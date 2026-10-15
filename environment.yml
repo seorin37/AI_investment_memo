@@ -1,0 +1,15 @@
+name: ai_memo
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+      - fastapi
+      - "uvicorn[standard]"
+      - sqlalchemy
+      - "psycopg[binary]"
+      - alembic
+      - pgvector
+      - python-dotenv
+      - requests
