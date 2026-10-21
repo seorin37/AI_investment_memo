@@ -161,15 +161,15 @@ alembic upgrade head
 alembic current
 ~~~
 
-`0002 (head)`가 나오면 성공이다. DB에 들어간 테이블은 다음으로 확인한다.
+`0005 (head)`가 나오면 성공이다. DB에 들어간 테이블은 다음으로 확인한다.
 
 ~~~bash
 docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "\dt"'
 ~~~
 
-`memos`, `tracking_items`, `stocks` 등이 보이면 된다(`alembic_version` 포함 40개).
+`memos`, `tracking_items`, `stocks`, `economic_indicators` 등이 보이면 된다(`alembic_version` 포함 45개).
 
-- 예전에 `.env`를 만든 사람은 `.env.example`의 `DATABASE_URL=` 줄을 `.env`에도 붙여 넣는다. 값은 `${POSTGRES_*}` 변수를 쓰므로 따로 고칠 것이 없다.
+- 예전에 만든 `.env`에 `DATABASE_URL`이 없다면 PostgreSQL 접속 정보를 사용해 직접 추가한다. 기존 `.env`의 다른 설정은 유지한다.
 - 테이블 구조는 DBeaver 등에서 직접 고치지 않는다. 바꿀 일이 있으면 `alembic revision -m "설명"`으로 새 파일을 만들어 PR로 올린다.
 - 이미 올라간 마이그레이션 파일(0001, 0002 등)은 수정하지 않는다.
 - 누군가 새 마이그레이션을 올렸으면 `git pull` 후 `alembic upgrade head`를 다시 실행한다.
@@ -224,7 +224,7 @@ git checkout -b feature/브랜치-이름
 | `conda: command not found` | `source ~/.bashrc` 또는 터미널을 다시 연다. |
 | 파일이 느리거나 변경 감지가 안 됨 | 프로젝트가 `/mnt/c` 아래에 있는지 확인하고 `~/projects`로 옮긴다. |
 | `alembic: command not found` | `conda activate ai_memo`를 먼저 실행한다. |
-| `DATABASE_URL이 없습니다` | `.env`에 `DATABASE_URL` 줄이 없다. `.env.example`의 해당 줄을 `.env`에 붙여 넣는다. |
+| `DATABASE_URL이 없습니다` | `.env`에 PostgreSQL 접속 정보와 일치하는 `DATABASE_URL`을 추가한다. |
 | `alembic upgrade head`에서 `already exists` | 예전에 직접 만든 테이블이 있다. `docker compose down -v` 후 `docker compose up -d --wait`로 DB를 비우고 다시 실행한다(DB 데이터가 삭제된다). |
 
 ## 10. 완료 체크리스트
@@ -233,7 +233,7 @@ git checkout -b feature/브랜치-이름
 
 - [ ] `docker compose ps`에서 `memos-db`가 healthy
 - [ ] `\dx` 결과에 `vector`가 보임
-- [ ] `alembic upgrade head` 후 `alembic current`가 `0002 (head)`
+- [ ] `alembic upgrade head` 후 `alembic current`가 `0005 (head)`
 - [ ] `conda activate ai_memo` 후 `uvicorn`이 실행됨
 - [ ] `/health/db` 결과가 `{"status":"ok","pgvector":true}`
 - [ ] `git status`에 `.env`가 보이지 않음
