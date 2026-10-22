@@ -26,3 +26,6 @@ data/raw/
 .DS_Store
 Thumbs.db
 data/sample/
+
+# Market data pipeline logs
+/logs/
