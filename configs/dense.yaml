@@ -1,0 +1,6 @@
+# PC1: Dense 전용 모드
+mode: dense
+
+embed:
+  return_dense: true
+  return_sparse: false

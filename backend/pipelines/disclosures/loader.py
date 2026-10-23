@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import bindparam, text
@@ -17,7 +19,7 @@ from .dart import ReportRef
 
 
 KST = timezone(timedelta(hours=9))
-EXPECTED_ALEMBIC = "0005"
+
 EXPECTED_EMBEDDING_TYPE = "vector(1024)"
 
 
@@ -31,9 +33,23 @@ class ReferencedDisclosureError(RuntimeError):
 
 def preflight(conn: Connection, symbols: list[str]) -> None:
     problems: list[str] = []
-    version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-    if version != EXPECTED_ALEMBIC:
-        problems.append(f"alembic 버전이 {EXPECTED_ALEMBIC}가 아닙니다: {version}")
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    repo_root = Path(__file__).resolve().parents[3]
+    alembic_cfg = Config(str(repo_root / "alembic.ini"))
+    alembic_cfg.set_main_option("script_location", str(repo_root / "alembic"))
+
+    expected_heads = set(ScriptDirectory.from_config(alembic_cfg).get_heads())
+    actual_heads = set(
+        conn.execute(text("SELECT version_num FROM alembic_version")).scalars()
+    )
+
+    if actual_heads != expected_heads:
+        problems.append(
+            f"alembic 버전 불일치: DB={sorted(actual_heads)}, "
+            f"코드={sorted(expected_heads)}"
+        )
     if conn.execute(text("SELECT extversion FROM pg_extension WHERE extname = 'vector'")).scalar() is None:
         problems.append("vector 확장이 설치되어 있지 않습니다.")
     found = set(

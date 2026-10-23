@@ -43,6 +43,9 @@ def _check(name: str, ok: bool, detail, severity: str = "error") -> dict:
 
 
 def _rows(conn: Connection, table: str, symbols: list[str], periods: list[str]) -> dict[tuple[str, str], dict]:
+    if not symbols or not periods:
+        return {}
+
     result = conn.execute(
         text(f"SELECT * FROM {table} WHERE symbol IN :ss AND period_end::text IN :ps").bindparams(
             bindparam("ss", expanding=True), bindparam("ps", expanding=True)

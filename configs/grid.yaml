@@ -1,0 +1,18 @@
+# 검색 가중치 그리드 평가 (WO-019). evaluate_grid가 읽는다.
+# 모든 조합이 같은 후보(dense 상위 candidate_k ∪ sparse 상위 candidate_k)에서 순위를 낸다.
+# 가중치는 신호별 질의 min-max 정규화 후 가중합. 합이 1이 아니거나 음수면 시작 시 오류.
+# 빠진 신호(-)와 0은 같다(정규화·합산에서 제외).
+
+combos:
+  - {id: D100,   dense: 1.0,  sparse: 0.0,  colbert: 0.0,  note: "기존 dense 모드"}
+  - {id: D50S50, dense: 0.5,  sparse: 0.5,  colbert: 0.0,  note: "기존 hybrid 모드"}
+  - {id: D30S70, dense: 0.3,  sparse: 0.7,  colbert: 0.0,  note: "신규"}
+  - {id: C1,     dense: 0.4,  sparse: 0.2,  colbert: 0.4,  note: "BGE-M3 논문 권장값"}
+  - {id: C2,     dense: 0.34, sparse: 0.33, colbert: 0.33, note: "균등"}
+  - {id: C3,     dense: 0.5,  sparse: 0.0,  colbert: 0.5,  note: "sparse 제외"}
+  - {id: C4,     dense: 0.2,  sparse: 0.4,  colbert: 0.4,  note: "sparse 비중 높음"}
+  - {id: C5,     dense: 0.0,  sparse: 0.0,  colbert: 1.0,  note: "같은 후보를 colbert만으로 재정렬"}
+
+colbert:
+  # 후보 ColBERT 벡터 메모리 캐시 상한 (CPU, float16). 청크당 토큰 수 × 2KB — 평균 약 1.2MB, 최대(1,023토큰) 약 2MB.
+  cache_max_mb: 2048

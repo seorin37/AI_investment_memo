@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from datetime import date
 
 from sqlalchemy import bindparam, text
@@ -14,7 +16,6 @@ from sqlalchemy.engine import Connection
 from .financials import MappedPeriod
 
 
-EXPECTED_ALEMBIC = "0005"
 AMOUNT, PER_SHARE = "numeric(20,0)", "numeric(14,2)"
 KEY_COLUMNS = {"symbol": "character(6)", "period_end": "date", "period_type": "report_period"}
 FINANCIALS_VALUES = {
@@ -48,9 +49,23 @@ def table_columns(conn: Connection, table: str) -> dict[str, str]:
 def preflight(conn: Connection, symbols: list[str]) -> None:
     """alembic 0005, 두 테이블 컬럼·타입이 명세와 정확히 같은지, stocks에 대상 종목이 있는지. 하나라도 다르면 중단."""
     problems: list[str] = []
-    version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-    if version != EXPECTED_ALEMBIC:
-        problems.append(f"alembic 버전이 {EXPECTED_ALEMBIC}가 아닙니다: {version}")
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    repo_root = Path(__file__).resolve().parents[3]
+    alembic_cfg = Config(str(repo_root / "alembic.ini"))
+    alembic_cfg.set_main_option("script_location", str(repo_root / "alembic"))
+
+    expected_heads = set(ScriptDirectory.from_config(alembic_cfg).get_heads())
+    actual_heads = set(
+        conn.execute(text("SELECT version_num FROM alembic_version")).scalars()
+    )
+
+    if actual_heads != expected_heads:
+        problems.append(
+            f"alembic 버전 불일치: DB={sorted(actual_heads)}, "
+            f"코드={sorted(expected_heads)}"
+        )
     for table, expected in EXPECTED_COLUMNS.items():
         actual = table_columns(conn, table)
         if actual != expected:
