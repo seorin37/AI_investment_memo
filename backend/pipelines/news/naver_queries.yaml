@@ -1,0 +1,22 @@
+# 네이버 뉴스 검색 API 수집 설정
+# queries : 검색어로 실제 API에 보내는 값 (검색어는 필수 파라미터)
+# aliases : 검색 결과의 제목·요약에 이 중 하나가 없으면 노이즈로 보고 버린다
+
+stocks:
+  - { code: "005930", name: 삼성전자, queries: ["삼성전자"], aliases: ["삼성전자", "삼전"] }
+  - { code: "000660", name: SK하이닉스, queries: ["SK하이닉스"], aliases: ["SK하이닉스", "하이닉스"] }
+  # '네이버' 한 단어는 포털 서비스 기사가 대부분이라 기업을 가리키는 검색어로 나눠 받는다.
+  # 제목에 네이버/NAVER가 있을 때만 저장한다(title_only).
+  - { code: "035420", name: NAVER, queries: ["네이버 주가", "네이버 실적", "네이버 클라우드", "네이버 AI"], aliases: ["네이버", "NAVER"], title_only: true }
+  - { code: "105560", name: KB금융지주, queries: ["KB금융", "KB금융지주"], aliases: ["KB금융", "KB금융지주"] }
+
+# 네이버 API 응답에는 매체명 필드가 없으므로 원문 URL 도메인 -> news_sources.code 로 매체를 정한다.
+publishers:
+  sedaily.com: sedaily
+  mk.co.kr: mk
+  hankyung.com: hankyung
+  yna.co.kr: yonhap
+
+# true면 위 4개 매체 기사만 저장한다. news_articles.source_id가 NOT NULL이고
+# news_sources가 4개 매체뿐이라, 목록 밖 매체는 저장할 수 없다(기본 true).
+only_listed_publishers: true
