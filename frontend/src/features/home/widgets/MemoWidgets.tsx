@@ -91,7 +91,7 @@ function PinnedMemoSheet({ memo, onClose }: { memo: PinnedMemo; onClose: () => v
   const patch = usePatchMemoFor();
   if (done)
     return (
-      <WidgetSheet title={done === 'saved' ? '메모를 저장했어요' : '고정을 해제했어요'} subtitle={`${memo.stock_name} · ${dotDate(memo.created_at)}`} onClose={onClose} footer={<Button label="확인" variant="blue" onPress={onClose} />}>
+      <WidgetSheet title={done === 'saved' ? '메모를 저장했어요' : '고정을 해제했어요'} subtitle={`${memo.stock_name} · ${dotDate(memo.created_at)}`} onClose={onClose} footer={<Button label="확인" variant="primary" onPress={onClose} />}>
         <SuccessBox message={done === 'saved' ? '투자 생각을 정리해 뒀어요.' : '메모 내용은 그대로 남아 있어요.'} />
         <T size={14} weight="bold">
           {title}
@@ -109,7 +109,7 @@ function PinnedMemoSheet({ memo, onClose }: { memo: PinnedMemo; onClose: () => v
       footer={
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <Button label="고정 해제" variant="secondary" style={{ flex: 1 }} onPress={() => patch.mutate({ id: memo.id, code: memo.stock_code, patch: { pinned: false } }, { onSuccess: () => setDone('unpinned') })} />
-          <Button label="저장" variant="blue" style={{ flex: 1 }} loading={patch.isPending} disabled={!title.trim()} onPress={() => patch.mutate({ id: memo.id, code: memo.stock_code, patch: { title, body } }, { onSuccess: () => setDone('saved') })} />
+          <Button label="저장" variant="primary" style={{ flex: 1 }} loading={patch.isPending} disabled={!title.trim()} onPress={() => patch.mutate({ id: memo.id, code: memo.stock_code, patch: { title, body } }, { onSuccess: () => setDone('saved') })} />
         </View>
       }
     >
@@ -132,7 +132,7 @@ export function ChecklistWidget() {
   const shown = data?.slice(0, 4) ?? [];
   const done = shown.filter((i) => i.done).length;
   return (
-    <WidgetCard title="확인할 것" subtitle="하나씩 확인하며 생각을 정리해요" right={<ProgressRing done={done} total={shown.length} size={34} color={colors.blue} dashed />}>
+    <WidgetCard title="확인할 것" subtitle="하나씩 확인하며 생각을 정리해요" right={<ProgressRing done={done} total={shown.length} size={34} color={colors.brand} dashed />}>
       {isLoading && <Loading height={80} />}
       <View>
         {shown.map((it, i) => (
@@ -171,8 +171,8 @@ function AddChecklistSheet({ onClose }: { onClose: () => void }) {
   if (added) {
     const mine = items.filter((i) => i.stock_code === code);
     return (
-      <WidgetSheet title="확인할 것을 추가했어요" subtitle="기업별로 확인할 내용을 정리해요" onClose={onClose} footer={<Button label="확인" variant="blue" onPress={onClose} />}>
-        <ProgressRing done={mine.filter((i) => i.done).length} total={mine.length} size={30} color={colors.blue} dashed />
+      <WidgetSheet title="확인할 것을 추가했어요" subtitle="기업별로 확인할 내용을 정리해요" onClose={onClose} footer={<Button label="확인" variant="primary" onPress={onClose} />}>
+        <ProgressRing done={mine.filter((i) => i.done).length} total={mine.length} size={30} color={colors.brand} dashed />
         <T size={15} weight="bold">
           {text}
         </T>
@@ -193,7 +193,7 @@ function AddChecklistSheet({ onClose }: { onClose: () => void }) {
       footer={
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <Button label="취소" variant="secondary" style={{ flex: 1 }} onPress={onClose} />
-          <Button label="추가" variant="blue" style={{ flex: 1 }} disabled={!code || !text.trim()} loading={add.isPending} onPress={() => code && add.mutate({ stockCode: code, text: text.trim() }, { onSuccess: () => setAdded(true) })} />
+          <Button label="추가" variant="primary" style={{ flex: 1 }} disabled={!code || !text.trim()} loading={add.isPending} onPress={() => code && add.mutate({ stockCode: code, text: text.trim() }, { onSuccess: () => setAdded(true) })} />
         </View>
       }
     >
@@ -236,7 +236,7 @@ export function QuickMemoWidget() {
     <WidgetCard title="빠른 메모" subtitle="떠오른 생각을 놓치기 전에" icon="edit">
       <Select value={target} options={stocks.map((s) => ({ key: s.code, label: s.name }))} onChange={setCode} placeholder="종목 선택" />
       <TextArea value={text} onChangeText={setText} placeholder="지금 떠오른 생각을 자유롭게 남겨보세요." minHeight={72} style={{ fontSize: 13, padding: 12 }} />
-      <Button label="메모 남기기" variant="blue" size="sm" style={{ height: 36 }} onPress={submit} loading={create.isPending} disabled={!text.trim() || !target} />
+      <Button label="메모 남기기" variant="primary" size="sm" onPress={submit} loading={create.isPending} disabled={!text.trim() || !target} />
       <T size={10} color={colors.textSub}>
         남긴 메모는 선택한 종목의 메모 보드에 모여요.
       </T>
@@ -255,11 +255,11 @@ function QuickMemoDoneSheet({ result, stockName, onClose }: { result: { id: stri
       onClose={onClose}
       footer={
         pinned ? (
-          <Button label="확인" variant="blue" onPress={onClose} />
+          <Button label="확인" variant="primary" onPress={onClose} />
         ) : (
           <>
             <Button label="홈에 고정" variant="secondary" onPress={() => patch.mutate({ id: result.id, code: result.code, patch: { pinned: true } }, { onSuccess: () => setPinned(true) })} loading={patch.isPending} />
-            <Button label="새 메모 쓰기" variant="blue" onPress={onClose} />
+            <Button label="새 메모 쓰기" variant="primary" onPress={onClose} />
           </>
         )
       }
@@ -307,7 +307,7 @@ export function PriceConditionWidget() {
                   {num(r.current_price)}원
                 </T>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <Switch tone="blue" value={r.condition.tracking} onChange={(v) => setTracking.mutate({ memoId: r.memo_id, conditionId: r.condition.id, tracking: v })} />
+                  <Switch value={r.condition.tracking} onChange={(v) => setTracking.mutate({ memoId: r.memo_id, conditionId: r.condition.id, tracking: v })} />
                   <Icon name="chevronRight" size={14} color={colors.textBody} />
                 </View>
               </View>
@@ -327,7 +327,7 @@ function PriceConditionSheet({ row, onClose }: { row: PriceConditionRow; onClose
   const reached = row.condition.status === 'reached';
   const gap = row.current_price - row.condition.price;
   return (
-    <WidgetSheet title="가격 조건 상세" subtitle={row.stock_name} onClose={onClose} footer={<Button label="확인" variant="blue" onPress={onClose} />}>
+    <WidgetSheet title="가격 조건 상세" subtitle={row.stock_name} onClose={onClose} footer={<Button label="확인" variant="primary" onPress={onClose} />}>
       <View style={{ backgroundColor: reached ? colors.greenSoft : colors.blueSoft, borderRadius: 12, padding: 16, gap: 6 }}>
         <T size={13} weight="semibold" color={reached ? colors.greenText : colors.blue}>
           {reached ? '설정한 가격 조건에 도달했어요' : !row.condition.tracking ? '가격 조건 추적이 꺼져 있어요' : '설정한 가격을 기다리고 있어요'}
@@ -412,7 +412,7 @@ function JournalSheet({ entry, onClose }: { entry: JournalEntry | null; onClose:
   };
   if (saved)
     return (
-      <WidgetSheet title="투자 기록을 저장했어요" subtitle={`${name} · 메모와 별도로 보관해요`} onClose={onClose} footer={<Button label="확인" variant="blue" onPress={onClose} />}>
+      <WidgetSheet title="투자 기록을 저장했어요" subtitle={`${name} · 메모와 별도로 보관해요`} onClose={onClose} footer={<Button label="확인" variant="primary" onPress={onClose} />}>
         <SuccessBox message="오늘의 판단을 남겨 뒀어요." />
         <T size={14} weight="bold">
           {title}
@@ -423,7 +423,7 @@ function JournalSheet({ entry, onClose }: { entry: JournalEntry | null; onClose:
       </WidgetSheet>
     );
   return (
-    <WidgetSheet title={entry ? '투자 기록' : '새 투자 기록'} subtitle={name} onClose={onClose} footer={<Button label="기록 저장" variant="blue" onPress={save} loading={create.isPending || update.isPending} disabled={!title.trim()} />}>
+    <WidgetSheet title={entry ? '투자 기록' : '새 투자 기록'} subtitle={name} onClose={onClose} footer={<Button label="기록 저장" variant="primary" onPress={save} loading={create.isPending || update.isPending} disabled={!title.trim()} />}>
       <FieldLabel>종목</FieldLabel>
       <Select value={code} options={stocks.map((s) => ({ key: s.code, label: s.name }))} onChange={setCode} />
       <FieldLabel>기록 제목</FieldLabel>
@@ -686,7 +686,7 @@ function ConcludeSheet({ candidate, onClose }: { candidate: NonNullable<ReturnTy
         footer={
           <Button
             label="투자 기록에서 보기"
-            variant="blue"
+            variant="primary"
             onPress={() => {
               onClose();
               router.navigate('/journal');
@@ -705,7 +705,7 @@ function ConcludeSheet({ candidate, onClose }: { candidate: NonNullable<ReturnTy
       title="결론 쓰기"
       subtitle={`${candidate.stock_name} · ${candidate.premise_event}`}
       onClose={onClose}
-      footer={<Button label="투자 기록으로 보내기" variant="blue" disabled={!text.trim()} loading={conclude.isPending} onPress={() => conclude.mutate({ memoId: candidate.memo_id, stockCode: candidate.stock_code, conclusion: text.trim() }, { onSuccess: () => setDone(true) })} />}
+      footer={<Button label="투자 기록으로 보내기" variant="primary" disabled={!text.trim()} loading={conclude.isPending} onPress={() => conclude.mutate({ memoId: candidate.memo_id, stockCode: candidate.stock_code, conclusion: text.trim() }, { onSuccess: () => setDone(true) })} />}
     >
       <MemoChip color={candidate.color} title={candidate.memo_title} label="처음 남긴 메모" />
       <T size={12} color={colors.textWarm}>

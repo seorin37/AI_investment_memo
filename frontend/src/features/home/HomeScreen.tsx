@@ -100,7 +100,7 @@ function ChoiceCard({ recommended, icon, title, desc, points, cta, onPress }: { 
   return (
     <Hoverable
       onPress={onPress}
-      style={{ flex: 1, borderRadius: 20, borderWidth: recommended ? 2 : 1, borderColor: recommended ? colors.black : colors.border, backgroundColor: recommended ? '#F7F8FA' : colors.surface, padding: 28, gap: 14 }}
+      style={{ flex: 1, borderRadius: 20, borderWidth: recommended ? 2 : 1, borderColor: recommended ? colors.brand : colors.border, backgroundColor: recommended ? '#F7F8FA' : colors.surface, padding: 28, gap: 14 }}
       hoverStyle={{ ...shadow.pop }}
     >
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -108,7 +108,7 @@ function ChoiceCard({ recommended, icon, title, desc, points, cta, onPress }: { 
           <Icon name={icon} size={22} color={colors.text} />
         </View>
         {recommended && (
-          <View style={{ backgroundColor: colors.black, borderRadius: 14, paddingHorizontal: 12, height: 28, justifyContent: 'center' }}>
+          <View style={{ backgroundColor: colors.brand, borderRadius: 14, paddingHorizontal: 12, height: 28, justifyContent: 'center' }}>
             <T size={12} weight="bold" color="#FFF" lh={1}>
               추천
             </T>
@@ -284,9 +284,9 @@ function CustomHome({
             <Hoverable
               onPress={() => setPicker(true)}
               style={{ width: colW, height: 280, borderRadius: 16, borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#D6DAE1', backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', gap: 10 }}
-              hoverStyle={{ borderColor: colors.blue }}
+              hoverStyle={{ borderColor: colors.brand }}
             >
-              <Icon name="plus" size={36} color={colors.blue} strokeWidth={1.4} />
+              <Icon name="plus" size={36} color={colors.brand} strokeWidth={1.4} />
               <T size={18} weight="bold">
                 위젯 추가
               </T>
@@ -374,13 +374,13 @@ function WidgetFrame({
       </View>
     );
 
-  const handle = (pos: object) => <View style={[{ position: 'absolute', width: 9, height: 9, backgroundColor: '#FFF', borderWidth: 1.5, borderColor: colors.blue, zIndex: 3 }, pos]} />;
+  const handle = (pos: object) => <View style={[{ position: 'absolute', width: 9, height: 9, backgroundColor: '#FFF', borderWidth: 1.5, borderColor: colors.brand, zIndex: 3 }, pos]} />;
 
   return (
     <Animated.View
       onLayout={(e) => onLayoutRect(e.nativeEvent.layout)}
       style={[
-        { width, borderRadius: 16, borderWidth: 1.5, borderColor: colors.blue, backgroundColor: '#FFF', padding: 6, paddingTop: 0, transform: pan.getTranslateTransform() },
+        { width, borderRadius: 16, borderWidth: 1.5, borderColor: colors.brand, backgroundColor: '#FFF', padding: 6, paddingTop: 0, transform: pan.getTranslateTransform() },
         dragging && { zIndex: 100, opacity: 0.92, ...shadow.modal },
       ]}
     >
@@ -437,13 +437,13 @@ function WidgetPicker({ existing, onAdd, onClose }: { existing: WidgetType[]; on
                   disabled={added}
                   onPress={() => onAdd(w.type)}
                   style={{ width: isMobile ? '100%' : '48.8%', borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 14, gap: 4, opacity: added ? 0.5 : 1 }}
-                  hoverStyle={{ borderColor: colors.blue, backgroundColor: colors.blueSoft }}
+                  hoverStyle={{ borderColor: colors.brand, backgroundColor: colors.brandSoft }}
                 >
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                     <T size={14} weight="semibold">
                       {w.title}
                     </T>
-                    <T size={11} color={added ? colors.textMuted : colors.blue}>
+                    <T size={11} color={added ? colors.textMuted : colors.brand}>
                       {added ? '추가됨' : '+ 추가'}
                     </T>
                   </View>

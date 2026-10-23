@@ -1,14 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { Image, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { Image, Platform, Pressable, ScrollView, View } from 'react-native';
 import { usePathname, useRouter, type Href } from 'expo-router';
 import { env } from '@/config/env';
 import { Icon, type IconName } from '@/components/icons/Icon';
-import { Avatar, Hoverable, IconButton } from '@/components/ui/primitives';
+import { Avatar, Hoverable, IconButton, TextField } from '@/components/ui/primitives';
 import { T } from '@/components/ui/Text';
 import { useJournal, useMyStocks, useStockSearch } from '@/hooks/queries';
 import { useAuth } from '@/store/auth';
 import { useUI } from '@/store/ui';
-import { colors, fonts, layout, shadow } from '@/theme/tokens';
+import { colors, layout, shadow } from '@/theme/tokens';
 
 /** Main Sidebar — 시안 그대로: 로고 · 검색 · 홈/최신 업데이트/투자 기록 · 내 종목(보유/관심) · 휴지통 · 설정 및 지원 · 프로필 */
 export function Sidebar({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
@@ -57,7 +57,7 @@ export function Sidebar({ collapsed, onNavigate }: { collapsed: boolean; onNavig
           onPress={() => (collapsed ? toggleSidebar() : setOpen((o) => ({ ...o, mine: !o.mine })))}
           right={
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <IconButton name="plus" label="종목 추가" onPress={() => openModal({ type: 'addStock' })} size={16} color={colors.text} box={24} />
+              <IconButton name="plus" label="종목 추가" onPress={() => openModal({ type: 'addStock' })} size={16} color={colors.brand} box={24} />
               <Icon name={open.mine ? 'chevronUp' : 'chevronDown'} size={16} color="#5F6672" />
             </View>
           }
@@ -85,14 +85,13 @@ export function Sidebar({ collapsed, onNavigate }: { collapsed: boolean; onNavig
             label="설정 및 지원"
             collapsed={collapsed}
             active={supportOpen}
-            neutralActive
             onPress={() => setSupportOpen((v) => !v)}
             right={supportOpen ? <Icon name="chevronRight" size={16} color={colors.textSub} /> : undefined}
           />
           {supportOpen && (
             <>
               {Platform.OS === 'web' && <Pressable onPress={() => setSupportOpen(false)} style={{ position: 'fixed' as 'absolute', top: 0, left: 0, right: 0, bottom: 0 } as object} />}
-              <View style={{ position: 'absolute', left: collapsed ? 64 : 234, bottom: -6, width: 192, backgroundColor: colors.surface, borderRadius: 12, padding: 8, borderWidth: 1, borderColor: '#F0F1F3', ...shadow.pop }}>
+              <View style={{ position: 'absolute', left: onNavigate ? 0 : collapsed ? 64 : 234, bottom: -6, width: 192, backgroundColor: colors.surface, borderRadius: 12, padding: 8, borderWidth: 1, borderColor: '#F0F1F3', ...shadow.pop }}>
                 {(
                   [
                     { icon: 'settings', label: '설정', run: () => openModal({ type: 'settings' }) },
@@ -102,12 +101,13 @@ export function Sidebar({ collapsed, onNavigate }: { collapsed: boolean; onNavig
                 ).map((m) => (
                   <Hoverable
                     key={m.label}
+                    accessibilityRole="button"
                     onPress={() => {
                       setSupportOpen(false);
                       m.run();
                     }}
-                    style={{ height: 44, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, borderRadius: 8 }}
-                    hoverStyle={{ backgroundColor: '#F6F6F8' }}
+                    style={{ height: 40, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, borderRadius: 8 }}
+                    hoverStyle={{ backgroundColor: colors.brandSoft }}
                   >
                     <Icon name={m.icon} size={18} color={colors.textBody} />
                     <T size={15}>{m.label}</T>
@@ -154,7 +154,6 @@ function NavItem({
   collapsed,
   onPress,
   right,
-  neutralActive,
 }: {
   icon: IconName;
   label: string;
@@ -162,27 +161,26 @@ function NavItem({
   collapsed?: boolean;
   onPress: () => void;
   right?: React.ReactNode;
-  neutralActive?: boolean;
 }) {
-  const activeBg = neutralActive ? '#F4F4F6' : colors.brandSoft;
-  const fg = active && !neutralActive ? colors.brand : '#1C1C1C';
+  const fg = active ? colors.brand : '#1C1C1C';
   return (
     <Hoverable
       accessibilityRole="link"
       accessibilityLabel={label}
+      tooltip={collapsed ? label : undefined}
       accessibilityState={{ selected: active }}
       onPress={onPress}
       style={[
-        { height: 40, borderRadius: 8, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, gap: 10 },
+        { height: 40, borderRadius: 8, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, gap: 8 },
         collapsed && { justifyContent: 'center', paddingHorizontal: 0 },
-        active && { backgroundColor: activeBg },
+        active && { backgroundColor: colors.brandSoft },
       ]}
-      hoverStyle={!active && { backgroundColor: '#F7F7F9' }}
+      hoverStyle={!active && { backgroundColor: colors.brandSoft }}
     >
       <Icon name={icon} size={20} color={fg} strokeWidth={1.7} />
       {!collapsed && (
         <>
-          <T size={16} weight={active && !neutralActive ? 'semibold' : 'regular'} color={fg} style={{ flex: 1 }} lh={1.2}>
+          <T size={16} weight={active ? 'semibold' : 'regular'} color={fg} style={{ flex: 1 }} lh={1.2}>
             {label}
           </T>
           {right}
@@ -194,7 +192,7 @@ function NavItem({
 
 function Group({ label, open, onToggle }: { label: string; open: boolean; onToggle: () => void }) {
   return (
-    <Hoverable onPress={onToggle} style={{ height: 40, flexDirection: 'row', alignItems: 'center', paddingLeft: 36, paddingRight: 12, borderRadius: 8 }} hoverStyle={{ backgroundColor: '#F7F7F9' }}>
+    <Hoverable accessibilityState={{ expanded: open }} onPress={onToggle} style={{ height: 40, flexDirection: 'row', alignItems: 'center', paddingLeft: 36, paddingRight: 12, borderRadius: 8 }} hoverStyle={{ backgroundColor: colors.brandSoft }}>
       <T size={16} style={{ flex: 1 }} lh={1.2}>
         {label}
       </T>
@@ -206,9 +204,11 @@ function Group({ label, open, onToggle }: { label: string; open: boolean; onTogg
 function StockItem({ name, active, onPress }: { name: string; active: boolean; onPress: () => void }) {
   return (
     <Hoverable
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
       onPress={onPress}
       style={[{ height: 40, justifyContent: 'center', paddingLeft: 56, borderRadius: 8 }, active && { backgroundColor: colors.brandSoft }]}
-      hoverStyle={!active && { backgroundColor: '#F7F7F9' }}
+      hoverStyle={!active && { backgroundColor: colors.brandSoft }}
     >
       <T size={16} weight={active ? 'semibold' : 'regular'} color={active ? colors.brand : '#1C1C1C'} numberOfLines={1} lh={1.2}>
         {name}
@@ -247,19 +247,17 @@ function GlobalSearch({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <View style={{ paddingHorizontal: 16, zIndex: 50 }}>
-      <View style={{ height: 40, borderRadius: 8, backgroundColor: colors.surfaceMuted, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, gap: 8 }}>
-        <Icon name="search" size={18} color="#8B8B8B" />
-        <TextInput
+        <TextField
+          icon="search"
           value={q}
           onChangeText={setQ}
           placeholder="검색"
           placeholderTextColor="#9F9F9F"
           onFocus={() => setFocused(true)}
           onBlur={() => setTimeout(() => setFocused(false), 150)}
-          style={[{ flex: 1, minWidth: 0, fontFamily: fonts.regular, fontSize: 15, color: colors.text, paddingVertical: 0 }, Platform.OS === 'web' && ({ outlineStyle: 'none' } as object)]}
+          style={{ height: 40, borderRadius: 8, backgroundColor: colors.surfaceMuted, borderColor: colors.surfaceMuted, paddingHorizontal: 12 }}
           accessibilityLabel="검색"
         />
-      </View>
       {focused && q.trim().length > 0 && (
         <View style={{ position: 'absolute', top: 46, left: 16, width: 300, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border, padding: 6, ...shadow.pop }}>
           {results.length === 0 ? (
@@ -276,7 +274,7 @@ function GlobalSearch({ onNavigate }: { onNavigate?: () => void }) {
                   onNavigate?.();
                 }}
                 style={{ paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8 }}
-                hoverStyle={{ backgroundColor: '#F5F6F8' }}
+                hoverStyle={{ backgroundColor: colors.brandSoft }}
               >
                 <T size={14} weight="medium">
                   {r.title}

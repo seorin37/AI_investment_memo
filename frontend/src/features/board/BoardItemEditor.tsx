@@ -239,8 +239,8 @@ function EditorBody({
               keyboardType="url"
               style={{ flex: 1, height: 44, borderRadius: 12 }}
             />
-            <Button label="추가" variant="secondary" size="sm" onPress={addLink} style={{ height: 44, paddingHorizontal: 18 }} />
-            <Button label="파일 첨부" variant="secondary" size="sm" onPress={attachFile} style={{ height: 44, paddingHorizontal: 18 }} />
+            <Button label="추가" variant="secondary" onPress={addLink} />
+            <Button label="파일 첨부" variant="secondary" onPress={attachFile} />
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <T size={12} color={colors.textWarm} style={{ width: 60 }}>
@@ -250,7 +250,8 @@ function EditorBody({
               <Hoverable
                 key={t.key}
                 onPress={() => setRefType(t.key)}
-                style={{ height: 28, paddingHorizontal: 12, borderRadius: 14, justifyContent: 'center', backgroundColor: refType === t.key ? colors.black : colors.surfaceWarm }}
+                accessibilityState={{ selected: refType === t.key }}
+                style={{ height: 28, paddingHorizontal: 12, borderRadius: 14, justifyContent: 'center', backgroundColor: refType === t.key ? colors.brand : colors.surfaceWarm }}
               >
                 <T size={12} weight="medium" color={refType === t.key ? '#FFF' : colors.textBody} lh={1.2}>
                   {t.label}

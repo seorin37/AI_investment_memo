@@ -53,7 +53,7 @@ export function SettingsModal({ onClose, initial = 'display' }: { onClose: () =>
   const nav = isMobile ? (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, padding: 12 }} style={{ flexGrow: 0, borderBottomWidth: 1, borderColor: colors.borderSoft }}>
       {NAV.flatMap((g) => g.items).map((it) => (
-        <Hoverable key={it.key} onPress={() => setSection(it.key)} style={{ height: 34, paddingHorizontal: 12, borderRadius: 17, justifyContent: 'center', backgroundColor: section === it.key ? colors.brandSoft : '#F5F6F8' }}>
+        <Hoverable key={it.key} accessibilityRole="button" accessibilityState={{ selected: section === it.key }} onPress={() => setSection(it.key)} style={{ height: 34, paddingHorizontal: 12, borderRadius: 17, justifyContent: 'center', backgroundColor: section === it.key ? colors.brandSoft : colors.surfaceSubtle }}>
           <T size={13} weight={section === it.key ? 'semibold' : 'regular'} color={section === it.key ? colors.brand : colors.textBody}>
             {it.label}
           </T>
@@ -83,9 +83,11 @@ export function SettingsModal({ onClose, initial = 'display' }: { onClose: () =>
             return (
               <Hoverable
                 key={it.key}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
                 onPress={() => setSection(it.key)}
                 style={[{ height: 42, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, borderRadius: 8, marginBottom: 4 }, on && { backgroundColor: colors.brandSoft }]}
-                hoverStyle={!on && { backgroundColor: '#F7F7F9' }}
+                hoverStyle={!on && { backgroundColor: colors.brandSoft }}
               >
                 <Icon name={it.icon} size={16} color={on ? colors.brand : colors.text} />
                 <T size={14} weight={on ? 'semibold' : 'regular'} color={on ? colors.brand : colors.text}>

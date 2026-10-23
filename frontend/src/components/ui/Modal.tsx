@@ -1,7 +1,7 @@
 import React from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useBreakpoint } from '@/hooks/useLayout';
-import { colors, shadow } from '@/theme/tokens';
+import { colors, modalLayout, shadow } from '@/theme/tokens';
 import { IconButton } from './primitives';
 import { T } from './Text';
 
@@ -15,8 +15,8 @@ export function Sheet({
   width = 640,
   children,
   scroll = true,
-  padding = 24,
-  radius = 32,
+  padding = modalLayout.padding,
+  radius = modalLayout.radius,
   style,
 }: {
   visible: boolean;
@@ -57,22 +57,23 @@ export function Sheet({
 }
 
 /** 모달 상단: 작은 맥락 라벨 + 제목 + 닫기 */
-export function SheetHeader({ eyebrow, title, onClose, right }: { eyebrow?: string; title: string; onClose: () => void; right?: React.ReactNode }) {
+export function SheetHeader({ eyebrow, title, description, titleSize = modalLayout.titleSize, onClose, right }: { eyebrow?: string; title: string; description?: string; titleSize?: number; onClose: () => void; right?: React.ReactNode }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, gap: 12 }}>
-      <View style={{ flex: 1, gap: 2 }}>
+      <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
         {eyebrow ? (
           <T size={13} color={colors.textWarm}>
             {eyebrow}
           </T>
         ) : null}
-        <T size={20} weight="bold">
+        <T size={titleSize} weight="bold">
           {title}
         </T>
+        {!!description && <T size={modalLayout.descriptionSize} color={colors.textSub}>{description}</T>}
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         {right}
-        <IconButton name="x" label="닫기" onPress={onClose} size={24} color={colors.text} box={36} />
+        <IconButton name="x" label="닫기" onPress={onClose} size={modalLayout.closeSize} color={colors.text} box={modalLayout.closeBox} />
       </View>
     </View>
   );

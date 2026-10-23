@@ -21,9 +21,9 @@ export default function StockScreen() {
   if (!stock) return <Loading height={400} />;
 
   return (
-    <Page top={active === 'info' ? 56 : 80}>
-      <StockHeader stock={stock} mine={my} large={active === 'info'} />
-      <View style={{ marginTop: active === 'info' ? 44 : 24, marginBottom: 24 }}>
+    <Page top={56}>
+      <StockHeader stock={stock} mine={my} />
+      <View style={{ marginTop: 24, marginBottom: 24 }}>
         <PillTabs
           items={[
             { key: 'board', label: '보드' },

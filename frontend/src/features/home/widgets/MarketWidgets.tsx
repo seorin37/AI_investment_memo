@@ -89,8 +89,8 @@ function IndexCard({ index }: { index: MarketIndex }) {
         {RANGE_TABS.map((t) => {
           const on = t.key === range;
           return (
-            <Hoverable key={t.key} onPress={() => setRange(t.key)} style={[{ flex: 1, height: 22, borderRadius: 6, alignItems: 'center', justifyContent: 'center' }, on && { backgroundColor: '#FFF', ...shadow.card }]}>
-              <T size={10} weight={on ? 'semibold' : 'regular'} color={on ? colors.text : colors.textSub} lh={1}>
+            <Hoverable key={t.key} accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => setRange(t.key)} style={[{ flex: 1, height: 22, borderRadius: 6, alignItems: 'center', justifyContent: 'center' }, on && { backgroundColor: colors.surface, ...shadow.card }]} hoverStyle={!on && { backgroundColor: colors.brandSoft }}>
+              <T size={10} weight={on ? 'semibold' : 'regular'} color={on ? colors.brand : colors.textSub} lh={1}>
                 {t.label}
               </T>
             </Hoverable>
@@ -120,7 +120,7 @@ export function UpdatesWidget() {
             key={s.code}
             onPress={() => router.navigate(`/updates/${s.code}`)}
             style={{ borderRadius: 12, borderWidth: 1, borderColor: '#E5E8EB', padding: 12, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', gap: 8 }}
-            hoverStyle={{ borderColor: colors.blue, backgroundColor: colors.blueSoft }}
+            hoverStyle={{ borderColor: colors.brand, backgroundColor: colors.brandSoft }}
           >
             <View style={{ flex: 1, gap: 8 }}>
               <T size={15} weight="semibold">
@@ -139,10 +139,10 @@ export function UpdatesWidget() {
         공시, 뉴스, 실적 소식을{'\n'}종목별로 모아 확인하세요.
       </T>
       <Hoverable onPress={() => router.navigate('/updates')} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 10 }}>
-        <T size={13} weight="medium" color={colors.blue}>
+        <T size={13} weight="medium" color={colors.brand}>
           전체 업데이트 보기
         </T>
-        <Icon name="arrowRight" size={13} color={colors.blue} />
+        <Icon name="arrowRight" size={13} color={colors.brand} />
       </Hoverable>
     </View>
   );
@@ -193,22 +193,22 @@ export function CalendarWidget() {
         </T>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
           <Hoverable onPress={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))} style={{ padding: 4 }}>
-            <Icon name="chevronLeft" size={14} color={colors.blue} />
+            <Icon name="chevronLeft" size={14} color={colors.brand} />
           </Hoverable>
           <T size={17} weight="medium">
             {cursor.getFullYear()}년 {cursor.getMonth() + 1}월
           </T>
           <Hoverable onPress={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))} style={{ padding: 4 }}>
-            <Icon name="chevronRight" size={14} color={colors.blue} />
+            <Icon name="chevronRight" size={14} color={colors.brand} />
           </Hoverable>
           <Hoverable
             onPress={() => {
               setCursor(new Date(today.getFullYear(), today.getMonth(), 1));
               setSelected(today);
             }}
-            style={{ height: 30, paddingHorizontal: 14, borderRadius: 15, backgroundColor: colors.blueSoft, justifyContent: 'center' }}
+            style={{ height: 30, paddingHorizontal: 14, borderRadius: 15, backgroundColor: colors.brandSoft, justifyContent: 'center' }}
           >
-            <T size={12} weight="medium" color={colors.blue} lh={1}>
+            <T size={12} weight="medium" color={colors.brand} lh={1}>
               오늘
             </T>
           </Hoverable>
@@ -216,8 +216,8 @@ export function CalendarWidget() {
       </View>
       <View style={{ flexDirection: 'row', gap: 6 }}>
         {CAL_TABS.map((t) => (
-          <Hoverable key={t.key} onPress={() => setTab(t.key)} style={{ height: 30, paddingHorizontal: 14, borderRadius: 15, justifyContent: 'center', backgroundColor: tab === t.key ? colors.blueSoft : 'transparent' }}>
-            <T size={12} weight="medium" color={colors.blue} lh={1}>
+          <Hoverable key={t.key} accessibilityRole="tab" accessibilityState={{ selected: tab === t.key }} onPress={() => setTab(t.key)} style={{ height: 30, paddingHorizontal: 14, borderRadius: 15, justifyContent: 'center', backgroundColor: tab === t.key ? colors.brandSoft : 'transparent' }} hoverStyle={{ backgroundColor: colors.brandSoft }}>
+            <T size={12} weight="medium" color={colors.brand} lh={1}>
               {t.label}
             </T>
           </Hoverable>
@@ -251,8 +251,8 @@ export function CalendarWidget() {
                       alignItems: 'center',
                       justifyContent: 'center',
                       borderWidth: isToday ? 1.5 : 0,
-                      borderColor: colors.blue,
-                      backgroundColor: isToday ? colors.blueSoft : isSel ? '#F1F3F7' : 'transparent',
+                      borderColor: colors.brand,
+                      backgroundColor: isToday || isSel ? colors.brandSoft : 'transparent',
                     }}
                   >
                     <T size={12} color={fg} weight={isToday ? 'semibold' : 'regular'} lh={1}>
@@ -274,7 +274,7 @@ export function CalendarWidget() {
             {selected.getMonth() + 1}월 {selected.getDate()}일 ({WEEKDAYS[selected.getDay()]})
           </T>
           <Hoverable onPress={() => setDraft(draft === null ? '' : null)}>
-            <T size={11} color={colors.blue}>
+            <T size={11} color={colors.brand}>
               + 일정 추가
             </T>
           </Hoverable>

@@ -226,16 +226,17 @@ export function JournalEditor({ entry, onDelete }: { entry: JournalEntry; onDele
               key={t.label}
               accessibilityRole="button"
               accessibilityLabel={t.label}
+              accessibilityState={{ selected: !!t.active }}
               onPress={() => void t.run()}
-              style={[{ width: 36, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }, t.active && { backgroundColor: '#F1ECFB' }]}
-              hoverStyle={{ backgroundColor: '#F4F4F6' }}
+              style={[{ width: 36, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }, t.active && { backgroundColor: colors.brandSoft }]}
+              hoverStyle={{ backgroundColor: colors.brandSoft }}
             >
               {t.icon === 'text' ? (
-                <T size={15} weight="medium" lh={1}>
-                  가<T size={10} weight="medium">가</T>
+                <T size={15} weight="medium" color={t.active ? colors.brand : colors.text} lh={1}>
+                  가<T size={10} weight="medium" color={t.active ? colors.brand : colors.text}>가</T>
                 </T>
               ) : (
-                <Icon name={t.icon} size={18} color={colors.text} strokeWidth={1.6} />
+                <Icon name={t.icon} size={18} color={t.active ? colors.brand : colors.text} strokeWidth={1.6} />
               )}
             </Hoverable>
           ))}
@@ -363,10 +364,10 @@ function BlockView({
 
 function SmallLink({ label, onPress, danger }: { label: string; onPress: () => void; danger?: boolean }) {
   return (
-    <Pressable onPress={onPress} hitSlop={6}>
-      <T size={12} color={danger ? colors.danger : colors.textSub}>
+    <Hoverable onPress={onPress} hitSlop={6} style={{ borderRadius: 4 }} hoverStyle={{ backgroundColor: danger ? colors.dangerSoft : colors.brandSoft }}>
+      <T size={12} color={danger ? colors.danger : colors.brand}>
         {label}
       </T>
-    </Pressable>
+    </Hoverable>
   );
 }

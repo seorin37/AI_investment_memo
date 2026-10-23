@@ -38,14 +38,15 @@ export function MemoDetailModal({ onClose, stockCode, memoId, initialTab = 'memo
             </View>
             <Hoverable
               onPress={() => update.mutate({ id: memo.id, patch: { pinned: !memo.pinned } }, { onSuccess: () => toast(memo.pinned ? '고정을 해제했어요' : '홈에 고정했어요') })}
-              style={{ height: 32, paddingHorizontal: 18, borderRadius: 10, backgroundColor: memo.pinned ? '#2E3138' : colors.surfaceWarm, justifyContent: 'center' }}
+              accessibilityState={{ selected: memo.pinned }}
+              style={{ height: 32, paddingHorizontal: 12, borderRadius: 8, backgroundColor: memo.pinned ? colors.brand : colors.surfaceSubtle, justifyContent: 'center' }}
               hoverStyle={{ opacity: 0.9 }}
             >
               <T size={12} weight="medium" color={memo.pinned ? '#FFF' : colors.textBody} lh={1.2}>
                 {memo.pinned ? '고정됨' : '고정'}
               </T>
             </Hoverable>
-            <IconButton name="x" label="닫기" onPress={onClose} size={24} color={colors.text} box={36} />
+            <IconButton name="x" label="닫기" onPress={onClose} size={20} color={colors.text} box={36} />
           </View>
           <View style={{ marginBottom: 22 }}>
             <Segmented
@@ -110,16 +111,12 @@ function MemoTab({
             <Button label="저장" size="sm" loading={saving} disabled={!title.trim()} onPress={() => onSave({ title: title.trim(), body }, () => setEditing(false))} />
           </View>
         ) : (
-          <Hoverable
+          <Button label="수정" variant="secondary" size="sm"
             onPress={() => {
               setTitle(memo.title);
               setBody(memo.body);
               setEditing(true);
-            }} style={{ height: 32, paddingHorizontal: 20, borderRadius: 10, backgroundColor: colors.surfaceWarm, justifyContent: 'center' }} hoverStyle={{ backgroundColor: '#ECE9E3' }}>
-            <T size={14} weight="medium" lh={1.2}>
-              수정
-            </T>
-          </Hoverable>
+            }} />
         )}
       </View>
       {editing ? (

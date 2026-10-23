@@ -1,15 +1,15 @@
 import React, { useMemo, useState } from 'react';
-import { Platform, ScrollView, TextInput, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Icon } from '@/components/icons/Icon';
-import { EmptyState, Hoverable, IconButton, Loading } from '@/components/ui/primitives';
+import { EmptyState, Hoverable, IconButton, Loading, TextField } from '@/components/ui/primitives';
 import { T } from '@/components/ui/Text';
 import { JournalEditor } from '@/features/journal/JournalEditor';
 import { useCreateJournal, useDeleteJournal, useJournal } from '@/hooks/queries';
 import { useBreakpoint } from '@/hooks/useLayout';
 import { korMonthDay, uid } from '@/lib/format';
 import { useUI } from '@/store/ui';
-import { colors, fonts } from '@/theme/tokens';
+import { colors } from '@/theme/tokens';
 import type { JournalEntry } from '@/types/models';
 
 const preview = (j: JournalEntry) =>
@@ -57,16 +57,16 @@ export default function JournalScreen() {
     });
 
   const searchBox = (
-    <View style={{ height: 36, width: isMobile ? undefined : 240, flex: isMobile ? 1 : undefined, borderRadius: 18, backgroundColor: '#F5F5F6', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, gap: 8 }}>
-      <Icon name="search" size={14} color={colors.textMuted} />
-      <TextInput
+      <TextField
+        icon="search"
         value={q}
         onChangeText={setQ}
         placeholder="검색"
         placeholderTextColor={colors.textMuted}
-        style={[{ flex: 1, minWidth: 0, fontFamily: fonts.regular, fontSize: 13, color: colors.text }, Platform.OS === 'web' && ({ outlineStyle: 'none' } as object)]}
+        accessibilityLabel="투자 기록 검색"
+        style={{ height: 36, width: isMobile ? undefined : 240, flex: isMobile ? 1 : undefined, borderRadius: 18, backgroundColor: colors.surfaceSubtle, borderColor: colors.surfaceSubtle }}
+        inputStyle={{ fontSize: 13 }}
       />
-    </View>
   );
 
   const listView = (
@@ -80,7 +80,7 @@ export default function JournalScreen() {
             {data?.length ?? 0}개의 기록
           </T>
         </View>
-        <IconButton name="pencil" label="새 기록" onPress={newEntry} color={colors.text} size={16} box={36} style={{ borderRadius: 18, borderWidth: 1, borderColor: colors.border, backgroundColor: '#FFF' }} />
+        <IconButton name="pencil" label="새 기록" onPress={newEntry} color={colors.brand} size={16} box={36} style={{ borderRadius: 18, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }} />
       </View>
       {isMobile && <View style={{ flexDirection: 'row', paddingHorizontal: 8, marginBottom: 12 }}>{searchBox}</View>}
       {isLoading && <Loading />}
@@ -90,11 +90,12 @@ export default function JournalScreen() {
           return (
             <Hoverable
               key={j.id}
+              accessibilityState={{ selected: on }}
               onPress={() => setSelected(j.id)}
               style={[{ paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, gap: 4 }, on && { backgroundColor: colors.brandSoft }]}
-              hoverStyle={!on && { backgroundColor: '#F7F7F9' }}
+              hoverStyle={!on && { backgroundColor: colors.brandSoft }}
             >
-              <T size={14} weight="bold" numberOfLines={1}>
+              <T size={14} weight="bold" color={on ? colors.brand : colors.text} numberOfLines={1}>
                 {j.title || '새로운 기록'}
               </T>
               <View style={{ flexDirection: 'row', gap: 8 }}>

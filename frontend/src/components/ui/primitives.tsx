@@ -18,29 +18,41 @@ import {
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { Icon, type IconName } from '@/components/icons/Icon';
-import { colors, fonts, radius, shadow } from '@/theme/tokens';
+import { buttonSizes, colors, fonts, interaction, radius, shadow } from '@/theme/tokens';
 import { T } from './Text';
 
-type PressState = PressableStateCallbackType & { hovered?: boolean };
+type PressState = PressableStateCallbackType & { hovered?: boolean; focused?: boolean };
 
 /** hover 상태를 받을 수 있는 Pressable (웹에서 마우스 오버 표현) */
 export function Hoverable({
   style,
   hoverStyle,
   pressedStyle,
+  tooltip,
   children,
   ...rest
 }: Omit<PressableProps, 'style'> & {
   style?: StyleProp<ViewStyle>;
   hoverStyle?: StyleProp<ViewStyle>;
   pressedStyle?: StyleProp<ViewStyle>;
+  tooltip?: string;
 }) {
   return (
     <Pressable
+      ref={Platform.OS === 'web' ? (node) => {
+        const target = node as unknown as { setAttribute(name: string, value: string): void; removeAttribute(name: string): void } | null;
+        if (tooltip) target?.setAttribute('title', tooltip);
+        else target?.removeAttribute('title');
+      } : undefined}
       {...rest}
       style={(s) => {
         const st = s as PressState;
-        return [style, st.hovered && hoverStyle, st.pressed && (pressedStyle ?? { opacity: 0.85 })];
+        return [
+          style,
+          !rest.disabled && st.hovered && hoverStyle,
+          !rest.disabled && st.pressed && (pressedStyle ?? { opacity: interaction.pressedOpacity }),
+          Platform.OS === 'web' && !rest.disabled && st.focused && styles.focusRing,
+        ];
       }}
     >
       {children}
@@ -49,23 +61,16 @@ export function Hoverable({
 }
 
 // ─── 버튼 ────────────────────────────────────────────────────
-type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'blue' | 'danger' | 'dangerOutline';
+type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'dangerOutline';
 type ButtonSize = 'sm' | 'md' | 'lg';
 
 const btnTone: Record<ButtonVariant, { bg: string; fg: string; border?: string; hover: string }> = {
-  primary: { bg: colors.black, fg: '#FFFFFF', hover: '#2A2C31' },
-  secondary: { bg: colors.surfaceWarm, fg: colors.text, hover: '#ECE9E3' },
-  outline: { bg: colors.surface, fg: colors.text, border: colors.border, hover: '#F7F8FA' },
-  ghost: { bg: 'transparent', fg: colors.textSub, hover: '#F3F4F6' },
-  blue: { bg: colors.blue, fg: '#FFFFFF', hover: '#3A6BEB' },
+  primary: { bg: colors.brand, fg: colors.surface, hover: colors.brand },
+  secondary: { bg: colors.surfaceSubtle, fg: colors.textBody, hover: colors.borderSoft },
+  outline: { bg: colors.surface, fg: colors.brand, border: colors.border, hover: colors.brandSoft },
+  ghost: { bg: 'transparent', fg: colors.brand, hover: colors.brandSoft },
   danger: { bg: colors.danger, fg: '#FFFFFF', hover: '#D13C41' },
   dangerOutline: { bg: colors.surface, fg: colors.danger, border: '#F5C2C7', hover: '#FFF5F5' },
-};
-
-const btnSize: Record<ButtonSize, { h: number; px: number; fs: number; r: number }> = {
-  sm: { h: 32, px: 12, fs: 13, r: 8 },
-  md: { h: 44, px: 18, fs: 15, r: 12 },
-  lg: { h: 48, px: 22, fs: 16, r: 12 },
 };
 
 export function Button({
@@ -90,12 +95,15 @@ export function Button({
   style?: StyleProp<ViewStyle>;
 }) {
   const tone = btnTone[variant];
-  const sz = btnSize[size];
+  const sz = buttonSizes[size];
+  const inactive = !!(disabled || loading);
   return (
     <Hoverable
       accessibilityRole="button"
       accessibilityLabel={label}
-      onPress={disabled || loading ? undefined : onPress}
+      accessibilityState={{ disabled: inactive, busy: !!loading }}
+      disabled={inactive}
+      onPress={onPress}
       style={[
         {
           height: sz.h,
@@ -107,13 +115,13 @@ export function Button({
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: 6,
-          opacity: disabled ? 0.4 : 1,
+          gap: 8,
+          opacity: disabled ? interaction.disabledOpacity : 1,
         },
         fullWidth && { alignSelf: 'stretch' },
         style,
       ]}
-      hoverStyle={!disabled && { backgroundColor: tone.hover }}
+      hoverStyle={{ backgroundColor: tone.hover, opacity: interaction.hoverOpacity }}
     >
       {loading ? <ActivityIndicator size="small" color={tone.fg} /> : icon ? <Icon name={icon} size={sz.fs + 2} color={tone.fg} /> : null}
       <T size={sz.fs} weight="semibold" color={tone.fg} lh={1.2}>
@@ -144,17 +152,18 @@ export function IconButton({
     <Hoverable
       accessibilityRole="button"
       accessibilityLabel={label}
+      tooltip={label}
       onPress={onPress}
       hitSlop={6}
       style={[{ width: box, height: box, borderRadius: box / 4, alignItems: 'center', justifyContent: 'center' }, style]}
-      hoverStyle={{ backgroundColor: '#F1F2F4' }}
+      hoverStyle={{ backgroundColor: colors.brandSoft }}
     >
       <Icon name={name} size={size} color={color} />
     </Hoverable>
   );
 }
 
-// ─── 탭 칩 (검정 알약) ───────────────────────────────────────
+// ─── 탭 칩 (브랜드 알약) ─────────────────────────────────────
 export function PillTabs<K extends string>({
   items,
   value,
@@ -181,11 +190,11 @@ export function PillTabs<K extends string>({
               height: size === 'sm' ? 30 : 32,
               paddingHorizontal: size === 'sm' ? 14 : 16,
               borderRadius: radius.pill,
-              backgroundColor: active ? colors.black : colors.surfaceMuted,
+              backgroundColor: active ? colors.brand : colors.surfaceMuted,
               alignItems: 'center',
               justifyContent: 'center',
             }}
-            hoverStyle={!active && { backgroundColor: '#EFF0F2' }}
+            hoverStyle={!active && { backgroundColor: colors.brandSoft }}
           >
             <T size={13} weight={active ? 'semibold' : 'regular'} color={active ? '#FFFFFF' : colors.textSub} lh={1.2}>
               {it.label}
@@ -226,7 +235,7 @@ export function Segmented<K extends string>({
       {items.map((it) => {
         const active = it.key === value;
         return (
-          <Pressable
+          <Hoverable
             key={it.key}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
@@ -236,11 +245,12 @@ export function Segmented<K extends string>({
               { flex: 1, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
               active && { backgroundColor: colors.surface, ...shadow.card },
             ]}
+            hoverStyle={!active && { backgroundColor: colors.brandSoft }}
           >
-            <T size={fontSize} weight={active ? 'semibold' : 'medium'} color={active ? colors.text : colors.textWarm} lh={1.2}>
+            <T size={fontSize} weight={active ? 'semibold' : 'medium'} color={active ? colors.brand : colors.textWarm} lh={1.2}>
               {it.label}
             </T>
-          </Pressable>
+          </Hoverable>
         );
       })}
     </View>
@@ -254,15 +264,18 @@ export function MiniSegmented<K extends string>({ items, value, onChange }: { it
       {items.map((it) => {
         const active = it.key === value;
         return (
-          <Pressable
+          <Hoverable
             key={it.key}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
             onPress={() => onChange(it.key)}
             style={[{ paddingHorizontal: 12, height: 30, borderRadius: 8, justifyContent: 'center' }, active && { backgroundColor: '#FFF', ...shadow.card }]}
+            hoverStyle={!active && { backgroundColor: colors.brandSoft }}
           >
-            <T size={12} weight={active ? 'semibold' : 'regular'} color={active ? colors.text : colors.textSub} lh={1.2}>
+            <T size={12} weight={active ? 'semibold' : 'regular'} color={active ? colors.brand : colors.textSub} lh={1.2}>
               {it.label}
             </T>
-          </Pressable>
+          </Hoverable>
         );
       })}
     </View>
@@ -316,11 +329,10 @@ export function AiToggle({ value, onChange, size = 'md', disabled }: { value: bo
   );
 }
 
-/** 일반 스위치 (설정 화면 — 보라 / 위젯 — 파랑) */
-export function Switch({ value, onChange, tone = 'purple' }: { value: boolean; onChange: (v: boolean) => void; tone?: 'purple' | 'blue' }) {
-  const on = tone === 'purple' ? '#7C5CD6' : colors.blue;
+/** 일반 스위치 — 설정·위젯에 같은 브랜드 강조색 사용 */
+export function Switch({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
   return (
-    <Pressable
+    <Hoverable
       accessibilityRole="switch"
       accessibilityState={{ checked: value }}
       aria-checked={value}
@@ -329,19 +341,20 @@ export function Switch({ value, onChange, tone = 'purple' }: { value: boolean; o
         e.stopPropagation?.();
         onChange(!value);
       }}
-      style={{ width: 40, height: 24, borderRadius: 12, backgroundColor: value ? on : '#E2E4E8', padding: 3, justifyContent: 'center' }}
+      style={{ width: 40, height: 24, borderRadius: 12, backgroundColor: value ? colors.brand : '#E2E4E8', padding: 3, justifyContent: 'center' }}
+      hoverStyle={{ opacity: interaction.hoverOpacity }}
     >
       <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#FFF', alignSelf: value ? 'flex-end' : 'flex-start', ...shadow.card }} />
-    </Pressable>
+    </Hoverable>
   );
 }
 
 // ─── 체크박스 ────────────────────────────────────────────────
 /** 원형 체크 (보드 체크리스트 · 투자 기록) */
 export function CircleCheck({ checked, onPress, size = 20, tone = 'purple' }: { checked: boolean; onPress?: () => void; size?: number; tone?: 'purple' | 'gray' }) {
-  const fill = tone === 'purple' ? '#8B6CDB' : colors.textSub;
+  const fill = tone === 'purple' ? colors.brand : colors.textSub;
   return (
-    <Pressable
+    <Hoverable
       accessibilityRole="checkbox"
       accessibilityState={{ checked }}
       aria-checked={checked}
@@ -359,15 +372,14 @@ export function CircleCheck({ checked, onPress, size = 20, tone = 'purple' }: { 
       }}
     >
       {checked && <Icon name="check" size={size * 0.62} color="#FFF" strokeWidth={3} />}
-    </Pressable>
+    </Hoverable>
   );
 }
 
 /** 사각 체크 (위젯 '확인할 것' · 설정) */
-export function SquareCheck({ checked, onPress, tone = 'blue', size = 18 }: { checked: boolean; onPress?: () => void; tone?: 'blue' | 'purple'; size?: number }) {
-  const fill = tone === 'blue' ? colors.blue : '#7C5CD6';
+export function SquareCheck({ checked, onPress, size = 18 }: { checked: boolean; onPress?: () => void; size?: number }) {
   return (
-    <Pressable
+    <Hoverable
       accessibilityRole="checkbox"
       accessibilityState={{ checked }}
       aria-checked={checked}
@@ -379,20 +391,20 @@ export function SquareCheck({ checked, onPress, tone = 'blue', size = 18 }: { ch
         borderRadius: 4,
         borderWidth: checked ? 0 : 1.5,
         borderColor: '#D3D7DE',
-        backgroundColor: checked ? fill : '#FFF',
+        backgroundColor: checked ? colors.brand : '#FFF',
         alignItems: 'center',
         justifyContent: 'center',
       }}
     >
       {checked && <Icon name="check" size={size * 0.7} color="#FFF" strokeWidth={3} />}
-    </Pressable>
+    </Hoverable>
   );
 }
 
 export function LabeledCheck({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <Pressable onPress={() => onChange(!checked)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-      <SquareCheck checked={checked} onPress={() => onChange(!checked)} tone="purple" />
+      <SquareCheck checked={checked} onPress={() => onChange(!checked)} />
       <T size={14} color={colors.textBody}>
         {label}
       </T>
@@ -401,7 +413,7 @@ export function LabeledCheck({ label, checked, onChange }: { label: string; chec
 }
 
 // ─── 진행 링 (1/4) ───────────────────────────────────────────
-export function ProgressRing({ done, total, size = 32, color = '#8B6CDB', dashed }: { done: number; total: number; size?: number; color?: string; dashed?: boolean }) {
+export function ProgressRing({ done, total, size = 32, color = colors.brand, dashed }: { done: number; total: number; size?: number; color?: string; dashed?: boolean }) {
   const stroke = 2.5;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
@@ -484,12 +496,13 @@ export function TextField({
           height: 44,
           borderRadius: 10,
           borderWidth: 1,
-          borderColor: focused ? '#9AA3B2' : colors.border,
+          borderColor: colors.border,
           backgroundColor: colors.surface,
           paddingHorizontal: 14,
           gap: 8,
         },
         style,
+        focused && { borderColor: colors.brand },
       ]}
     >
       {icon && <Icon name={icon} size={16} color={colors.textMuted} />}
@@ -512,22 +525,28 @@ export function TextField({
 }
 
 export function TextArea({ style, minHeight = 120, ...rest }: TextInputProps & { minHeight?: number }) {
+  const [focused, setFocused] = useState(false);
   return (
     <TextInput
       multiline
       textAlignVertical="top"
       placeholderTextColor={colors.placeholder}
       {...rest}
+      onFocus={(e) => { setFocused(true); rest.onFocus?.(e); }}
+      onBlur={(e) => { setFocused(false); rest.onBlur?.(e); }}
       style={[
         styles.input,
         {
           minHeight,
+          borderWidth: 1,
+          borderColor: 'transparent',
           borderRadius: 12,
           backgroundColor: colors.surfaceWarm,
           padding: 16,
           lineHeight: 22,
         },
         style,
+        focused && { borderColor: colors.brand },
       ]}
     />
   );
@@ -552,12 +571,15 @@ export function Select<K extends string>({
   return (
     <View style={{ width, zIndex: open ? 50 : 1 }}>
       <Hoverable
+        accessibilityRole="button"
+        accessibilityLabel={current?.label ?? placeholder}
+        accessibilityState={{ expanded: open }}
         onPress={() => setOpen((o) => !o)}
         style={{
           height: 38,
           borderRadius: 8,
           borderWidth: 1,
-          borderColor: colors.border,
+          borderColor: open ? colors.brand : colors.border,
           backgroundColor: colors.surface,
           paddingHorizontal: 12,
           flexDirection: 'row',
@@ -565,7 +587,7 @@ export function Select<K extends string>({
           justifyContent: 'space-between',
           gap: 8,
         }}
-        hoverStyle={{ borderColor: '#C9CED6' }}
+        hoverStyle={{ borderColor: colors.brand, backgroundColor: colors.surfaceMuted }}
       >
         <T size={14} color={current ? colors.text : colors.placeholder} numberOfLines={1} style={{ flexShrink: 1 }}>
           {current?.label ?? placeholder}
@@ -578,14 +600,15 @@ export function Select<K extends string>({
             <Hoverable
               key={o.key}
               disabled={o.disabled}
+              accessibilityState={{ selected: o.key === value, disabled: o.disabled }}
               onPress={() => {
                 onChange(o.key);
                 setOpen(false);
               }}
-              style={{ paddingHorizontal: 12, height: 36, justifyContent: 'center', borderRadius: 6, opacity: o.disabled ? 0.4 : 1 }}
-              hoverStyle={{ backgroundColor: '#F4F5F7' }}
+              style={{ paddingHorizontal: 12, height: 36, justifyContent: 'center', borderRadius: 6, opacity: o.disabled ? interaction.disabledOpacity : 1, backgroundColor: o.key === value ? colors.brandSoft : undefined }}
+              hoverStyle={{ backgroundColor: colors.brandSoft }}
             >
-              <T size={14} weight={o.key === value ? 'semibold' : 'regular'} numberOfLines={1}>
+              <T size={14} weight={o.key === value ? 'semibold' : 'regular'} color={o.key === value ? colors.brand : colors.text} numberOfLines={1}>
                 {o.label}
               </T>
             </Hoverable>
@@ -698,6 +721,7 @@ export function QuestionDot({ onPress, active }: { onPress?: () => void; active?
 }
 
 const styles = StyleSheet.create({
+  focusRing: Platform.OS === 'web' ? ({ outlineStyle: 'solid', outlineWidth: interaction.focusWidth, outlineColor: colors.brand, outlineOffset: 2 } as ViewStyle) : {},
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.xl,

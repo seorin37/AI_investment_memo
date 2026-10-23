@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Icon } from '@/components/icons/Icon';
-import { Sheet } from '@/components/ui/Modal';
+import { Sheet, SheetHeader } from '@/components/ui/Modal';
 import { Button, Hoverable, Segmented, TextArea, TextField } from '@/components/ui/primitives';
 import { T } from '@/components/ui/Text';
 import { useSendFeedback } from '@/hooks/queries';
@@ -36,19 +36,14 @@ export function FeedbackModal({ onClose, initialTab = 'general' }: { onClose: ()
 
   return (
     <Sheet visible onClose={onClose} width={520} padding={32} radius={28}>
-      <View style={{ position: 'absolute', right: 0, top: 6 }}>
-        <T size={92} weight="bold" color="#E3E5E9" lh={1}>
-          “
-        </T>
-      </View>
-      <T size={24} weight="bold">
-        {tab === 'general' ? '피드백 보내기' : '오류 신고'}
-      </T>
-      <T size={13} color={colors.textSub} style={{ marginTop: 6, marginBottom: 22 }} lh={1.6}>
-        {tab === 'general'
+      <SheetHeader
+        title={tab === 'general' ? '피드백 보내기' : '오류 신고'}
+        titleSize={24}
+        description={tab === 'general'
           ? 'MEMO’S(메모스)를 사용하며 느낀 점을 알려주세요.\n소중한 의견을 모아 더 좋은 서비스를 만들겠습니다.'
           : '서비스 이용 중 발생한 문제를 알려주세요.\n남겨주신 내용을 확인하고 개선하겠습니다.'}
-      </T>
+        onClose={onClose}
+      />
       <Segmented
         tone="cool"
         items={[
@@ -95,8 +90,11 @@ export function FeedbackModal({ onClose, initialTab = 'general' }: { onClose: ()
               return (
                 <Hoverable
                   key={c}
+                  accessibilityRole="button"
                   onPress={() => setCats((x) => (on ? x.filter((y) => y !== c) : [...x, c]))}
-                  style={{ height: 34, paddingHorizontal: 18, borderRadius: 17, borderWidth: 1, borderColor: on ? colors.text : colors.border, backgroundColor: on ? colors.text : '#FFF', justifyContent: 'center', flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                  accessibilityState={{ selected: on }}
+                  style={{ height: 34, paddingHorizontal: 18, borderRadius: 17, borderWidth: 1, borderColor: on ? colors.brand : colors.border, backgroundColor: on ? colors.brand : colors.surface, justifyContent: 'center', flexDirection: 'row', alignItems: 'center', gap: 8 }}
+                  hoverStyle={{ opacity: 0.9 }}
                 >
                   {on && <Icon name="check" size={12} color="#FFF" strokeWidth={2.5} />}
                   <T size={13} color={on ? '#FFF' : colors.textBody} lh={1.2}>
@@ -128,8 +126,8 @@ export function FeedbackModal({ onClose, initialTab = 'general' }: { onClose: ()
         </T>
       </View>
       <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 22 }}>
-        <Button label="취소" variant="secondary" onPress={onClose} style={{ backgroundColor: '#F2F3F5', paddingHorizontal: 34, height: 48 }} />
-        <Button label="보내기" onPress={submit} disabled={!canSend} loading={send.isPending} style={{ paddingHorizontal: 46, height: 48 }} />
+        <Button label="취소" variant="secondary" size="lg" onPress={onClose} />
+        <Button label="보내기" size="lg" onPress={submit} disabled={!canSend} loading={send.isPending} />
       </View>
     </Sheet>
   );

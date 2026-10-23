@@ -1,8 +1,7 @@
 import React from 'react';
 import { View } from 'react-native';
 import { Icon } from '@/components/icons/Icon';
-import { Sheet } from '@/components/ui/Modal';
-import { IconButton } from '@/components/ui/primitives';
+import { Sheet, SheetHeader } from '@/components/ui/Modal';
 import { T } from '@/components/ui/Text';
 import { colors } from '@/theme/tokens';
 
@@ -21,22 +20,10 @@ export function WidgetSheet({
   footer?: React.ReactNode;
 }) {
   return (
-    <Sheet visible onClose={onClose} width={440} padding={20} radius={20}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 14 }}>
-        <View style={{ flex: 1 }}>
-          <T size={16} weight="bold">
-            {title}
-          </T>
-          {subtitle && (
-            <T size={11} color={colors.textSub}>
-              {subtitle}
-            </T>
-          )}
-        </View>
-        <IconButton name="x" label="닫기" onPress={onClose} size={16} color={colors.text} />
-      </View>
+    <Sheet visible onClose={onClose} width={440} radius={20}>
+      <SheetHeader title={title} description={subtitle} onClose={onClose} />
       <View style={{ gap: 10, minHeight: 300 }}>{children}</View>
-      {footer && <View style={{ gap: 8, marginTop: 18 }}>{footer}</View>}
+      {footer && <View style={{ gap: 8, marginTop: 20, paddingTop: 16, borderTopWidth: 1, borderColor: colors.borderSoft }}>{footer}</View>}
     </Sheet>
   );
 }

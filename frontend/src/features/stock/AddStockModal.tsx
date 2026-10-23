@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Sheet } from '@/components/ui/Modal';
+import { Sheet, SheetHeader } from '@/components/ui/Modal';
 import { Button, Hoverable, TextField } from '@/components/ui/primitives';
 import { T } from '@/components/ui/Text';
 import { useAddStock, useMyStocks, useStockSearch } from '@/hooks/queries';
@@ -37,17 +37,8 @@ export function AddStockModal({ onClose, preset }: { onClose: () => void; preset
   };
 
   return (
-    <Sheet visible onClose={onClose} width={520} padding={28} radius={20}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <T size={20} weight="bold">
-          종목 추가
-        </T>
-        <Pressable onPress={onClose} hitSlop={8}>
-          <T size={14} color={colors.textBody}>
-            닫기
-          </T>
-        </Pressable>
-      </View>
+    <Sheet visible onClose={onClose} width={520} radius={20}>
+      <SheetHeader title="종목 추가" onClose={onClose} />
 
       <Step n={1} label="종목 검색" />
       <TextField
@@ -58,10 +49,10 @@ export function AddStockModal({ onClose, preset }: { onClose: () => void; preset
           setPicked(null);
         }}
         placeholder="종목명 또는 종목코드"
-        style={{ height: 48, borderColor: q ? colors.text : colors.border, backgroundColor: q ? '#F6F7F9' : colors.surface }}
+        style={{ backgroundColor: colors.surfaceMuted }}
       />
       <View style={{ marginTop: 8, minHeight: 40, gap: 2 }}>
-        {q.trim() && results.length === 0 && !isFetching && (
+        {q.trim().length > 0 && results.length === 0 && !isFetching && (
           <T size={13} color={colors.textMuted} style={{ padding: 12 }}>
             검색 결과가 없어요
           </T>
@@ -71,11 +62,13 @@ export function AddStockModal({ onClose, preset }: { onClose: () => void; preset
           return (
             <Hoverable
               key={s.code}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
               onPress={() => setPicked(s)}
-              style={[{ height: 42, borderRadius: 8, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 10 }, active && { backgroundColor: '#F1F1F2' }]}
-              hoverStyle={{ backgroundColor: '#F6F6F7' }}
+              style={[{ height: 42, borderRadius: 8, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 8 }, active && { backgroundColor: colors.brandSoft }]}
+              hoverStyle={{ backgroundColor: colors.brandSoft }}
             >
-              <T size={14} weight={active ? 'bold' : 'medium'}>
+              <T size={14} weight={active ? 'bold' : 'medium'} color={active ? colors.brand : colors.text}>
                 {s.name}
               </T>
               <T size={12} color={colors.textMuted}>
@@ -103,10 +96,13 @@ export function AddStockModal({ onClose, preset }: { onClose: () => void; preset
           return (
             <Hoverable
               key={k}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
               onPress={() => setStatus(k)}
-              style={{ flex: 1, height: 42, borderRadius: radius.sm, backgroundColor: active ? colors.black : '#F5F5F6', alignItems: 'center', justifyContent: 'center' }}
+              style={{ flex: 1, height: 44, borderRadius: radius.md, backgroundColor: active ? colors.brand : colors.surfaceSubtle, alignItems: 'center', justifyContent: 'center' }}
+              hoverStyle={{ opacity: 0.9 }}
             >
-              <T size={14} weight="bold" color={active ? '#FFF' : '#9A9AA0'}>
+              <T size={14} weight="semibold" color={active ? colors.surface : colors.textSub}>
                 {label}
               </T>
             </Hoverable>
@@ -123,8 +119,8 @@ export function AddStockModal({ onClose, preset }: { onClose: () => void; preset
           : '추가할 종목을 검색 결과에서 선택해 주세요.'}
       </T>
       <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 18 }}>
-        <Button label="취소" variant="secondary" size="sm" onPress={onClose} style={{ height: 40, paddingHorizontal: 26, backgroundColor: '#F2F2F3' }} />
-        <Button label="확인" size="sm" onPress={submit} disabled={!picked} loading={add.isPending} style={{ height: 40, paddingHorizontal: 26 }} />
+        <Button label="취소" variant="secondary" onPress={onClose} />
+        <Button label="확인" onPress={submit} disabled={!picked} loading={add.isPending} />
       </View>
     </Sheet>
   );
@@ -133,7 +129,7 @@ export function AddStockModal({ onClose, preset }: { onClose: () => void; preset
 function Step({ n, label }: { n: number; label: string }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, marginBottom: 12 }}>
-      <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: colors.black, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: colors.brand, alignItems: 'center', justifyContent: 'center' }}>
         <T size={11} weight="bold" color="#FFF" lh={1}>
           {n}
         </T>

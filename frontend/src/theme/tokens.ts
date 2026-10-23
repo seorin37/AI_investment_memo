@@ -33,7 +33,7 @@ export const colors = {
   brand: '#6A42AB', // 사이드바 활성 텍스트
   brandSoft: '#F4EFFD', // 사이드바 활성 배경
   brandLine: '#986BEE',
-  blue: '#477BFF', // 링크 · 위젯 기본 버튼
+  blue: '#477BFF', // 정보·데이터 구분 (주요 액션은 brand)
   blueStrong: '#3B82F5',
   blueSoft: '#EEF3FF',
   teal: '#1AB8A2', // AI 연결 토글 ON
@@ -98,6 +98,17 @@ export const chartColors = {
 export const radius = { xs: 6, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, pill: 999 } as const;
 
 export const space = { xxs: 4, xs: 8, sm: 12, md: 16, lg: 20, xl: 24, xxl: 32, xxxl: 40 } as const;
+
+/** 공통 버튼 규격 — 화면에서는 너비·배치만 조정한다. */
+export const buttonSizes = {
+  sm: { h: 32, px: 12, fs: 13, r: radius.sm },
+  md: { h: 44, px: 18, fs: 15, r: radius.md },
+  lg: { h: 48, px: 22, fs: 16, r: radius.md },
+} as const;
+
+export const interaction = { hoverOpacity: 0.9, pressedOpacity: 0.8, disabledOpacity: 0.4, focusWidth: 2 } as const;
+
+export const modalLayout = { padding: space.xl, radius: radius.xxl, titleSize: 20, descriptionSize: 14, closeSize: 20, closeBox: 36 } as const;
 
 export const layout = {
   sidebarWidth: 250,

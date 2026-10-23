@@ -53,7 +53,7 @@ export function WidgetCard({
 export function LinkText({ label, onPress, align = 'center' }: { label: string; onPress: () => void; align?: 'center' | 'left' }) {
   return (
     <Hoverable onPress={onPress} style={{ alignSelf: align === 'center' ? 'center' : 'flex-start', paddingVertical: 4 }} hoverStyle={{ opacity: 0.75 }}>
-      <T size={13} color={colors.blue} weight="medium">
+      <T size={13} color={colors.brand} weight="medium">
         {label}
       </T>
     </Hoverable>
