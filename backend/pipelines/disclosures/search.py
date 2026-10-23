@@ -10,6 +10,7 @@ false(서비스용)면 `SET LOCAL hnsw.ef_search = <ef_search>`.
 
 from __future__ import annotations
 
+import hashlib
 import time
 from dataclasses import asdict, dataclass
 
@@ -38,9 +39,13 @@ class Hit:
     score: float
     dense: float | None = None
     sparse: float | None = None
+    colbert: float | None = None
     section: str = ""
     symbol: str = ""
     period_end: str = ""
+    chunk_text: str = ""
+    title: str = ""
+    source_url: str = ""
 
     @property
     def key(self) -> Key:
@@ -101,14 +106,14 @@ def dense_candidates(conn: Connection, query_vector: np.ndarray, k: int, filters
     rows = conn.execute(
         text(
             "SELECT c.rcept_no, c.chunk_index, c.section, d.symbol, d.period_end::text,"
-            " 1 - (c.embedding <=> CAST(:q AS vector)) AS score"
+            " 1 - (c.dense_embedding <=> CAST(:q AS vector)) AS score, c.chunk_text, d.title, coalesce(d.source_url, '')"
             " FROM disclosure_chunks c JOIN disclosures d ON d.rcept_no = c.rcept_no"
-            f" WHERE c.embedding IS NOT NULL{where}"
-            " ORDER BY c.embedding <=> CAST(:q AS vector), c.rcept_no, c.chunk_index LIMIT :k"
+            f" WHERE c.dense_embedding IS NOT NULL AND c.sparse_embedding IS NOT NULL{where}"
+            " ORDER BY c.dense_embedding <=> CAST(:q AS vector), c.rcept_no, c.chunk_index LIMIT :k"
         ),
         {"q": vector_literal(query_vector), "k": k, **params},
     ).all()
-    return [Hit(r[0], r[1], float(r[5]), dense=float(r[5]), section=r[2] or "", symbol=r[3].strip(), period_end=r[4]) for r in rows]
+    return [Hit(r[0], r[1], float(r[5]), dense=float(r[5]), section=r[2] or "", symbol=r[3].strip(), period_end=r[4], chunk_text=r[6], title=r[7], source_url=r[8]) for r in rows]
 
 
 def dense_scores_for(conn: Connection, query_vector: np.ndarray, keys: list[Key]) -> dict[Key, Hit]:
@@ -118,14 +123,14 @@ def dense_scores_for(conn: Connection, query_vector: np.ndarray, keys: list[Key]
     rows = conn.execute(
         text(
             "SELECT c.rcept_no, c.chunk_index, c.section, d.symbol, d.period_end::text,"
-            " 1 - (c.embedding <=> CAST(:q AS vector))"
+            " 1 - (c.dense_embedding <=> CAST(:q AS vector)), c.chunk_text, d.title, coalesce(d.source_url, '')"
             " FROM disclosure_chunks c JOIN disclosures d ON d.rcept_no = c.rcept_no"
             " JOIN unnest(CAST(:rs AS text[]), CAST(:ix AS int[])) AS k(r, i) ON c.rcept_no = k.r AND c.chunk_index = k.i"
-            " WHERE c.embedding IS NOT NULL"
+            " WHERE c.dense_embedding IS NOT NULL AND c.sparse_embedding IS NOT NULL"
         ),
         {"q": vector_literal(query_vector), "rs": [k[0] for k in keys], "ix": [k[1] for k in keys]},
     ).all()
-    return {(r[0], r[1]): Hit(r[0], r[1], float(r[5]), dense=float(r[5]), section=r[2] or "", symbol=r[3].strip(), period_end=r[4]) for r in rows}
+    return {(r[0], r[1]): Hit(r[0], r[1], float(r[5]), dense=float(r[5]), section=r[2] or "", symbol=r[3].strip(), period_end=r[4], chunk_text=r[6], title=r[7], source_url=r[8]) for r in rows}
 
 
 def allowed_rcept_nos(conn: Connection, filters: Filters) -> set[str]:
@@ -192,12 +197,12 @@ class ColbertCache:
         from collections import OrderedDict
 
         self.max_bytes = int(max_mb * 2**20)
-        self.items: "OrderedDict[Key, np.ndarray]" = OrderedDict()
+        self.items: "OrderedDict[tuple[str, int, str, str], np.ndarray]" = OrderedDict()
         self.bytes = 0
         self.hits = 0
         self.misses = 0
 
-    def get(self, key: Key):
+    def get(self, key: tuple[str, int, str, str]):
         value = self.items.get(key)
         if value is None:
             self.misses += 1
@@ -206,7 +211,7 @@ class ColbertCache:
         self.hits += 1
         return value
 
-    def put(self, key: Key, value: np.ndarray) -> None:
+    def put(self, key: tuple[str, int, str, str], value: np.ndarray) -> None:
         if key in self.items:
             self.bytes -= self.items.pop(key).nbytes
         self.items[key] = value
@@ -227,6 +232,30 @@ def chunk_texts(conn: Connection, keys: list[Key]) -> dict[Key, str]:
         {"rs": [k[0] for k in keys], "ix": [k[1] for k in keys]},
     ).all()
     return {(r[0], r[1]): r[2] for r in rows}
+
+
+def search_424(
+    engine: Engine,
+    encoder,
+    sparse_index: SparseIndex,
+    query: str,
+    filters: Filters,
+    search_config: dict,
+    colbert_cache: ColbertCache | None = None,
+) -> list[Hit]:
+    """서비스 기본 검색: dense 0.4 + sparse 0.2 + ColBERT 0.4."""
+    scores = score_candidates(engine, encoder, sparse_index, query, filters, search_config, colbert_cache, with_colbert=True)
+    weights = search_config.get("weights", {"dense": 0.4, "sparse": 0.2, "colbert": 0.4})
+    ranked = rank(scores, weights, int(search_config.get("final_k", 10)))
+    hits = []
+    for key, score in ranked:
+        base = scores.meta[key]
+        hits.append(Hit(
+            key[0], key[1], score, dense=scores.dense[key], sparse=scores.sparse[key], colbert=scores.colbert[key],
+            section=base.section, symbol=base.symbol, period_end=base.period_end, chunk_text=base.chunk_text,
+            title=base.title, source_url=base.source_url,
+        ))
+    return hits
 
 
 def score_candidates(
@@ -279,11 +308,17 @@ def score_candidates(
         vectors: dict[Key, object] = {}
         need: list[Key] = []
         texts: dict[Key, str] = {}
+        cache_keys: dict[Key, tuple[str, int, str, str]] = {}
         if with_colbert:
             step = time.perf_counter()
-            vectors = {key: cache.get(key) for key in keys}
+            texts = chunk_texts(conn, keys)
+            namespace = str(getattr(encoder, "cache_namespace", type(encoder).__name__))
+            cache_keys = {
+                key: (key[0], key[1], hashlib.sha256(texts[key].encode()).hexdigest(), namespace)
+                for key in keys
+            }
+            vectors = {key: cache.get(cache_keys[key]) for key in keys}
             need = [key for key, vec in vectors.items() if vec is None]
-            texts = chunk_texts(conn, need)
             timings["colbert"] = (time.perf_counter() - step) * 1000.0
 
     colbert_scores: dict[Key, float] = {}
@@ -293,7 +328,7 @@ def score_candidates(
         fresh = encoder.encode_colbert_documents([texts[key] for key in need])
         for key, vec in zip(need, fresh):
             vectors[key] = vec
-            cache.put(key, vec)
+            cache.put(cache_keys[key], vec)
         colbert_scores = {key: colbert_score(encoded.colbert, vectors[key]) for key in keys}
         timings["colbert"] += (time.perf_counter() - step) * 1000.0
     timings["total"] = (time.perf_counter() - started) * 1000.0

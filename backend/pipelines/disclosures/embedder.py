@@ -8,8 +8,10 @@ FlagEmbedding의 `encode()`는 호출마다 첫 배치를 OOM 탐색용으로 �
 
 from __future__ import annotations
 
+import json
 import os
 import time
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Sequence
@@ -184,6 +186,21 @@ def check_dense(vectors: np.ndarray, tolerance: float = 0.01) -> None:
         raise EmbeddingQualityError(f"임베딩 노름 범위 밖: {norms.min():.4f}~{norms.max():.4f}")
 
 
+def check_sparse(rows: Sequence[dict[str, float] | None]) -> None:
+    """Sparse 토큰 ID와 가중치가 DB에 안전하게 저장 가능한지 검사한다."""
+    for row in rows:
+        if row is None:
+            raise EmbeddingQualityError("sparse 임베딩이 생성되지 않았습니다.")
+        for token, weight in row.items():
+            try:
+                token_id = int(token)
+                value = float(weight)
+            except (TypeError, ValueError):
+                raise EmbeddingQualityError(f"잘못된 sparse 값: {token!r}={weight!r}") from None
+            if token_id < 0 or str(token_id) != str(token) or not np.isfinite(value) or value <= 0:
+                raise EmbeddingQualityError(f"잘못된 sparse 값: {token!r}={weight!r}")
+
+
 def l2_normalize(vectors: np.ndarray) -> np.ndarray:
     vectors = np.asarray(vectors, dtype=np.float32)
     return vectors / np.linalg.norm(vectors, axis=1, keepdims=True).clip(min=1e-12)
@@ -337,6 +354,7 @@ def load_encoder(model_config: dict, offline: bool, allow_cpu: bool) -> tuple[M3
         max_length=int(model_config.get("max_length", 1024)),
         query_max_length=int(model_config.get("query_max_length", 512)),
     )
+    encoder.cache_namespace = f"{model_config['name']}@{model_config['revision']}"
     return encoder, {"model_path": str(path), "device": device, "dtype": "float16" if use_fp16 else "float32"}
 
 
@@ -376,33 +394,35 @@ def embed_pending(
     encoder: M3Encoder,
     rcept_nos: Sequence[str],
     *,
-    sparse_dir: Path | None,
+    model_name: str = "unknown",
+    model_revision: str = "unknown",
+    config_hash: str = "unknown",
     commit_every: int = 256,
     progress_every_sec: float = 10.0,
 ) -> EmbedReport:
-    """`embedding IS NULL`인 청크만 임베딩해 UPDATE한다 (DB가 체크포인트).
+    """dense/sparse가 없거나 현재 모델 설정과 다른 청크를 함께 임베딩한다.
 
     begin: 트랜잭션 컨텍스트를 돌려주는 함수(보통 engine.begin). commit_every행마다 executemany UPDATE + commit.
-    sparse_dir가 있으면(hybrid) 같은 추론의 sparse를 파일에 먼저 덧붙인 뒤 DB를 커밋한다. embedding은 있는데
-    sparse 파일에 없는 청크도 다시 처리한다. 끝나면 sparse 파일을 정렬·중복 제거한다.
+    dense와 sparse 및 생성 메타데이터는 같은 UPDATE/트랜잭션으로 확정한다. DB가 유일한 체크포인트다.
     NaN/Inf·노름 이상 배치는 저장하지 않고 실패로 센다(NULL로 남아 validate가 잡는다).
     """
     from sqlalchemy import bindparam, text
 
-    from . import sparse_store
     from .search import vector_literal
 
     rcept_nos = sorted(set(rcept_nos))
     with begin() as conn:
         rows = conn.execute(
             text(
-                "SELECT id, rcept_no, chunk_index, chunk_text, embedding IS NULL FROM disclosure_chunks"
+                "SELECT id, rcept_no, chunk_index, chunk_text,"
+                " dense_embedding IS NULL OR sparse_embedding IS NULL OR embedding_model IS DISTINCT FROM :model"
+                " OR embedding_revision IS DISTINCT FROM :revision OR embedding_config_hash IS DISTINCT FROM :config_hash AS pending"
+                " FROM disclosure_chunks"
                 " WHERE rcept_no IN :rs ORDER BY rcept_no, chunk_index"
             ).bindparams(bindparam("rs", expanding=True)),
-            {"rs": rcept_nos},
+            {"rs": rcept_nos, "model": model_name, "revision": model_revision, "config_hash": config_hash},
         ).all() if rcept_nos else []
-    sparse_keys = sparse_store.keys(sparse_dir, rcept_nos) if sparse_dir is not None else set()
-    work = [r for r in rows if r[4] or (sparse_dir is not None and (r[1], r[2]) not in sparse_keys)]
+    work = [r for r in rows if r[4]]
     report = EmbedReport(pending=len(work))
     if not work:
         log.info("임베딩할 청크가 없습니다.")
@@ -415,12 +435,27 @@ def embed_pending(
     def flush() -> None:
         if not buffer:
             return
-        if sparse_dir is not None:
-            sparse_store.append(sparse_dir, [(r, i, e.sparse or {}) for _, r, i, e in buffer])
+        embedded_at = datetime.now(timezone.utc)
         with begin() as conn:
             conn.execute(
-                text("UPDATE disclosure_chunks SET embedding = CAST(:e AS vector) WHERE id = :id"),
-                [{"id": chunk_id, "e": vector_literal(encoded.dense)} for chunk_id, _, _, encoded in buffer],
+                text(
+                    "UPDATE disclosure_chunks SET dense_embedding = CAST(:dense AS vector),"
+                    " sparse_embedding = CAST(:sparse AS jsonb), embedding_model = :model,"
+                    " embedding_revision = :revision, embedding_config_hash = :config_hash, embedded_at = :embedded_at"
+                    " WHERE id = :id"
+                ),
+                [
+                    {
+                        "id": chunk_id,
+                        "dense": vector_literal(encoded.dense),
+                        "sparse": json.dumps(encoded.sparse, separators=(",", ":"), sort_keys=True),
+                        "model": model_name,
+                        "revision": model_revision,
+                        "config_hash": config_hash,
+                        "embedded_at": embedded_at,
+                    }
+                    for chunk_id, _, _, encoded in buffer
+                ],
             )
         report.embedded += len(buffer)
         buffer.clear()
@@ -428,6 +463,7 @@ def embed_pending(
     def on_batch(indices: list[int], outputs: list[Encoded]) -> None:
         try:
             check_dense(np.stack([o.dense for o in outputs]))
+            check_sparse([o.sparse for o in outputs])
         except EmbeddingQualityError as exc:
             report.failed += len(indices)
             log.error("배치 품질 검사 실패 → 저장하지 않음 (%d개): %s", len(indices), exc)
@@ -445,15 +481,9 @@ def embed_pending(
             eta = (len(work) - done) / rate if rate > 0 else float("inf")
             log.info("진행 %d/%d청크, %.1f청크/초, 남은 시간 약 %.0f초 (배치 %d)", done, len(work), rate, eta, encoder.batch_size)
 
-    _, stats = encoder.encode_documents([r[3] for r in work], sparse=sparse_dir is not None, on_batch=on_batch, keep_results=False)
+    _, stats = encoder.encode_documents([r[3] for r in work], sparse=True, on_batch=on_batch, keep_results=False)
     flush()
     report.stats = stats
-    if sparse_dir is not None:
-        valid: dict[str, set[int]] = {}
-        for _, rcept_no, chunk_index, _, _ in rows:
-            valid.setdefault(rcept_no, set()).add(chunk_index)
-        for rcept_no in rcept_nos:
-            sparse_store.compact(sparse_dir, rcept_no, valid.get(rcept_no, set()))
     log.info(
         "임베딩 완료: %d청크, %.1f초, %.1f청크/초, 최대 GPU 메모리 %.2f GiB, 실패 %d, 잘림 %d",
         report.embedded,

@@ -1,4 +1,4 @@
-"""disclosures · disclosure_chunks · stocks.dart_corp_code · ingest_runs 적재 (스키마 변경 없음).
+"""disclosures · disclosure_chunks · stocks.dart_corp_code · ingest_runs 적재.
 
 함수는 Connection을 받아 쓰기만 하고 commit하지 않는다. 트랜잭션 경계는 호출자가 정한다
 (실행 진입점은 문서 하나당 `engine.begin()` 하나).
@@ -41,9 +41,7 @@ def preflight(conn: Connection, symbols: list[str]) -> None:
     alembic_cfg.set_main_option("script_location", str(repo_root / "alembic"))
 
     expected_heads = set(ScriptDirectory.from_config(alembic_cfg).get_heads())
-    actual_heads = set(
-        conn.execute(text("SELECT version_num FROM alembic_version")).scalars()
-    )
+    actual_heads = set(conn.execute(text("SELECT version_num FROM alembic_version")).scalars().all())
 
     if actual_heads != expected_heads:
         problems.append(
@@ -63,11 +61,19 @@ def preflight(conn: Connection, symbols: list[str]) -> None:
     column_type = conn.execute(
         text(
             "SELECT format_type(a.atttypid, a.atttypmod) FROM pg_attribute a "
-            "WHERE a.attrelid = 'disclosure_chunks'::regclass AND a.attname = 'embedding' AND NOT a.attisdropped"
+            "WHERE a.attrelid = 'disclosure_chunks'::regclass AND a.attname = 'dense_embedding' AND NOT a.attisdropped"
         )
     ).scalar()
     if column_type != EXPECTED_EMBEDDING_TYPE:
-        problems.append(f"disclosure_chunks.embedding 타입이 {EXPECTED_EMBEDDING_TYPE}가 아닙니다: {column_type}")
+        problems.append(f"disclosure_chunks.dense_embedding 타입이 {EXPECTED_EMBEDDING_TYPE}가 아닙니다: {column_type}")
+    sparse_type = conn.execute(
+        text(
+            "SELECT data_type FROM information_schema.columns WHERE table_schema='public' "
+            "AND table_name='disclosure_chunks' AND column_name='sparse_embedding'"
+        )
+    ).scalar()
+    if sparse_type != "jsonb":
+        problems.append(f"disclosure_chunks.sparse_embedding 타입이 jsonb가 아닙니다: {sparse_type}")
     if problems:
         raise PreflightError("; ".join(problems))
 
@@ -143,7 +149,7 @@ def db_fingerprint(conn: Connection, rcept_no: str) -> str | None:
 
 
 def load_chunks(conn: Connection, rcept_no: str, chunks: list[Chunk]) -> bool:
-    """청크를 교체 적재한다 (embedding = NULL). fingerprint가 DB와 같으면 건너뛰고 False."""
+    """청크를 교체 적재한다 (dense/sparse = NULL). fingerprint가 DB와 같으면 건너뛰고 False."""
     if not chunks:
         raise ValueError(f"{rcept_no}: 적재할 청크가 없습니다.")
     if db_fingerprint(conn, rcept_no) == doc_fingerprint([c.chunk_hash for c in chunks]):
@@ -151,8 +157,8 @@ def load_chunks(conn: Connection, rcept_no: str, chunks: list[Chunk]) -> bool:
     conn.execute(text("DELETE FROM disclosure_chunks WHERE rcept_no = :r"), {"r": rcept_no})
     conn.execute(
         text(
-            "INSERT INTO disclosure_chunks (rcept_no, chunk_index, section, chunk_text, embedding)"
-            " VALUES (:rcept_no, :chunk_index, :section, :chunk_text, NULL)"
+            "INSERT INTO disclosure_chunks (rcept_no, chunk_index, section, chunk_text, dense_embedding, sparse_embedding)"
+            " VALUES (:rcept_no, :chunk_index, :section, :chunk_text, NULL, NULL)"
         ),
         [
             {"rcept_no": rcept_no, "chunk_index": c.chunk_index, "section": c.section, "chunk_text": c.chunk_text}

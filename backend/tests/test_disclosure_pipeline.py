@@ -264,11 +264,11 @@ class ValidateDbTest(unittest.TestCase):
         vector = vector_literal(np.full(1024, 1 / 32, dtype=np.float32))
         for i, chunk_text in enumerate(texts):
             self.conn.execute(text(
-                "INSERT INTO disclosure_chunks (rcept_no, chunk_index, section, chunk_text, embedding) VALUES (:r, :i, 's', :t, CAST(:e AS vector))"
-            ), {"r": self.RCEPT, "i": i, "t": chunk_text, "e": vector})
+                "INSERT INTO disclosure_chunks (rcept_no, chunk_index, section, chunk_text, dense_embedding, sparse_embedding, embedding_model, embedding_revision, embedding_config_hash, embedded_at)"
+                " VALUES (:r, :i, 's', :t, CAST(:e AS vector), CAST(:s AS jsonb), 'm', 'r', 'h', now())"
+            ), {"r": self.RCEPT, "i": i, "t": chunk_text, "e": vector, "s": '{"5":1.0}'})
         self.chunks = [Chunk(self.RCEPT, i, "s", "text", t, 1, sha256_text(t)) for i, t in enumerate(texts)]
         pipeline.update_manifest(self.root / "manifest.jsonl", {self.RCEPT: [c.manifest_row() for c in self.chunks]})
-        sparse_store.append(self.root / "sparse", [(self.RCEPT, 0, {"5": 1.0}), (self.RCEPT, 1, {"6": 1.0})])
 
     def tearDown(self):
         self.outer.rollback()
@@ -276,7 +276,7 @@ class ValidateDbTest(unittest.TestCase):
         self.tmp.cleanup()
 
     def run_validate(self, **kwargs):
-        options = {"manifest_path": self.root / "manifest.jsonl", "sparse_dir": self.root / "sparse", "expected_per_symbol": None}
+        options = {"manifest_path": self.root / "manifest.jsonl", "expected_per_symbol": None}
         options.update(kwargs)
         return validate(self.conn, [self.RCEPT], **options)
 
@@ -288,19 +288,18 @@ class ValidateDbTest(unittest.TestCase):
         self.assertTrue(result["ok"], result["checks"])
         self.assertEqual(result["fingerprints"][self.RCEPT], doc_fingerprint([c.chunk_hash for c in self.chunks]))
 
-    def test_detects_null_embedding_sparse_gap_and_manifest_mismatch(self):
-        self.conn.execute(text("UPDATE disclosure_chunks SET embedding = NULL WHERE rcept_no = :r AND chunk_index = 1"), {"r": self.RCEPT})
-        sparse_store.compact(self.root / "sparse", self.RCEPT, valid_indices={0})
+    def test_detects_null_embeddings_and_manifest_mismatch(self):
+        self.conn.execute(text("UPDATE disclosure_chunks SET dense_embedding = NULL, sparse_embedding = NULL, embedding_model=NULL, embedding_revision=NULL, embedding_config_hash=NULL, embedded_at=NULL WHERE rcept_no = :r AND chunk_index = 1"), {"r": self.RCEPT})
         pipeline.update_manifest(self.root / "manifest.jsonl", {self.RCEPT: [self.chunks[0].manifest_row()]})
-        self.assertEqual(self.failed(self.run_validate()), {"embedding_not_null", "sparse_matches_db", "manifest_matches_db"})
+        self.assertEqual(self.failed(self.run_validate()), {"dense_embedding_not_null", "sparse_embedding_not_null", "embedding_metadata_not_null", "manifest_matches_db"})
 
     def test_detects_index_gap_and_bad_norm(self):
         self.conn.execute(text("UPDATE disclosure_chunks SET chunk_index = 5 WHERE rcept_no = :r AND chunk_index = 1"), {"r": self.RCEPT})
-        self.conn.execute(text("UPDATE disclosure_chunks SET embedding = array_fill(0.5, ARRAY[1024])::vector WHERE rcept_no = :r AND chunk_index = 0"), {"r": self.RCEPT})
-        self.assertTrue({"chunk_index_contiguous", "embedding_norm"} <= self.failed(self.run_validate(sparse_dir=None)))
+        self.conn.execute(text("UPDATE disclosure_chunks SET dense_embedding = array_fill(0.5, ARRAY[1024])::vector WHERE rcept_no = :r AND chunk_index = 0"), {"r": self.RCEPT})
+        self.assertTrue({"chunk_index_contiguous", "dense_embedding_norm"} <= self.failed(self.run_validate()))
 
     def test_per_symbol_expectation(self):
-        result = self.run_validate(sparse_dir=None, expected_per_symbol={"005930": 10}, periods=["2001-06-30"])
+        result = self.run_validate(expected_per_symbol={"005930": 10}, periods=["2001-06-30"])
         self.assertIn("disclosures_per_symbol", self.failed(result))
 
     def test_non_periodic_and_out_of_period_rows_are_ignored(self):

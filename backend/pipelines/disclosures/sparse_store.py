@@ -1,8 +1,7 @@
-"""BGE-M3 sparse(lexical) 가중치 파일 저장소와 메모리 역색인.
+"""BGE-M3 sparse(lexical) 가중치와 메모리 역색인.
 
-파일: `{sparse_dir}/{rcept_no}.jsonl`, 한 줄 = {"rcept_no","chunk_index","weights":{"<token_id>": float32}}.
-DB 스키마를 바꾸지 않기 위해 sparse는 파일에만 둔다. 같은 키가 여러 번 있으면 마지막 줄을 쓴다
-(중단 후 재실행으로 생길 수 있음). compact()로 정렬·중복 제거한다.
+운영 저장소는 disclosure_chunks.sparse_embedding(JSONB)이다. 파일 함수는 이전 산출물
+검증·이관용으로만 남긴다.
 """
 
 from __future__ import annotations
@@ -14,6 +13,8 @@ from pathlib import Path
 from typing import Iterable
 
 import numpy as np
+from sqlalchemy import bindparam, text
+from sqlalchemy.engine import Connection, Engine
 
 
 Key = tuple[str, int]
@@ -122,7 +123,7 @@ class SparseIndex:
 
     @classmethod
     def from_dir(cls, sparse_dir: Path, rcept_nos: Iterable[str]) -> "SparseIndex":
-        """문서 파일을 하나씩 읽어 쌓는다 (전체 dict를 한꺼번에 들고 있지 않는다)."""
+        """이전 JSONL 산출물에서 인덱스를 만든다. 이관·회귀검증 전용."""
 
         def stream():
             for rcept_no in sorted(set(rcept_nos)):
@@ -131,6 +132,29 @@ class SparseIndex:
                     yield (rcept_no, index), rows[index]
 
         return cls(stream())
+
+    @classmethod
+    def from_connection(cls, conn: Connection, rcept_nos: Iterable[str] | None = None) -> "SparseIndex":
+        """DB의 유효한 dense+sparse 청크에서 인덱스를 만든다."""
+        wanted = sorted(set(rcept_nos or []))
+        sql = (
+            "SELECT rcept_no, chunk_index, sparse_embedding FROM disclosure_chunks "
+            "WHERE dense_embedding IS NOT NULL AND sparse_embedding IS NOT NULL"
+        )
+        params = {}
+        if wanted:
+            sql += " AND rcept_no IN :rs"
+            statement = text(sql + " ORDER BY rcept_no, chunk_index").bindparams(bindparam("rs", expanding=True))
+            params["rs"] = wanted
+        else:
+            statement = text(sql + " ORDER BY rcept_no, chunk_index")
+        rows = conn.execute(statement, params)
+        return cls((((row[0], int(row[1])), {str(k): float(v) for k, v in (row[2] or {}).items()}) for row in rows))
+
+    @classmethod
+    def from_engine(cls, engine: Engine, rcept_nos: Iterable[str] | None = None) -> "SparseIndex":
+        with engine.connect() as conn:
+            return cls.from_connection(conn, rcept_nos)
 
     def __len__(self) -> int:
         return len(self.keys)

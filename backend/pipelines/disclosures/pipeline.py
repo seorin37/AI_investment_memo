@@ -4,8 +4,8 @@
   collect  data/raw/dart/{종목}_{접수번호}.zip, data/raw/dart/reports.json, corpCode.xml 캐시, stocks.dart_corp_code
   parse    data/parsed/{rcept_no}.json
   chunk    data/chunks/{rcept_no}.jsonl, data/chunks/manifest.jsonl
-  load     disclosures, disclosure_chunks(embedding NULL) — 문서당 트랜잭션 1개, fingerprint가 같으면 건너뜀
-  embed    disclosure_chunks.embedding (+ hybrid: data/embeddings/sparse/{rcept_no}.jsonl)
+  load     disclosures, disclosure_chunks(dense/sparse NULL) — 문서당 트랜잭션 1개, fingerprint가 같으면 건너뜀
+  embed    disclosure_chunks.dense_embedding + sparse_embedding (DB 동시 저장)
   validate 완료 조건 자동 검사
 실행 기록: ingest_runs 1행, logs/run_{mode}_{ts}.json
 """
@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -29,7 +30,7 @@ from app.targets import TARGET_SYMBOLS
 from ..common.config import REPO_ROOT, data_path, load_config, resolve_path
 from ..common.logging import REDACTOR, get_logger, setup_logging
 from . import chunker as chunker_mod
-from . import dart, parser, sparse_store
+from . import dart, parser
 from .loader import KST
 
 
@@ -148,7 +149,6 @@ class Run:
         self.raw_dir = data_path(config, "raw_dir")
         self.parsed_dir = data_path(config, "parsed_dir")
         self.chunks_dir = data_path(config, "chunks_dir")
-        self.sparse_dir = data_path(config, "sparse_dir") if mode == "hybrid" else None
         self.logs_dir = data_path(config, "logs_dir")
         self.manifest_path = self.chunks_dir / "manifest.jsonl"
         self.companies = {str(k): v for k, v in config["targets"]["companies"].items()}
@@ -304,11 +304,7 @@ class Run:
             log.info("정정본 교체: %s → %s", old, ref.rcept_no)
             (self.chunks_dir / f"{old}.jsonl").unlink(missing_ok=True)
             (self.parsed_dir / f"{old}.json").unlink(missing_ok=True)
-            if self.sparse_dir is not None:
-                sparse_store.remove(self.sparse_dir, old)
             update_manifest(self.manifest_path, {}, drop={old})
-        if reloaded and self.sparse_dir is not None:
-            sparse_store.remove(self.sparse_dir, ref.rcept_no)  # 청크가 바뀌었으니 이전 sparse는 무효
         return reloaded
 
     def embed(self, rcept_nos: list[str]) -> dict:
@@ -321,11 +317,21 @@ class Run:
         from .embedder import embed_pending, environment_info
 
         self.record["environment"] = {**environment_info(), **model_info}
+        model_cfg = self.config["model"]
+        identity_config = {
+            key: model_cfg.get(key)
+            for key in ("name", "revision", "max_length")
+        }
+        config_hash = hashlib.sha256(
+            json.dumps(identity_config, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
         report = embed_pending(
             self.engine.begin,
             encoder,
             rcept_nos,
-            sparse_dir=self.sparse_dir,
+            model_name=str(model_cfg["name"]),
+            model_revision=str(model_cfg["revision"]),
+            config_hash=config_hash,
             commit_every=int(self.config.get("load", {}).get("commit_every", 256)),
         )
         stats = report.stats
@@ -349,7 +355,7 @@ class Run:
         expected = {s: len(self.periods) for s in self.symbols} if full_scope else None
         with self.engine.connect() as conn:
             result = validate(
-                conn, rcept_nos, manifest_path=self.manifest_path, sparse_dir=self.sparse_dir, expected_per_symbol=expected, periods=self.periods
+                conn, rcept_nos, manifest_path=self.manifest_path, expected_per_symbol=expected, periods=self.periods
             )
         for check in result["checks"]:
             log.info("validate %s %s: %s", "OK " if check["ok"] else "FAIL", check["name"], check["detail"])

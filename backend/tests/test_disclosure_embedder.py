@@ -266,28 +266,27 @@ class EmbedPendingDbTest(unittest.TestCase):
             yield self.conn
 
     def null_count(self):
-        return self.conn.execute(self.text("SELECT count(*) FROM disclosure_chunks WHERE rcept_no = 'T0000000000099' AND embedding IS NULL")).scalar()
+        return self.conn.execute(self.text("SELECT count(*) FROM disclosure_chunks WHERE rcept_no = 'T0000000000099' AND (dense_embedding IS NULL OR sparse_embedding IS NULL)")).scalar()
 
-    def test_hybrid_embeds_nulls_writes_sparse_and_resumes(self):
-        with tempfile.TemporaryDirectory() as directory:
-            sparse_dir = Path(directory)
-            report = embedder.embed_pending(self.begin, StubEncoder(), ["T0000000000099"], sparse_dir=sparse_dir, commit_every=2)
-            self.assertEqual((report.pending, report.embedded, report.failed), (5, 5, 0))
-            self.assertEqual(self.null_count(), 0)
-            from pipelines.disclosures import sparse_store
-
-            self.assertEqual(sparse_store.keys(sparse_dir, ["T0000000000099"]), {("T0000000000099", i) for i in range(5)})
-            again = embedder.embed_pending(self.begin, StubEncoder(), ["T0000000000099"], sparse_dir=sparse_dir, commit_every=2)
-            self.assertEqual(again.pending, 0)
-            sparse_store.remove(sparse_dir, "T0000000000099")  # sparse가 없으면 다시 처리
-            self.assertEqual(embedder.embed_pending(self.begin, StubEncoder(), ["T0000000000099"], sparse_dir=sparse_dir).pending, 5)
+    def test_embeds_dense_sparse_in_db_and_resumes(self):
+        kwargs = {"model_name": "m", "model_revision": "r", "config_hash": "h"}
+        report = embedder.embed_pending(self.begin, StubEncoder(), ["T0000000000099"], commit_every=2, **kwargs)
+        self.assertEqual((report.pending, report.embedded, report.failed), (5, 5, 0))
+        self.assertEqual(self.null_count(), 0)
+        stored = self.conn.execute(self.text("SELECT sparse_embedding FROM disclosure_chunks WHERE rcept_no='T0000000000099' ORDER BY chunk_index")).scalars().all()
+        self.assertEqual(stored, [{"7": 0.5}] * 5)
+        self.assertEqual(embedder.embed_pending(self.begin, StubEncoder(), ["T0000000000099"], **kwargs).pending, 0)
+        changed = {**kwargs, "config_hash": "changed"}
+        self.assertEqual(embedder.embed_pending(self.begin, StubEncoder(), ["T0000000000099"], **changed).pending, 5)
+        self.conn.execute(self.text("UPDATE disclosure_chunks SET dense_embedding=NULL, sparse_embedding=NULL, embedding_model=NULL, embedding_revision=NULL, embedding_config_hash=NULL, embedded_at=NULL WHERE rcept_no='T0000000000099' AND chunk_index=0"))
+        self.assertEqual(embedder.embed_pending(self.begin, StubEncoder(), ["T0000000000099"], **changed).pending, 1)
 
     def test_bad_batch_is_not_saved(self):
-        report = embedder.embed_pending(self.begin, StubEncoder(bad_texts={"다"}), ["T0000000000099"], sparse_dir=None, commit_every=256)
+        report = embedder.embed_pending(self.begin, StubEncoder(bad_texts={"다"}), ["T0000000000099"], commit_every=256)
         self.assertEqual((report.embedded, report.failed), (3, 2))  # 배치 [다, 라] 실패
         self.assertEqual(self.null_count(), 2)
         norm = self.conn.execute(self.text(
-            "SELECT max(abs(vector_norm(embedding) - 1)) FROM disclosure_chunks WHERE rcept_no = 'T0000000000099' AND embedding IS NOT NULL"
+            "SELECT max(abs(vector_norm(dense_embedding) - 1)) FROM disclosure_chunks WHERE rcept_no = 'T0000000000099' AND dense_embedding IS NOT NULL"
         )).scalar()
         self.assertLess(norm, 1e-5)
 

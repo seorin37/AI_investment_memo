@@ -127,9 +127,7 @@ def main(argv: list[str] | None = None) -> int:
     if mode == "hybrid":
         from .sparse_store import SparseIndex
 
-        with engine.connect() as conn:
-            rcept_nos = conn.execute(text("SELECT DISTINCT rcept_no FROM disclosure_chunks")).scalars().all()
-        index = SparseIndex.from_dir(data_path(config, "sparse_dir"), rcept_nos)
+        index = SparseIndex.from_engine(engine)
         weights = config.get("hybrid", {})
         dense_weight, sparse_weight = float(weights.get("dense_weight", 0.5)), float(weights.get("sparse_weight", 0.5))
         log.info("sparse 역색인 %d청크, 가중치 dense %.2f / sparse %.2f", len(index), dense_weight, sparse_weight)

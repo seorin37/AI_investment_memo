@@ -42,6 +42,14 @@ class CombineTest(unittest.TestCase):
     def test_vector_literal(self):
         self.assertEqual(search.vector_literal(np.array([0.5, -1.0], dtype=np.float32)), "[0.5,-1.0]")
 
+    def test_colbert_cache_key_invalidates_on_text_or_model_change(self):
+        cache = search.ColbertCache(1)
+        vector = np.ones((1, 4), dtype=np.float16)
+        cache.put(("R", 0, "text-a", "model-a"), vector)
+        self.assertIsNotNone(cache.get(("R", 0, "text-a", "model-a")))
+        self.assertIsNone(cache.get(("R", 0, "text-b", "model-a")))
+        self.assertIsNone(cache.get(("R", 0, "text-a", "model-b")))
+
 
 class SparseStoreTest(unittest.TestCase):
     def test_append_read_dedupe_compact(self):
@@ -85,6 +93,20 @@ class SparseStoreTest(unittest.TestCase):
             sparse_store.append(Path(directory), [("R1", 0, {"3": 1.0}), ("R2", 0, {"3": 2.0})])
             index = sparse_store.SparseIndex.from_dir(Path(directory), ["R2", "R1"])
             self.assertEqual(index.top({"3": 1.0}, 2), [(("R2", 0), 2.0), (("R1", 0), 1.0)])
+
+    def test_db_and_legacy_file_indexes_score_the_same(self):
+        entries = [("R1", 0, {"3": 1.0}), ("R2", 0, {"3": 2.0})]
+
+        class RowsConn:
+            def execute(self, statement, params=None):
+                return entries
+
+        db_index = sparse_store.SparseIndex.from_connection(RowsConn())
+        with tempfile.TemporaryDirectory() as directory:
+            sparse_store.append(Path(directory), entries)
+            file_index = sparse_store.SparseIndex.from_dir(Path(directory), ["R1", "R2"])
+        query = {"3": 0.5}
+        self.assertEqual(db_index.top(query, 2), file_index.top(query, 2))
 
 
 class FakeEncoder:

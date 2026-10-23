@@ -2,8 +2,7 @@
 
 - 기업별 disclosures 행 수(전체 실행: 기업당 대상 기간 수), (symbol, kind, period_end) 중복 0
 - 청크 없는 공시 0, chunk_index 0부터 연속
-- embedding NULL 0, 노름 0.99~1.01, NaN/Inf 0
-- hybrid: sparse 파일의 (rcept_no, chunk_index) 집합 = DB 청크 집합
+- dense/sparse NULL 0, dense 노름 0.99~1.01, sparse 값 유효
 - 매니페스트 행 = DB 청크 (개수·(rcept_no, chunk_index)·chunk_hash 모두 일치)
 - 문서별 doc_fingerprint (DB chunk_text 기준)
 """
@@ -16,7 +15,6 @@ from pathlib import Path
 from sqlalchemy import bindparam, text
 from sqlalchemy.engine import Connection
 
-from . import sparse_store
 from .chunker import doc_fingerprint, sha256_text
 
 
@@ -100,7 +98,6 @@ def validate(
     rcept_nos: list[str],
     *,
     manifest_path: Path,
-    sparse_dir: Path | None,
     expected_per_symbol: dict[str, int] | None,
     periods: list[str] | None = None,
 ) -> dict:
@@ -131,7 +128,10 @@ def validate(
     stats = conn.execute(
         _in(
             "SELECT d.rcept_no, count(c.id), coalesce(min(c.chunk_index), -1), coalesce(max(c.chunk_index), -1),"
-            " count(c.id) FILTER (WHERE c.embedding IS NULL)"
+            " count(c.id) FILTER (WHERE c.dense_embedding IS NULL),"
+            " count(c.id) FILTER (WHERE c.sparse_embedding IS NULL),"
+            " count(c.id) FILTER (WHERE c.embedding_model IS NULL OR c.embedding_revision IS NULL"
+            " OR c.embedding_config_hash IS NULL OR c.embedded_at IS NULL)"
             " FROM disclosures d LEFT JOIN disclosure_chunks c ON c.rcept_no = d.rcept_no"
             " WHERE d.rcept_no IN :rs GROUP BY d.rcept_no"
         ),
@@ -139,22 +139,26 @@ def validate(
     ).all()
     chunkless = [r[0] for r in stats if r[1] == 0]
     gaps = [r[0] for r in stats if r[1] and (r[2] != 0 or r[3] != r[1] - 1)]
-    nulls = {r[0]: r[4] for r in stats if r[4]}
+    dense_nulls = {r[0]: r[4] for r in stats if r[4]}
+    sparse_nulls = {r[0]: r[5] for r in stats if r[5]}
+    metadata_nulls = {r[0]: r[6] for r in stats if r[6]}
     total_chunks = sum(r[1] for r in stats)
     checks.append(_check("chunks_exist", not chunkless, {"chunkless": chunkless}))
     checks.append(_check("chunk_index_contiguous", not gaps, {"gaps": gaps}))
-    checks.append(_check("embedding_not_null", not nulls, {"null_by_doc": nulls, "total_chunks": total_chunks}))
+    checks.append(_check("dense_embedding_not_null", not dense_nulls, {"null_by_doc": dense_nulls, "total_chunks": total_chunks}))
+    checks.append(_check("sparse_embedding_not_null", not sparse_nulls, {"null_by_doc": sparse_nulls, "total_chunks": total_chunks}))
+    checks.append(_check("embedding_metadata_not_null", not metadata_nulls, {"null_by_doc": metadata_nulls}))
 
     norm = conn.execute(
         _in(
             "SELECT min(n), max(n), count(*) FILTER (WHERE n = 'NaN'::float8 OR n = 'Infinity'::float8 OR n < :lo OR n > :hi)"
-            " FROM (SELECT vector_norm(embedding) AS n FROM disclosure_chunks WHERE rcept_no IN :rs AND embedding IS NOT NULL) t"
+            " FROM (SELECT vector_norm(dense_embedding) AS n FROM disclosure_chunks WHERE rcept_no IN :rs AND dense_embedding IS NOT NULL) t"
         ),
         {"rs": rcept_nos, "lo": NORM_LOW, "hi": NORM_HIGH},
     ).one()
     checks.append(
         _check(
-            "embedding_norm",
+            "dense_embedding_norm",
             norm[2] == 0 and norm[0] is not None,
             {"min": norm[0], "max": norm[1], "out_of_range_or_nonfinite": norm[2]},
         )
@@ -171,10 +175,17 @@ def validate(
         if hashes:
             fingerprints[rcept_no] = doc_fingerprint(hashes)
 
-    if sparse_dir is not None:
-        sparse_keys = sparse_store.keys(sparse_dir, rcept_nos)
-        extra, lacking = sorted(sparse_keys - set(db_hashes)), sorted(set(db_hashes) - sparse_keys)
-        checks.append(_check("sparse_matches_db", not extra and not lacking, {"sparse": len(sparse_keys), "db": len(db_hashes), "extra": extra[:10], "missing": lacking[:10]}))
+    invalid_sparse = conn.execute(
+        _in(
+            "SELECT rcept_no, chunk_index FROM disclosure_chunks c WHERE rcept_no IN :rs"
+            " AND sparse_embedding IS NOT NULL AND EXISTS ("
+            " SELECT 1 FROM jsonb_each(c.sparse_embedding) e"
+            " WHERE e.key !~ '^[0-9]+$' OR jsonb_typeof(e.value) <> 'number'"
+            " OR CASE WHEN jsonb_typeof(e.value) = 'number' THEN (e.value #>> '{}')::double precision <= 0 ELSE true END)"
+        ),
+        {"rs": rcept_nos},
+    ).all()
+    checks.append(_check("sparse_embedding_valid", not invalid_sparse, {"invalid": [list(r) for r in invalid_sparse[:10]]}))
 
     manifest: dict[tuple[str, int], str] = {}
     manifest_rows = 0

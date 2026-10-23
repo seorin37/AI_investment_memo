@@ -258,10 +258,9 @@ def main(argv: list[str] | None = None) -> int:
 
     engine = get_engine()
     with engine.connect() as conn:
-        db_chunks = int(conn.execute(text("SELECT count(*) FROM disclosure_chunks")).scalar())
-        rcept_nos = conn.execute(text("SELECT DISTINCT rcept_no FROM disclosure_chunks")).scalars().all()
+        db_chunks = int(conn.execute(text("SELECT count(*) FROM disclosure_chunks WHERE dense_embedding IS NOT NULL AND sparse_embedding IS NOT NULL")).scalar())
     alignment = check_reference_corpus(reference, db_chunks)
-    index = SparseIndex.from_dir(data_path(config, "sparse_dir"), rcept_nos)
+    index = SparseIndex.from_engine(engine)
     if len(index) != db_chunks:
         raise SystemExit(f"sparse 역색인({len(index)})과 DB 청크({db_chunks}) 수가 다릅니다. hybrid 임베딩을 먼저 완료하세요.")
     encoder, model_info = load_encoder(config["model"], args.offline, args.allow_cpu)

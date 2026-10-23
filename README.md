@@ -177,6 +177,11 @@ PYTHONPATH=backend python -m pipelines.disclosures.run_hybrid \
 
 `collect → parse → chunk → load → embed → validate`
 
+공시 청크의 BGE-M3 dense(1024차원)와 sparse(토큰별 가중치) 임베딩은 각각
+`disclosure_chunks.dense_embedding`, `disclosure_chunks.sparse_embedding`에 같은
+트랜잭션으로 저장됩니다. ColBERT 문서 벡터는 DB에 저장하지 않고 검색 후보에
+대해서만 계산하며 본문 해시와 모델 식별자를 포함한 메모리 캐시를 사용합니다.
+
 `--steps`를 이용해 필요한 단계만 실행할 수 있습니다.
 
 예:
@@ -191,6 +196,20 @@ PYTHONPATH=backend python -m pipelines.disclosures.run_dense \
 ```
 
 `--limit 1`은 처리 문서 상한이며, DART 목록 조회나 원문 다운로드 횟수를 반드시 1회로 제한하는 것은 아닙니다.
+
+기본 4:2:4 공시 검색:
+
+```bash
+PYTHONPATH=backend python -m pipelines.disclosures.search_tool \
+  "삼성전자의 반도체 설비투자 계획" \
+  --symbol 005930 \
+  --offline
+```
+
+검색은 dense 후보와 sparse 후보를 합친 후 후보 본문에 ColBERT를 계산하고,
+각 신호를 질의별 min-max 정규화하여 dense 0.4, sparse 0.2, ColBERT 0.4로
+합산합니다. 후보 수와 최종 결과 수, 가중치는 `configs/common.yaml`의 `search`에서
+조정할 수 있습니다.
 
 ### DART 재무 데이터
 

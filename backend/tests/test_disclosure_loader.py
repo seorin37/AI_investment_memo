@@ -37,8 +37,8 @@ class FakeResult:
 
 
 class FakeConn:
-    def __init__(self, alembic="0005", vector="0.8.7", symbols=("005930",), column="vector(1024)"):
-        self.answers = [alembic, vector, list(symbols), column]
+    def __init__(self, alembic="0007_disclosure_embeddings", vector="0.8.7", symbols=("005930",), column="vector(1024)", sparse="jsonb"):
+        self.answers = [[alembic], vector, list(symbols), column, sparse]
 
     def execute(self, *args, **kwargs):
         return FakeResult(self.answers.pop(0))
@@ -126,12 +126,12 @@ class LoaderDbTest(unittest.TestCase):
     def test_load_chunks_skip_on_same_fingerprint(self):
         loader.upsert_disclosure(self.conn, ref("T0000000000031"))
         self.assertTrue(loader.load_chunks(self.conn, "T0000000000031", chunks("T0000000000031", ["가", "나"])))
-        self.conn.execute(text("UPDATE disclosure_chunks SET embedding = array_fill(0.03125, ARRAY[1024])::vector WHERE rcept_no = 'T0000000000031'"))
+        self.conn.execute(text("UPDATE disclosure_chunks SET dense_embedding = array_fill(0.03125, ARRAY[1024])::vector, sparse_embedding='{}'::jsonb, embedding_model='m', embedding_revision='r', embedding_config_hash='h', embedded_at=now() WHERE rcept_no = 'T0000000000031'"))
         self.assertFalse(loader.load_chunks(self.conn, "T0000000000031", chunks("T0000000000031", ["가", "나"])))
-        self.assertEqual(self.count("SELECT count(*) FROM disclosure_chunks WHERE rcept_no = 'T0000000000031' AND embedding IS NOT NULL"), 2)
+        self.assertEqual(self.count("SELECT count(*) FROM disclosure_chunks WHERE rcept_no = 'T0000000000031' AND dense_embedding IS NOT NULL"), 2)
         self.assertTrue(loader.load_chunks(self.conn, "T0000000000031", chunks("T0000000000031", ["가", "다", "라"])))
         self.assertEqual(
-            self.conn.execute(text("SELECT array_agg(chunk_index ORDER BY chunk_index) FROM disclosure_chunks WHERE rcept_no = 'T0000000000031' AND embedding IS NULL")).scalar(),
+            self.conn.execute(text("SELECT array_agg(chunk_index ORDER BY chunk_index) FROM disclosure_chunks WHERE rcept_no = 'T0000000000031' AND dense_embedding IS NULL")).scalar(),
             [0, 1, 2],
         )
 

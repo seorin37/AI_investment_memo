@@ -33,7 +33,6 @@ paths:
   raw_dir: data/raw/dart
   parsed_dir: data/parsed
   chunks_dir: data/chunks
-  sparse_dir: data/embeddings/sparse
   logs_dir: logs
   # 재무 API 원본 응답 JSON (run_financials, WO-015)
   financials_raw_dir: data/raw/dart/financials
@@ -48,7 +47,7 @@ model:
   devices: ["cuda:0"]   # 멀티 GPU는 지원하지 않는다. 첫 장치만 쓴다.
   max_length: 1024
   query_max_length: 512
-  batch_size: 16        # 6GB GPU 기준. OOM이면 절반씩 줄인다.
+  batch_size: 16        # 6GB GPU 실측 기본값. OOM이면 자동으로 절반씩 줄인다.
 
 parse:
   # TITLE 텍스트가 하나라도 맞으면 그 섹션(하위 포함)을 제외한다. 섹션 제목을 하드코딩하지 않는다.
@@ -77,3 +76,10 @@ search:
   candidate_k: 50
   exact: true        # 평가는 반드시 true (HNSW 미사용 정확 검색)
   ef_search: 200     # exact=false일 때 hnsw.ef_search
+  weights:           # 실제 검색 기본값: dense / sparse / ColBERT = 4 / 2 / 4
+    dense: 0.4
+    sparse: 0.2
+    colbert: 0.4
+
+colbert:
+  cache_max_mb: 2048
