@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Linking, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Page, PageHeader } from '@/components/layout/Page';
@@ -35,6 +35,9 @@ const openSource = (u: MarketUpdate) => {
 
 /** 3.1 최신 업데이트 — 종목별 최신 공시 · 뉴스 · 주가 */
 export function UpdatesOverview() {
+  const [gridWidth, setGridWidth] = useState(0);
+  const columns = Math.max(1, Math.min(3, Math.floor((gridWidth + 24) / (480 + 24))));
+  const cardWidth = gridWidth > 0 ? (gridWidth - 24 * (columns - 1)) / columns : undefined;
   const { data: stocks, isLoading } = useMyStocks();
   const { data: updates = [], error, refetch, isRefetching } = useUpdates();
   const router = useRouter();
@@ -55,9 +58,11 @@ export function UpdatesOverview() {
       {isLoading && <Loading />}
       {error && <ErrorState message="업데이트를 불러오지 못했어요." onRetry={() => void refetch()} />}
       {stocks?.length === 0 && <EmptyState title="아직 추가한 종목이 없어요" desc="사이드바의 '내 종목 +'로 종목을 추가하면 소식이 모여요." />}
-      <View style={{ gap: 24, maxWidth: 568 }}>
+      <View onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 24 }}>
         {ordered.map((s) => (
-          <StockUpdateCard key={s.code} stock={s} items={latestByType(s.code)} onOpenStock={() => router.navigate(`/updates/${s.code}`)} />
+          <View key={s.code} style={{ width: cardWidth ?? '100%' }}>
+            <StockUpdateCard stock={s} items={latestByType(s.code)} onOpenStock={() => router.navigate(`/updates/${s.code}`)} />
+          </View>
         ))}
       </View>
     </Page>

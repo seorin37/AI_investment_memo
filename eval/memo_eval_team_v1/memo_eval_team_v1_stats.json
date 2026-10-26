@@ -1,0 +1,13 @@
+{
+ "memos": 30,
+ "sentences": 41,
+ "items": 33,
+ "decision": {
+  "normal": 18,
+  "partial": 12,
+  "full_fallback": 8,
+  "needs_confirmation": 3
+ },
+ "boundary": 3,
+ "conflict_d048": 0
+}

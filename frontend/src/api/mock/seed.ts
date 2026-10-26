@@ -65,7 +65,7 @@ export const stockMaster: StockMaster[] = [
   { code: '207940', name: '삼성바이오로직스', market: 'KOSPI' },
   { code: '068270', name: '셀트리온', market: 'KOSPI' },
   { code: '005490', name: 'POSCO홀딩스', market: 'KOSPI' },
-  { code: '105560', name: 'KB금융', market: 'KOSPI' },
+  { code: '105560', name: 'KB금융지주', market: 'KOSPI' },
   { code: '042700', name: '한미반도체', market: 'KOSPI' },
   { code: '086520', name: '에코프로', market: 'KOSDAQ' },
   { code: '196170', name: '알테오젠', market: 'KOSDAQ' },
@@ -75,6 +75,7 @@ export const myStocks: MyStock[] = [
   { code: '000660', name: 'SK하이닉스', market: 'KOSPI', status: 'holding', tags: [], unread_updates: 3, added_at: '2026-09-20T10:00:00+09:00' },
   { code: '005930', name: '삼성전자', market: 'KOSPI', status: 'watching', tags: [], unread_updates: 2, added_at: '2026-09-21T10:00:00+09:00' },
   { code: '035420', name: '네이버', market: 'KOSPI', status: 'watching', tags: [], unread_updates: 0, added_at: '2026-09-22T10:00:00+09:00' },
+  { code: '105560', name: 'KB금융지주', market: 'KOSPI', status: 'watching', tags: [], unread_updates: 0, added_at: '2026-09-23T10:00:00+09:00' },
 ];
 
 // ─── 시세 ────────────────────────────────────────────────────
@@ -395,9 +396,13 @@ export const marketUpdates: MarketUpdate[] = [
   { id: 'u17', stock_code: '035420', stock_name: '네이버', type: 'news', title: '커머스 거래액 성장세 지속', source: '뉴스', url: 'https://www.mk.co.kr/', published_at: ago({ d: 1, h: 5 }) },
   { id: 'u18', stock_code: '035420', stock_name: '네이버', type: 'price', title: '주가 −0.8% 하락', source: '시세', url: null, published_at: ago({ h: 6 }) },
   { id: 'u19', stock_code: '035420', stock_name: '네이버', type: 'disclosure', title: '기업설명회(IR) 개최 안내', source: 'DART', url: 'https://dart.fss.or.kr/', published_at: ago({ d: 2, h: 2 }) },
+  // KB금융지주 — UI 확인용 예시 데이터 (실제 공시·뉴스·시세 아님)
+  { id: 'u20', stock_code: '105560', stock_name: 'KB금융지주', type: 'disclosure', title: '[예시] 분기 배당 관련 공시', source: '목업', url: null, published_at: ago({ h: 3 }) },
+  { id: 'u21', stock_code: '105560', stock_name: 'KB금융지주', type: 'news', title: '[예시] 주주환원 정책 관련 소식', source: '목업', url: null, published_at: ago({ h: 5 }) },
+  { id: 'u22', stock_code: '105560', stock_name: 'KB금융지주', type: 'price', title: '[예시] 주가 변동 업데이트', source: '목업', url: null, published_at: ago({ h: 6 }) },
 ];
 
-export const readUpdateIds = new Set<string>(['u15', 'u16', 'u17', 'u18', 'u19', 'u5', 'u6', 'u7', 'u8', 'u9', 'u10', 'u11']);
+export const readUpdateIds = new Set<string>(['u15', 'u16', 'u17', 'u18', 'u19', 'u20', 'u21', 'u22', 'u5', 'u6', 'u7', 'u8', 'u9', 'u10', 'u11']);
 
 /** m4 디자인 타임라인 순서 그대로 */
 export function seededTimeline(memoId: string): TimelineEntry[] | null {
