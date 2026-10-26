@@ -79,8 +79,8 @@ def unapproved(record, status="proposed"):
     return replace(record, review_status=status, reviewed_at="", reviewer="")
 
 
-def test_seed_files_reflect_only_nine_human_approvals(tmp_path, monkeypatch):
-    """실제 개발용 후보에는 사람이 승인한 9개 레코드만 반영돼야 한다."""
+def test_seed_files_reflect_fifteen_human_approvals(tmp_path, monkeypatch):
+    """기존 승인 9건을 보존하고 새로 승인한 6건만 추가돼야 한다."""
     seed = Path(evaluation.__file__).with_name("evaluation")
     for name in ("articles.csv", "pair_labels.csv", "event_groups.json"):
         shutil.copyfile(seed / name, tmp_path / name)
@@ -97,14 +97,35 @@ def test_seed_files_reflect_only_nine_human_approvals(tmp_path, monkeypatch):
     }
     approved_articles = {a.article_id for a in dataset.articles
                          if a.review_status == "approved"}
-    assert approved_articles == {14, 36, 76, 175, 245, 254}
-    assert all(p.review_status != "approved" for p in dataset.pairs)
+    old_article_ids = {14, 36, 76, 175, 245, 254}
+    new_article_ids = {53, 239, 107, 266}
+    assert approved_articles == old_article_ids | new_article_ids
+    assert len(approved_articles) == 10
+    assert all(a.article_type == "single_event" for a in dataset.articles
+               if a.article_id in approved_articles)
+    approved_pairs = {(p.article_id_a, p.article_id_b): (p.relation, p.scope)
+                      for p in dataset.pairs if p.review_status == "approved"}
+    assert approved_pairs == {
+        (53, 239): ("different_event", "whole_article"),
+        (107, 266): ("different_event", "whole_article"),
+    }
     records = (*dataset.articles, *dataset.groups, *dataset.pairs)
     approved = [r for r in records if r.review_status == "approved"]
     pending = [r for r in records if r.review_status != "approved"]
-    assert len(records) == 41 and len(approved) == 9 and len(pending) == 32
+    assert len(records) == 41 and len(approved) == 15 and len(pending) == 26
     assert all(r.reviewer == "yebin" for r in approved)
-    assert len({r.reviewed_at for r in approved}) == 1
+    old_records = [g for g in dataset.groups if g.review_status == "approved"] + [
+        a for a in dataset.articles if a.article_id in old_article_ids]
+    new_records = [a for a in dataset.articles if a.article_id in new_article_ids] + [
+        p for p in dataset.pairs if p.review_status == "approved"]
+    assert len(old_records) == 9 and len(new_records) == 6
+    old_stamp = "2026-10-26T11:09:33+09:00"
+    assert all(r.reviewer == "yebin" and r.reviewed_at == old_stamp for r in old_records)
+    new_stamps = {r.reviewed_at for r in new_records}
+    assert len(new_stamps) == 1 and old_stamp not in new_stamps
+    new_time = datetime.fromisoformat(next(iter(new_stamps)))
+    assert new_time.utcoffset() is not None
+    assert datetime.fromisoformat(old_stamp) < new_time <= datetime.now(timezone.utc)
     for record in approved:
         recorded_at = datetime.fromisoformat(record.reviewed_at)
         assert recorded_at.utcoffset() is not None
@@ -117,6 +138,8 @@ def test_seed_files_reflect_only_nine_human_approvals(tmp_path, monkeypatch):
     assert boundary.relation == "undecided" and boundary.review_status == "needs_review"
     assert {a.article_id for a in dataset.articles
             if a.article_type == "multi_event_briefing"} == {16, 22}
+    assert all(a.review_status != "approved" for a in dataset.articles
+               if a.article_type == "multi_event_briefing")
 
     def forbidden(*args, **kwargs):
         pytest.fail("실제 후보의 벡터 없는 상태에서 군집 계산 금지")
@@ -124,7 +147,7 @@ def test_seed_files_reflect_only_nine_human_approvals(tmp_path, monkeypatch):
     # 실제 기사 벡터를 주지 않으므로 성능을 계산하지 않는다.
     report = evaluation.evaluate_articles([], dataset)
     assert report["label_summary"]["approved_groups"] == 3
-    assert report["label_summary"]["approved_relations"] == 3
+    assert report["label_summary"]["approved_relations"] == 5
     assert report["status"] == "평가 불가: 평가 가능한 승인 관계 없음"
     assert report["results"] == []
     assert "metrics" not in report
