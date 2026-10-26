@@ -120,9 +120,9 @@ def main(argv: list[str] | None = None) -> int:
     search_config["exact"] = True
     queries = load_queries(resolve_path(args.queries))
 
-    from ..common.db import get_engine
+    from ..common.db import get_read_engine
 
-    engine = get_engine()
+    engine = get_read_engine()
     encoder, model_info = load_encoder(config["model"], args.offline, args.allow_cpu)
     if mode == "hybrid":
         from .sparse_store import SparseIndex

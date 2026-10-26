@@ -253,10 +253,10 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit("--split 형식은 dev:0.7 입니다.")
         dev_ids, test_ids = ref.stratified_split(questions, float(ratio), args.seed)
 
-    from ..common.db import get_engine
+    from ..common.db import get_read_engine
     from .sparse_store import SparseIndex
 
-    engine = get_engine()
+    engine = get_read_engine()
     with engine.connect() as conn:
         db_chunks = int(conn.execute(text("SELECT count(*) FROM disclosure_chunks WHERE dense_embedding IS NOT NULL AND sparse_embedding IS NOT NULL")).scalar())
     alignment = check_reference_corpus(reference, db_chunks)

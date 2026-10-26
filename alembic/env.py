@@ -16,11 +16,14 @@ if config.config_file_name is not None:
 target_metadata = None
 
 
-def get_url() -> str:
-    url = os.environ.get("DATABASE_URL")
+def get_url(environ=None) -> str:
+    env = os.environ if environ is None else environ
+    url = env.get("ALEMBIC_DATABASE_URL") or env.get("DATABASE_URL")
     if not url:
-        raise RuntimeError("DATABASE_URL이 없습니다. .env를 확인하세요.")
-    return url
+        raise RuntimeError(
+            "ALEMBIC_DATABASE_URL 또는 DATABASE_URL이 없습니다. 환경변수나 .env를 확인하세요."
+        )
+    return url.strip()
 
 
 def run_migrations_offline() -> None:

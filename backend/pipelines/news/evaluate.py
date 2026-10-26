@@ -189,7 +189,7 @@ def print_table(rows: list[dict]) -> None:
 
 
 def main(argv=None) -> int:
-    from ..common.db import get_dsn, load_env
+    from ..common.db import get_read_dsn, load_env
     ap = argparse.ArgumentParser(description="dense/hybrid 가중치 비교 평가")
     ap.add_argument("--queries", type=Path, help="정답 CSV (query_id,query,relevant_urls)")
     ap.add_argument("--export-pool", type=Path, help="라벨링용 기사 목록을 이 CSV로 내보내고 끝낸다")
@@ -206,7 +206,7 @@ def main(argv=None) -> int:
 
     import psycopg
     load_env()
-    dsn = get_dsn()
+    dsn = get_read_dsn()
     if not dsn:
         print("DB 접속 정보가 없습니다.", file=sys.stderr)
         return 1
