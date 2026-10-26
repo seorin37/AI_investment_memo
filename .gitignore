@@ -26,3 +26,10 @@ data/raw/
 .DS_Store
 Thumbs.db
 data/sample/
+
+# 로컬 데이터 디렉터리 전체
+data/
+
+# 평가용 페르소나 테스트 산출물 (실제 결과 results/memo_personas/personas_100/ 은 커밋한다)
+results/memo_personas/personas_100_mock/
+*_failed/
