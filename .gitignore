@@ -33,3 +33,6 @@ data/
 # 평가용 페르소나 테스트 산출물 (실제 결과 results/memo_personas/personas_100/ 은 커밋한다)
 results/memo_personas/personas_100_mock/
 *_failed/
+
+# 메모 생성 맥북 점검 산출물 (data/ 아래 evidence_packs_mock·_e2e는 위 data/ 규칙으로 이미 무시)
+results/memo_personas/memos_mock/

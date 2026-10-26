@@ -914,7 +914,7 @@ def render_review(res: dict, meta: dict) -> str:
     p, q = res["personas"], res["quotas"]
     L = [f"# 평가용 페르소나 {len(p)}명 검수 ({meta['mode']})", "",
          f"{SAMPLE_LABEL}입니다. 목표 분포 출처: {STAT_SOURCE}.",
-         f"70대+ 인원과 지역 배분은 임시 테스트 배분입니다. 기업별 대표 종목 인원·슬롯은 평가용 배분이며 실제 투자자 비중이 아닙니다.",
+         "70대+ 인원과 지역 배분은 임시 테스트 배분입니다. 기업별 대표 종목 인원·슬롯은 평가용 배분이며 실제 투자자 비중이 아닙니다.",
          "", f"- 데이터: {meta['source'].get('dataset')} (revision {meta['source'].get('revision')})",
          f"- seed {meta['seed']}, 생성 {meta['generated_at']}", ""]
     for title, col, key in (("연령", "age_bucket", "age"), ("성별", "sex", "sex"), ("지역", "region_quota", "region")):

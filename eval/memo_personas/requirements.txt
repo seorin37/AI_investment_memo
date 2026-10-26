@@ -1,0 +1,7 @@
+# 메모 생성 파이프라인 실행에 필요한 패키지 (모두 environment.yml의 ai_memo 환경에 이미 있음)
+# conda 환경에 빠져 있을 때만: pip install -r eval/memo_personas/requirements.txt
+requests
+sqlalchemy
+psycopg[binary]
+python-dotenv
+PyYAML
