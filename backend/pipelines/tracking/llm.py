@@ -144,4 +144,3 @@ def judge_with_llm(judgments: list[Judgment], memo_symbol: str, stock_name: str,
     if call is None or not any(j.decision == PENDING for j in judgments):
         return judgments
     return apply_llm(judgments, parse_response(call(build_prompt(memo_symbol, stock_name, judgments))))
-
