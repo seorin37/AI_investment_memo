@@ -52,10 +52,10 @@ def has_domain_word(text: str, vocab: frozenset[str]) -> bool:
 def build(min_df: int, out: Path) -> int:
     from sqlalchemy import text
 
-    from ..common.db import get_engine
+    from ..common.db import get_read_engine
 
     df: collections.Counter = collections.Counter()
-    with get_engine().connect() as conn:
+    with get_read_engine().connect() as conn:
         for (chunk,) in conn.execute(text("SELECT chunk_text FROM disclosure_chunks")):
             df.update(stems(chunk))
     words = sorted(w for w, n in df.items() if n >= min_df and 2 <= len(w) <= 15)

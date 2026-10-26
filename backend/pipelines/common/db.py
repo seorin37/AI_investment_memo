@@ -29,16 +29,33 @@ def load_env() -> None:
     load_dotenv(Path(__file__).resolve().parents[3] / ".env")
 
 
-def database_url() -> str:
-    url = os.environ.get("DATABASE_URL")
-    if not url:
+def _environment(environ=None):
+    if environ is None:
         load_env()
-        url = os.environ.get("DATABASE_URL")
+        return os.environ
+    return environ
+
+
+def database_url(environ=None) -> str:
+    """Return the read/write application URL without exposing it in errors."""
+    env = _environment(environ)
+    url = env.get("DATABASE_URL")
     if not url:
         raise DatabaseConfigError(
             "DATABASE_URL이 없습니다. 환경변수나 .env를 확인하세요."
         )
-    return url
+    return url.strip()
+
+
+def read_database_url(environ=None) -> str:
+    """Return the read-only URL, falling back to the legacy application URL."""
+    env = _environment(environ)
+    url = env.get("READONLY_DATABASE_URL") or env.get("DATABASE_URL")
+    if not url:
+        raise DatabaseConfigError(
+            "READONLY_DATABASE_URL 또는 DATABASE_URL이 없습니다. 환경변수나 .env를 확인하세요."
+        )
+    return url.strip()
 
 
 @lru_cache(maxsize=1)
@@ -46,20 +63,27 @@ def get_engine() -> Engine:
     return create_engine(database_url(), pool_pre_ping=True)
 
 
-def get_dsn(environ=None) -> str | None:
-    """psycopg용 접속 문자열을 반환한다."""
-    if environ is None:
-        load_env()
+@lru_cache(maxsize=1)
+def get_read_engine() -> Engine:
+    return create_engine(read_database_url(), pool_pre_ping=True)
 
-    env = os.environ if environ is None else environ
+
+def _psycopg_url(url: str) -> str:
+    """Remove a SQLAlchemy driver suffix while preserving an encoded URL."""
+    return re.sub(
+        r"^(postgres(?:ql)?)\+\w+://",
+        r"\1://",
+        url.strip(),
+    )
+
+
+def get_dsn(environ=None) -> str | None:
+    """Return the read/write psycopg connection string."""
+    env = _environment(environ)
     url = env.get("DATABASE_URL")
 
     if url:
-        return re.sub(
-            r"^(postgres(?:ql)?)\+\w+://",
-            r"\1://",
-            url.strip(),
-        )
+        return _psycopg_url(url)
 
     if not env.get("POSTGRES_USER") or not env.get("POSTGRES_DB"):
         return None
@@ -73,6 +97,15 @@ def get_dsn(environ=None) -> str | None:
         password=env.get("POSTGRES_PASSWORD", ""),
         dbname=env["POSTGRES_DB"],
     )
+
+
+def get_read_dsn(environ=None) -> str | None:
+    """Return a read-only psycopg connection string with legacy fallback."""
+    env = _environment(environ)
+    url = env.get("READONLY_DATABASE_URL")
+    if url:
+        return _psycopg_url(url)
+    return get_dsn(env)
 
 
 def start_run(cur, job: str, target_date: date | None) -> int:

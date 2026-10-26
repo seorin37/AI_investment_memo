@@ -278,9 +278,9 @@ def main(argv: list[str] | None = None) -> int:
     with source_file.open(encoding="utf-8-sig") as handle:
         annotations = [json.loads(line) for line in handle if line.strip()]
 
-    from ..common.db import get_engine
+    from ..common.db import get_read_engine
 
-    with get_engine().connect() as conn:
+    with get_read_engine().connect() as conn:
         team_rcepts = {e["rcept_no"] for r in annotations for g in r.get("required_fact_groups", []) for e in g.get("valid_evidence_or", [])}
         rcept_map = same_period_replacements(conn, team_rcepts, annotations)
         load = db_loader(conn)

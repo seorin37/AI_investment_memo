@@ -1,4 +1,3 @@
-import os
 import unittest
 from unittest import mock
 
@@ -9,11 +8,14 @@ from app import main
 
 class HealthApiTest(unittest.TestCase):
     def setUp(self):
+        self.read_dsn = mock.patch.object(main, "get_read_dsn", return_value="readonly-dsn")
+        self.read_dsn.start()
         self.client = TestClient(main.app)
         self.client.__enter__()
 
     def tearDown(self):
         self.client.__exit__(None, None, None)
+        self.read_dsn.stop()
 
     @staticmethod
     def _connection_mock(fetchone_result):
@@ -48,57 +50,44 @@ class HealthApiTest(unittest.TestCase):
         self.assertEqual(response.json(), {"status": "ok", "pgvector": False})
 
     def test_health_db_connection_failure(self):
-        error_message = "database unavailable"
+        sensitive_error = "could not connect to secret-host as secret-user"
 
         with mock.patch.object(
             main.psycopg,
             "connect",
-            side_effect=main.psycopg.OperationalError(error_message),
+            side_effect=main.psycopg.OperationalError(sensitive_error),
         ):
             response = self.client.get("/health/db")
 
         self.assertEqual(response.status_code, 503)
-        self.assertEqual(response.json()["status"], "error")
-        self.assertIn(error_message, response.json()["detail"])
-
-    def test_health_db_connection_arguments_from_environment(self):
-        connect, _ = self._connection_mock((1,))
-        environment = {
-            "POSTGRES_HOST": "db.example.test",
-            "POSTGRES_PORT": "6543",
-            "POSTGRES_USER": "test-user",
-            "POSTGRES_PASSWORD": "test-password",
-            "POSTGRES_DB": "test-db",
-        }
-
-        with (
-            mock.patch.dict(os.environ, environment, clear=True),
-            mock.patch.object(main.psycopg, "connect", connect),
-        ):
-            response = self.client.get("/health/db")
-
-        self.assertEqual(response.status_code, 200)
-        connect.assert_called_once_with(
-            host="db.example.test",
-            port="6543",
-            user="test-user",
-            password="test-password",
-            dbname="test-db",
-            connect_timeout=3,
+        self.assertEqual(
+            response.json(),
+            {"status": "error", "detail": "database health check failed"},
         )
+        self.assertNotIn("secret-host", response.text)
+        self.assertNotIn("secret-user", response.text)
 
-    def test_health_db_connection_argument_defaults(self):
+    def test_health_db_uses_readonly_dsn(self):
         connect, _ = self._connection_mock((1,))
 
+        with mock.patch.object(main.psycopg, "connect", connect):
+            response = self.client.get("/health/db")
+
+        self.assertEqual(response.status_code, 200)
+        connect.assert_called_once_with("readonly-dsn", connect_timeout=3)
+
+    def test_health_db_missing_configuration_is_sanitized(self):
+        connect = mock.MagicMock()
+
         with (
-            mock.patch.dict(os.environ, {}, clear=True),
+            mock.patch.object(main, "get_read_dsn", return_value=None),
             mock.patch.object(main.psycopg, "connect", connect),
         ):
             response = self.client.get("/health/db")
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(connect.call_args.kwargs["host"], "localhost")
-        self.assertEqual(connect.call_args.kwargs["port"], "5432")
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["detail"], "database health check failed")
+        connect.assert_not_called()
 
     def test_health_db_queries_pgvector_extension(self):
         connect, connection = self._connection_mock((1,))
