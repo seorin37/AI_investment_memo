@@ -205,3 +205,27 @@ def test_embed_window_skips_a_poison_article_and_keeps_going(monkeypatch):
     done = embedder.embed_window(conn, "hybrid", encode, since, until)
     assert done == 4                       # 3번 기사 하나만 건너뛰고 나머지는 저장
     assert sorted(conn.inserted) == [1, 2, 4, 5]
+
+
+def test_embedding_text_uses_lead_only_when_summary_is_short():
+    long = "가" * 40
+    assert embedder.embedding_text("제목", long, "리드") == f"제목\n{long}"      # 요약이 충분하면 리드는 안 씀
+    assert embedder.embedding_text("제목", None, "리드 문장") == "제목\n리드 문장"
+    assert embedder.embedding_text("제목", "짧은 요약", "리드 문장") == "제목\n리드 문장"
+    assert embedder.embedding_text("제목", "짧은 요약", None) == "제목\n짧은 요약"  # 리드가 없으면 있는 요약
+    assert embedder.embedding_text("제목", None, None) == "제목"
+    assert embedder.embedding_text("제목", "요약") == "제목\n요약"                 # 기존 호출 방식 유지
+
+
+def test_embed_window_reads_lead_column(monkeypatch):
+    rows = [(1, "한경 제목", None, "리드 첫 문장"), (2, "연합 제목", "가" * 40, None)]
+    monkeypatch.setattr(embedder, "pending_articles", lambda *a, **k: rows)
+    seen = []
+
+    def encode(texts):
+        seen.extend(texts)
+        return [([0.1], {"1": 0.5}) for _ in texts]
+
+    since = until = datetime(2026, 10, 22, tzinfo=timezone.utc)
+    assert embedder.embed_window(_FakeConn(), "hybrid", encode, since, until) == 2
+    assert seen == ["한경 제목\n리드 첫 문장", "연합 제목\n" + "가" * 40]
