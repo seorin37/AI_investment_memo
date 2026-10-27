@@ -1,0 +1,39 @@
+# AI 업데이트 파이프라인 설정. 임계값은 experiment 결과(유사도 분포)를 보고 조정한다 (아래 값은 임시).
+news:
+  variant: hybrid            # news_embedding_variants.variant (dense | hybrid). 둘 다 dense 벡터로 검색한다
+  lookback_days: 30
+  top_k: 8
+disclosure:
+  top_k: 4
+price:
+  near_pct: 3.0              # 조건가까지 남은 거리가 조건가의 이 % 이내면 '가까워짐'
+topic:
+  min_similarity: 0.5        # 폴백 2 (후보 임계값, 임시). calibrate 결과로 정한다
+  # min_similarity_news: 0.5        # 뉴스만 따로 정하려면 주석을 풀고 값을 넣는다 (없으면 min_similarity)
+  min_similarity_disclosure: 0.45  # 공시만 따로 정한 값 (정답 공시가 0.45~0.5에 많아서 낮췄다). 뉴스는 min_similarity를 따른다
+  max_disclosure_evidence: 2
+  max_news_evidence: 3
+  related_news_min_similarity: 0.6   # 공시 카드에 링크로 덧붙이는 관련 기사의 최소 유사도 (LLM이 문장으로 쓰지 않은 기사, 임시값)
+  news_dup_similarity: 0.7   # 이 이상 비슷한 제목의 기사는 하나로 묶는다 (임시: 글자 이중쌍 유사도)
+  max_text_chars_news: 600
+  max_text_chars_disclosure: 800
+  format_retry: 1            # 제목·문장 길이만 어겼을 때 고쳐 달라고 다시 요청하는 횟수 (0이면 끔). 숫자·출처·금지어 위반은 다시 요청하지 않는다
+  on_check_fail: drop        # fixed(고정 문구 카드로 대체, 지침서) | drop(카드를 만들지 않음)
+  title_max: 20
+  max_sentences: 3
+  sentence_max_chars: 60
+  min_confidence: 0.7
+  min_fact_overlap: 0.6
+  reason_max: 80
+  fact_max: 100
+  max_evidence: 3
+  # 시제 패턴: 예측·단정 표현. 회사 발언을 전한 문장("~라고 밝혔어요")에는 적용하지 않는다 (checks.ATTRIBUTION)
+  banned_patterns:
+    - '(오를|내릴|올라갈|떨어질|상승할|하락할|회복될|반등할)\s*(거|것|가능성|전망|듯)'
+    - '가능성이?\s*(높|큽|커)'
+    - '(할|될)\s*전망'
+# 금지 표현 사전: 지침서 3-3 초기 사전 (부분 문자열 일치). 시제 패턴은 위 topic.banned_patterns.
+# "매수", "매도" 단독은 넣지 않았다: 자사주 매수·지분 매도 같은 공시 사실을 막기 때문.
+banned:
+  [사세요, 파세요, 매수 기회, 매도 기회, 담을 때, 손절하세요, 오를 거, 상승할 가능성, 회복될 전망, 호재, 악재,
+   긍정적, 부정적, 저평가, 고평가, 유망, 유리, 불리, 확실히, 반드시, 틀림없이]
