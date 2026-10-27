@@ -1,0 +1,53 @@
+# 메모 1,000개 생성 설정 (eval/memo_personas)
+# 값만 바꾸고 키 이름은 바꾸지 마세요. 경로는 레포 루트 기준입니다.
+# 비밀값(API 키, DB 주소)은 여기에 쓰지 말고 레포 루트 .env에만 둡니다.
+
+paths:
+  personas_dir: results/memo_personas/personas_100   # 3단계 결과 (그대로 사용, 재다운로드 없음)
+  evidence_dir: data/evidence_packs                  # export_evidence 출력
+  memos_dir: results/memo_personas/memos             # generate_memos·report 출력
+
+# 표시 이름: 종목코드 (alembic/versions/0002_seed_reference_data.py의 stocks 시드)
+companies:
+  삼성전자: "005930"
+  SK하이닉스: "000660"
+  NAVER: "035420"
+  KB금융: "105560"
+
+evidence:
+  as_of_date: null          # null이면 기업별로 DB의 마지막 거래일. 고정하려면 "2026-10-23" 형식
+  disclosures_max: 8        # 최근 공시 최대 건수
+  chunks_per_disclosure: 2  # 공시마다 붙일 원문 발췌 수
+  excerpt_chars: 300        # 발췌 길이(원문 그대로 자름, 수치 변형 없음)
+  news_max: 15              # 최근 뉴스 최대 건수 (같은 제목은 1건)
+  news_months: 3
+  volume_spike_ratio: 2.0   # 20일 평균 거래량 대비 이 배수 이상이면 급증일
+  volume_spike_months: 3
+  volume_spike_top: 3
+  macro_change_months: 3
+  # 근거 유형별 최소 건수. 이보다 적으면 coverage.md에 경고를 남기고, 메모 생성 때 그 유형 비중을 다른 유형으로 옮깁니다.
+  min_items:
+    공시: 1
+    뉴스: 3
+    주가·거래: 1
+    재무: 2
+    거시: 2
+
+llm:
+  mock: false               # true면 Gemini를 부르지 않고 목업 응답(테스트용). 실제 생성 때는 false
+  temperature: 0.9
+  max_output_tokens: 16384  # thinking 토큰을 쓰는 모델은 여유가 필요. '응답이 중간에 끊김'이 반복되면 올리세요
+  timeout_sec: 120
+  requests_per_minute: 5    # 보수적 기본값. 유료 키면 올려도 됩니다
+  requests_per_day: 200     # 이 횟수에 닿으면 "내일 다시 실행" 안내 후 멈춥니다
+  backoff_retries: 5        # 429(분당 한도)일 때 기다렸다 다시 시도하는 횟수
+  backoff_base_sec: 10      # 10초, 20초, 40초 … 로 늘어남
+
+generation:
+  seed: 2026
+  pilot_size: 10
+  regenerate_max: 2           # 자동 검사 실패 시 같은 사람 재생성 최대 횟수
+  fallback_share: 0.15        # 폴백·혼합(B·C) 문항 비율 (1인 1~2개)
+  composite_min_share: 0.33   # 추적형(A) 중 복합 근거 비율 (지시: 30% 이상)
+  insufficient_share: 0.10    # 추적형(A) 중 '자료 부족' 문항 비율
+  similarity_flag: 0.9        # 같은 사람 메모 쌍 유사도가 이 이상이면 표시만(삭제 안 함)
