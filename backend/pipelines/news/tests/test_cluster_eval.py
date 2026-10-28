@@ -49,3 +49,39 @@ def test_load_labels_rejects_unknown_value(tmp_path):
     _write(path, [(0.6, "maybe")])
     with pytest.raises(ValueError):
         ce.load_labels(path)
+
+
+def test_separation_auc():
+    assert ce.separation_auc([(0.9, "same"), (0.8, "same"), (0.5, "different")]) == 1.0
+    assert ce.separation_auc([(0.5, "same"), (0.9, "different")]) == 0.0
+    assert ce.separation_auc([(0.7, "same"), (0.7, "different")]) == 0.5
+    assert ce.separation_auc([(0.7, "same")]) is None
+
+
+def test_colbert_pair_is_symmetric():
+    import numpy as np
+    a = np.array([[1.0, 0.0], [0.0, 1.0]])
+    b = np.array([[1.0, 0.0]])
+    assert ce._colbert_pair(a, b) == pytest.approx(ce._colbert_pair(b, a))
+    assert ce._colbert_pair(a, a) == pytest.approx(1.0)
+
+
+def test_add_colbert_keeps_labels_and_compare_uses_it(tmp_path, monkeypatch):
+    import numpy as np
+    path = tmp_path / "pairs.csv"
+    with path.open("w", encoding="utf-8-sig", newline="") as f:
+        w = csv.DictWriter(f, ce.FIELDS)
+        w.writeheader()
+        for i, (a, b, sim, label) in enumerate([(1, 2, 0.9, "same"), (3, 4, 0.8, "different"), (5, 6, 0.7, "same")], 1):
+            w.writerow({**{k: "" for k in ce.FIELDS}, "pair_id": i, "a_id": a, "b_id": b,
+                        "similarity": sim, "sparse_score": 0.1 * i, "label": label, "note": f"메모{i}"})
+    assert [r["score"] for r in ce.compare(path)] == ["dense", "sparse"]      # colbert 칸이 비면 건너뜀
+    vec = {1: [[1, 0]], 2: [[1, 0]], 3: [[1, 0]], 4: [[0, 1]], 5: [[1, 0]], 6: [[0.8, 0.6]]}
+    monkeypatch.setattr(ce, "article_texts", lambda conn, ids: {i: f"t{i}" for i in ids})
+    encode = lambda texts: [np.array(vec[int(t[1:])], dtype=float) for t in texts]
+    assert ce.add_colbert(None, path, encode) == 3
+    rows = list(csv.DictReader(path.open(encoding="utf-8-sig")))
+    assert [r["colbert_score"] for r in rows] == ["1.0000", "0.0000", "0.8000"]
+    assert [r["label"] for r in rows] == ["same", "different", "same"] and rows[0]["note"] == "메모1"
+    by = {r["score"]: r for r in ce.compare(path)}
+    assert by["colbert"]["auc"] == 1.0 and by["dense"]["auc"] == 0.5
