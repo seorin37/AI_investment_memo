@@ -75,7 +75,9 @@ def test_add_colbert_keeps_labels_and_compare_uses_it(tmp_path, monkeypatch):
         for i, (a, b, sim, label) in enumerate([(1, 2, 0.9, "same"), (3, 4, 0.8, "different"), (5, 6, 0.7, "same")], 1):
             w.writerow({**{k: "" for k in ce.FIELDS}, "pair_id": i, "a_id": a, "b_id": b,
                         "similarity": sim, "sparse_score": 0.1 * i, "label": label, "note": f"메모{i}"})
-    assert [r["score"] for r in ce.compare(path)] == ["dense", "sparse"]      # colbert 칸이 비면 건너뜀
+    names = [r["score"] for r in ce.compare(path)]
+    assert names[:2] == ["dense", "sparse"] and "colbert" not in names       # colbert 칸이 비면 건너뜀
+    assert "dense+0.2×sparse" in names
     vec = {1: [[1, 0]], 2: [[1, 0]], 3: [[1, 0]], 4: [[0, 1]], 5: [[1, 0]], 6: [[0.8, 0.6]]}
     monkeypatch.setattr(ce, "article_texts", lambda conn, ids: {i: f"t{i}" for i in ids})
     encode = lambda texts: [np.array(vec[int(t[1:])], dtype=float) for t in texts]

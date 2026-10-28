@@ -175,19 +175,35 @@ def separation_auc(labels: list[tuple[float, str]]) -> float | None:
     return wins / (len(same) * len(diff))
 
 
+# 혼합 점수: dense + 가중치 × sparse. sparse는 범위가 작아(보통 0~0.7) 그대로 더한다.
+SPARSE_WEIGHTS = (0.1, 0.2, 0.3, 0.5)
+
+
+def _summarize(name: str, labels: list[tuple[float, str]]) -> dict:
+    results = score(labels, sorted({s for s, _ in labels}))   # 점수 범위가 달라 실제 값들을 기준 후보로 쓴다
+    best = recommend(results)
+    at = next((r for r in results if r["threshold"] == best), None)
+    return {"score": name, "auc": separation_auc(labels), "threshold": best,
+            "missed": at["missed"] if at else None, "pairs": len(labels)}
+
+
 def compare(path: Path) -> list[dict]:
     """점수 종류마다: 가르는 힘(AUC), 잘못 묶음 5% 이하가 되는 가장 낮은 기준과 그때 놓치는 같은 사건 비율."""
     out = []
+    loaded = {}
     for key in SCORE_COLUMNS:
         try:
-            labels = load_labels(path, key)
+            loaded[key] = load_labels(path, key)
         except ValueError:
             continue   # colbert 칸이 비어 있으면 건너뜀
-        results = score(labels, sorted({s for s, _ in labels}))   # 점수 범위가 달라 실제 값들을 기준 후보로 쓴다
-        best = recommend(results)
-        at = next((r for r in results if r["threshold"] == best), None)
-        out.append({"score": key, "auc": separation_auc(labels), "threshold": best,
-                    "missed": at["missed"] if at else None, "pairs": len(labels)})
+        out.append(_summarize(key, loaded[key]))
+    if "dense" in loaded and "sparse" in loaded:
+        for w in SPARSE_WEIGHTS:
+            mixed = [(d + w * s, l) for (d, l), (s, _) in zip(loaded["dense"], loaded["sparse"])]
+            out.append(_summarize(f"dense+{w:g}×sparse", mixed))
+    if "dense" in loaded and "colbert" in loaded:
+        mixed = [((d + c) / 2, l) for (d, l), (c, _) in zip(loaded["dense"], loaded["colbert"])]
+        out.append(_summarize("(dense+colbert)/2", mixed))
     return out
 
 
@@ -268,7 +284,7 @@ def main(argv=None) -> int:
             auc = f"{r['auc']:.3f}" if r["auc"] is not None else "-"
             th = f"{r['threshold']:.4f}" if r["threshold"] is not None else "없음"
             missed = f"{r['missed']:.1%}" if r["missed"] is not None else "-"
-            print(f" {r['score']:<8}   {auc:>8}         {th:>10}                {missed:>6}")
+            print(f" {r['score']:<20} {auc:>8}         {th:>10}                {missed:>6}")
         print("\nAUC는 1.0에 가까울수록 같은 사건과 다른 사건을 잘 가른다 (0.5면 못 가름).")
         return 0
 
