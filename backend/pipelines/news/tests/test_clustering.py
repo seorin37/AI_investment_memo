@@ -51,9 +51,9 @@ def test_picks_highest_mean_then_lowest_id():
 
 def test_time_window_and_max_size():
     new = m(9, [1.0, 0.0], hours=0)
-    old = Candidate(1, (m(1, [1.0, 0.0], hours=-49),))
+    old = Candidate(1, (m(1, [1.0, 0.0], hours=-25),))
     assert choose_cluster(new, [old], P).cluster_id is None
-    edge = Candidate(2, (m(2, [1.0, 0.0], hours=-48),))
+    edge = Candidate(2, (m(2, [1.0, 0.0], hours=-24),))
     assert choose_cluster(new, [edge], P).cluster_id == 2
     full = Candidate(3, tuple(m(100 + i, [1.0, 0.0]) for i in range(P.max_size)))
     assert choose_cluster(new, [full], P).cluster_id is None
@@ -108,7 +108,7 @@ def test_params_validation_and_version():
         ClusterParams(threshold=1.5)
     with pytest.raises(ValueError):
         ClusterParams(window=timedelta(0))
-    assert ClusterParams().method_version == "complete-link-v2:t0.65:w48h:k10:m30"
+    assert ClusterParams().method_version == "complete-link-v3:t0.65:w24h:k10:m30"
 
 
 def test_representative_prefers_summary_then_earliest_then_source():

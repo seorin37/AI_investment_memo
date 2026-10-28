@@ -4,12 +4,13 @@
   - 묶음의 '모든' 기사와 코사인 유사도가 threshold 이상이어야 합류한다 (complete-link).
     하나라도 연결되면 이어 붙이는 방식(single-link)은 A-B-C-D 사슬로 다른 사건까지 묶어
     봐야 할 기사를 숨길 수 있어서 쓰지 않는다.
-  - 묶음의 모든 기사가 새 기사와 window(기본 48시간) 안에 발행돼야 한다.
+  - 묶음의 모든 기사가 새 기사와 window(기본 24시간) 안에 발행돼야 한다.
   - 통과한 묶음이 여럿이면 평균 유사도가 가장 높은 묶음, 같으면 id가 작은 묶음.
   - 통과한 묶음이 없으면 새 묶음을 만든다 (None 반환).
   - 여러 사건을 모은 브리핑(톱뉴스·헤드라인·다이제스트)과 같은 틀에 내용만 다른 고정 꼭지
     ([부고]·[인사]·[게시판]·운세·[표] 등)는 아무 묶음과도 비슷하게 나와 잘못 묶이므로 항상 혼자 둔다.
-dense 벡터만 쓴다. 0.65·48시간은 실험값이며 경계 구간 사람 확인 후 다시 정한다.
+dense 벡터만 쓴다. 0.65는 실험값이며 경계 구간 사람 확인 후 다시 정한다. 기준은 "같은 사건(엄격)"이라 시간 범위는 24시간이다
+(48시간이면 다음 날의 반대 방향 시황 같은 다른 날의 일까지 묶였다).
 """
 from __future__ import annotations
 
@@ -41,7 +42,7 @@ def is_standalone_title(title: str | None) -> bool:
 @dataclass(frozen=True)
 class ClusterParams:
     threshold: float = 0.65
-    window: timedelta = timedelta(hours=48)
+    window: timedelta = timedelta(hours=24)
     candidates: int = 10      # 새 기사와 가까운 기존 기사 몇 건까지 후보로 볼지
     max_size: int = 30        # 묶음 최대 기사 수
 
@@ -58,7 +59,7 @@ class ClusterParams:
     def method_version(self) -> str:
         """배정 당시 규칙. news_cluster_members.method_version에 남겨 기준이 바뀐 뒤에도 구분한다."""
         hours = int(self.window.total_seconds() // 3600)
-        return f"complete-link-v2:t{self.threshold:.2f}:w{hours}h:k{self.candidates}:m{self.max_size}"
+        return f"complete-link-v3:t{self.threshold:.2f}:w{hours}h:k{self.candidates}:m{self.max_size}"
 
 
 @dataclass(frozen=True)

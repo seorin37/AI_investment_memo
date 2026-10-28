@@ -248,7 +248,7 @@ def main(argv=None) -> int:
     ap.add_argument("--variant", choices=VARIANTS, default="hybrid")
     ap.add_argument("--limit", type=int, help="이번에 배정할 최대 기사 수")
     ap.add_argument("--threshold", type=float, default=ClusterParams.threshold)
-    ap.add_argument("--window-hours", type=int, default=48)
+    ap.add_argument("--window-hours", type=int, default=24)
     ap.add_argument("--report", type=int, metavar="N", help="배정 후 큰 묶음 N개를 출력")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")

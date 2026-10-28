@@ -44,7 +44,7 @@ RSS 4개 매체 (30분마다) ──┐
 ```
 
 - **리드 보충** (`lead_fetcher.py`, `lead_sources.yaml`): RSS 요약이 없거나 40자 미만인 기사(주로 한경·서경)만 첫 2~3문장(최대 300자)을 `news_article_leads`에 보충한다. 임베딩 입력에만 쓰고 화면·LLM 근거에는 쓰지 않는다. 보충을 기다리는(`pending`) 기사는 임베딩을 다음 주기로 미룬다.
-- **중복 묶음** (`clustering.py`, `cluster_assigner.py`): 새 기사를 48시간 안의 기존 묶음에 붙인다. 묶음의 **모든** 기사와 유사도 0.65 이상이어야 합류한다(실험값). 한 번 정한 소속은 바꾸지 않는다. 브리핑·[부고]·[인사]·운세 같은 고정 꼭지는 항상 혼자 둔다. 결과는 `news_clusters`, `news_cluster_members`.
+- **중복 묶음** (`clustering.py`, `cluster_assigner.py`): 새 기사를 24시간 안의 기존 묶음에 붙인다(48시간은 다른 날의 일까지 묶여 2026-10-28 줄임). 묶음의 **모든** 기사와 유사도 0.65 이상이어야 합류한다(실험값). 한 번 정한 소속은 바꾸지 않는다. 브리핑·[부고]·[인사]·운세 같은 고정 꼭지는 항상 혼자 둔다. 결과는 `news_clusters`, `news_cluster_members`.
 - 테이블은 `alembic/versions/0008_news_article_leads.py`, `0009_news_clusters.py`. **공시 적재 코드는 DB와 코드의 마이그레이션 버전이 같아야 돌므로, 이 코드를 합칠 때 중앙 DB에도 0008·0009를 같이 적용한다.**
 
     python -m backend.pipelines.news.cluster_assigner --report 10        # 미배정 기사 배정 + 큰 묶음 10개 출력
@@ -134,7 +134,7 @@ BGE-M3 hybrid 임베딩은 기사 1건에서 두 가지를 함께 만들어 `new
 | tagger.py | 제목·요약에서 종목 이름을 찾아 news_stocks 연결 (stocks.yaml). NAVER는 제목에 있을 때만 (`title_only`) |
 | embedder.py | BGE-M3 임베딩 -> news_embedding_variants. hybrid는 dense와 sparse를 한 번에 저장. 한 기사가 오류를 내도 나머지는 계속 처리한다 |
 | lead_fetcher.py, lead_sources.yaml | 요약 없는 기사의 리드 보충 (link: 기사 첫 문단 / naver: 검색 API description). `--probe`로 본문 칸 찾기 |
-| clustering.py | 중복 묶음 판정 규칙 (DB 없음): complete-link, 48시간, 최대 30건, 대표 선정, 고정 꼭지 단독 처리 |
+| clustering.py | 중복 묶음 판정 규칙 (DB 없음): complete-link, 24시간, 최대 30건, 대표 선정, 고정 꼭지 단독 처리 |
 | cluster_assigner.py | 미배정 기사를 발행 순서대로 묶음에 배정해 저장 (pgvector 후보 검색, advisory lock) |
 | cluster_eval.py | 묶음 기준값 평가: 경계 구간 쌍 CSV 내보내기(`export`), 사람 체크 결과로 기준값별 계산(`score`) |
 | scoring.py | dense / sparse / hybrid 점수 식 (가중치는 인자로 받는다) |

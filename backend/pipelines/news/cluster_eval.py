@@ -4,7 +4,7 @@
   (엑셀로 열어 label 칸에 same / different / unsure 를 적는다)
   python -m backend.pipelines.news.cluster_eval score eval/news_dedup/boundary_pairs_v2.csv    # 기준값별 결과
 
-뽑는 방법: 기사마다 48시간 안에서 가장 가까운 기사 몇 건을 찾고, dense 유사도가 0.60~0.95인 쌍만 남겨
+뽑는 방법: 기사마다 24시간 안에서 가장 가까운 기사 몇 건을 찾고, dense 유사도가 0.60~0.95인 쌍만 남겨
 유사도 구간(0.05 단위)마다 같은 수를 고른다. 기준이 '같은 사건(엄격)'이라 0.80 이상에도 다른 사건이
 섞일 수 있어 높은 구간까지 본다. 고정 꼭지 제목(clustering.is_standalone_title)은 뺀다.
 sparse_score는 BGE-M3 sparse(단어 겹침) 점수로, 나중에 dense+sparse 혼합을 비교할 때 쓴다.
@@ -41,7 +41,7 @@ CROSS JOIN LATERAL (
     FROM news_embedding_variants vx
     JOIN news_articles x ON x.id = vx.news_id
     WHERE vx.variant = 'hybrid' AND x.id <> a.id
-      AND x.published_at BETWEEN a.published_at - interval '48 hours' AND a.published_at + interval '48 hours'
+      AND x.published_at BETWEEN a.published_at - interval '24 hours' AND a.published_at + interval '24 hours'
     ORDER BY vx.dense <=> va.dense
     LIMIT %(k)s
 ) b
