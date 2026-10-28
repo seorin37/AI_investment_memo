@@ -52,6 +52,18 @@ RSS 4개 매체 (30분마다) ──┐
     scripts/with_test_db.sh python -m backend.pipelines.news.pipeline hourly --skip-rss --embed --fill-lead --cluster
         # 테스트 DB(.env.test, 127.0.0.1:5433)에서 수집 없이 뒤 단계만 확인
 
+### 묶음 기준값(threshold) 정하기
+
+0.65는 실험값이다. 경계 구간(dense 유사도 0.55~0.80) 기사 쌍 100개를 사람이 체크해 정한다.
+
+    python -m backend.pipelines.news.cluster_eval export eval/news_dedup/boundary_pairs_v1.csv   # DB 읽기만
+    # 엑셀로 열어 label 칸에 same(같은 사건) / different(다른 사건) / unsure 를 적는다
+    python -m backend.pipelines.news.cluster_eval score eval/news_dedup/boundary_pairs_v1.csv    # 기준값별 결과
+
+- 같은 사건 = 같은 일(누가·무엇을·언제)을 다룬 기사. 같은 주제라도 다른 날·다른 회사·반대 방향(반등 vs 하락)이면 다른 사건.
+- 추천은 "묶이는 쌍 중 다른 사건 비율(잘못 묶음) 5% 이하인 가장 낮은 기준"이다. 잘못 묶으면 봐야 할 기사가 접혀 숨기 때문이다.
+- `same_cluster_now`는 지금 기준(0.65)으로 실제 같은 묶음인지, `sparse_score`는 단어 겹침 점수로 나중에 dense+sparse 혼합을 비교할 때 쓴다.
+
 ### 리드 보충을 실제로 켜는 순서 (수집기 PC에서, 한 번만)
 
 지금은 모든 매체가 `enabled: false`이고 link 방식 매체의 `selector`가 비어 있어 **요청을 하나도 보내지 않는다.** 수집기가 실제로 리드를 가져오려면 아래 잠금 세 개가 모두 풀려야 한다.
@@ -63,6 +75,7 @@ RSS 4개 매체 (30분마다) ──┐
 | ③ `selector` | `lead_sources.yaml` | link 방식(한경·매경·연합)은 전부 `null`. `enabled: true`여도 비어 있으면 요청하지 않는다 |
 
 - 서울경제는 약관상 크롤링 금지라 네이버 검색 API(naver 방식)로만 보충한다. selector가 필요 없어서 ①②와 `.env`의 네이버 API 키만 있으면 호출하므로 주의한다.
+- `enabled`를 따로 두는 이유: (1) 서울경제(naver)는 selector가 없어 `enabled`가 유일한 스위치다. (2) 매체에서 연락이 오거나 403이 계속되거나 "이 매체는 빼자"는 결정이 나면, 찾아 둔 selector를 지우지 않고 `false`만 바꿔 바로 끌 수 있다(다시 켤 때 `--probe`를 다시 할 필요가 없다). 약관 문제가 정리되고 안정되면 `method: off` 하나로 끄는 방식으로 단순화할 수 있다.
 - `--probe`는 selector를 **찾기 위한** 명령이라 `enabled`와 상관없이 돈다. 대신 매번 요청 전에 확인을 묻고, `lead_sources.yaml`은 **고치지 않는다**(추천만 출력). selector와 `enabled`는 결과를 보고 사람이 적는다.
 
 1. 대표님께 뉴스 이용 근거를 확인한다. (확인 전에는 아래를 실행하지 않는다)
@@ -95,6 +108,7 @@ RSS 4개 매체 (30분마다) ──┐
 | lead_fetcher.py, lead_sources.yaml | 요약 없는 기사의 리드 보충 (link: 기사 첫 문단 / naver: 검색 API description). `--probe`로 본문 칸 찾기 |
 | clustering.py | 중복 묶음 판정 규칙 (DB 없음): complete-link, 48시간, 최대 30건, 대표 선정, 고정 꼭지 단독 처리 |
 | cluster_assigner.py | 미배정 기사를 발행 순서대로 묶음에 배정해 저장 (pgvector 후보 검색, advisory lock) |
+| cluster_eval.py | 묶음 기준값 평가: 경계 구간 쌍 CSV 내보내기(`export`), 사람 체크 결과로 기준값별 계산(`score`) |
 | scoring.py | dense / sparse / hybrid 점수 식 (가중치는 인자로 받는다) |
 | evaluate.py | 평가: Recall@k, MRR, nDCG. 가중치·정규화 방식을 바꿔 가며 비교 |
 | repository.py | news_sources·news_feeds 조회, 중복 판별 해시 |
