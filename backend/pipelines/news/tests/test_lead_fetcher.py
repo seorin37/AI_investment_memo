@@ -180,6 +180,60 @@ def test_naver_no_match_retries():
     assert (r.status, r.source, r.attempts) == ("pending", "naver", 1)
 
 
+# ---------------------------------------------------------------- selector 찾기 (--probe)
+
+MENU_HTML = """<html><body><article><nav>경제 | 증권 | 산업 | 부동산 | 정치 | 사회 | 국제 | 오피니언 | 스포츠 | 연예</nav>
+<div id="articletxt">삼성전자가 엔비디아에 6세대 고대역폭메모리(HBM4)를 공급한다. 업계에 따르면 계약을 맺었다.</div>
+</article></body></html>"""
+
+
+def test_probe_ranks_selectors_and_recommends_specific_one(tmp_path):
+    fc = FakeClock()
+    get = http({"https://www.hankyung.com/a/1": Resp(200, MENU_HTML),
+                "https://www.hankyung.com/a/2": Resp(200, MENU_HTML)})
+    src = cfg().sources["hankyung"]
+    rows, fetched, notes = lf.probe(["https://www.hankyung.com/a/1", "https://www.hankyung.com/a/2"], src, cfg(),
+                                    get, sleep=fc.sleep, clock=fc.clock, save_dir=tmp_path)
+    assert fetched == 2 and notes == []
+    hits = {r.selector: r.hits for r in rows}
+    assert hits["#articletxt"] == 2 and hits["article"] == 2 and hits["div.article-body"] == 0
+    assert lf.recommend(rows, fetched) == "#articletxt"           # 같은 성공 수면 구체적인 칸 우선
+    assert rows[0].samples[0].startswith("삼성전자가")
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["hankyung_1.html", "hankyung_2.html"]
+    assert fc.slept == [4.0, 4.0]                                  # robots 뒤, 기사 사이 4초
+
+
+def test_probe_stops_on_403_and_respects_robots():
+    get = http({"https://www.hankyung.com/a/1": Resp(403)})
+    rows, fetched, notes = lf.probe(["https://www.hankyung.com/a/1", "https://www.hankyung.com/a/2"],
+                                    cfg().sources["hankyung"], cfg(), get, sleep=lambda s: None)
+    assert fetched == 0 and "멈춤" in notes[0]
+    assert "https://www.hankyung.com/a/2" not in get.calls
+    assert lf.recommend(rows, fetched) is None
+    blocked = http({"https://www.hankyung.com/robots.txt": Resp(200, "User-agent: *\nDisallow: /\n")})
+    _, fetched, notes = lf.probe(["https://www.hankyung.com/a/1"], cfg().sources["hankyung"], cfg(), blocked,
+                                 sleep=lambda s: None)
+    assert fetched == 0 and "불허" in notes[0] and blocked.calls == ["https://www.hankyung.com/robots.txt"]
+
+
+def test_probe_with_given_selector_only():
+    get = http({})
+    rows, fetched, _ = lf.probe(["https://www.hankyung.com/a/1"], cfg().sources["hankyung"], cfg(), get,
+                                selectors=["#articletxt"], sleep=lambda s: None)
+    assert [r.selector for r in rows] == ["#articletxt"] and rows[0].hits == 1
+
+
+def test_probe_cli_asks_before_sending(monkeypatch, capsys):
+    monkeypatch.setattr(lf, "load_config", lambda: cfg())
+    monkeypatch.setattr("backend.pipelines.common.db.get_dsn", lambda: "postgresql://unused")
+    monkeypatch.setattr("backend.pipelines.common.db.load_env", lambda: None)
+    monkeypatch.setattr(lf, "_requests_get", lambda ua: pytest.fail("확인 전에 요청하면 안 됨"))
+    monkeypatch.setattr("builtins.input", lambda prompt: "n")
+    assert lf.main(["--probe", "hankyung", "--url", "https://www.hankyung.com/a/1"]) == 1
+    assert "취소" in capsys.readouterr().out
+    assert lf.main(["--probe", "sedaily", "--url", "https://www.sedaily.com/a/1"]) == 1   # naver 방식은 대상 아님
+
+
 # ---------------------------------------------------------------- 설정
 
 def test_shipped_config_sends_no_requests():

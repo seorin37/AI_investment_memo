@@ -2,6 +2,7 @@
 
   python -m backend.pipelines.news.lead_fetcher --dry-run     # 보충 대상 건수만 확인 (요청·쓰기 없음)
   python -m backend.pipelines.news.lead_fetcher               # 보충 실행 (lead_sources.yaml에서 켠 매체만)
+  python -m backend.pipelines.news.lead_fetcher --probe hankyung   # 본문 칸(selector) 찾기: 기사 3건만 요청
 설정은 lead_sources.yaml. 2026-10-27 현재 모든 매체가 꺼져 있어 실행해도 요청을 보내지 않는다.
 
 흐름
@@ -303,6 +304,102 @@ def _link_one(item, src, config, http_get, robots, throttle) -> LeadResult:
     return LeadResult(item.news_id, "ok", "link", item.attempts + 1, lead_text=lead, http_status=code)
 
 
+# ---------------------------------------------------------------- selector 찾기 (--probe)
+
+# 흔히 쓰이는 본문 칸. 구체적인 것부터 두고, 넓은 것(article)은 메뉴가 섞일 수 있어 마지막에 둔다.
+CANDIDATE_SELECTORS = (
+    "#articletxt", "#article-body", "#article_body", "#articleBody", "#news_body_area", "#newsEndContents",
+    "div.article-body", "div.article_body", "div.article-txt", "div.news_cnt_detail_wrap", "div.story-news",
+    "[itemprop='articleBody']", "article",
+)
+
+
+@dataclass
+class ProbeRow:
+    selector: str
+    hits: int
+    samples: list[str] = field(default_factory=list)
+
+
+def probe(urls: Iterable[str], src: SourceConfig, config: LeadConfig, http_get: HttpGet,
+          selectors: Iterable[str] | None = None, sleep=time.sleep, clock=time.monotonic,
+          save_dir: Path | None = None) -> tuple[list[ProbeRow], int, list[str]]:
+    """기사 몇 건을 받아 후보 selector마다 리드가 뽑히는지 본다. (결과, 받은 기사 수, 메모)
+
+    요청 규칙은 실제 수집과 같다 (UA, robots.txt, 간격, 403·429 중단). 설정 파일은 바꾸지 않는다.
+    """
+    throttle = Throttle(config.interval, sleep, clock)
+    robots = RobotsCache(http_get, config.user_agent, throttle)
+    pages: list[str] = []
+    notes: list[str] = []
+    for url in urls:
+        if not _host_matches(url, src.domains):
+            notes.append(f"건너뜀(도메인 다름): {url}")
+            continue
+        allowed = robots.allowed(url)
+        if not allowed:
+            notes.append(f"건너뜀(robots.txt {'확인 실패' if allowed is None else '불허'}): {url}")
+            continue
+        throttle.wait(urlsplit(url).netloc.lower())
+        try:
+            resp = http_get(url)
+        except Exception as exc:
+            notes.append(f"요청 실패({type(exc).__name__}): {url}")
+            continue
+        if resp.status_code in STOP_STATUSES:
+            notes.append(f"HTTP {resp.status_code} — 더 요청하지 않고 멈춤: {url}")
+            break
+        if resp.status_code != 200:
+            notes.append(f"HTTP {resp.status_code}: {url}")
+            continue
+        pages.append(resp.text)
+        if save_dir is not None:
+            save_dir.mkdir(parents=True, exist_ok=True)
+            (save_dir / f"{src.code}_{len(pages)}.html").write_text(resp.text, encoding="utf-8")
+    rows = []
+    for selector in selectors or CANDIDATE_SELECTORS:
+        leads = [extract_lead(html, selector, src.drop_selectors, config.max_chars, config.min_chars)
+                 for html in pages]
+        found = [lead for lead in leads if lead]
+        rows.append(ProbeRow(selector, len(found), found))
+    rows.sort(key=lambda r: -r.hits)   # 안정 정렬: 같은 성공 수면 후보 순서(구체적인 것 먼저) 유지
+    return rows, len(pages), notes
+
+
+def recommend(rows: list[ProbeRow], fetched: int) -> str | None:
+    """받은 기사 전부에서 리드가 뽑힌 첫 selector. 샘플 문장은 사람이 눈으로 확인해야 한다."""
+    return next((r.selector for r in rows if fetched and r.hits == fetched), None)
+
+
+def probe_urls(conn, code: str, limit: int = 3) -> list[str]:
+    """그 매체의 최근 기사 중 요약이 부족한 것 우선으로 limit건."""
+    with conn.cursor() as cur:
+        cur.execute(f"""
+            SELECT a.url FROM news_articles a JOIN news_sources s ON s.id = a.source_id
+            WHERE s.code = %s
+            ORDER BY (a.summary IS NULL OR char_length(btrim(a.summary)) < {SUMMARY_MIN_CHARS}) DESC,
+                     a.published_at DESC
+            LIMIT %s""", (code, limit))
+        return [r[0] for r in cur.fetchall()]
+
+
+def _print_probe(code: str, rows: list[ProbeRow], fetched: int, notes: list[str]) -> None:
+    print(f"\n[{code}] 받은 기사 {fetched}건")
+    for note in notes:
+        print("  -", note)
+    for r in rows:
+        sample = (r.samples[0][:70] + "…") if r.samples else "(칸 없음 또는 너무 짧음)"
+        print(f"  {r.selector:<28} {r.hits}/{fetched}  {sample}")
+    best = recommend(rows, fetched)
+    if best:
+        print(f"\n추천: {best}")
+        print("  샘플이 기사 첫 문장인지(메뉴·광고가 섞이지 않았는지) 눈으로 확인한 뒤")
+        print(f"  lead_sources.yaml 의 {code}.selector 에 적고 enabled: true 로 바꾸세요.")
+    else:
+        print("\n모든 기사에서 뽑힌 칸이 없습니다. 브라우저에서 본문 오른쪽 클릭 → 검사로 칸 이름을 찾아")
+        print('  --selector "칸이름" 으로 다시 확인하세요.')
+
+
 # ---------------------------------------------------------------- DB
 
 def enqueue(conn, config: LeadConfig, days: int | None = None) -> int:
@@ -424,6 +521,12 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="뉴스 리드(첫 문단) 보충")
     ap.add_argument("--dry-run", action="store_true", help="요청·쓰기 없이 보충 대상 건수만 출력")
     ap.add_argument("--days", type=int, help="최근 며칠 발행분을 볼지 (기본: 설정의 enqueue_days)")
+    ap.add_argument("--probe", metavar="MEDIA", help="이 매체(link 방식)의 본문 칸 찾기. enabled와 상관없이 기사 몇 건만 요청")
+    ap.add_argument("--selector", action="append", help="--probe: 이 selector만 확인 (여러 번 지정 가능)")
+    ap.add_argument("--url", action="append", help="--probe: 확인할 기사 URL (기본: DB에서 최근 기사)")
+    ap.add_argument("--limit", type=int, default=3, help="--probe: 받을 기사 수 (기본 3, 최대 5)")
+    ap.add_argument("--save-fixtures", type=Path, metavar="DIR", help="--probe: 받은 HTML을 테스트용으로 저장")
+    ap.add_argument("--yes", action="store_true", help="--probe: 요청 전 확인 질문을 건너뜀")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     load_env()
@@ -432,6 +535,29 @@ def main(argv=None) -> int:
         log.error("DB 접속 정보가 없습니다. .env의 DATABASE_URL 또는 POSTGRES_*를 확인하세요.")
         return 1
     config = load_config()
+    if args.probe:
+        src = config.sources.get(args.probe)
+        if src is None or src.method != "link":
+            log.error("%s: lead_sources.yaml에 link 방식으로 설정된 매체가 아닙니다.", args.probe)
+            return 1
+        limit = max(1, min(args.limit, 5))
+        if args.url:
+            urls = args.url[:limit]
+        else:
+            with psycopg.connect(dsn, autocommit=True) as conn:
+                urls = probe_urls(conn, args.probe, limit)
+        if not urls:
+            log.error("확인할 기사 URL이 없습니다.")
+            return 1
+        print(f"{args.probe} 매체에 robots.txt 1건 + 기사 {len(urls)}건을 "
+              f"{config.interval:g}초 간격으로 요청합니다. (User-Agent: {config.user_agent})")
+        if not args.yes and input("계속할까요? [y/N] ").strip().lower() != "y":
+            print("취소했습니다.")
+            return 1
+        rows, fetched, notes = probe(urls, src, config, _requests_get(config.user_agent),
+                                     args.selector, save_dir=args.save_fixtures)
+        _print_probe(args.probe, rows, fetched, notes)
+        return 0
     with psycopg.connect(dsn, autocommit=True) as conn:
         if args.dry_run:
             print("매체  보충대상  방식  상태")

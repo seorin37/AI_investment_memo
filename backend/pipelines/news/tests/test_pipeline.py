@@ -149,7 +149,7 @@ def test_run_hourly_without_embed_does_not_touch_embedding(monkeypatch):
 def test_loop_hourly_runs_each_cycle_and_survives_errors(monkeypatch):
     calls = {"run": 0, "sleep": []}
 
-    def fake_run(dsn, embed, variant, days, stocks, encoder):
+    def fake_run(dsn, embed, variant, days, stocks, encoder, *flags):   # flags: fill_lead, cluster
         calls["run"] += 1
         if calls["run"] == 1:
             raise RuntimeError("일시 오류")   # 한 번 실패해도 반복이 멈추면 안 된다
@@ -229,3 +229,34 @@ def test_embed_window_reads_lead_column(monkeypatch):
     since = until = datetime(2026, 10, 22, tzinfo=timezone.utc)
     assert embedder.embed_window(_FakeConn(), "hybrid", encode, since, until) == 2
     assert seen == ["한경 제목\n리드 첫 문장", "연합 제목\n" + "가" * 40]
+
+
+def _record_steps(monkeypatch):
+    steps = []
+    monkeypatch.setattr(pipeline, "_collect_rss", lambda dsn: steps.append("rss") or 0)
+    monkeypatch.setattr(pipeline, "fill_leads", lambda dsn: steps.append("lead"))
+    monkeypatch.setattr(pipeline, "embed_recent", lambda *a, **k: steps.append("embed"))
+    monkeypatch.setattr(pipeline, "assign_clusters", lambda dsn, variant: steps.append("cluster"))
+    return steps
+
+
+def test_hourly_defaults_keep_old_behavior(monkeypatch):
+    steps = _record_steps(monkeypatch)
+    pipeline.run_hourly("dsn", embed=True, encoder=object())
+    assert steps == ["rss", "embed"]                       # 옵션을 안 붙이면 리드·묶음 단계 없음
+
+
+def test_hourly_runs_new_steps_in_order(monkeypatch):
+    steps = _record_steps(monkeypatch)
+    pipeline.run_hourly("dsn", embed=True, encoder=object(), fill_lead=True, cluster=True)
+    assert steps == ["rss", "lead", "embed", "cluster"]    # 리드 → 임베딩 → 묶음 순서
+    steps.clear()
+    pipeline.run_hourly("dsn", embed=True, encoder=object(), fill_lead=True, cluster=True, skip_rss=True)
+    assert steps == ["lead", "embed", "cluster"]
+
+
+def test_loop_rejects_skip_rss(monkeypatch):
+    monkeypatch.setattr(pipeline, "load_env", lambda: None)
+    monkeypatch.setattr(pipeline, "get_dsn", lambda: "dsn")
+    monkeypatch.setattr(pipeline, "loop_hourly", lambda *a, **k: pytest.fail("실행되면 안 됨"))
+    assert pipeline.main(["hourly", "--loop", "60", "--skip-rss"]) == 1

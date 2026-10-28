@@ -35,6 +35,54 @@ RSS 4개 매체 (30분마다) ──┐
 **주의 3: 임베딩은 한 번에 하나만.** `--loop` 반복이 도는 동안 같은 DB에 `daily ... --include-untagged`를 따로 돌리지 않는다.
 **참고: 임베딩 대상 범위.** `--embed`는 최근 `--embed-days`일(기본 3) 발행분 중 임베딩이 없는 기사를 찾는다. 이 범위를 넘긴 미처리 기사는 자동 재시도 대상이 아니므로, 필요하면 `--embed-days`를 늘려 한 번 돌린다. 수집과 임베딩은 한 반복 안에서 차례로 실행되므로 임베딩이 길어지면 다음 수집이 늦어질 수 있다. 서버에서 상시 운영할 때는 둘을 별도 작업으로 나눈다.
 
+## 중복 묶음과 리드 보충 (2026-10-27 추가)
+
+같은 사건 기사를 묶어 화면에 대표 1건 + "관련 기사 N건"으로 접기 위한 단계다. 두 옵션 모두 기본 꺼짐이라 붙이지 않으면 예전과 같다.
+
+```
+수집(RSS·네이버) → [--fill-lead] 리드 보충 → 태깅·임베딩 → [--cluster] 중복 묶음 배정
+```
+
+- **리드 보충** (`lead_fetcher.py`, `lead_sources.yaml`): RSS 요약이 없거나 40자 미만인 기사(주로 한경·서경)만 첫 2~3문장(최대 300자)을 `news_article_leads`에 보충한다. 임베딩 입력에만 쓰고 화면·LLM 근거에는 쓰지 않는다. 보충을 기다리는(`pending`) 기사는 임베딩을 다음 주기로 미룬다.
+- **중복 묶음** (`clustering.py`, `cluster_assigner.py`): 새 기사를 48시간 안의 기존 묶음에 붙인다. 묶음의 **모든** 기사와 유사도 0.65 이상이어야 합류한다(실험값). 한 번 정한 소속은 바꾸지 않는다. 브리핑·[부고]·[인사]·운세 같은 고정 꼭지는 항상 혼자 둔다. 결과는 `news_clusters`, `news_cluster_members`.
+- 테이블은 `alembic/versions/0008_news_article_leads.py`, `0009_news_clusters.py`. **공시 적재 코드는 DB와 코드의 마이그레이션 버전이 같아야 돌므로, 이 코드를 합칠 때 중앙 DB에도 0008·0009를 같이 적용한다.**
+
+    python -m backend.pipelines.news.cluster_assigner --report 10        # 미배정 기사 배정 + 큰 묶음 10개 출력
+    python -m backend.pipelines.news.lead_fetcher --dry-run --days 7     # 매체별 보충 대상 건수 (요청·쓰기 없음)
+    scripts/with_test_db.sh python -m backend.pipelines.news.pipeline hourly --skip-rss --embed --fill-lead --cluster
+        # 테스트 DB(.env.test, 127.0.0.1:5433)에서 수집 없이 뒤 단계만 확인
+
+### 리드 보충을 실제로 켜는 순서 (수집기 PC에서, 한 번만)
+
+지금은 모든 매체가 `enabled: false`이고 link 방식 매체의 `selector`가 비어 있어 **요청을 하나도 보내지 않는다.** 수집기가 실제로 리드를 가져오려면 아래 잠금 세 개가 모두 풀려야 한다.
+
+| 잠금 | 어디서 | 지금 |
+|---|---|---|
+| ① `--fill-lead` | 파이프라인 실행 옵션 | 붙이지 않으면 리드 단계 자체가 없다 |
+| ② `enabled: true` | `lead_sources.yaml` | 전부 `false`. 사람이 직접 바꾼다 |
+| ③ `selector` | `lead_sources.yaml` | link 방식(한경·매경·연합)은 전부 `null`. `enabled: true`여도 비어 있으면 요청하지 않는다 |
+
+- 서울경제는 약관상 크롤링 금지라 네이버 검색 API(naver 방식)로만 보충한다. selector가 필요 없어서 ①②와 `.env`의 네이버 API 키만 있으면 호출하므로 주의한다.
+- `--probe`는 selector를 **찾기 위한** 명령이라 `enabled`와 상관없이 돈다. 대신 매번 요청 전에 확인을 묻고, `lead_sources.yaml`은 **고치지 않는다**(추천만 출력). selector와 `enabled`는 결과를 보고 사람이 적는다.
+
+1. 대표님께 뉴스 이용 근거를 확인한다. (확인 전에는 아래를 실행하지 않는다)
+2. 매체별 본문 칸(selector) 찾기 — 그 매체에 robots.txt 1건 + 기사 3건만, 4초 간격으로 요청한다. 실행 전에 확인을 묻는다.
+
+        python -m backend.pipelines.news.lead_fetcher --probe hankyung --save-fixtures backend/pipelines/news/tests/fixtures
+        python -m backend.pipelines.news.lead_fetcher --probe mk
+        python -m backend.pipelines.news.lead_fetcher --probe yonhap
+        python -m backend.pipelines.news.lead_fetcher --probe hankyung --selector "#articletxt"   # 특정 칸만 다시 확인
+
+3. 출력의 **추천** selector와 샘플 문장(기사 첫 문장인지, 메뉴·광고가 섞이지 않았는지)을 눈으로 확인한 뒤 `lead_sources.yaml`의 `selector`에 적고 `enabled: true`로 바꾼다. 서울경제는 `enabled: true`만 바꾼다.
+4. `lead_fetcher --dry-run`으로 대상 건수를 보고, `lead_fetcher`를 한 번 실행해 `news_article_leads`의 매체별 `status`(ok / failed)를 확인한다. failed가 많으면 3번으로 돌아간다.
+5. 이미 제목만으로 임베딩된 기사를 리드를 넣어 다시 임베딩한다. **묶음 배정을 켜기 전에** 해야 한다(배정은 바뀌지 않으므로).
+
+        python -m backend.pipelines.news.embedder --reembed-leads
+
+6. 수집기 반복 실행에 `--fill-lead --cluster`를 붙인다: `pipeline hourly --embed --fill-lead --cluster --loop 1800`
+
+나중에 사이트가 개편되면 그 매체 기사가 "본문 추출 실패 (선택자 확인 필요)"로 실패한다. 그때 2~3번만 다시 한다.
+
 ## 파일
 
 | 파일 | 역할 |
@@ -44,6 +92,9 @@ RSS 4개 매체 (30분마다) ──┐
 | pipeline.py | 실행기 (`hourly [--embed --loop]`, `daily`) |
 | tagger.py | 제목·요약에서 종목 이름을 찾아 news_stocks 연결 (stocks.yaml). NAVER는 제목에 있을 때만 (`title_only`) |
 | embedder.py | BGE-M3 임베딩 -> news_embedding_variants. hybrid는 dense와 sparse를 한 번에 저장. 한 기사가 오류를 내도 나머지는 계속 처리한다 |
+| lead_fetcher.py, lead_sources.yaml | 요약 없는 기사의 리드 보충 (link: 기사 첫 문단 / naver: 검색 API description). `--probe`로 본문 칸 찾기 |
+| clustering.py | 중복 묶음 판정 규칙 (DB 없음): complete-link, 48시간, 최대 30건, 대표 선정, 고정 꼭지 단독 처리 |
+| cluster_assigner.py | 미배정 기사를 발행 순서대로 묶음에 배정해 저장 (pgvector 후보 검색, advisory lock) |
 | scoring.py | dense / sparse / hybrid 점수 식 (가중치는 인자로 받는다) |
 | evaluate.py | 평가: Recall@k, MRR, nDCG. 가중치·정규화 방식을 바꿔 가며 비교 |
 | repository.py | news_sources·news_feeds 조회, 중복 판별 해시 |

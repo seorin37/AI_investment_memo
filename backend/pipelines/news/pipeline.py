@@ -5,7 +5,11 @@
   python -m backend.pipelines.news.pipeline daily --variant hybrid       # 전날분 네이버 수집 -> 종목 태깅 -> 임베딩 -> 오래된 기사 정리
   python -m backend.pipelines.news.pipeline daily --variant hybrid --skip-embed   # 태깅/정리만 (임베딩은 각자 따로)
   python -m backend.pipelines.news.pipeline daily --date 2026-10-20      # 특정 날짜(KST) 다시 처리
+  python -m backend.pipelines.news.pipeline hourly --embed --fill-lead --cluster --loop 1800
+      # 수집 -> 리드 보충(요약 없는 기사) -> 태깅·임베딩 -> 중복 묶음 배정
 설정은 .env(DATABASE_URL 또는 POSTGRES_*)에서 읽는다.
+--fill-lead와 --cluster는 기본 꺼짐이라, 붙이지 않으면 예전과 똑같이 동작한다.
+리드 보충은 lead_sources.yaml에서 켜고 selector까지 확정한 매체만 요청한다.
 """
 from __future__ import annotations
 
@@ -82,9 +86,36 @@ def embed_recent(dsn: str, encoder, variant: str, days: int, stocks_path: Path) 
     return embedded
 
 
+def fill_leads(dsn: str) -> dict | None:
+    """요약이 없거나 짧은 기사의 리드 보충. 실패해도 수집·임베딩은 계속한다 (임베딩은 pending만 기다린다)."""
+    import psycopg
+    from . import lead_fetcher
+    try:
+        with psycopg.connect(dsn, autocommit=True) as conn:
+            return lead_fetcher.run(conn)
+    except Exception:
+        log.exception("리드 보충 실패. 다음 주기에 다시 시도합니다.")
+        return None
+
+
+def assign_clusters(dsn: str, variant: str) -> dict | None:
+    """임베딩이 끝난 기사를 중복 묶음에 배정. 실패해도 기사·임베딩에는 영향이 없다."""
+    import psycopg
+    from .cluster_assigner import assign_pending
+    try:
+        with psycopg.connect(dsn) as conn:
+            return assign_pending(conn, variant=variant).as_dict()
+    except Exception:
+        log.exception("묶음 배정 실패. 다음 주기에 다시 시도합니다.")
+        return None
+
+
 def run_hourly(dsn: str, embed: bool = False, variant: str = "hybrid", embed_days: int = 3,
-               stocks_path: Path | None = None, encoder=None) -> int:
-    rc = _collect_rss(dsn)
+               stocks_path: Path | None = None, encoder=None, fill_lead: bool = False,
+               cluster: bool = False, skip_rss: bool = False) -> int:
+    rc = 0 if skip_rss else _collect_rss(dsn)
+    if fill_lead:
+        fill_leads(dsn)
     if embed:
         # 임베딩이 실패해도 수집한 기사는 이미 저장돼 있고, 홈 위젯에는 영향이 없다.
         try:
@@ -92,11 +123,13 @@ def run_hourly(dsn: str, embed: bool = False, variant: str = "hybrid", embed_day
                          stocks_path or Path(__file__).with_name("stocks.yaml"))
         except Exception:
             log.exception("임베딩 실패. 수집한 기사는 저장됐고, 다음 주기에 다시 시도합니다.")
+    if cluster:
+        assign_clusters(dsn, variant)
     return rc
 
 
 def loop_hourly(dsn: str, interval: int, embed: bool, variant: str, embed_days: int,
-                stocks_path: Path, keep_days: int) -> int:
+                stocks_path: Path, keep_days: int, fill_lead: bool = False, cluster: bool = False) -> int:
     """interval초마다 수집(+임베딩)을 반복한다. 모델은 한 번만 불러 온다. Ctrl+C로 멈춘다."""
     import psycopg
     encoder = LazyEncoder(variant)
@@ -105,7 +138,7 @@ def loop_hourly(dsn: str, interval: int, embed: bool, variant: str, embed_days: 
     while True:
         started = clock.monotonic()
         try:
-            run_hourly(dsn, embed, variant, embed_days, stocks_path, encoder)
+            run_hourly(dsn, embed, variant, embed_days, stocks_path, encoder, fill_lead, cluster)
             today = datetime.now(KST).date()
             if last_cleanup != today:   # 하루 한 번만 오래된 기사 정리
                 with psycopg.connect(dsn, autocommit=True) as conn:
@@ -140,7 +173,7 @@ def _collect_rss(dsn: str) -> int:
 
 def run_daily(dsn: str, target: date, variant: str, skip_embed: bool, stocks_path: Path,
               skip_naver: bool = False, include_untagged: bool = False,
-              keep_days: int = RETENTION_DAYS) -> int:
+              keep_days: int = RETENTION_DAYS, fill_lead: bool = False, cluster: bool = False) -> int:
     import psycopg
     since, until = day_range(target)
     with psycopg.connect(dsn, autocommit=True) as conn:
@@ -150,14 +183,19 @@ def run_daily(dsn: str, target: date, variant: str, skip_embed: bool, stocks_pat
             if not skip_naver:
                 res = naver.run_naver(conn, since, until)
                 log.info("네이버 수집: %s", res)
+            if fill_lead:
+                fill_leads(dsn)
             scanned, links = tag_window(conn, load_stocks(stocks_path), since, until, load_title_only(stocks_path))
             log.info("태깅: 훑은 기사 %d건, 새 연결 %d건", scanned, links)
             embedded = 0
             if not skip_embed:
                 from .embedder import embed_window, make_bge_m3_encoder
+                # 중복 묶음은 전체 기사 대상이므로, 묶음 배정을 켜면 종목이 없는 기사도 임베딩한다.
                 embedded = embed_window(conn, variant, make_bge_m3_encoder(variant), since, until,
-                                        include_untagged=include_untagged)
+                                        include_untagged=include_untagged or cluster)
                 log.info("임베딩(%s): %d건", variant, embedded)
+            if cluster:
+                log.info("묶음 배정: %s", assign_clusters(dsn, variant))
             removed = cleanup(conn, keep_days)
             log.info("정리: %d건 삭제", removed)
         except Exception as exc:
@@ -187,6 +225,12 @@ def main(argv=None) -> int:
     ap.add_argument("--keep-days", type=int, default=RETENTION_DAYS,
                     help=f"종목 연결이 없는 기사를 보관할 일수 (기본 {RETENTION_DAYS}). hourly --loop과 daily 모두에 적용. "
                          "0이면 정리하지 않는다 (평가용 기사를 지키고 싶을 때)")
+    ap.add_argument("--fill-lead", action="store_true",
+                    help="요약이 없거나 짧은 기사의 리드 보충 (lead_sources.yaml에서 켠 매체만 요청)")
+    ap.add_argument("--cluster", action="store_true",
+                    help="임베딩 뒤 중복 묶음 배정 (daily는 종목 없는 기사도 임베딩)")
+    ap.add_argument("--skip-rss", action="store_true",
+                    help="hourly: RSS 수집을 건너뜀 (테스트 DB에서 뒤 단계만 확인할 때)")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     load_env()
@@ -196,16 +240,20 @@ def main(argv=None) -> int:
         return 1
     if args.job == "hourly":
         if args.loop:
+            if args.skip_rss:
+                log.error("--skip-rss는 --loop와 함께 쓸 수 없습니다.")
+                return 1
             try:
                 return loop_hourly(dsn, args.loop, args.embed, args.variant, args.embed_days,
-                                   args.stocks, args.keep_days)
+                                   args.stocks, args.keep_days, args.fill_lead, args.cluster)
             except KeyboardInterrupt:
                 log.info("반복 실행을 멈췄습니다.")
                 return 0
-        return run_hourly(dsn, args.embed, args.variant, args.embed_days, args.stocks)
+        return run_hourly(dsn, args.embed, args.variant, args.embed_days, args.stocks,
+                          fill_lead=args.fill_lead, cluster=args.cluster, skip_rss=args.skip_rss)
     target = args.date or (datetime.now(KST).date() - timedelta(days=1))
     return run_daily(dsn, target, args.variant, args.skip_embed, args.stocks, args.skip_naver,
-                     args.include_untagged, args.keep_days)
+                     args.include_untagged, args.keep_days, args.fill_lead, args.cluster)
 
 
 if __name__ == "__main__":
