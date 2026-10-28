@@ -1,0 +1,41 @@
+# 뉴스 리드(첫 문단) 보충 설정 — lead_fetcher.py
+# RSS 요약이 없거나 40자 미만인 기사만 대상이다. 리드는 임베딩 입력에만 쓰고 화면·LLM 근거에는 쓰지 않는다.
+#
+# method
+#   link  : 기사 링크에 들어가 본문 칸(selector)의 첫 2~3문장(최대 lead_max_chars자)을 가져온다
+#   naver : 네이버 검색 API에서 originallink가 같은 결과의 description을 가져온다 (크롤링 아님)
+# enabled: false 이면 그 매체 기사는 보충하지 않는다 (리드 행을 만들지 않으므로 임베딩도 기다리지 않는다).
+# selector: null 이면 enabled여도 요청을 보내지 않는다. 실제 기사 HTML을 보고 확정한 뒤 채운다.
+#
+# 2026-10-27: 실제 수집 전이라 전부 꺼 둠. 켜기 전 대표님께 뉴스 이용 근거를 확인한다.
+#   서울경제는 약관(제11조)이 크롤링을 명시적으로 금지해 link 대신 naver를 쓴다.
+
+request_interval_seconds: 4   # 같은 매체에 보내는 요청 사이 최소 간격
+max_attempts: 3               # 일시 오류(5xx·타임아웃·검색 결과 없음) 재시도 횟수. 넘으면 failed
+lead_max_chars: 300
+lead_min_chars: 40            # 이보다 짧게 뽑히면 추출 실패로 본다 (선택자 깨짐·사진 기사)
+enqueue_days: 3               # 최근 며칠 발행분만 보충 대상으로 올린다
+contact: ""                   # User-Agent 뒤에 붙일 연락처 (예: 팀 메일). 비워 두면 생략
+
+sources:
+  hankyung:
+    method: link
+    enabled: false
+    domains: [hankyung.com]
+    selector: null            # 미확정
+    drop_selectors: []        # 본문 칸 안에서 지울 요소 (사진 설명·관련 기사 등)
+  mk:
+    method: link
+    enabled: false
+    domains: [mk.co.kr]
+    selector: null            # 미확정
+    drop_selectors: []
+  yonhap:
+    method: link              # 요약이 40자 미만인 일부 기사만 해당
+    enabled: false
+    domains: [yna.co.kr]
+    selector: null            # 미확정
+    drop_selectors: []
+  sedaily:
+    method: naver
+    enabled: false

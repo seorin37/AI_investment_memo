@@ -149,7 +149,7 @@ def test_run_hourly_without_embed_does_not_touch_embedding(monkeypatch):
 def test_loop_hourly_runs_each_cycle_and_survives_errors(monkeypatch):
     calls = {"run": 0, "sleep": []}
 
-    def fake_run(dsn, embed, variant, days, stocks, encoder):
+    def fake_run(dsn, embed, variant, days, stocks, encoder, *flags, **kw):   # flags: fill_lead, cluster / kw: cluster_llm
         calls["run"] += 1
         if calls["run"] == 1:
             raise RuntimeError("일시 오류")   # 한 번 실패해도 반복이 멈추면 안 된다
@@ -205,3 +205,69 @@ def test_embed_window_skips_a_poison_article_and_keeps_going(monkeypatch):
     done = embedder.embed_window(conn, "hybrid", encode, since, until)
     assert done == 4                       # 3번 기사 하나만 건너뛰고 나머지는 저장
     assert sorted(conn.inserted) == [1, 2, 4, 5]
+
+
+def test_embedding_text_uses_lead_only_when_summary_is_short():
+    long = "가" * 40
+    assert embedder.embedding_text("제목", long, "리드") == f"제목\n{long}"      # 요약이 충분하면 리드는 안 씀
+    assert embedder.embedding_text("제목", None, "리드 문장") == "제목\n리드 문장"
+    assert embedder.embedding_text("제목", "짧은 요약", "리드 문장") == "제목\n리드 문장"
+    assert embedder.embedding_text("제목", "짧은 요약", None) == "제목\n짧은 요약"  # 리드가 없으면 있는 요약
+    assert embedder.embedding_text("제목", None, None) == "제목"
+    assert embedder.embedding_text("제목", "요약") == "제목\n요약"                 # 기존 호출 방식 유지
+
+
+def test_embed_window_reads_lead_column(monkeypatch):
+    rows = [(1, "한경 제목", None, "리드 첫 문장"), (2, "연합 제목", "가" * 40, None)]
+    monkeypatch.setattr(embedder, "pending_articles", lambda *a, **k: rows)
+    seen = []
+
+    def encode(texts):
+        seen.extend(texts)
+        return [([0.1], {"1": 0.5}) for _ in texts]
+
+    since = until = datetime(2026, 10, 22, tzinfo=timezone.utc)
+    assert embedder.embed_window(_FakeConn(), "hybrid", encode, since, until) == 2
+    assert seen == ["한경 제목\n리드 첫 문장", "연합 제목\n" + "가" * 40]
+
+
+def _record_steps(monkeypatch):
+    steps = []
+    monkeypatch.setattr(pipeline, "_collect_rss", lambda dsn: steps.append("rss") or 0)
+    monkeypatch.setattr(pipeline, "fill_leads", lambda dsn: steps.append("lead"))
+    monkeypatch.setattr(pipeline, "embed_recent", lambda *a, **k: steps.append("embed"))
+    monkeypatch.setattr(pipeline, "assign_clusters", lambda dsn, variant, llm=False: steps.append("cluster"))
+    return steps
+
+
+def test_hourly_defaults_keep_old_behavior(monkeypatch):
+    steps = _record_steps(monkeypatch)
+    pipeline.run_hourly("dsn", embed=True, encoder=object())
+    assert steps == ["rss", "embed"]                       # 옵션을 안 붙이면 리드·묶음 단계 없음
+
+
+def test_hourly_runs_new_steps_in_order(monkeypatch):
+    steps = _record_steps(monkeypatch)
+    pipeline.run_hourly("dsn", embed=True, encoder=object(), fill_lead=True, cluster=True)
+    assert steps == ["rss", "lead", "embed", "cluster"]    # 리드 → 임베딩 → 묶음 순서
+    steps.clear()
+    pipeline.run_hourly("dsn", embed=True, encoder=object(), fill_lead=True, cluster=True, skip_rss=True)
+    assert steps == ["lead", "embed", "cluster"]
+
+
+def test_loop_rejects_skip_rss(monkeypatch):
+    monkeypatch.setattr(pipeline, "load_env", lambda: None)
+    monkeypatch.setattr(pipeline, "get_dsn", lambda: "dsn")
+    monkeypatch.setattr(pipeline, "loop_hourly", lambda *a, **k: pytest.fail("실행되면 안 됨"))
+    assert pipeline.main(["hourly", "--loop", "60", "--skip-rss"]) == 1
+
+
+def test_cluster_llm_needs_cluster_and_gemini_key(monkeypatch):
+    monkeypatch.setattr(pipeline, "load_env", lambda: None)
+    monkeypatch.setattr(pipeline, "get_dsn", lambda: "dsn")
+    monkeypatch.setattr(pipeline, "run_hourly", lambda *a, **k: 0)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    assert pipeline.main(["hourly", "--cluster-llm"]) == 1                     # --cluster 없이
+    assert pipeline.main(["hourly", "--cluster", "--cluster-llm"]) == 1        # 키 없음
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    assert pipeline.main(["hourly", "--cluster", "--cluster-llm"]) == 0
