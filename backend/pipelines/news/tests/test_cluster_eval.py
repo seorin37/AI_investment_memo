@@ -11,6 +11,7 @@ def test_sparse_score_and_bucket():
     assert ce.bucket_of(0.55) == "0.55-0.60"
     assert ce.bucket_of(0.6499) == "0.60-0.65"
     assert ce.bucket_of(0.79) == "0.75-0.80"
+    assert ce.bucket_of(0.95) == "0.95-1.00" and ce.bucket_of(0.9499) == "0.90-0.95"
 
 
 def test_sample_pairs_dedupes_and_balances_buckets():

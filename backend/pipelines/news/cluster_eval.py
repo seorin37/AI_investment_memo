@@ -1,11 +1,12 @@
 """중복 묶음 기준값(threshold) 정하기: 경계 구간 기사 쌍을 뽑아 사람이 체크하고, 기준값별 정확도를 계산한다.
 
-  python -m backend.pipelines.news.cluster_eval export eval/news_dedup/boundary_pairs.csv   # 쌍 뽑기
+  python -m backend.pipelines.news.cluster_eval export eval/news_dedup/boundary_pairs_v2.csv   # 쌍 뽑기
   (엑셀로 열어 label 칸에 same / different / unsure 를 적는다)
-  python -m backend.pipelines.news.cluster_eval score eval/news_dedup/boundary_pairs.csv    # 기준값별 결과
+  python -m backend.pipelines.news.cluster_eval score eval/news_dedup/boundary_pairs_v2.csv    # 기준값별 결과
 
-뽑는 방법: 기사마다 48시간 안에서 가장 가까운 기사 몇 건을 찾고, dense 유사도가 0.55~0.80인 쌍만 남겨
-유사도 구간(0.05 단위)마다 같은 수를 고른다. 고정 꼭지 제목(clustering.is_standalone_title)은 뺀다.
+뽑는 방법: 기사마다 48시간 안에서 가장 가까운 기사 몇 건을 찾고, dense 유사도가 0.60~0.95인 쌍만 남겨
+유사도 구간(0.05 단위)마다 같은 수를 고른다. 기준이 '같은 사건(엄격)'이라 0.80 이상에도 다른 사건이
+섞일 수 있어 높은 구간까지 본다. 고정 꼭지 제목(clustering.is_standalone_title)은 뺀다.
 sparse_score는 BGE-M3 sparse(단어 겹침) 점수로, 나중에 dense+sparse 혼합을 비교할 때 쓴다.
 쌍 단위 결과라 실제 묶음(묶음의 모든 기사와 비교)과는 조금 다를 수 있다. 기준값을 고르는 참고로 쓴다.
 """
@@ -15,6 +16,7 @@ import argparse
 import csv
 import json
 import logging
+import math
 import random
 from pathlib import Path
 
@@ -22,7 +24,8 @@ from .clustering import is_standalone_title
 
 log = logging.getLogger("cluster_eval")
 
-LOW, HIGH, STEP = 0.55, 0.80, 0.05
+LOW, HIGH, STEP = 0.60, 0.95, 0.05     # 내보낼 유사도 범위와 구간 폭
+SCORE_RANGE = (0.55, 0.95)             # score가 계산할 기준값 범위 (0.01 단위)
 LABELS = {"same", "different", "unsure"}
 MAX_FALSE_MERGE = 0.05      # 묶인 쌍 중 다른 사건 비율이 이 이하인 가장 낮은 기준을 추천한다
 FIELDS = ["pair_id", "similarity", "sparse_score", "bucket", "same_cluster_now",
@@ -62,7 +65,7 @@ def sparse_score(a, b) -> float:
 
 
 def bucket_of(similarity: float) -> str:
-    lo = LOW + int((similarity - LOW) / STEP) * STEP
+    lo = math.floor(similarity / STEP + 1e-9) * STEP
     return f"{lo:.2f}-{lo + STEP:.2f}"
 
 
@@ -84,10 +87,10 @@ def sample_pairs(rows, per_bucket: int, seed: int = 20261028) -> list[tuple]:
     return sorted(picked, key=lambda r: r[2])
 
 
-def export_pairs(conn, path: Path, per_bucket: int = 20, k: int = 5) -> dict:
+def export_pairs(conn, path: Path, per_bucket: int = 15, k: int = 5, low: float = LOW, high: float = HIGH) -> dict:
     with conn.cursor() as cur:
         cur.execute("SET hnsw.ef_search = 100")
-        cur.execute(PAIRS_SQL, {"k": k, "low": LOW, "high": HIGH})
+        cur.execute(PAIRS_SQL, {"k": k, "low": low, "high": high})
         candidates = cur.fetchall()
         ids = sorted({i for r in candidates for i in r[:2]})
         cur.execute(ARTICLE_SQL, (ids,))
@@ -132,7 +135,8 @@ def load_labels(path: Path) -> list[tuple[float, str]]:
 
 def score(labels: list[tuple[float, str]], thresholds=None) -> list[dict]:
     """기준값마다: 묶이는 쌍(유사도 ≥ 기준) 중 다른 사건 비율(잘못 묶음), 같은 사건 중 놓친 비율."""
-    thresholds = thresholds or [round(LOW + i * 0.01, 2) for i in range(int((HIGH - LOW) / 0.01) + 1)]
+    lo, hi = SCORE_RANGE
+    thresholds = thresholds or [round(lo + i * 0.01, 2) for i in range(round((hi - lo) / 0.01) + 1)]
     same_total = sum(1 for _, l in labels if l == "same")
     out = []
     for t in thresholds:
@@ -153,7 +157,9 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     ex = sub.add_parser("export", help="경계 구간 기사 쌍을 CSV로 뽑는다 (DB 읽기만)")
     ex.add_argument("path", type=Path)
-    ex.add_argument("--per-bucket", type=int, default=20, help="유사도 구간(0.05)마다 뽑을 쌍 수 (기본 20 → 100쌍)")
+    ex.add_argument("--per-bucket", type=int, default=15, help="유사도 구간(0.05)마다 뽑을 쌍 수 (기본 15 → 7구간 105쌍)")
+    ex.add_argument("--low", type=float, default=LOW)
+    ex.add_argument("--high", type=float, default=HIGH)
     sc = sub.add_parser("score", help="사람이 체크한 CSV로 기준값별 결과 계산 (DB 없음)")
     sc.add_argument("path", type=Path)
     args = ap.parse_args(argv)
@@ -181,7 +187,7 @@ def main(argv=None) -> int:
         return 1
     with psycopg.connect(dsn, options="-c default_transaction_read_only=on") as conn:
         log.info("접속: %s:%s/%s (읽기 전용)", conn.info.host, conn.info.port, conn.info.dbname)
-        print(export_pairs(conn, args.path, args.per_bucket))
+        print(export_pairs(conn, args.path, args.per_bucket, low=args.low, high=args.high))
     return 0
 
 
