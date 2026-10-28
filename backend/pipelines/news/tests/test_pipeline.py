@@ -149,7 +149,7 @@ def test_run_hourly_without_embed_does_not_touch_embedding(monkeypatch):
 def test_loop_hourly_runs_each_cycle_and_survives_errors(monkeypatch):
     calls = {"run": 0, "sleep": []}
 
-    def fake_run(dsn, embed, variant, days, stocks, encoder, *flags):   # flags: fill_lead, cluster
+    def fake_run(dsn, embed, variant, days, stocks, encoder, *flags, **kw):   # flags: fill_lead, cluster / kw: cluster_llm
         calls["run"] += 1
         if calls["run"] == 1:
             raise RuntimeError("일시 오류")   # 한 번 실패해도 반복이 멈추면 안 된다
@@ -236,7 +236,7 @@ def _record_steps(monkeypatch):
     monkeypatch.setattr(pipeline, "_collect_rss", lambda dsn: steps.append("rss") or 0)
     monkeypatch.setattr(pipeline, "fill_leads", lambda dsn: steps.append("lead"))
     monkeypatch.setattr(pipeline, "embed_recent", lambda *a, **k: steps.append("embed"))
-    monkeypatch.setattr(pipeline, "assign_clusters", lambda dsn, variant: steps.append("cluster"))
+    monkeypatch.setattr(pipeline, "assign_clusters", lambda dsn, variant, llm=False: steps.append("cluster"))
     return steps
 
 
@@ -260,3 +260,14 @@ def test_loop_rejects_skip_rss(monkeypatch):
     monkeypatch.setattr(pipeline, "get_dsn", lambda: "dsn")
     monkeypatch.setattr(pipeline, "loop_hourly", lambda *a, **k: pytest.fail("실행되면 안 됨"))
     assert pipeline.main(["hourly", "--loop", "60", "--skip-rss"]) == 1
+
+
+def test_cluster_llm_needs_cluster_and_gemini_key(monkeypatch):
+    monkeypatch.setattr(pipeline, "load_env", lambda: None)
+    monkeypatch.setattr(pipeline, "get_dsn", lambda: "dsn")
+    monkeypatch.setattr(pipeline, "run_hourly", lambda *a, **k: 0)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    assert pipeline.main(["hourly", "--cluster-llm"]) == 1                     # --cluster 없이
+    assert pipeline.main(["hourly", "--cluster", "--cluster-llm"]) == 1        # 키 없음
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    assert pipeline.main(["hourly", "--cluster", "--cluster-llm"]) == 0

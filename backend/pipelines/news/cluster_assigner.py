@@ -3,11 +3,13 @@
   python -m backend.pipelines.news.cluster_assigner                 # 미배정 기사 전부 배정
   python -m backend.pipelines.news.cluster_assigner --limit 200     # 200건만
   python -m backend.pipelines.news.cluster_assigner --report 15     # 배정 후 큰 묶음 15개 출력
+  python -m backend.pipelines.news.cluster_assigner --llm           # 애매한 묶음은 Gemini에 묻는다 (외부 API)
 테스트 DB에서는 scripts/with_test_db.sh 를 앞에 붙여 실행한다.
 
 흐름 (기사 1건마다, 한 트랜잭션)
   1. pgvector로 발행시각 ±window 안의 '이미 배정된' 기사 중 가장 가까운 candidates건을 찾는다.
-  2. 그 기사들이 속한 묶음의 소속 기사 전부를 불러 clustering.choose_cluster로 판정한다.
+  2. 그 기사들이 속한 묶음의 소속 기사 전부를 불러 clustering.choose_cluster로 판정한다
+     (유사도 → 규칙 → --llm이면 애매한 묶음만 LLM).
   3. 합류하면 소속을 추가하고 묶음 정보(기사 수·발행 범위·대표)를 갱신, 아니면 새 묶음을 만든다.
 한 번 배정한 소속은 바꾸지 않는다. 같은 DB에서 배정이 동시에 돌지 않도록 advisory lock을 잡는다.
 """
@@ -16,10 +18,10 @@ from __future__ import annotations
 import argparse
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 
-from .clustering import (Candidate, ClusterParams, Member, RepresentativeInfo,
+from .clustering import (Candidate, ClusterParams, Judge, Member, RepresentativeInfo,
                          choose_cluster, is_standalone_title, pick_representative)
 
 log = logging.getLogger("cluster_assigner")
@@ -36,15 +38,21 @@ class AssignStats:
     created: int = 0
     seconds: float = 0.0
     skipped_locked: bool = False
+    decided_by: dict = field(default_factory=dict)   # decided_by별 기사 수
 
     def as_dict(self) -> dict:
         return {"processed": self.processed, "joined": self.joined, "created": self.created,
-                "seconds": round(self.seconds, 1), "skipped_locked": self.skipped_locked}
+                "seconds": round(self.seconds, 1), "skipped_locked": self.skipped_locked,
+                "decided_by": dict(self.decided_by)}
 
 
 def _vec(value):
     """pgvector가 돌려준 Vector를 numpy 배열로 바꾼다 (계산 모듈은 숫자 배열만 받는다)."""
     return value.to_numpy() if hasattr(value, "to_numpy") else value
+
+
+def _member(news_id, published_at, dense, title, summary) -> Member:
+    return Member(news_id, published_at, _vec(dense), is_standalone_title(title), title or "", summary)
 
 
 def _variant(variant: str) -> str:
@@ -55,9 +63,9 @@ def _variant(variant: str) -> str:
 
 
 def pending_articles(conn, variant: str = "hybrid", limit: int | None = None) -> list[tuple]:
-    """(news_id, published_at, dense, title) — 임베딩은 있고 아직 묶음이 없는 기사, 발행 순서대로."""
+    """(news_id, published_at, dense, title, summary) — 임베딩은 있고 아직 묶음이 없는 기사, 발행 순서대로."""
     sql = f"""
-        SELECT a.id, a.published_at, v.dense, a.title
+        SELECT a.id, a.published_at, v.dense, a.title, a.summary
         FROM news_articles a
         JOIN news_embedding_variants v ON v.news_id = a.id AND v.variant = '{_variant(variant)}'
         WHERE NOT EXISTS (SELECT 1 FROM news_cluster_members m WHERE m.news_id = a.id)
@@ -95,7 +103,7 @@ def load_candidates(conn, cluster_ids: list[int], variant: str = "hybrid") -> li
     if not cluster_ids:
         return []
     sql = f"""
-        SELECT m.cluster_id, m.news_id, a.published_at, v.dense, a.title
+        SELECT m.cluster_id, m.news_id, a.published_at, v.dense, a.title, a.summary
         FROM news_cluster_members m
         JOIN news_articles a ON a.id = m.news_id
         JOIN news_embedding_variants v ON v.news_id = m.news_id AND v.variant = '{_variant(variant)}'
@@ -104,8 +112,8 @@ def load_candidates(conn, cluster_ids: list[int], variant: str = "hybrid") -> li
     grouped: dict[int, list[Member]] = {cid: [] for cid in cluster_ids}
     with conn.cursor() as cur:
         cur.execute(sql, (cluster_ids,))
-        for cluster_id, news_id, published_at, dense, title in cur.fetchall():
-            grouped[cluster_id].append(Member(news_id, published_at, _vec(dense), is_standalone_title(title)))
+        for cluster_id, news_id, published_at, dense, title, summary in cur.fetchall():
+            grouped[cluster_id].append(_member(news_id, published_at, dense, title, summary))
     return [Candidate(cid, tuple(members)) for cid, members in grouped.items()]
 
 
@@ -137,10 +145,11 @@ def _refresh_cluster(cur, cluster_id: int) -> None:
         WHERE id = %s""", (count, first, last, _representative(cur, cluster_id), cluster_id))
 
 
-def assign_one(conn, member: Member, params: ClusterParams, variant: str = "hybrid") -> tuple[int, bool]:
-    """기사 1건을 배정하고 (묶음 id, 기존 묶음 합류 여부)를 돌려준다. 호출자가 커밋한다."""
+def assign_one(conn, member: Member, params: ClusterParams, variant: str = "hybrid",
+               judge: Judge | None = None) -> tuple[int, bool, str]:
+    """기사 1건을 배정하고 (묶음 id, 기존 묶음 합류 여부, decided_by)를 돌려준다. 호출자가 커밋한다."""
     candidates = load_candidates(conn, candidate_cluster_ids(conn, member, params, variant), variant)
-    decision = choose_cluster(member, candidates, params)
+    decision = choose_cluster(member, candidates, params, judge)
     with conn.cursor() as cur:
         if decision.cluster_id is None:
             cur.execute("""
@@ -150,11 +159,12 @@ def assign_one(conn, member: Member, params: ClusterParams, variant: str = "hybr
         else:
             cluster_id = decision.cluster_id
         cur.execute("""
-            INSERT INTO news_cluster_members (news_id, cluster_id, similarity, method_version)
-            VALUES (%s, %s, %s, %s)""", (member.news_id, cluster_id, decision.min_similarity, params.method_version))
+            INSERT INTO news_cluster_members (news_id, cluster_id, similarity, method_version, decided_by)
+            VALUES (%s, %s, %s, %s, %s)""", (member.news_id, cluster_id, decision.min_similarity,
+                                         params.method_version, decision.decided_by))
         if decision.cluster_id is not None:
             _refresh_cluster(cur, cluster_id)
-    return cluster_id, decision.cluster_id is not None
+    return cluster_id, decision.cluster_id is not None, decision.decided_by
 
 
 def repair_clusters(conn) -> int:
@@ -171,12 +181,15 @@ def repair_clusters(conn) -> int:
 
 
 def assign_pending(conn, params: ClusterParams = ClusterParams(), variant: str = "hybrid",
-                   limit: int | None = None) -> AssignStats:
+                   limit: int | None = None, judge: Judge | None = None) -> AssignStats:
     """미배정 기사를 모두 배정한다. 다른 곳에서 배정 중이면 아무것도 하지 않는다.
+    judge를 넘기면 애매한 묶음은 judge에 묻는다 (params.use_llm도 True로 맞춰야 기록이 맞다).
 
     conn은 autocommit=False여야 한다. 기사 1건마다 커밋하므로 중간에 멈춰도 다음 실행이 이어서 처리한다.
     """
     from pgvector.psycopg import register_vector
+    if (judge is not None) != params.use_llm:
+        raise ValueError("judge를 쓰면 params.use_llm=True, 안 쓰면 False여야 합니다 (method_version 기록용)")
     register_vector(conn)
     stats = AssignStats()
     started = time.monotonic()
@@ -195,10 +208,10 @@ def assign_pending(conn, params: ClusterParams = ClusterParams(), variant: str =
         conn.commit()
         if repaired:
             log.info("묶음 정리: %d개", repaired)
-        for news_id, published_at, dense, title in pending_articles(conn, variant, limit):
-            member = Member(news_id, published_at, _vec(dense), is_standalone_title(title))
+        for row in pending_articles(conn, variant, limit):
+            member = _member(*row)
             try:
-                _, joined = assign_one(conn, member, params, variant)
+                _, joined, decided_by = assign_one(conn, member, params, variant, judge)
                 conn.commit()
             except Exception:
                 conn.rollback()
@@ -206,13 +219,16 @@ def assign_pending(conn, params: ClusterParams = ClusterParams(), variant: str =
             stats.processed += 1
             stats.joined += joined
             stats.created += not joined
+            stats.decided_by[decided_by] = stats.decided_by.get(decided_by, 0) + 1
     finally:
         with conn.cursor() as cur:
             cur.execute("SELECT pg_advisory_unlock(%s)", (ADVISORY_LOCK_KEY,))
         conn.commit()
         stats.seconds = time.monotonic() - started
-    log.info("묶음 배정 %d건: 기존 묶음 합류 %d, 새 묶음 %d, %.1f초",
-             stats.processed, stats.joined, stats.created, stats.seconds)
+    log.info("묶음 배정 %d건: 기존 묶음 합류 %d, 새 묶음 %d, %.1f초, 판정 %s",
+             stats.processed, stats.joined, stats.created, stats.seconds, stats.decided_by)
+    if judge is not None and hasattr(judge, "stats"):
+        log.info("LLM 판정: %s", judge.stats.as_dict())
     return stats
 
 
@@ -249,6 +265,9 @@ def main(argv=None) -> int:
     ap.add_argument("--limit", type=int, help="이번에 배정할 최대 기사 수")
     ap.add_argument("--threshold", type=float, default=ClusterParams.threshold)
     ap.add_argument("--window-hours", type=int, default=24)
+    ap.add_argument("--llm", action="store_true",
+                    help="애매한 묶음(최소 유사도 0.85 미만)은 Gemini에 묻는다. 외부 API, 환경변수 GEMINI_API_KEY 필요")
+    ap.add_argument("--llm-max-calls", type=int, default=300, help="이번 실행에서 LLM을 부를 최대 횟수 (넘으면 합류 안 함)")
     ap.add_argument("--report", type=int, metavar="N", help="배정 후 큰 묶음 N개를 출력")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -257,10 +276,18 @@ def main(argv=None) -> int:
     if not dsn:
         log.error("DB 접속 정보가 없습니다. .env의 DATABASE_URL 또는 POSTGRES_*를 확인하세요.")
         return 1
-    params = ClusterParams(threshold=args.threshold, window=timedelta(hours=args.window_hours))
+    params = ClusterParams(threshold=args.threshold, window=timedelta(hours=args.window_hours), use_llm=args.llm)
+    judge = None
+    if args.llm:
+        from .same_event_judge import judge_from_env
+        try:
+            judge = judge_from_env(args.llm_max_calls)
+        except RuntimeError as exc:
+            log.error("%s", exc)
+            return 1
     with psycopg.connect(dsn) as conn:
         log.info("접속: %s:%s/%s, 규칙 %s", conn.info.host, conn.info.port, conn.info.dbname, params.method_version)
-        stats = assign_pending(conn, params, args.variant, args.limit)
+        stats = assign_pending(conn, params, args.variant, args.limit, judge)
         if args.report:
             r = report(conn, args.report)
             print(f"\n묶음 {r['clusters']}개 / 기사 {r['articles']}건 — 2건 이상 묶음 {r['multi_clusters']}개"

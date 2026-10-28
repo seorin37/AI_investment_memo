@@ -4,14 +4,16 @@ import pytest
 
 from backend.pipelines.news.clustering import (Candidate, ClusterParams, Member, RepresentativeInfo,
                                                choose_cluster, cosine_similarity, is_standalone_title,
-                                               pick_representative)
+                                               pick_representative, rule_conflict, title_amounts,
+                                               title_regions)
 
 T0 = datetime(2026, 10, 22, 9, 0, tzinfo=timezone.utc)
 P = ClusterParams(threshold=0.65)
+T0_KST_NOON = datetime(2026, 10, 22, 3, 0, tzinfo=timezone.utc)   # 한국 시간 22일 12:00
 
 
-def m(news_id, vec, hours=0):
-    return Member(news_id, T0 + timedelta(hours=hours), vec)
+def m(news_id, vec, hours=0, title=""):
+    return Member(news_id, T0 + timedelta(hours=hours), vec, title=title)
 
 
 def test_cosine_similarity_basic():
@@ -54,7 +56,8 @@ def test_time_window_and_max_size():
     old = Candidate(1, (m(1, [1.0, 0.0], hours=-25),))
     assert choose_cluster(new, [old], P).cluster_id is None
     edge = Candidate(2, (m(2, [1.0, 0.0], hours=-24),))
-    assert choose_cluster(new, [edge], P).cluster_id == 2
+    assert choose_cluster(new, [edge], ClusterParams(threshold=0.65, same_day=False)).cluster_id == 2
+    assert choose_cluster(new, [edge], P).decided_by == "rule"            # 기본은 다른 날이면 안 묶음
     full = Candidate(3, tuple(m(100 + i, [1.0, 0.0]) for i in range(P.max_size)))
     assert choose_cluster(new, [full], P).cluster_id is None
 
@@ -108,7 +111,80 @@ def test_params_validation_and_version():
         ClusterParams(threshold=1.5)
     with pytest.raises(ValueError):
         ClusterParams(window=timedelta(0))
-    assert ClusterParams().method_version == "complete-link-v3:t0.65:w24h:k10:m30"
+    with pytest.raises(ValueError):
+        ClusterParams(threshold=0.8, llm_below=0.7)
+    assert ClusterParams().method_version == "complete-link-v4:t0.70:w24h:k10:m30:day:rules:nollm"
+    assert ClusterParams(use_llm=True).method_version.endswith(":rules:llm0.85")
+
+
+def test_title_regions_and_amounts():
+    assert title_regions("강화·인천 북부에 한파주의보 해제") == {"인천"}
+    assert title_regions("충주 등 충청북도 12곳") == {"충북"}
+    assert title_regions("고양 등 경기 11곳 한파주의보 해제") == {"경기"}
+    assert title_regions("경기 침체 우려에 코스피 하락") == set()          # 경제 뜻의 '경기'는 지역 아님
+    assert title_amounts("에이루트, 17억원 유상증자") == {17.0}
+    assert title_amounts("시큐레터, 7억원 유상증자") == {7.0}               # 17억의 7억으로 잘못 잡지 않음
+    assert title_amounts("1조 규모 투자, 2,500억 회사채") == {10000.0, 2500.0}
+
+
+def test_rule_conflict():
+    base = Member(1, T0_KST_NOON, [1, 0], title="고양 등 경기 11곳 한파주의보 해제")
+    def other(title, hours=0):
+        return Member(2, T0_KST_NOON + timedelta(hours=hours), [1, 0], title=title)
+    assert rule_conflict(base, other("원주 등 강원 18곳 한파주의보 해제"), P) == "region"
+    assert rule_conflict(base, other("시흥 등 경기 10곳 한파주의보 해제"), P) is None
+    assert rule_conflict(base, other("한파주의보 해제 잇따라"), P) is None       # 한쪽에만 있으면 비교 안 함
+    assert rule_conflict(base, other("시흥 등 경기 10곳", hours=12), P) == "day"   # 한국 시간 다음 날 0시
+    assert rule_conflict(base, other("시흥 등 경기 10곳", hours=11), P) is None
+    a = Member(3, T0_KST_NOON, [1, 0], title="에이루트, 17억원 유상증자")
+    assert rule_conflict(a, Member(4, T0_KST_NOON, [1, 0], title="시큐레터, 7억원 유상증자"), P) == "amount"
+    assert rule_conflict(a, Member(4, T0_KST_NOON, [1, 0], title="에이루트, 17억 규모 유상증자 실시"), P) is None
+
+
+def test_rule_blocks_join_and_next_cluster_is_tried():
+    new = Member(9, T0_KST_NOON, [1.0, 0.0], title="원주 등 강원 18곳 한파주의보 해제")
+    gyeonggi = Candidate(1, (Member(1, T0_KST_NOON, [1.0, 0.0], title="고양 등 경기 11곳 한파주의보 해제"),))
+    gangwon = Candidate(2, (Member(2, T0_KST_NOON, [0.9, 0.44], title="강원 산지 한파주의보 해제"),))
+    assert choose_cluster(new, [gyeonggi], P) == choose_cluster(new, [gyeonggi], P)
+    assert choose_cluster(new, [gyeonggi], P).decided_by == "rule"
+    d = choose_cluster(new, [gyeonggi, gangwon], P)                       # 평균이 더 높은 경기는 규칙에 걸림
+    assert (d.cluster_id, d.decided_by) == (2, "dense")
+
+
+class FakeJudge:
+    def __init__(self, *answers):
+        self.answers, self.asked = list(answers), []
+
+    def __call__(self, new, members):
+        self.asked.append(tuple(x.news_id for x in members))
+        return self.answers.pop(0)
+
+
+def test_llm_only_for_ambiguous_band():
+    params = ClusterParams(threshold=0.70, llm_below=0.85, use_llm=True)
+    new = m(9, [1.0, 0.0])
+    sure = Candidate(1, (m(1, [0.9, 0.436]),))                            # 0.90 → LLM 안 물음
+    judge = FakeJudge()
+    assert choose_cluster(new, [sure], params, judge).decided_by == "dense" and judge.asked == []
+    vague = Candidate(2, (m(2, [0.75, 0.661]),))                          # 0.75 → LLM
+    assert choose_cluster(new, [vague], params, FakeJudge(True)).decided_by == "llm-same"
+    d = choose_cluster(new, [vague], params, FakeJudge(False))
+    assert (d.cluster_id, d.decided_by) == (None, "llm-different")
+    d = choose_cluster(new, [vague], params, FakeJudge(None))             # 답을 못 받으면 합류 안 함
+    assert (d.cluster_id, d.decided_by) == (None, "llm-unavailable")
+    assert choose_cluster(new, [vague], params).decided_by == "dense"    # judge가 없으면 규칙까지만
+
+
+def test_llm_tries_next_cluster_up_to_limit():
+    params = ClusterParams(threshold=0.70, llm_below=0.85, llm_per_article=2, use_llm=True)
+    new = m(9, [1.0, 0.0])
+    c1, c2, c3 = (Candidate(i, (m(i, [0.8 - i / 100, (1 - (0.8 - i / 100) ** 2) ** 0.5]),)) for i in (1, 2, 3))
+    judge = FakeJudge(False, True)
+    d = choose_cluster(new, [c3, c2, c1], params, judge)
+    assert judge.asked == [(1,), (2,)] and (d.cluster_id, d.decided_by) == (2, "llm-same")
+    judge = FakeJudge(False, False, True)
+    d = choose_cluster(new, [c3, c2, c1], params, judge)
+    assert len(judge.asked) == 2 and (d.cluster_id, d.decided_by) == (None, "llm-different")
 
 
 def test_representative_prefers_summary_then_earliest_then_source():

@@ -128,8 +128,17 @@ def export_pairs(conn, path: Path, per_bucket: int = 15, k: int = 5, low: float 
 SCORE_COLUMNS = {"dense": "similarity", "sparse": "sparse_score", "colbert": "colbert_score"}
 
 
-def load_labels(path: Path, key: str = "dense") -> list[tuple[float, str]]:
-    """(점수, label). key는 dense / sparse / colbert. unsure와 빈칸은 뺀다. 알 수 없는 값은 오류."""
+def _pair_rule_conflict(row: dict) -> str | None:
+    """배정과 같은 규칙(같은 날·지역·금액)으로 두 기사가 묶일 수 없는지."""
+    from datetime import datetime
+    from .clustering import ClusterParams, Member, rule_conflict
+    a, b = (Member(0, datetime.fromisoformat(row[f"{x}_published"]), (1.0,), title=row[f"{x}_title"]) for x in "ab")
+    return rule_conflict(a, b, ClusterParams())
+
+
+def load_labels(path: Path, key: str = "dense", rules: bool = False) -> list[tuple[float, str]]:
+    """(점수, label). key는 dense / sparse / colbert. unsure와 빈칸은 뺀다. 알 수 없는 값은 오류.
+    rules=True면 규칙에 걸리는 쌍은 점수를 -1로 둔다 (어떤 기준에서도 안 묶임)."""
     column = SCORE_COLUMNS[key]
     out = []
     with path.open(encoding="utf-8-sig", newline="") as f:
@@ -142,7 +151,7 @@ def load_labels(path: Path, key: str = "dense") -> list[tuple[float, str]]:
             value = (row.get(column) or "").strip()
             if not value:
                 raise ValueError(f"pair_id={row.get('pair_id')}: {column} 칸이 비어 있습니다 (colbert는 add-colbert 먼저)")
-            out.append((float(value), label))
+            out.append((-1.0 if rules and _pair_rule_conflict(row) else float(value), label))
     return out
 
 
@@ -266,6 +275,7 @@ def main(argv=None) -> int:
     sc = sub.add_parser("score", help="사람이 체크한 CSV로 기준값별 결과 계산 (DB 없음)")
     sc.add_argument("path", type=Path)
     sc.add_argument("--by", choices=list(SCORE_COLUMNS), default="dense", help="어떤 점수로 계산할지 (기본 dense)")
+    sc.add_argument("--rules", action="store_true", help="배정 규칙(같은 날·지역·금액)에 걸리는 쌍은 안 묶이는 것으로 계산")
     ac = sub.add_parser("add-colbert", help="CSV에 ColBERT 점수 칸을 채운다 (DB 읽기 + 로컬 BGE-M3, 외부 요청 없음)")
     ac.add_argument("path", type=Path)
     cp = sub.add_parser("compare", help="dense·sparse·ColBERT 중 어느 점수가 같은/다른 사건을 잘 가르는지 비교 (DB 없음)")
@@ -289,7 +299,7 @@ def main(argv=None) -> int:
         return 0
 
     if args.cmd == "score":
-        labels = load_labels(args.path, args.by)
+        labels = load_labels(args.path, args.by, args.rules)
         same = sum(1 for _, l in labels if l == "same")
         print(f"체크된 쌍 {len(labels)}개 (같은 사건 {same}, 다른 사건 {len(labels) - same})")
         print("기준값  묶이는 쌍  잘못 묶음  놓친 같은 사건")

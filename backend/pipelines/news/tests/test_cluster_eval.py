@@ -87,3 +87,18 @@ def test_add_colbert_keeps_labels_and_compare_uses_it(tmp_path, monkeypatch):
     assert [r["label"] for r in rows] == ["same", "different", "same"] and rows[0]["note"] == "메모1"
     by = {r["score"]: r for r in ce.compare(path)}
     assert by["colbert"]["auc"] == 1.0 and by["dense"]["auc"] == 0.5
+
+
+def test_load_labels_with_rules(tmp_path):
+    path = tmp_path / "pairs.csv"
+    rows = [("2026-10-22T01:00+00:00", "고양 등 경기 11곳 한파주의보 해제", "2026-10-22T01:05+00:00", "원주 등 강원 18곳 한파주의보 해제"),
+            ("2026-10-21T09:00+00:00", "상어 부캉이 수로 밖으로", "2026-10-21T16:00+00:00", "부캉이 다시 돌아와"),   # KST 18시 ↔ 다음 날 1시
+            ("2026-10-22T01:00+00:00", "한은 기준금리 동결", "2026-10-22T02:00+00:00", "한은 동결(종합)")]
+    with path.open("w", encoding="utf-8-sig", newline="") as f:
+        w = csv.DictWriter(f, ce.FIELDS)
+        w.writeheader()
+        for i, (ap, at, bp, bt) in enumerate(rows, 1):
+            w.writerow({**{k: "" for k in ce.FIELDS}, "pair_id": i, "similarity": 0.9, "label": "same",
+                        "a_published": ap, "a_title": at, "b_published": bp, "b_title": bt})
+    assert [s for s, _ in ce.load_labels(path)] == [0.9, 0.9, 0.9]
+    assert [s for s, _ in ce.load_labels(path, rules=True)] == [-1.0, -1.0, 0.9]

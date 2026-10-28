@@ -9,6 +9,7 @@ Create Date: 2026-10-27
 - news_cluster_members: 기사 1건 = 1행. 기사는 한 묶음에만 속한다.
   similarity는 합류 시점에 묶음 안 기사들과의 최소 코사인 유사도이고, 묶음을 처음 만든 기사는 NULL이다.
   method_version은 배정 당시 규칙(임계값·시간 범위 등)을 구분해 기준이 바뀐 뒤에도 결과를 추적하게 한다.
+  decided_by는 이 기사의 배정을 무엇이 정했는지다 (합류: dense·llm-same / 새 묶음: new·rule·llm-different·llm-unavailable).
 대표 기사가 30일 정리로 지워지면 representative_news_id가 NULL이 되고, 배정 코드가 다음 대표를 정한다.
 """
 from typing import Sequence, Union
@@ -38,6 +39,8 @@ CREATE TABLE news_cluster_members (
   cluster_id      bigint      NOT NULL REFERENCES news_clusters(id) ON DELETE CASCADE,
   similarity      real        CHECK (similarity IS NULL OR similarity BETWEEN -1 AND 1),
   method_version  text        NOT NULL,
+  decided_by      text        NOT NULL DEFAULT 'new'
+                  CHECK (decided_by IN ('dense', 'llm-same', 'new', 'rule', 'llm-different', 'llm-unavailable')),
   assigned_at     timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX news_cluster_members_cluster_idx ON news_cluster_members (cluster_id);
