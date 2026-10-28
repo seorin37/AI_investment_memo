@@ -66,6 +66,9 @@ RSS 4개 매체 (30분마다) ──┐
     # 엑셀로 열어 label 칸에 same(같은 사건) / different(다른 사건) / unsure 를 적는다
     python -m backend.pipelines.news.cluster_eval score eval/news_dedup/boundary_pairs_v2.csv    # 기준값별 결과
     python -m backend.pipelines.news.cluster_eval score eval/news_dedup/boundary_pairs_v2.csv --rules   # 규칙까지 적용한 결과
+    python -m backend.pipelines.news.cluster_eval llm eval/news_dedup/boundary_pairs_v2.csv --out eval/news_dedup/llm_check.csv
+        # 0.70~0.85·규칙 통과 쌍만 Gemini에 물어 사람 정답과 비교 (외부 API, 호출 전 확인, 기본 최대 60회)
+        # Gemini 정확도와 '0.70 + 규칙 + LLM' 전체의 잘못 묶음·놓침을 보여 주고, 쌍별 답·이유를 --out에 저장
 
 - **같은 사건** = 같은 일(누가·무엇을·언제)을 다룬 기사. 같은 발표·사고·판결·거래를 여러 매체가 쓴 속보, 같은 매체의 속보와 종합(1보·2보)은 같은 사건이다.
 - **다른 사건** = 같은 날·같은 종목·같은 주제라도 일이 다르면 다른 사건이다.

@@ -102,3 +102,63 @@ def test_load_labels_with_rules(tmp_path):
                         "a_published": ap, "a_title": at, "b_published": bp, "b_title": bt})
     assert [s for s, _ in ce.load_labels(path)] == [0.9, 0.9, 0.9]
     assert [s for s, _ in ce.load_labels(path, rules=True)] == [-1.0, -1.0, 0.9]
+
+
+def _write_full(path, rows):
+    """rows: (similarity, label, a_published, a_title, b_published, b_title)"""
+    with path.open("w", encoding="utf-8-sig", newline="") as f:
+        w = csv.DictWriter(f, ce.FIELDS)
+        w.writeheader()
+        for i, (sim, label, ap, at, bp, bt) in enumerate(rows, 1):
+            w.writerow({**{k: "" for k in ce.FIELDS}, "pair_id": i, "similarity": sim, "label": label,
+                        "a_id": i * 10, "b_id": i * 10 + 1, "a_published": ap, "a_title": at,
+                        "b_published": bp, "b_title": bt})
+
+
+def test_llm_eval_targets_judges_and_summarizes(tmp_path):
+    day = "2026-10-22T01:00+00:00"
+    path = tmp_path / "pairs.csv"
+    _write_full(path, [
+        (0.90, "same", day, "한은 동결", day, "한은 동결(종합)"),                     # 1: 0.85 이상 → LLM 안 감, 묶임
+        (0.80, "same", day, "김여정 확성기", day, "김여정 확성기 가동"),              # 2: LLM 대상
+        (0.75, "different", day, "PHP 결함 발견", day, "일본 PHP 대응 촉구"),         # 3: LLM 대상
+        (0.72, "different", day, "고양 등 경기 11곳", day, "원주 등 강원 18곳"),       # 4: 규칙에 걸림 → 대상 아님
+        (0.78, "unsure", day, "가", day, "나"),                                       # 5: 빠짐
+        (0.65, "same", day, "다", day, "라"),                                         # 6: 0.70 미만 → 놓침
+        (0.71, "same", day, "코스피 반등", day, "코스피 반등 마감"),                   # 7: LLM 대상, 답 없음
+    ])
+    rows = ce.llm_targets(path)
+    assert [r["pair_id"] for r in rows] == ["2", "3", "7"]
+
+    answers = {"김여정 확성기": True, "PHP 결함 발견": True, "코스피 반등": None}
+
+    class Judge:
+        last_reason = ""
+
+        def __call__(self, a, members):
+            assert len(members) == 1 and a.published_at.tzinfo is not None
+            self.last_reason = f"이유-{a.title}"
+            return answers[a.title]
+
+    results = ce.judge_pairs(rows, Judge())
+    assert [(r["llm"], r["agree"]) for r in results] == [("same", "yes"), ("same", "no"), ("none", "no")]
+    assert results[0]["reason"] == "이유-김여정 확성기"
+    s = ce.summarize_llm(results, path)
+    assert s["table"][("different", "same")] == 1 and s["table"][("same", "none")] == 1
+    assert s["accuracy"] == pytest.approx(1 / 2) and s["unavailable"] == 1
+    assert s["merged"] == 3                                   # 1, 2, 3
+    assert s["false_merge"] == pytest.approx(1 / 3)          # 3번
+    assert s["missed"] == pytest.approx(2 / 4)               # same 1·2·6·7 중 6·7 놓침
+    out = tmp_path / "out" / "llm.csv"
+    ce.write_llm_results(results, out)
+    assert len(list(csv.DictReader(out.open(encoding="utf-8-sig")))) == 3
+
+
+def test_llm_command_cancels_without_calling(tmp_path, monkeypatch):
+    day = "2026-10-22T01:00+00:00"
+    path = tmp_path / "pairs.csv"
+    _write_full(path, [(0.80, "same", day, "가", day, "나")])
+    monkeypatch.setattr("builtins.input", lambda prompt: "n")
+    import backend.pipelines.news.same_event_judge as sj
+    monkeypatch.setattr(sj, "judge_from_env", lambda *a, **k: pytest.fail("취소했는데 호출함"))
+    assert ce.main(["llm", str(path)]) == 1

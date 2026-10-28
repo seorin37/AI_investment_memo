@@ -40,6 +40,7 @@ def test_judge_counts_and_budget():
     assert judge(new, members) is None                                    # 오류도 None (합류 안 함)
     assert judge(new, members) is None                                    # 한도(4회) 넘음 → 묻지 않음
     assert judge.stats.as_dict() == {"calls": 4, "same": 1, "different": 1, "unavailable": 2, "skipped_budget": 1}
+    assert judge.last_reason == "호출 한도 초과"
 
 
 def test_gemini_key_comes_only_from_gemini_api_key(monkeypatch):

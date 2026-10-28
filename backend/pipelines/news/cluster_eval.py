@@ -5,6 +5,8 @@
   python -m backend.pipelines.news.cluster_eval score eval/news_dedup/boundary_pairs_v2.csv    # 기준값별 결과
   python -m backend.pipelines.news.cluster_eval add-colbert eval/news_dedup/boundary_pairs_v2.csv  # ColBERT 점수 칸 채우기
   python -m backend.pipelines.news.cluster_eval compare eval/news_dedup/boundary_pairs_v2.csv   # dense·sparse·ColBERT 비교
+  python -m backend.pipelines.news.cluster_eval llm eval/news_dedup/boundary_pairs_v2.csv \
+      --out eval/news_dedup/llm_check.csv                                                       # Gemini 판정 정확도 (외부 API)
 
 뽑는 방법: 기사마다 24시간 안에서 가장 가까운 기사 몇 건을 찾고, dense 유사도가 0.60~0.95인 쌍만 남겨
 유사도 구간(0.05 단위)마다 같은 수를 고른다. 기준이 '같은 사건(엄격)'이라 0.80 이상에도 다른 사건이
@@ -264,6 +266,80 @@ def add_colbert(conn, path: Path, encode) -> int:
     return len(rows)
 
 
+LLM_BAND = (0.70, 0.85)      # 배정에서 LLM에 묻는 구간 (ClusterParams.threshold ~ llm_below)
+LLM_OUT_FIELDS = ["pair_id", "similarity", "label", "llm", "agree", "reason", "a_title", "b_title"]
+
+
+def llm_targets(path: Path, low: float = LLM_BAND[0], high: float = LLM_BAND[1]) -> list[dict]:
+    """사람이 체크한 쌍 중 배정에서 실제로 LLM까지 가는 쌍: 유사도 [low, high), 규칙 통과, unsure·빈칸 제외."""
+    out = []
+    with path.open(encoding="utf-8-sig", newline="") as f:
+        for row in csv.DictReader(f):
+            label = (row.get("label") or "").strip().lower()
+            if label not in ("same", "different"):
+                continue
+            if low <= float(row["similarity"]) < high and not _pair_rule_conflict(row):
+                out.append(row)
+    return out
+
+
+def _row_member(row: dict, side: str):
+    from datetime import datetime
+    from .clustering import Member
+    return Member(int(row[f"{side}_id"] or 0), datetime.fromisoformat(row[f"{side}_published"]), (1.0,),
+                  title=row[f"{side}_title"], summary=row.get(f"{side}_summary") or None)
+
+
+def judge_pairs(rows: list[dict], judge) -> list[dict]:
+    """쌍마다 judge(a, [b])를 불러 결과 행을 만든다. llm은 same / different / none(답 못 받음)."""
+    out = []
+    for row in rows:
+        verdict = judge(_row_member(row, "a"), [_row_member(row, "b")])
+        llm = "none" if verdict is None else ("same" if verdict else "different")
+        out.append({"pair_id": row["pair_id"], "similarity": row["similarity"], "label": row["label"].strip().lower(),
+                    "llm": llm, "agree": "yes" if llm == row["label"].strip().lower() else "no",
+                    "reason": getattr(judge, "last_reason", ""), "a_title": row["a_title"], "b_title": row["b_title"]})
+    return out
+
+
+def summarize_llm(results: list[dict], path: Path, rules: bool = True,
+                  threshold: float = LLM_BAND[0], llm_below: float = LLM_BAND[1]) -> dict:
+    """LLM 정확도와, 0.70+규칙+LLM 전체로 봤을 때의 잘못 묶음·놓침 (답 못 받은 쌍은 안 묶임으로 센다)."""
+    table = {(h, l): 0 for h in ("same", "different") for l in ("same", "different", "none")}
+    for r in results:
+        table[(r["label"], r["llm"])] += 1
+    answered = [r for r in results if r["llm"] != "none"]
+    by_id = {r["pair_id"]: r["llm"] for r in results}
+    merged = wrong = caught = same_total = 0
+    with path.open(encoding="utf-8-sig", newline="") as f:
+        for row in csv.DictReader(f):
+            label = (row.get("label") or "").strip().lower()
+            if label not in ("same", "different"):
+                continue
+            same_total += label == "same"
+            sim = float(row["similarity"])
+            if sim < threshold or (rules and _pair_rule_conflict(row)):
+                continue
+            if sim < llm_below and by_id.get(row["pair_id"]) != "same":
+                continue                                  # LLM이 다르다거나 답이 없으면 안 묶음
+            merged += 1
+            wrong += label == "different"
+            caught += label == "same"
+    return {"pairs": len(results), "table": table,
+            "accuracy": sum(r["agree"] == "yes" for r in answered) / len(answered) if answered else None,
+            "unavailable": len(results) - len(answered),
+            "merged": merged, "false_merge": wrong / merged if merged else 0.0,
+            "missed": 1 - caught / same_total if same_total else 0.0}
+
+
+def write_llm_results(results: list[dict], out: Path) -> None:
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with out.open("w", encoding="utf-8-sig", newline="") as f:
+        w = csv.DictWriter(f, LLM_OUT_FIELDS)
+        w.writeheader()
+        w.writerows(results)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="중복 묶음 기준값 평가")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -280,6 +356,13 @@ def main(argv=None) -> int:
     ac.add_argument("path", type=Path)
     cp = sub.add_parser("compare", help="dense·sparse·ColBERT 중 어느 점수가 같은/다른 사건을 잘 가르는지 비교 (DB 없음)")
     cp.add_argument("path", type=Path)
+    lm = sub.add_parser("llm", help="애매 구간 쌍을 Gemini에 물어 사람 정답과 비교 (외부 API, 환경변수 GEMINI_API_KEY)")
+    lm.add_argument("path", type=Path)
+    lm.add_argument("--out", type=Path, help="쌍별 Gemini 답·이유를 저장할 CSV")
+    lm.add_argument("--low", type=float, default=LLM_BAND[0])
+    lm.add_argument("--high", type=float, default=LLM_BAND[1])
+    lm.add_argument("--max-calls", type=int, default=60, help="최대 호출 수 (기본 60)")
+    lm.add_argument("--yes", action="store_true", help="호출 전 확인을 묻지 않는다")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -296,6 +379,39 @@ def main(argv=None) -> int:
             missed = f"{r['missed']:.1%}" if r["missed"] is not None else "-"
             print(f" {r['score']:<20} {auc:>8}         {th:>10}                {missed:>6}")
         print("\nAUC는 1.0에 가까울수록 같은 사건과 다른 사건을 잘 가른다 (0.5면 못 가름).")
+        return 0
+
+    if args.cmd == "llm":
+        rows = llm_targets(args.path, args.low, args.high)
+        if not rows:
+            print("LLM에 물을 쌍이 없습니다 (체크된 쌍 중 유사도 구간·규칙 통과).")
+            return 1
+        calls = min(len(rows), args.max_calls)
+        print(f"유사도 {args.low:.2f}~{args.high:.2f}, 규칙 통과 쌍 {len(rows)}개 → Gemini {calls}회 호출 예정 (외부 API)")
+        if not args.yes and input("진행할까요? [y/N] ").strip().lower() != "y":
+            print("취소했습니다.")
+            return 1
+        from .same_event_judge import judge_from_env
+        try:
+            judge = judge_from_env(args.max_calls)
+        except RuntimeError as exc:
+            log.error("%s", exc)
+            return 1
+        results = judge_pairs(rows, judge)
+        if args.out:
+            write_llm_results(results, args.out)
+            print("쌍별 결과:", args.out)
+        s = summarize_llm(results, args.path, threshold=args.low, llm_below=args.high)
+        t = s["table"]
+        print(f"\n쌍 {s['pairs']}개 — 답 못 받음 {s['unavailable']}개")
+        print("              Gemini same  Gemini different  답 없음")
+        for h in ("same", "different"):
+            print(f" 사람 {h:<9} {t[(h, 'same')]:>8}  {t[(h, 'different')]:>12}  {t[(h, 'none')]:>8}")
+        acc = f"{s['accuracy']:.1%}" if s["accuracy"] is not None else "-"
+        print(f"Gemini가 사람과 같은 답: {acc}")
+        print(f"\n0.70 + 규칙 + LLM 전체: 묶이는 쌍 {s['merged']}개, 잘못 묶음 {s['false_merge']:.1%}, "
+              f"놓친 같은 사건 {s['missed']:.1%}")
+        print("(쌍 단위 계산이라 실제 묶음 결과와는 조금 다를 수 있다)")
         return 0
 
     if args.cmd == "score":

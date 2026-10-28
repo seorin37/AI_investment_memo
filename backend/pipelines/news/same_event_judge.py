@@ -87,10 +87,13 @@ class SameEventJudge:
     call: Callable[[str], str] = field(repr=False)
     max_calls: int = 300
     stats: JudgeStats = field(default_factory=JudgeStats)
+    last_reason: str = ""      # 마지막 판정의 이유 (평가 결과 파일용)
 
     def __call__(self, new: Member, members: Sequence[Member]) -> bool | None:
+        self.last_reason = ""
         if self.stats.calls >= self.max_calls:
             self.stats.skipped_budget += 1
+            self.last_reason = "호출 한도 초과"
             return None
         self.stats.calls += 1
         try:
@@ -98,8 +101,10 @@ class SameEventJudge:
         except Exception as exc:   # 오류 내용에 키는 없지만 길게 남기지 않는다
             log.warning("LLM 판정 실패 news_id=%s: %s", new.news_id, str(exc)[:120])
             self.stats.unavailable += 1
+            self.last_reason = f"오류: {str(exc)[:80]}"
             return None
         verdict, reason = parse_verdict(text)
+        self.last_reason = reason
         if verdict is None:
             log.warning("LLM 답 형식 오류 news_id=%s: %s", new.news_id, reason)
             self.stats.unavailable += 1
