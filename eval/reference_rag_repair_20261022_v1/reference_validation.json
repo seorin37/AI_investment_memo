@@ -1,0 +1,79 @@
+{
+  "run_id": "rag_repair_20261022_v1",
+  "passed": true,
+  "checks": [
+    {
+      "name": "100 unique questions",
+      "passed": true,
+      "detail": "100"
+    },
+    {
+      "name": "question IDs unchanged",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "question text unchanged",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "25 questions per company",
+      "passed": true,
+      "detail": "Counter({'삼성전자': 25, 'SK하이닉스': 25, 'NAVER': 25, 'KB금융지주': 25})"
+    },
+    {
+      "name": "original team gold preserved",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "human review remains pending",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "verification statuses valid",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "all evidence chunk references valid",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "verified items have every fact group",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "116 report-gold rows",
+      "passed": true,
+      "detail": "116"
+    },
+    {
+      "name": "CSV files are UTF-8-SIG",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "forbidden execution flags false",
+      "passed": true,
+      "detail": ""
+    }
+  ],
+  "errors": [],
+  "question_count": 100,
+  "gold_item_count": 116,
+  "evidence_reference_count": 611,
+  "verification_status": {
+    "evidence_verified": 94,
+    "not_disclosed_in_scope": 2,
+    "source_not_available": 4
+  },
+  "corpus_status": {
+    "indexed_complete": 86,
+    "extraction_loss": 14
+  }
+}
