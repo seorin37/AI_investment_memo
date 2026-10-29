@@ -93,13 +93,13 @@ alembic heads
 
 주요 데이터:
 
-- KIS 파일럿 종목 원시·수정 OHLCV 및 투자지표
-- KRX 파일럿 종목 시가총액·상장주식수
+- DB에 등록된 KOSPI 종목의 KIS 원시·수정 OHLCV 및 투자지표
+- KRX KOSPI 종목 마스터 및 전체 종목 시가총액·상장주식수
 - KOSPI / KOSDAQ 지수
 - KRX 금 가격
 
 KIS 백필 진입점은 `scripts/collect_kis_market_data.py`이며, `0011` migration과
-파일럿 검증이 끝난 DB에서만 명시적인 날짜 범위로 실행합니다. KRX 지수·금
+소량 검증이 끝난 DB에서만 명시적인 날짜 범위로 실행합니다. KRX 지수·금
 백필 함수는 `pipeline.py`, 시가총액·상장주식수 결합은 `metadata.py`에 있습니다.
 
 ### 경제지표
@@ -119,8 +119,9 @@ ECOS 및 FRED API를 이용해 경제지표를 수집합니다.
 
 ### 일일 증분 갱신
 
-서울 기준 09:00에는 KRX 시가총액·상장주식수, 지수·금, ECOS, FRED를
-실행하고 18:30에는 KIS 원시·수정 OHLCV와 투자지표를 실행합니다.
+서울 기준 09:00에는 최신 확정 거래일 KRX 종목 마스터를 먼저 동기화한 뒤,
+같은 KOSPI 대상 목록으로 시가총액·상장주식수를 결합하고 지수·금, ECOS,
+FRED를 실행합니다. 18:30에는 KIS 원시·수정 OHLCV와 투자지표를 실행합니다.
 
 ```bash
 PYTHONPATH=backend python -m pipelines.daily_refresh --profile morning --print-plan
@@ -129,8 +130,9 @@ PYTHONPATH=backend python -m pipelines.daily_refresh --profile evening --print-p
 
 운영 안전장치:
 
-- KIS와 KRX 종목 메타데이터는 파일럿 4종목만 실행
+- KIS와 KRX 종목 메타데이터는 실행 시작 시 `stocks.market='KOSPI'` 대상을 한 번 확정
 - KIS는 `DAILY_REFRESH_KIS_ENABLED=true`이고 `0011` 스키마가 준비된 경우에만 실행
+- Evening 작업은 해당 실행일과 최근 10일 범위의 누락·미완료 거래일을 복구하며, 전체 과거 백필·전체 재동기화는 자동 실행하지 않음
 - PostgreSQL advisory lock으로 동일 DB 대상 중복 실행 방지
 - 기존 소스별 완료/실패 JSON과 `logs/daily_refresh/` 통합 단계 로그로 재개 가능
 - 한 소스가 실패해도 나머지 소스는 계속 실행하며, 하나라도 실패하면 종료 코드 1
@@ -139,12 +141,21 @@ PYTHONPATH=backend python -m pipelines.daily_refresh --profile evening --print-p
 
 ```dotenv
 DAILY_REFRESH_KRX_LAG_DAYS=1
-DAILY_REFRESH_KIS_REQUERY_DAYS=35
 DAILY_REFRESH_ECOS_LAG_DAYS=1
 DAILY_REFRESH_FRED_LAG_DAYS=1
 DAILY_REFRESH_KRX_REQUERY_DAYS=7
 DAILY_REFRESH_ECOS_REQUERY_DAYS=35
 DAILY_REFRESH_FRED_REQUERY_DAYS=35
+```
+
+과거 KIS 백필은 명시적인 기간으로만 수동 실행합니다. 테스트·소량 검증은
+`--symbols` 또는 `--symbol-limit`으로 범위를 제한할 수 있습니다.
+수동 백필도 자동 Morning/Evening과 동일한 PostgreSQL advisory lock을 사용하므로,
+다른 시장데이터 수집이 실행 중이면 시작하지 않고 종료합니다.
+
+```bash
+PYTHONPATH=backend python scripts/collect_kis_market_data.py \
+  --start 2026-10-28 --end 2026-10-28 --symbol-limit 4
 ```
 
 현재 활성화된 Python 환경을 사용해 사용자 systemd 타이머를 설치합니다.
