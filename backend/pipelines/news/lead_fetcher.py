@@ -122,7 +122,7 @@ def extract_lead(html: str, selector: str, drop_selectors: Iterable[str] = (),
         line = clean_text(raw)
         if line and not _EMAIL_RE.search(line) and not _NOISE_RE.search(line):
             lines.append(line)
-    text = _BYLINE_RE.sub("", " ".join(lines), count=1).strip()
+    text = _BYLINE_RE.sub("", " ".join(lines).lstrip(" ·•|"), count=1).strip()
     lead = ""
     for sentence in _SENTENCE_RE.split(text)[:3]:
         candidate = f"{lead} {sentence}".strip()
@@ -132,6 +132,18 @@ def extract_lead(html: str, selector: str, drop_selectors: Iterable[str] = (),
     if not lead:   # 첫 문장부터 너무 길면 글자 수로 자른다
         lead = text[:max_chars].rstrip()
     return lead if len(lead) >= min_chars else None
+
+
+def meta_description_lead(html: str, max_chars: int = 300, min_chars: int = 1, title: str = "") -> str | None:
+    """본문 칸이 없는 페이지의 대체 리드: 페이지가 제공하는 요약(og:description). 제목과 같거나 너무 짧으면 쓰지 않는다."""
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, "lxml")
+    meta = soup.find("meta", attrs={"property": "og:description"}) or soup.find("meta", attrs={"name": "description"})
+    text = " ".join((meta.get("content") or "").split()) if meta else ""
+    if not text or len(text) < min_chars or (title and text in title):
+        return None
+    return text[:max_chars].rstrip()
 
 
 def lead_from_naver_items(items: Iterable[dict], url: str, max_chars: int = 300,
@@ -298,9 +310,11 @@ def _link_one(item, src, config, http_get, robots, throttle) -> LeadResult:
     if code != 200:
         return LeadResult(item.news_id, "failed", "link", item.attempts + 1, http_status=code, error=f"HTTP {code}")
     lead = extract_lead(resp.text, src.selector, src.drop_selectors, config.max_chars, config.min_chars)
+    if lead is None and item.attempts + 1 >= config.max_attempts:
+        # 본문이 끝내 안 채워지면 마지막 시도에서만 페이지 요약으로 대체 (속보는 본문이 늦게 채워진다)
+        lead = meta_description_lead(resp.text, config.max_chars, config.min_chars, item.title)
     if lead is None:
-        return LeadResult(item.news_id, "failed", "link", item.attempts + 1, http_status=code,
-                          error="본문 추출 실패 (선택자 확인 필요)")
+        return _retry_or_fail(item, "link", config, "본문 추출 실패 (선택자 확인 필요)", code)
     return LeadResult(item.news_id, "ok", "link", item.attempts + 1, lead_text=lead, http_status=code)
 
 
