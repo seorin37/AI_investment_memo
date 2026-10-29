@@ -20,18 +20,38 @@ def raw(symbol="005930", name="삼성전자", market="KOSPI"):
 
 def test_normalize_kospi_snapshot_filters_other_markets_and_validates_symbols():
     rows = stock_master.normalize_kospi_snapshot(
-        [raw(), raw("000660", "SK하이닉스"), raw("247540", "에코프로비엠", "KOSDAQ")]
+        [
+            raw(),
+            raw("000660", "SK하이닉스"),
+            raw("00104K", "CJ4우(전환)"),
+            raw("0126Z0", "영숫자종목"),
+            raw("247540", "에코프로비엠", "KOSDAQ"),
+        ]
     )
     assert rows == [
         {"symbol": "005930", "name": "삼성전자", "market": "KOSPI", "sector": "general"},
         {"symbol": "000660", "name": "SK하이닉스", "market": "KOSPI", "sector": "general"},
+        {"symbol": "00104K", "name": "CJ4우(전환)", "market": "KOSPI", "sector": "general"},
+        {"symbol": "0126Z0", "name": "영숫자종목", "market": "KOSPI", "sector": "general"},
     ]
-    with pytest.raises(ValueError, match="종목코드"):
-        stock_master.normalize_kospi_snapshot([raw("A05930")])
     with pytest.raises(ValueError, match="중복"):
         stock_master.normalize_kospi_snapshot([raw(), raw(name="삼성전자 변경")])
     with pytest.raises(ValueError, match="비어"):
         stock_master.normalize_kospi_snapshot([])
+
+
+@pytest.mark.parametrize("symbol", ["005930", "00104K", "0126Z0"])
+def test_stock_symbol_validation_accepts_numeric_and_uppercase_alphanumeric(symbol):
+    assert krx.is_valid_stock_symbol(symbol)
+
+
+@pytest.mark.parametrize(
+    "symbol", ["00593", "0059300", "00104k", "00-04K", "가0104K"]
+)
+def test_stock_symbol_validation_rejects_bad_length_special_and_lowercase(symbol):
+    assert not krx.is_valid_stock_symbol(symbol)
+    with pytest.raises(ValueError, match="종목코드"):
+        stock_master.normalize_kospi_snapshot([raw(symbol)])
 
 
 def test_fetch_kospi_stock_master_uses_official_base_info_endpoint(monkeypatch):
@@ -140,3 +160,28 @@ def test_load_kospi_symbols_fails_when_database_universe_is_empty():
 
     with pytest.raises(ValueError, match="종목 마스터를 먼저 등록"):
         stock_master.load_kospi_symbols(engine=Engine())
+
+
+def test_load_kospi_symbols_accepts_explicit_alphanumeric_codes():
+    class Result:
+        def scalars(self):
+            return iter(("00104K", "0126Z0"))
+
+    class Connection:
+        def execute(self, _statement):
+            return Result()
+
+    class Connect:
+        def __enter__(self):
+            return Connection()
+
+        def __exit__(self, *_args):
+            return False
+
+    class Engine:
+        def connect(self):
+            return Connect()
+
+    assert stock_master.load_kospi_symbols(
+        symbols=("00104K", "0126Z0"), engine=Engine()
+    ) == ("00104K", "0126Z0")

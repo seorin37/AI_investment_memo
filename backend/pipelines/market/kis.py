@@ -26,6 +26,7 @@ from sqlalchemy import bindparam, text
 
 from pipelines.common.db import get_engine, load_env
 from pipelines.market.calendar import is_krx_trading_day
+from pipelines.market.krx import is_valid_stock_symbol
 from pipelines.market.stock_master import load_kospi_symbols
 
 
@@ -402,8 +403,8 @@ class KisClient:
 
 
 def _validate_symbol(symbol: str) -> None:
-    if len(symbol) != 6 or not symbol.isdigit():
-        raise ValueError("종목코드는 6자리 숫자여야 합니다.")
+    if not is_valid_stock_symbol(symbol):
+        raise ValueError("종목코드는 6자리 영문 대문자 또는 숫자여야 합니다.")
 
 
 def _decimal(value: object, field: str, *, nullable: bool = False) -> Decimal | None:
