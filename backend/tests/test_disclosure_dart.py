@@ -285,6 +285,13 @@ class CollectTest(unittest.TestCase):
         self.assertEqual(result.reports, [])
         self.assertEqual(len(result.failures), 1)
         self.assertNotIn(API_KEY, result.failures[0])
+        [failed] = result.failed_items
+        self.assertEqual(
+            {k: failed[k] for k in ("symbol", "stage", "period_end", "kind", "rcept_no")},
+            {"symbol": "005930", "stage": "download", "period_end": "2024-12-31", "kind": "annual", "rcept_no": "20250311000001"},
+        )
+        self.assertIn("010", failed["reason"])
+        self.assertNotIn(API_KEY, failed["reason"])
 
 
 class DownloadSafetyTest(unittest.TestCase):

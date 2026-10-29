@@ -106,8 +106,8 @@ def period_label(period_end: str) -> str:
     return PERIOD_LABELS[int(period_end[5:7])]
 
 
-def chunk_header(company: str, period_end: str, section: str) -> str:
-    return f"[{company} {period_end[:4]} {period_label(period_end)} | {section}]\n"
+def chunk_header(company: str, period_end: str, section: str, label: str | None = None) -> str:
+    return f"[{company} {period_end[:4]} {label or period_label(period_end)} | {section}]\n"
 
 
 # ── 분할 도구 ─────────────────────────────────────────
@@ -255,7 +255,9 @@ def chunk_blocks(
     period_end: str,
     tokens: TokenCounter,
     settings: ChunkSettings,
+    label: str | None = None,
 ) -> list[Chunk]:
+    """label: 헤더의 기간 라벨. 없으면 period_end 월로 정한다 (12월 결산 기준)."""
     # 1) 같은 섹션의 연속 문단은 하나의 본문 묶음, 표는 각각 하나의 표 묶음
     groups: list[tuple[str, str, list[Block]]] = []
     for block in blocks:
@@ -268,7 +270,7 @@ def chunk_blocks(
     # 2) 묶음별 청크 본문 생성
     pieces: list[tuple[str, str, str]] = []  # (section, block_type, body)
     for section, block_type, members in groups:
-        header_tokens = tokens.count(chunk_header(company, period_end, section))
+        header_tokens = tokens.count(chunk_header(company, period_end, section, label))
         budget_max = settings.max_tokens - header_tokens
         budget_target = min(settings.target_tokens, budget_max)
         if budget_target < 50:
@@ -293,7 +295,7 @@ def chunk_blocks(
     # 3) 헤더를 붙이고 번호·해시를 매긴다
     chunks: list[Chunk] = []
     for section, block_type, body in pieces:
-        text = chunk_header(company, period_end, section) + body
+        text = chunk_header(company, period_end, section, label) + body
         count = tokens.count(text)
         if count > settings.max_tokens:
             raise ValueError(f"{rcept_no}: 청크가 최대 토큰을 넘습니다 ({count} > {settings.max_tokens}): {section}")
