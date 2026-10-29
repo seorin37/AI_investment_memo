@@ -15,7 +15,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Callable, Iterator
+from typing import Callable, Iterable, Iterator
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -23,8 +23,10 @@ from sqlalchemy import create_engine, text
 
 from pipelines.common.db import database_url
 from pipelines.economic.pipeline import backfill_ecos, backfill_fred
-from pipelines.market.kis import PILOT_SYMBOLS, refresh_kis_market_data
+from pipelines.market.calendar import is_krx_trading_day
+from pipelines.market.kis import refresh_kis_market_data
 from pipelines.market.metadata import backfill_market_metadata
+from pipelines.market.stock_master import load_kospi_symbols, sync_kospi_stocks
 from pipelines.market.pipeline import (
     backfill_gold_prices,
     backfill_market_indices,
@@ -99,6 +101,13 @@ def _boolean_env(name: str, default: bool = False) -> bool:
     raise ValueError(f"{name}은 true/false 형식이어야 합니다.")
 
 
+def _latest_krx_trading_day(on_or_before: date) -> date:
+    target = on_or_before
+    while not is_krx_trading_day(target):
+        target -= timedelta(days=1)
+    return target
+
+
 def build_refresh_plan(as_of: date) -> RefreshPlan:
     """공표 지연과 수정 가능성을 고려한 소스별 재조회 구간을 만든다."""
     krx_lag = _positive_int_env("DAILY_REFRESH_KRX_LAG_DAYS", 1)
@@ -106,28 +115,24 @@ def build_refresh_plan(as_of: date) -> RefreshPlan:
     ecos_lag = _positive_int_env("DAILY_REFRESH_ECOS_LAG_DAYS", 1)
     fred_lag = _positive_int_env("DAILY_REFRESH_FRED_LAG_DAYS", 1)
     krx_days = _positive_int_env("DAILY_REFRESH_KRX_REQUERY_DAYS", 7)
-    kis_days = _positive_int_env("DAILY_REFRESH_KIS_REQUERY_DAYS", 35)
     ecos_days = _positive_int_env("DAILY_REFRESH_ECOS_REQUERY_DAYS", 35)
     fred_days = _positive_int_env("DAILY_REFRESH_FRED_REQUERY_DAYS", 35)
-
-    full_sync_weekday = int(os.getenv("DAILY_REFRESH_KIS_FULL_SYNC_WEEKDAY", "6"))
-    if full_sync_weekday not in range(7):
-        raise ValueError("DAILY_REFRESH_KIS_FULL_SYNC_WEEKDAY는 0~6이어야 합니다.")
 
     def window(lag_days: int, requery_days: int) -> DateRange:
         end = as_of - timedelta(days=lag_days)
         return DateRange(start=end - timedelta(days=requery_days - 1), end=end)
 
-    full_sync_symbol = None
-    if as_of.weekday() == full_sync_weekday:
-        week_number = as_of.isocalendar().week
-        full_sync_symbol = PILOT_SYMBOLS[week_number % len(PILOT_SYMBOLS)]
+    kis_date = as_of - timedelta(days=kis_lag)
+    while not is_krx_trading_day(kis_date):
+        kis_date -= timedelta(days=1)
 
     return RefreshPlan(
         as_of=as_of,
         krx=window(krx_lag, krx_days),
-        kis=window(kis_lag, kis_days),
-        kis_full_sync_symbol=full_sync_symbol,
+        # Evening refresh handles only this run's finalized session.  Historical
+        # backfills and adjusted-price resyncs remain explicit manual jobs.
+        kis=DateRange(start=kis_date, end=kis_date),
+        kis_full_sync_symbol=None,
         ecos=window(ecos_lag, ecos_days),
         fred=window(fred_lag, fred_days),
     )
@@ -223,6 +228,8 @@ def _result_failed(name: str, result: dict) -> bool:
         )
     if name == "krx_stock_metadata":
         return bool(result.get("failed_dates"))
+    if name == "krx_stock_master":
+        return bool(result.get("failed_count"))
     if name in {"indices", "gold"}:
         return bool(result.get("failed") or result.get("empty_market"))
     return bool(result.get("failed"))
@@ -232,6 +239,9 @@ def default_steps(
     plan: RefreshPlan,
     request_interval: float,
     profile: str = "all",
+    *,
+    kis_symbols: Iterable[str] | None = None,
+    kis_symbol_limit: int | None = None,
 ) -> list[tuple[str, Callable[[], dict]]]:
     """실행 시간대별 단계만 반환한다."""
     if profile not in {"morning", "evening", "all"}:
@@ -245,6 +255,8 @@ def default_steps(
                 lambda: refresh_kis_market_data(
                     start_date=plan.kis.start,
                     end_date=plan.kis.end,
+                    symbols=kis_symbols,
+                    symbol_limit=kis_symbol_limit,
                     full_resync_symbol=plan.kis_full_sync_symbol,
                 ),
             )
@@ -252,14 +264,38 @@ def default_steps(
     if profile not in {"morning", "all"}:
         return steps
     if kis_enabled:
+        morning_context: dict[str, tuple[str, ...]] = {}
+        master_date = _latest_krx_trading_day(plan.krx.end)
+
+        def sync_stock_master() -> dict:
+            try:
+                existing = load_kospi_symbols()
+            except ValueError:
+                existing = ()
+            result = sync_kospi_stocks(
+                master_date,
+                minimum_count=_positive_int_env(
+                    "DAILY_REFRESH_KOSPI_MASTER_MIN_COUNT", 500
+                ),
+                existing_count=len(existing),
+            )
+            frozen = load_kospi_symbols()
+            morning_context["symbols"] = frozen
+            return {**result, "target_count": len(frozen)}
+
+        def collect_stock_metadata() -> dict:
+            return backfill_market_metadata(
+                start_date=plan.krx.start,
+                end_date=plan.krx.end,
+                symbols=morning_context.get("symbols"),
+                request_interval=request_interval,
+            )
+
+        steps.append(("krx_stock_master", sync_stock_master))
         steps.append(
             (
                 "krx_stock_metadata",
-                lambda: backfill_market_metadata(
-                    start_date=plan.krx.start,
-                    end_date=plan.krx.end,
-                    request_interval=request_interval,
-                ),
+                collect_stock_metadata,
             )
         )
     steps.extend([
@@ -309,6 +345,8 @@ def run_refresh(
     log_root: Path = RUN_LOG_DIR,
     steps: list[tuple[str, Callable[[], dict]]] | None = None,
     profile: str = "morning",
+    kis_symbols: Iterable[str] | None = None,
+    kis_symbol_limit: int | None = None,
 ) -> dict:
     """계획을 실행하고 단계별 결과 및 프로세스 종료 판단을 반환한다."""
     if request_interval < 0:
@@ -333,7 +371,11 @@ def run_refresh(
 
             has_failure = False
             for name, runner in steps or default_steps(
-                plan, request_interval, profile=profile
+                plan,
+                request_interval,
+                profile=profile,
+                kis_symbols=kis_symbols,
+                kis_symbol_limit=kis_symbol_limit,
             ):
                 try:
                     result = runner()
@@ -344,6 +386,8 @@ def run_refresh(
                         "error_type": type(exc).__name__,
                         "error": str(exc),
                     }
+                    if name == "krx_stock_master":
+                        result["failed_count"] = 1
                     status = "failed"
                 has_failure = has_failure or status == "failed"
                 summary["steps"][name] = {"status": status, "result": result}
@@ -381,6 +425,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="외부 API/DB를 호출하지 않고 날짜 계획만 출력",
     )
+    parser.add_argument(
+        "--kis-symbols",
+        nargs="+",
+        help="테스트·제한 실행용 KIS 종목코드 목록",
+    )
+    parser.add_argument(
+        "--kis-symbol-limit",
+        type=int,
+        help="테스트·제한 실행용 KIS 최대 종목 수",
+    )
     return parser.parse_args(argv)
 
 
@@ -396,7 +450,11 @@ def main(argv: list[str] | None = None) -> int:
             "steps": [
                 name
                 for name, _ in default_steps(
-                    plan, args.request_interval, profile=args.profile
+                    plan,
+                    args.request_interval,
+                    profile=args.profile,
+                    kis_symbols=args.kis_symbols,
+                    kis_symbol_limit=args.kis_symbol_limit,
                 )
             ],
         }
@@ -407,6 +465,8 @@ def main(argv: list[str] | None = None) -> int:
         plan,
         request_interval=args.request_interval,
         profile=args.profile,
+        kis_symbols=args.kis_symbols,
+        kis_symbol_limit=args.kis_symbol_limit,
     )
     print(json.dumps(summary, ensure_ascii=False, indent=2, default=str))
     return 1 if summary["status"] == "failed" else 0

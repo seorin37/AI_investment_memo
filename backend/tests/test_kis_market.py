@@ -220,6 +220,101 @@ def test_token_is_reused_and_requests_are_rate_limited():
     assert all(call[1]["headers"]["authorization"] == "Bearer secret-token" for call in session.get_calls)
 
 
+def test_rate_limit_covers_token_raw_adjusted_and_fundamentals():
+    clock = Clock()
+    request_times = []
+
+    class TimedSession(Session):
+        def post(self, *args, **kwargs):
+            request_times.append(("token", clock.monotonic()))
+            return super().post(*args, **kwargs)
+
+        def get(self, *args, **kwargs):
+            request_times.append(("quotation", clock.monotonic()))
+            path = args[0]
+            if path.endswith(kis.DAILY_PATH):
+                return Response(200, {"rt_cd": "0", "output2": [daily_row()]})
+            return super().get(*args, **kwargs)
+
+    client = kis.KisClient(
+        kis.KisCredentials("app", "secret"),
+        session=TimedSession(),
+        request_interval=1.05,
+        sleep=clock.sleep,
+        monotonic=clock.monotonic,
+    )
+    client.daily_page("005930", date(2026, 10, 27), date(2026, 10, 27), adjusted=False)
+    client.daily_page("005930", date(2026, 10, 27), date(2026, 10, 27), adjusted=True)
+    client.current_price("005930")
+
+    assert [kind for kind, _ in request_times] == [
+        "token", "quotation", "quotation", "quotation"
+    ]
+    assert all(
+        later - earlier >= 1.05
+        for (_, earlier), (_, later) in zip(request_times, request_times[1:])
+    )
+    assert client.request_metrics() == {
+        "total": 4, "token": 1, "quotation": 3, "retries": 0
+    }
+
+
+def test_expired_long_run_token_cache_is_replaced(tmp_path):
+    cache_path = tmp_path / "token.json"
+    session = Session()
+    client = kis.KisClient(
+        kis.KisCredentials("app", "secret"),
+        session=session,
+        request_interval=1.05,
+        sleep=lambda _seconds: None,
+        token_cache_path=cache_path,
+    )
+    client.current_price("005930")
+    payload = json.loads(cache_path.read_text(encoding="utf-8"))
+    payload["expires_at"] = "2000-01-01T00:00:00+00:00"
+    cache_path.write_text(json.dumps(payload), encoding="utf-8")
+    client._token_expires_at = datetime(2000, 1, 1, tzinfo=timezone.utc)
+
+    client.current_price("000660")
+
+    assert session.post_calls == 2
+    assert client.request_metrics()["token"] == 2
+    refreshed = json.loads(cache_path.read_text(encoding="utf-8"))
+    assert refreshed["expires_at"] != "2000-01-01T00:00:00+00:00"
+
+
+def test_unauthorized_token_is_invalidated_and_reissued(tmp_path):
+    class AuthSession(Session):
+        def post(self, *args, **kwargs):
+            self.post_calls += 1
+            return Response(200, {
+                "access_token": f"token-{self.post_calls}",
+                "access_token_token_expired": "2099-01-01 00:00:00",
+            })
+
+        def get(self, *args, **kwargs):
+            self.get_calls.append((args, kwargs))
+            if len(self.get_calls) == 1:
+                return Response(401, {"msg_cd": "EGW00123", "msg1": "expired"})
+            return Response(200, {"rt_cd": "0", "output": {"stck_prpr": "100"}})
+
+    session = AuthSession()
+    client = kis.KisClient(
+        kis.KisCredentials("app", "secret"),
+        session=session,
+        request_interval=1.05,
+        sleep=lambda _seconds: None,
+        token_cache_path=tmp_path / "token.json",
+    )
+
+    assert client.current_price("005930")["stck_prpr"] == "100"
+    assert session.post_calls == 2
+    assert len(session.get_calls) == 2
+    assert session.get_calls[0][1]["headers"]["authorization"] == "Bearer token-1"
+    assert session.get_calls[1][1]["headers"]["authorization"] == "Bearer token-2"
+    assert client.request_metrics()["retries"] == 1
+
+
 def test_token_cache_is_reused_across_clients_without_reissuing(tmp_path):
     cache_path = tmp_path / "kis_token_cache.json"
     credentials = kis.KisCredentials("client-public-value", "client-private-value")
@@ -404,6 +499,163 @@ def test_backfill_isolates_symbol_failure_and_preserves_success(tmp_path):
     assert result["failed_symbols"] == ["000660"]
     assert len(saved) == 1
     assert len(saved[0][0]) == len(saved[0][1]) == 1
+
+
+def test_901_symbol_mock_run_has_no_missing_duplicates_or_order_drift(tmp_path):
+    symbols = tuple(f"{number:06d}" for number in range(1, 902))
+
+    class BulkClient:
+        def __init__(self):
+            self.calls = []
+
+        def daily_page(self, symbol, _start, _end, *, adjusted):
+            self.calls.append((symbol, adjusted))
+            return [daily_row("20261028")]
+
+        def current_price(self, symbol):
+            self.calls.append((symbol, "fundamentals"))
+            return {
+                "per": "1", "pbr": "1", "eps": "100", "bps": "100",
+                "w52_hgpr": "120", "w52_hgpr_date": "20261001",
+                "w52_lwpr": "80", "w52_lwpr_date": "20251101",
+                "hts_avls": "1", "lstn_stcn": "1000",
+                "stck_prpr": "110", "acml_vol": "0",
+            }
+
+    client = BulkClient()
+    stored = {}
+
+    def saver(raw, adjusted):
+        for kind, rows in (("raw", raw), ("adjusted", adjusted)):
+            for row in rows:
+                stored[(kind, row["symbol"], row["trade_date"])] = row
+        return len(raw) + len(adjusted)
+
+    result = kis.backfill_kis_prices(
+        date(2026, 10, 28),
+        date(2026, 10, 28),
+        symbols,
+        client=client,
+        resume=True,
+        state_root=tmp_path,
+        saver=saver,
+    )
+    final_rows = {
+        symbol: {"trade_date": date(2026, 10, 28), "close": Decimal("110")}
+        for symbol in symbols
+    }
+    fundamentals = kis.collect_fundamentals(
+        client, symbols, final_rows, saver=lambda rows: len(rows)
+    )
+
+    assert result["completed_symbols"] == list(symbols)
+    assert result["failed_symbols"] == []
+    assert len(stored) == 901 * 2
+    assert len(client.calls) == 901 * 3
+    assert client.calls[:6] == [
+        (symbols[0], False), (symbols[0], True),
+        (symbols[1], False), (symbols[1], True),
+        (symbols[2], False), (symbols[2], True),
+    ]
+    assert client.calls[1802:] == [
+        (symbol, "fundamentals") for symbol in symbols
+    ]
+    assert fundamentals == {"saved_rows": 901, "failed_symbols": [], "errors": {}}
+
+
+def test_incomplete_date_detection_recovers_gap_and_partial_checkpoint(tmp_path):
+    class Row:
+        def __init__(self, values):
+            self.values = values
+
+        def one(self):
+            return self.values
+
+    class Connection:
+        def __init__(self, values):
+            self.values = values
+
+        def execute(self, *_args, **_kwargs):
+            return Row(self.values)
+
+    class Connect:
+        def __init__(self, values):
+            self.values = values
+
+        def __enter__(self):
+            return Connection(self.values)
+
+        def __exit__(self, *_args):
+            return False
+
+    class Engine:
+        def __init__(self, values):
+            self.values = values
+
+        def connect(self):
+            return Connect(self.values)
+
+    state = tmp_path / "daily" / "2026-10-27"
+    state.mkdir(parents=True)
+    (state / "kis_prices_completed.json").write_text(
+        json.dumps({
+            "005930:2026-10-27:2026-10-27:raw=True:adjusted=True": {}
+        }),
+        encoding="utf-8",
+    )
+    dates = kis.find_incomplete_kis_dates(
+        date(2026, 10, 28),
+        ("005930", "000660"),
+        state_root=tmp_path,
+        engine=Engine((date(2026, 10, 26), date(2026, 10, 26))),
+    )
+    assert dates == (date(2026, 10, 27), date(2026, 10, 28))
+
+
+def test_daily_symbol_snapshot_is_stable_when_market_membership_changes(tmp_path):
+    trade_date = date(2026, 10, 28)
+    original = ("000001", "000002")
+
+    assert kis.freeze_daily_symbols(
+        trade_date, original, state_root=tmp_path
+    ) == original
+    assert kis.freeze_daily_symbols(
+        trade_date,
+        ("000002", "000003"),
+        state_root=tmp_path,
+    ) == original
+
+    manifest = json.loads(
+        (tmp_path / "daily" / "2026-10-28" / "target_symbols.json")
+        .read_text(encoding="utf-8")
+    )
+    assert manifest["target_count"] == 2
+    assert manifest["symbols"] == list(original)
+
+
+def test_empty_database_schedules_only_current_session():
+    class Result:
+        def one(self):
+            return None, None
+
+    class Connection:
+        def execute(self, *_args, **_kwargs):
+            return Result()
+
+    class Connect:
+        def __enter__(self):
+            return Connection()
+
+        def __exit__(self, *_args):
+            return False
+
+    class Engine:
+        def connect(self):
+            return Connect()
+
+    assert kis.find_incomplete_kis_dates(
+        date(2026, 10, 28), ("005930",), engine=Engine()
+    ) == (date(2026, 10, 28),)
 
 
 def test_backfill_records_failed_year_and_resumes_only_that_chunk(monkeypatch, tmp_path):
@@ -663,10 +915,128 @@ def test_refresh_stops_before_api_when_schema_is_missing(monkeypatch):
             api_constructed = True
 
     monkeypatch.setattr(kis, "assert_kis_schema", missing_schema)
+    monkeypatch.setattr(kis, "load_kospi_symbols", lambda **_kwargs: ("005930",))
     monkeypatch.setattr(kis, "KisClient", ForbiddenClient)
 
     with pytest.raises(kis.KisSchemaError, match="0011"):
         kis.refresh_kis_market_data(date(2026, 10, 1), date(2026, 10, 27))
+    assert api_constructed is False
+
+
+def test_refresh_freezes_one_target_snapshot_for_prices_and_fundamentals(
+    monkeypatch, tmp_path
+):
+    target_calls = []
+    price_calls = []
+    fundamental_calls = []
+    targets = ("000660", "005930")
+
+    def load_targets(**kwargs):
+        target_calls.append(kwargs)
+        return targets
+
+    class Client:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def request_metrics(self):
+            return {"total": 0, "token": 0, "quotation": 0, "retries": 0}
+
+    def backfill(start_date, end_date, symbols, **kwargs):
+        symbol_count = len(tuple(symbols))
+        price_calls.append((start_date, end_date, tuple(symbols), kwargs))
+        return {
+            "completed_symbols": list(symbols),
+            "skipped_symbols": [],
+            "failed_symbols": [],
+            "completed_chunks": [],
+            "skipped_chunks": [],
+            "failed_chunks": [],
+            "raw_rows": symbol_count,
+            "adjusted_rows": symbol_count,
+            "zero_ohlc_rows": 0,
+            "remaining_failures": 0,
+            "target_count": symbol_count,
+            "completed_count": symbol_count,
+            "skipped_count": 0,
+            "failed_count": 0,
+        }
+
+    def fundamentals(_client, symbols, final_rows):
+        fundamental_calls.append((tuple(symbols), final_rows))
+        return {"saved_rows": len(tuple(symbols)), "failed_symbols": []}
+
+    monkeypatch.setattr(kis, "load_kospi_symbols", load_targets)
+    monkeypatch.setattr(kis, "assert_kis_schema", lambda: None)
+    monkeypatch.setattr(kis, "KisClient", Client)
+    monkeypatch.setattr(kis, "backfill_kis_prices", backfill)
+    monkeypatch.setattr(
+        kis,
+        "find_incomplete_kis_dates",
+        lambda *_args, **_kwargs: (date(2026, 10, 28),),
+    )
+    monkeypatch.setattr(
+        kis,
+        "load_latest_raw_prices",
+        lambda symbols, _start, _end: {
+            symbol: {"trade_date": date(2026, 10, 28), "close": Decimal("100")}
+            for symbol in symbols
+        },
+    )
+    monkeypatch.setattr(kis, "collect_fundamentals", fundamentals)
+    monkeypatch.setattr(kis, "STATE_ROOT", tmp_path)
+
+    result = kis.refresh_kis_market_data(
+        date(2026, 10, 28),
+        date(2026, 10, 28),
+        symbols=("005930", "000660"),
+        symbol_limit=2,
+    )
+
+    assert target_calls == [{"symbols": ("005930", "000660"), "limit": 2}]
+    assert price_calls[0][2] == targets
+    assert price_calls[0][3]["resume"] is True
+    assert price_calls[0][3]["state_root"] == tmp_path / "daily" / "2026-10-28"
+    assert fundamental_calls[0][0] == targets
+    assert set(fundamental_calls[0][1]) == set(targets)
+    assert result["target_count"] == 2
+    assert result["processed_dates"] == ["2026-10-28"]
+    assert result["incomplete_dates"] == []
+    assert result["processed_symbol_dates"] == 2
+    assert result["successful_symbol_dates"] == 2
+    assert result["skipped_symbol_dates"] == 0
+    assert result["failed_symbol_dates"] == 0
+    assert result["request_metrics"] == {
+        "total": 0, "token": 0, "quotation": 0, "retries": 0
+    }
+    persisted = json.loads(
+        (tmp_path / "daily" / "2026-10-28" / "kis_run_summary.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert persisted["target_count"] == 2
+    assert persisted["prices"]["raw_rows"] == 2
+
+
+def test_refresh_empty_target_fails_before_api(monkeypatch):
+    api_constructed = False
+
+    def no_targets(**_kwargs):
+        raise ValueError("stocks에 KOSPI 수집 대상이 없습니다")
+
+    class ForbiddenClient:
+        def __init__(self):
+            nonlocal api_constructed
+            api_constructed = True
+
+    monkeypatch.setattr(kis, "load_kospi_symbols", no_targets)
+    monkeypatch.setattr(kis, "KisClient", ForbiddenClient)
+
+    with pytest.raises(ValueError, match="수집 대상"):
+        kis.refresh_kis_market_data(date(2026, 10, 28), date(2026, 10, 28))
     assert api_constructed is False
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from argparse import Namespace
 import json
 import os
 from datetime import date, datetime, timezone
@@ -13,6 +14,8 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 
 from pipelines.market import kis, metadata
+from pipelines import daily_refresh
+from scripts import collect_kis_market_data
 
 
 TEST_URL_ENV = "KIS_INTEGRATION_DATABASE_URL"
@@ -197,6 +200,16 @@ def test_prices_fundamentals_and_metadata_upsert_idempotently(pg_engine):
     assert kis.save_fundamentals([fundamental]) == 1
     assert kis.save_kis_prices([raw], [adjusted]) == 2
     assert kis.save_fundamentals([fundamental]) == 1
+    latest = kis.load_latest_raw_prices(
+        ("005930", "000660"), trade_date, trade_date
+    )
+    assert latest == {
+        "005930": {
+            "symbol": "005930",
+            "trade_date": trade_date,
+            "close": Decimal("110.00"),
+        }
+    }
 
     update = metadata.save_market_metadata(
         [
@@ -280,6 +293,58 @@ def test_prices_fundamentals_and_metadata_upsert_idempotently(pg_engine):
     assert fundamental_saved["per"] == Decimal("10.500000")
     assert fundamental_saved["eps"] == Decimal("10.4762")
     assert fundamental_saved["source"] == "KIS"
+
+
+def test_metadata_uses_database_source_and_preserves_non_kis_ohlcv(pg_engine):
+    trade_date = date(2026, 10, 24)
+    with pg_engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                INSERT INTO prices_daily (
+                  symbol, trade_date, open, high, low, close, volume, source
+                ) VALUES (
+                  '000660', :day, 10, 12, 9, 11, 123, 'KRX_OPEN_API'
+                )
+                """
+            ),
+            {"day": trade_date},
+        )
+
+    result = metadata.save_market_metadata(
+        [{
+            "symbol": "000660",
+            "trade_date": trade_date,
+            "market_cap": Decimal("999999"),
+            "listed_shares": 12345,
+            "market_metadata_source": "KRX_OPEN_API",
+        }]
+    )
+
+    assert result == {
+        "updated_rows": 0,
+        "deferred_keys": ["000660:2026-10-24"],
+    }
+    with pg_engine.connect() as connection:
+        saved = connection.execute(
+            text(
+                """
+                SELECT open, high, low, close, volume, source,
+                       market_cap, listed_shares, market_metadata_source
+                FROM prices_daily
+                WHERE symbol = '000660' AND trade_date = :day
+                """
+            ),
+            {"day": trade_date},
+        ).mappings().one()
+    assert tuple(saved[key] for key in ("open", "high", "low", "close")) == (
+        Decimal("10.00"), Decimal("12.00"), Decimal("9.00"), Decimal("11.00")
+    )
+    assert saved["volume"] == 123
+    assert saved["source"] == "KRX_OPEN_API"
+    assert saved["market_cap"] is None
+    assert saved["listed_shares"] is None
+    assert saved["market_metadata_source"] is None
 
 
 def test_price_pair_rolls_back_when_adjusted_insert_fails(pg_engine):
@@ -389,6 +454,18 @@ def test_database_constraints_reject_invalid_rows(pg_engine):
             connection.execute(
                 text(
                     """
+                    INSERT INTO stock_fundamentals_snapshot (
+                      symbol, basis_trade_date, final_close, source
+                    ) VALUES ('105560', '2026-10-25', 0, 'KIS')
+                    """
+                )
+            )
+
+    with pytest.raises(IntegrityError):
+        with pg_engine.begin() as connection:
+            connection.execute(
+                text(
+                    """
                     INSERT INTO adjusted_prices_daily (
                       symbol, trade_date, open, high, low, close, volume,
                       source, adjustment_basis
@@ -400,14 +477,41 @@ def test_database_constraints_reject_invalid_rows(pg_engine):
                 )
             )
 
-    with pytest.raises(IntegrityError):
-        with pg_engine.begin() as connection:
-            connection.execute(
-                text(
-                    """
-                    INSERT INTO stock_fundamentals_snapshot (
-                      symbol, basis_trade_date, final_close, source
-                    ) VALUES ('105560', '2026-10-25', 0, 'KIS')
-                    """
-                )
-            )
+
+def test_morning_evening_advisory_lock_prevents_overlap(monkeypatch):
+    monkeypatch.setattr(daily_refresh, "database_url", _isolated_url)
+
+    with daily_refresh.daily_refresh_lock() as evening_acquired:
+        assert evening_acquired is True
+        with daily_refresh.daily_refresh_lock() as morning_acquired:
+            assert morning_acquired is False
+    with daily_refresh.daily_refresh_lock() as later_morning:
+        assert later_morning is True
+
+
+def test_manual_backfill_uses_same_postgres_advisory_lock(monkeypatch):
+    monkeypatch.setattr(daily_refresh, "database_url", _isolated_url)
+    monkeypatch.setattr(
+        collect_kis_market_data,
+        "parse_args",
+        lambda: Namespace(
+            start=date(2026, 10, 28),
+            end=date(2026, 10, 28),
+            symbols=None,
+            symbol_limit=None,
+            no_resume=False,
+            adjusted_only=False,
+            krx_request_interval=0,
+        ),
+    )
+    monkeypatch.setattr(
+        collect_kis_market_data,
+        "load_kospi_symbols",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("manual collection must not start")
+        ),
+    )
+
+    with daily_refresh.daily_refresh_lock() as acquired:
+        assert acquired is True
+        assert collect_kis_market_data.main() == 2

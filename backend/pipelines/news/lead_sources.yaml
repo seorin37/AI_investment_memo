@@ -20,22 +20,22 @@ contact: ""                   # User-Agent 뒤에 붙일 연락처 (예: 팀 메
 sources:
   hankyung:
     method: link
-    enabled: false
+    enabled: true
     domains: [hankyung.com]
-    selector: null            # 미확정
+    selector: "div.article-body"
     drop_selectors: []        # 본문 칸 안에서 지울 요소 (사진 설명·관련 기사 등)
   mk:
     method: link
-    enabled: false
+    enabled: true
     domains: [mk.co.kr]
-    selector: null            # 미확정
+    selector: "div.news_cnt_detail_wrap"
     drop_selectors: []
   yonhap:
     method: link              # 요약이 40자 미만인 일부 기사만 해당
-    enabled: false
+    enabled: true
     domains: [yna.co.kr]
-    selector: null            # 미확정
-    drop_selectors: []
+    selector: "div.story-news"
+    drop_selectors: ["div.txt-con", "div.tit-sub", "div.tit-con", "p.txt-copyright", "span.date", "button", "span.ir-txt01"]
   sedaily:
     method: naver
-    enabled: false
+    enabled: true

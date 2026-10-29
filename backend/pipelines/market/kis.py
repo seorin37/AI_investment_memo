@@ -1,4 +1,4 @@
-"""KIS Open API market-data collector for the four pilot stocks.
+"""KIS Open API market-data collector for the DB-managed KOSPI universe.
 
 Only quotation endpoints are used.  Access tokens can be reused from a
 permission-restricted local cache, credentials are never rendered in errors,
@@ -22,12 +22,13 @@ from typing import Callable, Iterable
 from zoneinfo import ZoneInfo
 
 import requests
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from pipelines.common.db import get_engine, load_env
+from pipelines.market.calendar import is_krx_trading_day
+from pipelines.market.stock_master import load_kospi_symbols
 
 
-PILOT_SYMBOLS = ("005930", "000660", "035420", "105560")
 BACKFILL_START = date(2020, 1, 1)
 SOURCE = "KIS"
 ADJUSTMENT_BASIS = "KIS_FID_ORG_ADJ_PRC_0_V1"
@@ -38,6 +39,7 @@ DAILY_PATH = "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice"
 PRICE_TR_ID = "FHKST01010100"
 DAILY_TR_ID = "FHKST03010100"
 STATE_ROOT = Path(__file__).resolve().parents[3] / "logs" / "market"
+KOSPI_BACKFILL_STATE_ROOT = STATE_ROOT / "kospi_all_v1"
 TOKEN_CACHE_PATH = STATE_ROOT / "kis_token_cache.json"
 RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 SEOUL = ZoneInfo("Asia/Seoul")
@@ -141,6 +143,10 @@ class KisClient:
         self._token_expires_at: datetime | None = None
         self.token_cache_hit = False
         self.token_issued = False
+        self.total_request_count = 0
+        self.token_request_count = 0
+        self.quotation_request_count = 0
+        self.retry_count = 0
 
     def close(self) -> None:
         if self._owns_session:
@@ -238,6 +244,8 @@ class KisClient:
 
     def _request_new_token(self) -> str:
         self._wait_for_slot()
+        self.total_request_count += 1
+        self.token_request_count += 1
         response = self.session.post(
             BASE_URL + TOKEN_PATH,
             json={
@@ -268,6 +276,30 @@ class KisClient:
         self.token_issued = True
         return self._token
 
+    def _invalidate_token(self, rejected_token: str) -> None:
+        """Discard only the rejected cached token, preserving a newer peer token."""
+
+        self._token = None
+        self._token_expires_at = None
+        path = self.token_cache_path
+        if path is None:
+            return
+        with self._cache_lock():
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError, TypeError, json.JSONDecodeError):
+                return
+            if payload.get("access_token") == rejected_token:
+                path.unlink(missing_ok=True)
+
+    def request_metrics(self) -> dict[str, int]:
+        return {
+            "total": self.total_request_count,
+            "token": self.token_request_count,
+            "quotation": self.quotation_request_count,
+            "retries": self.retry_count,
+        }
+
     def _issue_token(self) -> str:
         if self._token_valid():
             assert self._token is not None
@@ -281,10 +313,12 @@ class KisClient:
             return token
 
     def _get(self, path: str, tr_id: str, params: dict[str, str]) -> dict:
-        token = self._issue_token()
         last_error: Exception | None = None
         for attempt in range(1, self.max_attempts + 1):
+            token = self._issue_token()
             self._wait_for_slot()
+            self.total_request_count += 1
+            self.quotation_request_count += 1
             try:
                 response = self.session.get(
                     BASE_URL + path,
@@ -306,6 +340,11 @@ class KisClient:
                 if response.status_code == 200 and payload.get("rt_cd") == "0":
                     return payload
                 error = KisApiError(_safe_error(response, payload))
+                if response.status_code == 401 and attempt < self.max_attempts:
+                    self._invalidate_token(token)
+                    last_error = error
+                    self.retry_count += 1
+                    continue
                 if response.status_code not in RETRYABLE_STATUSES:
                     raise error
                 last_error = error
@@ -313,6 +352,7 @@ class KisClient:
                 self._mark_request()
                 last_error = KisApiError(f"KIS 네트워크 일시 오류: {type(exc).__name__}")
             if attempt < self.max_attempts:
+                self.retry_count += 1
                 delay = max(self.request_interval, 2 ** (attempt - 1))
                 self.sleep(delay + random.uniform(0, 0.1))
         assert last_error is not None
@@ -675,6 +715,153 @@ def save_fundamentals(rows: list[dict]) -> int:
     return len(rows)
 
 
+def load_latest_raw_prices(
+    symbols: Iterable[str],
+    start_date: date,
+    end_date: date,
+) -> dict[str, dict]:
+    """Load the latest persisted KIS raw close for each target in one query."""
+
+    requested = tuple(symbols)
+    if not requested:
+        return {}
+    statement = text(
+        """
+        SELECT DISTINCT ON (symbol) symbol, trade_date, close
+        FROM prices_daily
+        WHERE source = 'KIS'
+          AND trade_date BETWEEN :start_date AND :end_date
+          AND symbol IN :symbols
+        ORDER BY symbol, trade_date DESC
+        """
+    ).bindparams(bindparam("symbols", expanding=True))
+    engine = get_engine()
+    with engine.connect() as connection:
+        return {
+            str(row.symbol).strip(): {
+                "symbol": str(row.symbol).strip(),
+                "trade_date": row.trade_date,
+                "close": row.close,
+            }
+            for row in connection.execute(
+                statement,
+                {
+                    "symbols": requested,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                },
+            )
+        }
+
+
+def _trading_dates(start_date: date, end_date: date) -> tuple[date, ...]:
+    cursor = start_date
+    result = []
+    while cursor <= end_date:
+        if is_krx_trading_day(cursor):
+            result.append(cursor)
+        cursor += timedelta(days=1)
+    return tuple(result)
+
+
+def _checkpoint_symbols(path: Path) -> set[str]:
+    state = _load_json(path)
+    return {str(key).split(":", 1)[0] for key in state}
+
+
+def freeze_daily_symbols(
+    target_date: date,
+    symbols: Iterable[str],
+    *,
+    state_root: Path = STATE_ROOT,
+) -> tuple[str, ...]:
+    """Persist and reuse the exact universe first seen for one trading date."""
+
+    current = tuple(symbols)
+    path = state_root / "daily" / target_date.isoformat() / "target_symbols.json"
+    if path.exists():
+        payload = _load_json(path)
+        frozen = tuple(str(symbol) for symbol in payload.get("symbols", []))
+        if frozen and len(frozen) == len(set(frozen)):
+            return frozen
+        if path.exists():
+            raise ValueError(f"{target_date} KIS 대상 체크포인트가 올바르지 않습니다.")
+    _atomic_json(
+        path,
+        {
+            "trade_date": target_date.isoformat(),
+            "target_count": len(current),
+            "symbols": list(current),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+    return current
+
+
+def find_incomplete_kis_dates(
+    scheduled_date: date,
+    symbols: Iterable[str],
+    *,
+    lookback_days: int = 10,
+    state_root: Path = STATE_ROOT,
+    engine=None,
+) -> tuple[date, ...]:
+    """Find recent missing or interrupted sessions without triggering an API.
+
+    A completely empty database is treated as a first run and schedules only
+    ``scheduled_date``; historical loading remains an explicit manual job.
+    Once data exists, gaps after the older of raw/adjusted maxima are recovered.
+    Existing per-date checkpoints also identify partial or interrupted runs.
+    """
+
+    targets = tuple(symbols)
+    if not targets or lookback_days < 1:
+        raise ValueError("복구 대상 종목과 조회 기간이 올바르지 않습니다.")
+    window_start = scheduled_date - timedelta(days=lookback_days - 1)
+    candidates = _trading_dates(window_start, scheduled_date)
+    if not candidates:
+        raise ValueError("최근 범위에 KRX 거래일이 없습니다.")
+
+    target_engine = engine or get_engine()
+    statement = text(
+        """
+        SELECT
+          (SELECT max(trade_date) FROM prices_daily
+           WHERE source='KIS' AND trade_date <= :scheduled_date),
+          (SELECT max(trade_date) FROM adjusted_prices_daily
+           WHERE source='KIS' AND trade_date <= :scheduled_date)
+        """
+    )
+    with target_engine.connect() as connection:
+        max_raw, max_adjusted = connection.execute(
+            statement, {"scheduled_date": scheduled_date}
+        ).one()
+
+    needed: set[date] = {scheduled_date}
+    maxima = [value for value in (max_raw, max_adjusted) if value is not None]
+    if maxima:
+        baseline = min(maxima) if len(maxima) == 2 else window_start - timedelta(days=1)
+        needed.update(day for day in candidates if day > baseline)
+
+    for day in candidates:
+        root = state_root / "daily" / day.isoformat()
+        completed_path = root / "kis_prices_completed.json"
+        failed_path = root / "kis_prices_failed.json"
+        if not completed_path.exists() and not failed_path.exists():
+            continue
+        manifest_path = root / "target_symbols.json"
+        requested = (
+            set(freeze_daily_symbols(day, targets, state_root=state_root))
+            if manifest_path.exists()
+            else set(targets)
+        )
+        completed = _checkpoint_symbols(completed_path)
+        failures = _checkpoint_symbols(failed_path)
+        if failures or not requested.issubset(completed):
+            needed.add(day)
+    return tuple(sorted(day for day in needed if day in candidates))
+
+
 def _atomic_json(path: Path, value: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -686,10 +873,16 @@ def _atomic_json(path: Path, value: dict) -> None:
 def _load_json(path: Path) -> dict:
     if not path.exists():
         return {}
-    with path.open(encoding="utf-8") as handle:
-        value = json.load(handle)
+    try:
+        with path.open(encoding="utf-8") as handle:
+            value = json.load(handle)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        value = None
     if not isinstance(value, dict):
-        raise ValueError("KIS 상태 파일 형식이 올바르지 않습니다.")
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        corrupt_path = path.with_name(f"{path.name}.corrupt-{stamp}")
+        path.replace(corrupt_path)
+        return {}
     return value
 
 
@@ -717,7 +910,7 @@ def _chunk_key(
 def backfill_kis_prices(
     start_date: date = BACKFILL_START,
     end_date: date | None = None,
-    symbols: Iterable[str] = PILOT_SYMBOLS,
+    symbols: Iterable[str] | None = None,
     *,
     client: KisClient | None = None,
     include_raw: bool = True,
@@ -730,9 +923,17 @@ def backfill_kis_prices(
     end_date = end_date or date.today()
     if start_date > end_date or not (include_raw or include_adjusted):
         raise ValueError("수집 날짜 또는 원시/수정 선택이 올바르지 않습니다.")
-    requested = tuple(symbols)
-    if set(requested) - set(PILOT_SYMBOLS):
-        raise ValueError("현재는 파일럿 4종목만 지원합니다.")
+    requested = (
+        load_kospi_symbols()
+        if symbols is None
+        else tuple(str(symbol).strip() for symbol in symbols)
+    )
+    if not requested:
+        raise ValueError("KIS 수집 대상이 0종목입니다.")
+    if len(set(requested)) != len(requested):
+        raise ValueError("KIS 수집 대상에 중복 종목이 있습니다.")
+    for symbol in requested:
+        _validate_symbol(symbol)
     own_client = client is None
     api = client or KisClient()
     completed_path = state_root / "kis_prices_completed.json"
@@ -854,6 +1055,10 @@ def backfill_kis_prices(
         if skipped_by_symbol[symbol] == chunk_count_by_symbol[symbol]:
             result["skipped_symbols"].append(symbol)
     result["remaining_failures"] = len(failures)
+    result["target_count"] = len(requested)
+    result["completed_count"] = len(result["completed_symbols"])
+    result["skipped_count"] = len(result["skipped_symbols"])
+    result["failed_count"] = len(result["failed_symbols"])
     return result
 
 
@@ -887,22 +1092,71 @@ def refresh_kis_market_data(
     start_date: date,
     end_date: date,
     *,
+    symbols: Iterable[str] | None = None,
+    symbol_limit: int | None = None,
     full_resync_symbol: str | None = None,
     full_resync_start: date = BACKFILL_START,
 ) -> dict:
-    """Run recent prices/fundamentals and optional adjusted-only resync."""
+    """Run one frozen KOSPI universe through prices and fundamentals."""
+    targets = load_kospi_symbols(symbols=symbols, limit=symbol_limit)
     assert_kis_schema()  # Fail before any external request if 0011 is absent.
+    if full_resync_symbol is not None and full_resync_symbol not in targets:
+        raise ValueError("전체 재동기화 종목이 이번 실행 대상에 없습니다.")
+    scheduled_targets = freeze_daily_symbols(end_date, targets)
+    recovery_dates = find_incomplete_kis_dates(
+        end_date, targets, state_root=STATE_ROOT
+    )
     with KisClient() as client:
-        final_rows: dict[str, dict] = {}
-        recent = backfill_kis_prices(
-            start_date,
-            end_date,
-            PILOT_SYMBOLS,
-            client=client,
-            resume=False,
-            capture_latest_raw=final_rows,
+        metrics_before = client.request_metrics()
+        date_results: dict[str, dict] = {}
+        recent = {
+            "target_count": len(targets),
+            "completed_symbols": [],
+            "skipped_symbols": [],
+            "failed_symbols": [],
+            "completed_chunks": [],
+            "skipped_chunks": [],
+            "failed_chunks": [],
+            "raw_rows": 0,
+            "adjusted_rows": 0,
+            "zero_ohlc_rows": 0,
+            "remaining_failures": 0,
+        }
+        for target_date in recovery_dates:
+            date_targets = freeze_daily_symbols(target_date, targets)
+            one = backfill_kis_prices(
+                target_date,
+                target_date,
+                date_targets,
+                client=client,
+                resume=True,
+                state_root=STATE_ROOT / "daily" / target_date.isoformat(),
+            )
+            date_results[target_date.isoformat()] = one
+            for key in (
+                "completed_chunks", "skipped_chunks", "failed_chunks"
+            ):
+                recent[key].extend(one[key])
+            for key in ("raw_rows", "adjusted_rows", "zero_ohlc_rows"):
+                recent[key] += one[key]
+            recent["remaining_failures"] += one["remaining_failures"]
+        for key in ("completed_symbols", "skipped_symbols", "failed_symbols"):
+            recent[key] = sorted(
+                {
+                    symbol
+                    for result in date_results.values()
+                    for symbol in result[key]
+                }
+            )
+
+        # Completed checkpoints may skip API calls on a rerun.  Reload durable
+        # rows so fundamentals use the same frozen current universe.
+        final_rows = load_latest_raw_prices(
+            scheduled_targets, min(recovery_dates), end_date
         )
-        fundamentals = collect_fundamentals(client, PILOT_SYMBOLS, final_rows)
+        fundamentals = collect_fundamentals(
+            client, scheduled_targets, final_rows
+        )
         full_resync = None
         if full_resync_symbol:
             full_resync = backfill_kis_prices(
@@ -914,8 +1168,43 @@ def refresh_kis_market_data(
                 include_adjusted=True,
                 resume=False,
             )
-    return {
+        metrics_after = client.request_metrics()
+    request_metrics = {
+        key: metrics_after[key] - metrics_before[key]
+        for key in metrics_after
+    }
+    incomplete_dates = sorted(
+        day for day, result in date_results.items() if result["failed_symbols"]
+    )
+    processed_symbol_dates = sum(
+        result["target_count"] for result in date_results.values()
+    )
+    successful_symbol_dates = sum(
+        result["completed_count"] for result in date_results.values()
+    )
+    skipped_symbol_dates = sum(
+        result["skipped_count"] for result in date_results.values()
+    )
+    failed_symbol_dates = sum(
+        result["failed_count"] for result in date_results.values()
+    )
+    summary = {
+        "target_count": len(scheduled_targets),
+        "processed_date_count": len(recovery_dates),
+        "processed_dates": [day.isoformat() for day in recovery_dates],
+        "incomplete_dates": incomplete_dates,
+        "processed_symbol_dates": processed_symbol_dates,
+        "successful_symbol_dates": successful_symbol_dates,
+        "skipped_symbol_dates": skipped_symbol_dates,
+        "failed_symbol_dates": failed_symbol_dates,
+        "request_metrics": request_metrics,
         "prices": recent,
+        "date_results": date_results,
         "fundamentals": fundamentals,
         "full_resync": full_resync,
     }
+    _atomic_json(
+        STATE_ROOT / "daily" / end_date.isoformat() / "kis_run_summary.json",
+        summary,
+    )
+    return summary

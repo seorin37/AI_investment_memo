@@ -65,7 +65,7 @@ WorkingDirectory=$repo_root
 Environment=PYTHONPATH=$repo_root/backend
 Environment=DAILY_REFRESH_KIS_ENABLED=true
 ExecStart=$python_bin -m pipelines.daily_refresh --profile evening
-TimeoutStartSec=45min
+TimeoutStartSec=infinity
 EOF
 
 cat >"$evening_timer" <<'EOF'

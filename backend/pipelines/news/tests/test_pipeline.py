@@ -271,3 +271,58 @@ def test_cluster_llm_needs_cluster_and_gemini_key(monkeypatch):
     assert pipeline.main(["hourly", "--cluster", "--cluster-llm"]) == 1        # 키 없음
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     assert pipeline.main(["hourly", "--cluster", "--cluster-llm"]) == 0
+
+
+def test_naver_due_schedule():
+    assert pipeline.naver_due(None, 0.0, 7200) is True            # 처음에는 바로
+    assert pipeline.naver_due(0.0, 1800.0, 7200) is False         # 30분 뒤에는 아직
+    assert pipeline.naver_due(0.0, 7200.0 - 30, 7200) is True     # 반복 주기가 약간 흔들려도 건너뛰지 않는다
+    assert pipeline.naver_due(None, 0.0, 0) is False              # 0이면 끔
+
+
+def test_loop_runs_naver_at_its_own_interval(monkeypatch):
+    calls = {"naver": 0, "run": 0, "sleep": 0}
+    monkeypatch.setattr(pipeline, "collect_naver", lambda hours: calls.__setitem__("naver", calls["naver"] + 1))
+    monkeypatch.setattr(pipeline, "run_hourly", lambda *a, **k: calls.__setitem__("run", calls["run"] + 1))
+    monkeypatch.setattr(pipeline, "cleanup", lambda conn, days: 0)
+    now = {"t": 0.0}                                              # 가짜 시계: sleep할 때만 흐른다
+    monkeypatch.setattr(pipeline.clock, "monotonic", lambda: now["t"])
+
+    def fake_sleep(sec):
+        calls["sleep"] += 1
+        now["t"] += sec
+        if calls["sleep"] >= 9:
+            raise KeyboardInterrupt
+    monkeypatch.setattr(pipeline.clock, "sleep", fake_sleep)
+
+    class FakeConn:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+    import psycopg as _pg
+    monkeypatch.setattr(_pg, "connect", lambda *a, **k: FakeConn())
+    with pytest.raises(KeyboardInterrupt):
+        pipeline.loop_hourly("dsn", 1800, False, "hybrid", 3, Path("stocks.yaml"), 0, naver_every=7200)
+    assert calls["run"] == 9
+    assert calls["naver"] == 3          # 1번째, 5번째, 9번째 반복 = 2시간마다
+
+
+def test_collect_naver_survives_failure(monkeypatch):
+    monkeypatch.setattr(pipeline.naver, "main", lambda argv: (_ for _ in ()).throw(RuntimeError("API 오류")))
+    assert pipeline.collect_naver(3) == 1                        # 예외가 밖으로 나가지 않는다
+    seen = []
+    monkeypatch.setattr(pipeline.naver, "main", lambda argv: seen.append(argv) or 0)
+    assert pipeline.collect_naver(2.5) == 0 and seen == [["--hours", "2.5"]]
+
+
+def test_naver_every_needs_loop_and_keys(monkeypatch):
+    monkeypatch.setattr(pipeline, "load_env", lambda: None)
+    monkeypatch.setattr(pipeline, "get_dsn", lambda: "dsn")
+    monkeypatch.setattr(pipeline, "run_hourly", lambda *a, **k: 0)
+    monkeypatch.setattr(pipeline, "loop_hourly", lambda *a, **k: 0)
+    monkeypatch.delenv("NAVER_CLIENT_ID", raising=False)
+    monkeypatch.delenv("NAVER_CLIENT_SECRET", raising=False)
+    assert pipeline.main(["hourly", "--naver-every", "7200"]) == 1                    # --loop 없음
+    assert pipeline.main(["hourly", "--loop", "1800", "--naver-every", "7200"]) == 1  # 키 없음
+    monkeypatch.setenv("NAVER_CLIENT_ID", "id")
+    monkeypatch.setenv("NAVER_CLIENT_SECRET", "secret")
+    assert pipeline.main(["hourly", "--loop", "1800", "--naver-every", "7200"]) == 0

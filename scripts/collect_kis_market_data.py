@@ -1,33 +1,44 @@
 #!/usr/bin/env python3
-"""파일럿 4종목 KIS 원시·수정 일봉 백필 진입점.
+"""DB에 등록된 KOSPI 종목의 KIS 원시·수정 일봉 백필 진입점.
 
-0011 migration 적용 후에만 실행한다. 기본 동작은 2020-01-01 이후 원시와
-수정 OHLCV를 함께 수집하며 주문·계좌 API는 사용하지 않는다.
+0011 migration 적용 후에만 실행한다. 기간을 반드시 명시해야 하며 원시와
+수정 OHLCV를 함께 수집한다. 주문·계좌 API는 사용하지 않는다.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-from datetime import date, timedelta
+import sys
+from datetime import date
 
+from pipelines.daily_refresh import daily_refresh_lock
 from pipelines.market.kis import (
-    BACKFILL_START,
     KisClient,
-    PILOT_SYMBOLS,
+    KOSPI_BACKFILL_STATE_ROOT,
     assert_kis_schema,
     backfill_kis_prices,
     collect_fundamentals,
-    fetch_daily_range,
+    load_latest_raw_prices,
 )
 from pipelines.market.metadata import backfill_market_metadata
+from pipelines.market.stock_master import load_kospi_symbols
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--start", type=date.fromisoformat, default=BACKFILL_START)
-    parser.add_argument("--end", type=date.fromisoformat, default=date.today())
-    parser.add_argument("--symbols", nargs="+", default=list(PILOT_SYMBOLS))
+    parser.add_argument("--start", type=date.fromisoformat, required=True)
+    parser.add_argument("--end", type=date.fromisoformat, required=True)
+    parser.add_argument(
+        "--symbols",
+        nargs="+",
+        help="테스트·제한 실행용 명시 종목. 생략하면 DB의 KOSPI 전체",
+    )
+    parser.add_argument(
+        "--symbol-limit",
+        type=int,
+        help="테스트·제한 실행용 최대 종목 수",
+    )
     parser.add_argument("--no-resume", action="store_true")
     parser.add_argument("--adjusted-only", action="store_true")
     parser.add_argument("--krx-request-interval", type=float, default=0.5)
@@ -36,41 +47,49 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    assert_kis_schema()
-    latest_raw = {}
-    with KisClient() as client:
-        result = backfill_kis_prices(
-            start_date=args.start,
-            end_date=args.end,
+    with daily_refresh_lock() as acquired:
+        if not acquired:
+            print(
+                json.dumps(
+                    {
+                        "status": "skipped_concurrent",
+                        "error": "다른 시장데이터 수집 작업이 실행 중입니다.",
+                    },
+                    ensure_ascii=False,
+                ),
+                file=sys.stderr,
+            )
+            return 2
+        targets = load_kospi_symbols(
             symbols=args.symbols,
-            client=client,
-            include_raw=not args.adjusted_only,
-            include_adjusted=True,
-            resume=not args.no_resume,
-            capture_latest_raw=latest_raw,
+            limit=args.symbol_limit,
         )
-        if not args.adjusted_only:
-            for symbol in args.symbols:
-                if symbol not in latest_raw:
-                    rows, _ = fetch_daily_range(
-                        client,
-                        symbol,
-                        max(args.start, args.end - timedelta(days=14)),
-                        args.end,
-                        adjusted=False,
-                    )
-                    if rows:
-                        latest_raw[symbol] = rows[-1]
-            result["fundamentals"] = collect_fundamentals(
-                client, args.symbols, latest_raw
+        assert_kis_schema()
+        with KisClient() as client:
+            result = backfill_kis_prices(
+                start_date=args.start,
+                end_date=args.end,
+                symbols=targets,
+                client=client,
+                include_raw=not args.adjusted_only,
+                include_adjusted=True,
+                resume=not args.no_resume,
+                state_root=KOSPI_BACKFILL_STATE_ROOT,
             )
-            result["market_metadata"] = backfill_market_metadata(
-                args.start,
-                args.end,
-                symbols=args.symbols,
-                request_interval=args.krx_request_interval,
-                check_schema=False,
-            )
+            if not args.adjusted_only:
+                latest_raw = load_latest_raw_prices(
+                    targets, args.start, args.end
+                )
+                result["fundamentals"] = collect_fundamentals(
+                    client, targets, latest_raw
+                )
+                result["market_metadata"] = backfill_market_metadata(
+                    args.start,
+                    args.end,
+                    symbols=targets,
+                    request_interval=args.krx_request_interval,
+                    check_schema=False,
+                )
     print(json.dumps(result, ensure_ascii=False, indent=2))
     failed = bool(
         result["failed_symbols"]
