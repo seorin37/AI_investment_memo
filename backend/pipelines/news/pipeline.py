@@ -9,6 +9,8 @@
       # 수집 -> 리드 보충(요약 없는 기사) -> 태깅·임베딩 -> 중복 묶음 배정
   python -m backend.pipelines.news.pipeline hourly --embed --cluster --cluster-llm --loop 1800
       # 묶음 배정 때 애매한 묶음은 Gemini에 묻는다 (외부 API, 환경변수 GEMINI_API_KEY)
+  python -m backend.pipelines.news.pipeline hourly --embed --fill-lead --cluster --cluster-llm --loop 1800 --naver-every 7200
+      # 30분마다 RSS 수집, 2시간마다 네이버 종목 기사 보강(최근 3시간분)까지 한 프로세스가 같이 돈다
 설정은 .env(DATABASE_URL 또는 POSTGRES_*)에서 읽는다.
 --fill-lead와 --cluster는 기본 꺼짐이라, 붙이지 않으면 예전과 똑같이 동작한다.
 리드 보충은 lead_sources.yaml에서 켜고 selector까지 확정한 매체만 요청한다.
@@ -100,6 +102,27 @@ def fill_leads(dsn: str) -> dict | None:
         return None
 
 
+def naver_due(last: float | None, now: float, every: int) -> bool:
+    """네이버 보강을 지금 할 때인가. every(초)가 0이면 안 한다. 처음(last 없음)에는 바로 한다.
+    반복 주기가 약간 흔들려도 한 번 건너뛰지 않도록 1분의 여유를 둔다."""
+    if every <= 0:
+        return False
+    return last is None or now - last >= every - 60
+
+
+def collect_naver(hours: float) -> int:
+    """네이버 검색 API로 최근 hours시간 종목 기사를 받아 저장한다 (naver.py --hours와 같은 동작).
+    실패해도 RSS 수집·임베딩은 계속한다."""
+    try:
+        rc = naver.main(["--hours", str(hours)])
+    except Exception:
+        log.exception("네이버 보강 실패. 다음 주기에 다시 시도합니다.")
+        return 1
+    if rc:
+        log.error("네이버 보강이 오류 코드 %s로 끝났습니다. 다음 주기에 다시 시도합니다.", rc)
+    return rc
+
+
 def assign_clusters(dsn: str, variant: str, llm: bool = False) -> dict | None:
     """임베딩이 끝난 기사를 중복 묶음에 배정. 실패해도 기사·임베딩에는 영향이 없다.
     llm=True면 애매한 묶음은 Gemini에 묻는다 (환경변수 GEMINI_API_KEY)."""
@@ -138,15 +161,22 @@ def run_hourly(dsn: str, embed: bool = False, variant: str = "hybrid", embed_day
 
 def loop_hourly(dsn: str, interval: int, embed: bool, variant: str, embed_days: int,
                 stocks_path: Path, keep_days: int, fill_lead: bool = False, cluster: bool = False,
-                cluster_llm: bool = False) -> int:
-    """interval초마다 수집(+임베딩)을 반복한다. 모델은 한 번만 불러 온다. Ctrl+C로 멈춘다."""
+                cluster_llm: bool = False, *, naver_every: int = 0, naver_hours: float = 3.0) -> int:
+    """interval초마다 수집(+임베딩)을 반복한다. 모델은 한 번만 불러 온다. Ctrl+C로 멈춘다.
+    naver_every(초)가 0보다 크면 그 간격마다 RSS 수집 직전에 네이버 보강(최근 naver_hours시간)도 한다.
+    네이버로 받은 새 기사는 같은 반복 안에서 바로 리드 보충·임베딩·묶음 배정까지 간다."""
     import psycopg
     encoder = LazyEncoder(variant)
     last_cleanup = None
-    log.info("반복 실행 시작: %d초 간격, 임베딩 %s", interval, "켬" if embed else "끔")
+    last_naver = None
+    log.info("반복 실행 시작: %d초 간격, 임베딩 %s, 네이버 보강 %s", interval, "켬" if embed else "끔",
+             f"{naver_every}초마다(최근 {naver_hours:g}시간분)" if naver_every > 0 else "끔")
     while True:
         started = clock.monotonic()
         try:
+            if naver_due(last_naver, started, naver_every):
+                last_naver = started        # 실패해도 같은 주기 안에 계속 다시 부르지 않는다
+                collect_naver(naver_hours)
             run_hourly(dsn, embed, variant, embed_days, stocks_path, encoder, fill_lead, cluster,
                        cluster_llm=cluster_llm)
             today = datetime.now(KST).date()
@@ -244,6 +274,11 @@ def main(argv=None) -> int:
                     help="--cluster의 애매한 묶음은 Gemini에 묻는다 (외부 API, 환경변수 GEMINI_API_KEY 필요)")
     ap.add_argument("--skip-rss", action="store_true",
                     help="hourly: RSS 수집을 건너뜀 (테스트 DB에서 뒤 단계만 확인할 때)")
+    ap.add_argument("--naver-every", type=int, default=0, metavar="SECONDS",
+                    help="hourly --loop: 이 간격(초)마다 네이버 종목 기사 보강도 같이 한다 (예: 7200). 기본 0 = 안 함. "
+                         "NAVER_CLIENT_ID/SECRET 필요")
+    ap.add_argument("--naver-hours", type=float, default=3.0,
+                    help="--naver-every로 받을 최근 시간 범위 (기본 3). 간격보다 길게 두어 겹치게 한다")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     load_env()
@@ -257,6 +292,12 @@ def main(argv=None) -> int:
     if args.cluster_llm and not os.getenv("GEMINI_API_KEY"):
         log.error("--cluster-llm에는 환경변수 GEMINI_API_KEY가 필요합니다.")
         return 1
+    if args.naver_every and not (args.job == "hourly" and args.loop):
+        log.error("--naver-every는 hourly --loop와 함께 써야 합니다.")
+        return 1
+    if args.naver_every and not (os.getenv("NAVER_CLIENT_ID") and os.getenv("NAVER_CLIENT_SECRET")):
+        log.error("--naver-every에는 NAVER_CLIENT_ID / NAVER_CLIENT_SECRET 환경변수가 필요합니다.")
+        return 1
     if args.job == "hourly":
         if args.loop:
             if args.skip_rss:
@@ -264,7 +305,8 @@ def main(argv=None) -> int:
                 return 1
             try:
                 return loop_hourly(dsn, args.loop, args.embed, args.variant, args.embed_days,
-                                   args.stocks, args.keep_days, args.fill_lead, args.cluster, args.cluster_llm)
+                                   args.stocks, args.keep_days, args.fill_lead, args.cluster, args.cluster_llm,
+                                   naver_every=args.naver_every, naver_hours=args.naver_hours)
             except KeyboardInterrupt:
                 log.info("반복 실행을 멈췄습니다.")
                 return 0

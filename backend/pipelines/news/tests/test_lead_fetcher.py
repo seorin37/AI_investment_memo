@@ -148,13 +148,26 @@ def test_transient_errors_retry_then_fail():
     assert (r.status, r.attempts) == ("pending", 1) and "TimeoutError" in r.error
 
 
-def test_404_and_extraction_failure_are_final():
+def test_404_is_final_and_empty_body_is_retried_until_last_attempt():
     get = http({"https://www.hankyung.com/article/1": Resp(404),
                 "https://www.hankyung.com/article/2": Resp(200, "<html>본문 없음</html>")})
     results, _ = fetch_leads([item(1), item(2, "https://www.hankyung.com/article/2")], cfg(), get,
                              sleep=lambda s: None)
-    assert [r.status for r in results] == ["failed", "failed"]
+    assert [r.status for r in results] == ["failed", "pending"]   # 본문이 아직 안 채워졌을 수 있어 다시 시도
     assert "선택자" in results[1].error
+    last = fetch_leads([item(2, "https://www.hankyung.com/article/2", attempts=2)], cfg(), get,
+                       sleep=lambda s: None)[0][0]
+    assert last.status == "failed"
+
+
+def test_last_attempt_falls_back_to_meta_description():
+    desc = "영업이익 83조 원으로 632% 증가했다. 6개 분기 연속 역대 최대 실적을 냈고 3분기 배당은 주당 2만 원으로 정했다."
+    html = f'<html><head><meta property="og:description" content="{desc}"></head><body>본문 칸 없음</body></html>'
+    get = http({"https://www.hankyung.com/article/1": Resp(200, html)})
+    first = fetch_leads([item(1)], cfg(), get, sleep=lambda s: None)[0][0]
+    assert first.status == "pending"                                  # 처음에는 본문이 채워지길 기다린다
+    last = fetch_leads([item(1, attempts=2)], cfg(), get, sleep=lambda s: None)[0][0]
+    assert last.status == "ok" and "영업이익" in last.lead_text
 
 
 def test_other_domain_is_skipped_without_request():
@@ -236,15 +249,14 @@ def test_probe_cli_asks_before_sending(monkeypatch, capsys):
 
 # ---------------------------------------------------------------- 설정
 
-def test_shipped_config_sends_no_requests():
+def test_shipped_config_is_consistent():
     config = load_config()
     assert set(config.sources) == {"hankyung", "mk", "yonhap", "sedaily"}
-    assert not any(s.enabled for s in config.sources.values())
-    assert not any(s.ready for s in config.sources.values())
+    for code, src in config.sources.items():
+        if src.enabled:
+            assert src.ready, f"{code}: 켜져 있는데 준비가 안 됨 (본문 selector가 비어 있음)"
     assert config.sources["sedaily"].method == "naver"            # 약관상 링크 수집 안 함
     assert config.user_agent.startswith("memos-news-collector/")
-    # 준비된 매체가 없으면 DB에 손대지 않고 끝난다 (conn=None이어도 됨)
-    assert lf.run(None, config)["skipped"] == "no_ready_source"
 
 
 def test_config_validation(tmp_path):
