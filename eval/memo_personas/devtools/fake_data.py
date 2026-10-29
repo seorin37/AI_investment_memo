@@ -123,7 +123,7 @@ def financials_fin(symbol: str) -> list[dict]:
             if pe > date(2026, 6, 30):
                 break
             out.append({"symbol": symbol, "period_end": pe, "period_type": ptype, "net_interest_income": int(3.2e12 * k),
-                        "fee_income": int(0.95e12 * k), "loan_loss_provision": int(0.5e12 * k), "solvency_ratio": 15.8 + k * 0.1})
+                        "fee_income": int(0.95e12 * k), "loan_loss_provision": int(0.5e12 * k), "bis_ratio": 15.8 + k * 0.1})
     return out
 
 

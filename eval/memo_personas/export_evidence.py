@@ -42,7 +42,7 @@ REQUIRED_COLUMNS = {
                    "total_liabilities", "total_equity"],
     # 0001 sql:240
     "financials_fin": ["symbol", "period_end", "period_type", "net_interest_income", "fee_income",
-                       "loan_loss_provision", "solvency_ratio"],
+                       "loan_loss_provision", "bis_ratio"],
     # 0001 sql:520·533 (지표 코드는 sql:859 시드, 수집은 backend/pipelines/economic/pipeline.py ECOS_SERIES·FRED_SERIES)
     "economic_indicators": ["code", "name", "unit"],
     "economic_observations": ["indicator_code", "observation_date", "value"],
@@ -117,7 +117,7 @@ ORDER BY period_end
 # financials_fin (0001 sql:240): 금융권 전용
 SQL_FINANCIALS_FIN = """
 SELECT period_end, period_type::text AS period_type, net_interest_income, fee_income, loan_loss_provision,
-       solvency_ratio
+       bis_ratio
 FROM financials_fin WHERE symbol = :symbol AND period_end <= :as_of
 ORDER BY period_end
 """
@@ -429,7 +429,7 @@ def financial_block(symbol: str, rows: list[dict], fin_rows: list[dict]):
         fin_extra.append({"id": f"financials_fin:{symbol}:{r['period_end']}:{r['period_type']}",
                           "period_end": str(r["period_end"]), "period_type": r["period_type"], "cumulative": True,
                           **{k: num(r.get(k)) for k in ("net_interest_income", "fee_income", "loan_loss_provision",
-                                                        "solvency_ratio")}})
+                                                        "bis_ratio")}})
 
     items = []
     for x in recent:
@@ -460,13 +460,13 @@ def financial_block(symbol: str, rows: list[dict], fin_rows: list[dict]):
         label = {"q1": "1분기", "half": "상반기", "q3": "3분기", "annual": "연간"}[x["period_type"]]
         parts = [f"{ko} {won(x[k])}" for k, ko in (("net_interest_income", "순이자이익"), ("fee_income", "수수료이익"),
                                                     ("loan_loss_provision", "대손충당금")) if x[k] is not None]
-        if x["solvency_ratio"] is not None:
-            parts.append(f"자본비율(BIS 등) {x['solvency_ratio']:.2f}%")
+        if x["bis_ratio"] is not None:
+            parts.append(f"자본비율(BIS 등) {x['bis_ratio']:.2f}%")
         if parts:
             y = x["period_end"][:4]
             items.append(item(f"{symbol}/finfin/{x['period_end']}", "재무", "fin_financial_sector", [x["id"]],
                               f"{y}년 {label} 누적(금융 항목) " + " · ".join(parts), f"{y}년 {label} 순이자이익",
-                              [x[k] for k in ("net_interest_income", "fee_income", "loan_loss_provision", "solvency_ratio")],
+                              [x[k] for k in ("net_interest_income", "fee_income", "loan_loss_provision", "bis_ratio")],
                               [x["period_end"]]))
     block = {"basis": "손익은 분기 단독값(누적값 차감), 재무상태는 기말값. ROE=순이익/기말자본, 부채비율=부채/자본",
              "quarters": recent or NONE, "annual": annual or NONE, "financial_sector": fin_extra or NONE}
