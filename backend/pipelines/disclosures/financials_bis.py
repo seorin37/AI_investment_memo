@@ -1,4 +1,4 @@
-"""KB금융 BIS 총자본비율 추출 → financials_fin.solvency_ratio (WO-015 ③단계).
+"""KB금융 BIS 총자본비율 추출 → financials_fin.bis_ratio (WO-015 ③단계).
 
 공시 청크(disclosure_chunks, 읽기 전용)의 "BIS기준 자기자본비율" 표에서 대상 기간 말(당기) 총자본비율을 찾는다.
 - 지주 기준만 쓴다: 표 앞의 가장 가까운 주체 표시가 `[지배회사에 관한 사항]`·`[KB금융지주]`인 표.

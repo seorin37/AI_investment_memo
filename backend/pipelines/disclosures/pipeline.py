@@ -155,6 +155,7 @@ class Run:
         self.periods = [str(p) for p in config["targets"]["periods"]]
         self.symbols = [s.strip() for s in args.symbols.split(",") if s.strip()] or list(TARGET_SYMBOLS)
         self.failures: list[str] = []
+        self.failed_items: list[dict] = []  # dart.failure_item() 형식
         self.timings: dict[str, float] = {}
         self.record: dict = {
             "mode": mode,
@@ -174,6 +175,7 @@ class Run:
         self.run_id = None
         self.api_key: str | None = None
         self.zip_paths: dict[str, Path] = {}
+        self.selector = None  # dart.collect의 슬롯 선택 함수 (None이면 고정 periods)
 
     # 공통 도구
     def token_counter(self):
@@ -238,8 +240,10 @@ class Run:
             corp_cache_days=float(dart_cfg.get("corp_code_cache_days", 7)),
             session=session,
             download=not self.args.dry_run,
+            selector=self.selector,
         )
         self.failures.extend(result.failures)
+        self.failed_items.extend(result.failed_items)
         if not self.args.dry_run:
             known = {r.rcept_no: r for r in (dart.load_reports(self.raw_dir / "reports.json") if (self.raw_dir / "reports.json").exists() else [])}
             for ref in result.reports:
@@ -288,7 +292,13 @@ class Run:
         if not company:
             raise StepError(f"configs의 targets.companies에 {ref.symbol} 기업명이 없습니다.")
         chunks = chunker_mod.chunk_blocks(
-            ref.rcept_no, doc.blocks, company, ref.period_end, self.token_counter(), chunker_mod.ChunkSettings.from_config(self.config)
+            ref.rcept_no,
+            doc.blocks,
+            company,
+            ref.period_end,
+            self.token_counter(),
+            chunker_mod.ChunkSettings.from_config(self.config),
+            label=ref.period_label or None,
         )
         if not self.args.dry_run:
             _write_jsonl(self.chunks_dir / f"{ref.rcept_no}.jsonl", [c.to_dict() for c in chunks])
@@ -400,9 +410,11 @@ class Run:
                 if args.dry_run and "parse" in self.steps and not self.zip_paths.get(ref.rcept_no, self.raw_dir / ref.zip_name()).exists():
                     log.info("dry-run: %s %s %s ZIP이 없어 목록만 확인 (다운로드하지 않음)", ref.symbol, ref.period_end, ref.rcept_no)
                     continue
+                stage = "parse"
                 try:
                     doc = self.parse(ref) if "parse" in self.steps else None
                     chunks = None
+                    stage = "chunk"
                     if "chunk" in self.steps:
                         chunks = self.chunk(ref, doc)
                         manifest_updates[ref.rcept_no] = [c.manifest_row() for c in chunks]
@@ -415,6 +427,7 @@ class Run:
                         fingerprints[ref.rcept_no] = chunker_mod.doc_fingerprint([c.chunk_hash for c in chunks])
                         all_chunks.extend(chunks)
                         log.info("%s %s %s: %d청크, fingerprint %s", ref.symbol, ref.period_end, ref.rcept_no, len(chunks), fingerprints[ref.rcept_no][:16])
+                    stage = "load"
                     if "load" in self.steps and not args.dry_run:
                         reloaded = self.load(ref, chunks)
                         log.info("%s 적재: %s", ref.rcept_no, "교체 적재" if reloaded else "fingerprint 동일 → 건너뜀")
@@ -424,6 +437,15 @@ class Run:
                 except Exception as exc:  # 실패 문서는 건너뛰고 계속
                     message = REDACTOR.redact(f"{ref.symbol} {ref.period_end} {ref.rcept_no}: {type(exc).__name__}: {exc}")
                     self.failures.append(message)
+                    self.failed_items.append(dart.failure_item(
+                        ref.symbol,
+                        stage,
+                        REDACTOR.redact(f"{type(exc).__name__}: {exc}"),
+                        period_end=ref.period_end,
+                        kind=ref.kind,
+                        rcept_no=ref.rcept_no,
+                        title=ref.title,
+                    ))
                     log.error(message)
             self.timings["parse_chunk_load"] = round(time.perf_counter() - started, 2)
             if manifest_updates and not args.dry_run:

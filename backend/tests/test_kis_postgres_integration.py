@@ -160,7 +160,7 @@ def test_schema_is_at_0011_with_required_constraints(pg_engine):
                 )
             )
         )
-    assert revision == "0011_kis_market_data"
+    assert revision in {"0011_kis_market_data", "0012_financials_sector_columns"}  # 0012는 재무 컬럼만 추가
     assert {
         "prices_daily_pkey",
         "adjusted_prices_daily_pkey",

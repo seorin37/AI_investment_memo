@@ -37,7 +37,7 @@ class FakeResult:
 
 
 class FakeConn:
-    def __init__(self, alembic="0011_kis_market_data", vector="0.8.7", symbols=("005930",), column="vector(1024)", sparse="jsonb"):
+    def __init__(self, alembic="0012_financials_sector_columns", vector="0.8.7", symbols=("005930",), column="vector(1024)", sparse="jsonb"):
         self.answers = [[alembic], vector, list(symbols), column, sparse]
 
     def execute(self, *args, **kwargs):

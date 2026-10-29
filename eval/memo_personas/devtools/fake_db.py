@@ -59,7 +59,7 @@ def seed(url: str, seed_value: int = 7) -> dict:
         "financials": ("symbol, period_end, period_type, fs_div, revenue, operating_income, net_income, total_liabilities, "
                        "total_equity", data["financials"]),
         "financials_fin": ("symbol, period_end, period_type, net_interest_income, fee_income, loan_loss_provision, "
-                           "solvency_ratio", data["financials_fin"]),
+                           "bis_ratio", data["financials_fin"]),
         "economic_observations": ("indicator_code, observation_date, value", data["macro"]),
     }
     casts = {"kind": "CAST(:kind AS disclosure_kind)", "period_type": "CAST(:period_type AS report_period)"}
