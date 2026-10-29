@@ -2,7 +2,7 @@
 
   collect  data/raw/dart/financials/{종목}_{연도}_{보고서코드}_{CFS|OFS}.json, data/raw/dart/shares/{종목}_{연도}_{보고서코드}.json
   load     financials / financials_fin UPSERT, data/financials/provenance.jsonl
-  bis      금융 종목 solvency_ratio를 disclosure_chunks(읽기 전용)에서 추출해 UPDATE
+  bis      금융 종목 bis_ratio를 disclosure_chunks(읽기 전용)에서 추출해 UPDATE
   validate 완료 조건 자동 검사 (financials_validate)
 실행 기록: logs/financials_{ts}.json (ingest_runs는 쓰지 않는다 — ingest_job enum에 재무 항목이 없음)
 
@@ -325,10 +325,11 @@ class Run:
         return [s for s in self.symbols if s in mapping.fin_symbols]
 
     def bis(self) -> None:
-        """금융 종목의 solvency_ratio를 disclosure_chunks(읽기 전용)에서 추출해 financials_fin에 UPDATE한다."""
+        """금융 종목의 bis_ratio를 disclosure_chunks(읽기 전용)에서 추출해 financials_fin에 UPDATE한다."""
         from sqlalchemy import text
 
         from .financials_bis import extract_total_capital_ratio
+        from .financials_loader import set_ratio
 
         results: dict[str, dict] = {}
         provenance: list[dict] = []
@@ -353,14 +354,14 @@ class Run:
                 source = result.source if result else {"reason": "공시 또는 총자본비율 청크 없음"}
                 results[label] = {"value": value, "rcept_no": rcept_no, **{k: source[k] for k in ("column", "chunk_indexes", "provisional", "reason") if k in source}}
                 log.info("BIS %s: %s (%s)", label, value if value is not None else "NULL", source.get("column") or source.get("reason"))
-                provenance.append({"symbol": symbol, "period_end": period_end, "table": "financials_fin", "column": "solvency_ratio",
+                provenance.append({"symbol": symbol, "period_end": period_end, "table": "financials_fin", "column": "bis_ratio",
                                    "value": value, "rcept_no": rcept_no, "source": "disclosure_chunks", **source})
                 if self.args.dry_run:
                     continue
                 key = {"s": symbol, "p": period_end, "t": financials.period_type(period_end)}
                 where = " WHERE symbol = :s AND period_end = CAST(:p AS date) AND period_type = CAST(:t AS report_period)"
                 with self.engine.begin() as conn:
-                    stored = conn.execute(text("SELECT solvency_ratio FROM financials_fin" + where), key).all()
+                    stored = conn.execute(text("SELECT bis_ratio FROM financials_fin" + where), key).all()
                     if len(stored) != 1:
                         self.failures.append(f"{label}: financials_fin 행이 없습니다 (load 먼저)")
                         continue
@@ -369,7 +370,7 @@ class Run:
                         self.failures.append(f"{label}: BIS 추출 실패 — 기존 값 {stored[0][0]} 유지 ({source.get('reason')})")
                         provenance.pop()
                         continue
-                    conn.execute(text("UPDATE financials_fin SET solvency_ratio = :v" + where), {**key, "v": value})
+                    set_ratio(conn, symbol, period_end, key["t"], "bis_ratio", value, None if value is not None else "extract_failed")
         self.record["bis"] = results
         if not self.args.dry_run:
             update_provenance(self.provenance_path, provenance)

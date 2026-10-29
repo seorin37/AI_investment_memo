@@ -8,7 +8,7 @@
 | chunk_cross_check | 고정 대조값(삼성 2026 반기 누적 매출 = 청크 305,372,914백만원 × 1,000,000) | error |
 | annual_statement_cross_check | 2025 사업보고서 연결 손익 청크의 매출·영업이익 = API 값 (청크 단위 반올림 이내) | 불일치 error, 청크 없음 warning |
 | eps_consistency | net_income ÷ 유통주식수 vs 공시 EPS 차이 10% 이내 | warning |
-| null_report / rcept_no_match / solvency_ratio | NULL 목록·사유, API 접수번호와 disclosures 대조, BIS 값 | info |
+| null_report / rcept_no_match / bis_ratio | NULL 목록·사유, API 접수번호와 disclosures 대조, BIS 값 | info |
 """
 
 from __future__ import annotations
@@ -234,7 +234,7 @@ def null_report(fin_rows: dict, fin_fin_rows: dict, provenance_path: Path) -> di
                     p = json.loads(line)
                     reasons[(p["symbol"], p["period_end"], p["table"], p["column"])] = p.get("reason", "")
     report: dict[str, list] = {}
-    for table, rows, columns in (("financials", fin_rows, FINANCIALS_VALUES), ("financials_fin", fin_fin_rows, list(FIN_VALUES) + ["solvency_ratio"])):
+    for table, rows, columns in (("financials", fin_rows, FINANCIALS_VALUES), ("financials_fin", fin_fin_rows, list(FIN_VALUES) + ["bis_ratio"])):
         for column in columns:
             nulls = [f"{s} {p}: {reasons.get((s, p, table, column), '사유 기록 없음')}" for (s, p), r in sorted(rows.items()) if r[column] is None]
             if nulls:
@@ -293,6 +293,6 @@ def validate(
         check_share_issuance_notes(conn, shares, rcept_of),
         null_report(fin_rows, fin_fin_rows, provenance_path),
         rcept_no_match(provenance_path, rcept_of),
-        _check("solvency_ratio", True, {f"{s} {p}": None if r["solvency_ratio"] is None else str(r["solvency_ratio"]) for (s, p), r in sorted(fin_fin_rows.items())}, severity="info"),
+        _check("bis_ratio", True, {f"{s} {p}": None if r["bis_ratio"] is None else str(r["bis_ratio"]) for (s, p), r in sorted(fin_fin_rows.items())}, severity="info"),
     ]
     return {"ok": all(c["ok"] for c in checks if c["severity"] == "error"), "checks": checks}

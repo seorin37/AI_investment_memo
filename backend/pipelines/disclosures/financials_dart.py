@@ -4,6 +4,10 @@
   → `{financials_raw_dir}/{symbol}_{bsns_year}_{reprt_code}_{fs_div}.json`
 - `stockTotqySttus.json`(주식의 총수 현황): 013이면 빈 결과
   → `{shares_raw_dir}/{symbol}_{bsns_year}_{reprt_code}.json`
+- `company.json`(기업개황: 업종코드·결산월) → `{company_raw_dir}/{corp_code}.json` (코스피 전체 실행용)
+
+보고서 코드는 결산월 기준 위치(1분기·반기·3분기·사업)로, 사업연도(bsns_year)는 기간 말의 연도로 정한다.
+3월 결산 동원모빌리티 확인(2026-10-29): 2024 11013 = 분기보고서(2024.06), 2024 11014 = (2024.12), 2025 11011 = 사업보고서(2025.03).
 
 상태 000·013 응답만 저장하고, 파일이 이미 있으면 다시 호출하지 않는다 (refresh=True일 때만 다시 받음).
 상태 020(요청 한도)과 인증키 오류는 수집 전체를 중단한다. 매핑·적재는 이 모듈에서 하지 않는다.
@@ -20,14 +24,15 @@ from pathlib import Path
 from app.dart_reports import DartError, DartRateLimitError, _get, _safe_message
 
 from ..common.logging import get_logger
-from .financials import FS_DIV_ORDER
+from .financials import FS_DIV_ORDER, period_type
 
 
 log = get_logger("disclosures.financials_dart")
 
 STATEMENTS_ENDPOINT = "fnlttSinglAcntAll.json"
 SHARES_ENDPOINT = "stockTotqySttus.json"
-REPRT_CODES = {"03": "11013", "06": "11012", "09": "11014", "12": "11011"}
+COMPANY_ENDPOINT = "company.json"
+REPRT_CODES = {"q1": "11013", "half": "11012", "q3": "11014", "annual": "11011"}
 OK, NO_DATA, RATE_LIMIT = "000", "013", "020"
 # 키가 틀리거나 막힌 경우: 남은 호출도 모두 같은 오류이므로 전체를 중단한다.
 AUTH_ERRORS = {"010", "011", "012", "901"}
@@ -42,14 +47,19 @@ class Target:
     symbol: str
     corp_code: str
     period_end: str  # YYYY-MM-DD
+    fy_end_month: int = 12  # 결산월
 
     @property
     def bsns_year(self) -> str:
         return self.period_end[:4]
 
     @property
+    def period_type(self) -> str:
+        return period_type(self.period_end, self.fy_end_month)
+
+    @property
     def reprt_code(self) -> str:
-        return REPRT_CODES[self.period_end[5:7]]
+        return REPRT_CODES[self.period_type]
 
 
 def statement_path(raw_dir: Path, target: Target, fs_div: str) -> Path:
@@ -178,6 +188,13 @@ def collect(
             except DartError as exc:
                 report.failures.append(f"{target.symbol} {target.period_end}: {_safe_message(exc, api_key)}")
     return report
+
+
+def fetch_company(corp_code: str, api_key: str | None, raw_dir: Path, *, session=None, refresh: bool = False) -> tuple[dict, bool]:
+    """기업개황(업종코드 induty_code, 결산월 acc_mt). 저장본이 있으면 호출하지 않는다. (응답, 호출 여부)"""
+    path = raw_dir / f"{corp_code}.json"
+    fetched = get_or_fetch(path, COMPANY_ENDPOINT, {"corp_code": corp_code}, api_key or "", session=session, refresh=refresh)
+    return json.loads(path.read_text(encoding="utf-8")), fetched.called
 
 
 def cached_statement(statements_dir: Path, target: Target) -> tuple[str, Path] | None:

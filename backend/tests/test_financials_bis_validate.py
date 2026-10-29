@@ -100,6 +100,7 @@ class BisExtractTest(unittest.TestCase):
 class FakeResult:
     def __init__(self, rows):
         self.rows = rows
+        self.rowcount = len(rows) or 1
 
     def scalar(self):
         return self.rows[0][0] if self.rows else None
@@ -120,7 +121,7 @@ class FakeConn:
             return FakeResult([("R1",)])
         if "FROM disclosure_chunks" in sql:
             return FakeResult(self.state["chunks"])
-        if sql.startswith("SELECT solvency_ratio"):
+        if sql.startswith("SELECT bis_ratio"):
             return FakeResult([(self.state["stored"],)])
         if sql.startswith("UPDATE"):
             self.state["stored"] = params["v"]
