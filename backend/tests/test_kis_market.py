@@ -56,6 +56,17 @@ def test_normalize_distinguishes_raw_and_adjusted_ohlcv():
     assert "trade_value" not in adjusted
 
 
+def test_kis_normalization_accepts_uppercase_alphanumeric_symbol():
+    raw = kis.normalize_daily_row("00104K", daily_row(), adjusted=False)
+    assert raw["symbol"] == "00104K"
+
+
+@pytest.mark.parametrize("symbol", ["00104k", "00-04K", "12345", "1234567"])
+def test_kis_normalization_rejects_invalid_symbol(symbol):
+    with pytest.raises(ValueError, match="종목코드"):
+        kis.normalize_daily_row(symbol, daily_row(), adjusted=False)
+
+
 def test_samsung_2018_split_values_remain_distinct():
     adjusted = kis.normalize_daily_row(
         "005930",
@@ -499,6 +510,30 @@ def test_backfill_isolates_symbol_failure_and_preserves_success(tmp_path):
     assert result["failed_symbols"] == ["000660"]
     assert len(saved) == 1
     assert len(saved[0][0]) == len(saved[0][1]) == 1
+
+
+def test_backfill_isolates_provider_rejection_of_alphanumeric_symbol(tmp_path):
+    class Client:
+        def daily_page(self, symbol, *_args, adjusted):
+            if symbol == "00104K":
+                raise kis.KisApiError("provider rejected symbol")
+            return [daily_row()]
+
+    saved = []
+    result = kis.backfill_kis_prices(
+        date(2026, 10, 27),
+        date(2026, 10, 27),
+        ("00104K", "005930"),
+        client=Client(),
+        resume=False,
+        state_root=tmp_path,
+        saver=lambda raw, adjusted: saved.append((raw, adjusted)) or 2,
+    )
+
+    assert result["failed_symbols"] == ["00104K"]
+    assert result["completed_symbols"] == ["005930"]
+    assert len(saved) == 1
+    assert saved[0][0][0]["symbol"] == saved[0][1][0]["symbol"] == "005930"
 
 
 def test_901_symbol_mock_run_has_no_missing_duplicates_or_order_drift(tmp_path):

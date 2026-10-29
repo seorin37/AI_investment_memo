@@ -16,7 +16,7 @@ from sqlalchemy import bindparam, text
 from pipelines.common.db import get_engine
 from pipelines.market.calendar import is_krx_trading_day
 from pipelines.market.kis import assert_kis_schema
-from pipelines.market.krx import fetch_kospi_daily
+from pipelines.market.krx import fetch_kospi_daily, is_valid_stock_symbol
 from pipelines.market.stock_master import load_kospi_symbols
 
 
@@ -30,8 +30,10 @@ def _target_symbols(symbols: Iterable[str]) -> tuple[str, ...]:
         raise ValueError("KRX 메타데이터 수집 대상이 0종목입니다.")
     if len(targets) != len(set(targets)):
         raise ValueError("KRX 메타데이터 수집 대상에 중복 종목이 있습니다.")
-    if any(len(symbol) != 6 or not symbol.isdigit() for symbol in targets):
-        raise ValueError("KRX 메타데이터 종목코드는 6자리 숫자여야 합니다.")
+    if any(not is_valid_stock_symbol(symbol) for symbol in targets):
+        raise ValueError(
+            "KRX 메타데이터 종목코드는 6자리 영문 대문자 또는 숫자여야 합니다."
+        )
     return targets
 
 
@@ -59,8 +61,8 @@ def normalize_market_metadata(row: dict) -> dict:
     if row.get("MKT_NM") != "KOSPI":
         raise ValueError("KOSPI 메타데이터가 아닙니다.")
     symbol = str(row.get("ISU_CD", "")).strip()
-    if len(symbol) != 6 or not symbol.isdigit():
-        raise ValueError("종목코드는 6자리 숫자여야 합니다.")
+    if not is_valid_stock_symbol(symbol):
+        raise ValueError("종목코드는 6자리 영문 대문자 또는 숫자여야 합니다.")
     try:
         trade_date = datetime.strptime(str(row.get("BAS_DD", "")), "%Y%m%d").date()
     except ValueError as exc:

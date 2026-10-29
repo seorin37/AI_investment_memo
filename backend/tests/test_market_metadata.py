@@ -34,6 +34,20 @@ def test_normalize_uses_only_daily_market_metadata():
     assert not {"open", "high", "low", "close", "volume"} & result.keys()
 
 
+def test_metadata_accepts_uppercase_alphanumeric_symbol():
+    result = metadata.normalize_market_metadata(raw_row("00104K"))
+    assert result["symbol"] == "00104K"
+    assert metadata._target_symbols(("00104K", "0126Z0")) == (
+        "00104K", "0126Z0"
+    )
+
+
+@pytest.mark.parametrize("symbol", ["00104k", "00-04K", "12345", "1234567"])
+def test_metadata_rejects_invalid_symbol(symbol):
+    with pytest.raises(ValueError, match="종목코드"):
+        metadata.normalize_market_metadata(raw_row(symbol))
+
+
 def test_fetch_calls_all_kospi_endpoint_once_and_filters_targets():
     calls = []
     rows = [

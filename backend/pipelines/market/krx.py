@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import random
 from datetime import date
@@ -15,6 +16,13 @@ KRX_KOSPI_STOCK_MASTER_URL = (
 )
 
 RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
+STOCK_SYMBOL_PATTERN = re.compile(r"^[0-9A-Z]{6}$")
+
+
+def is_valid_stock_symbol(symbol: str) -> bool:
+    """Return whether *symbol* is a six-character KRX short code."""
+
+    return STOCK_SYMBOL_PATTERN.fullmatch(symbol) is not None
 
 
 def fetch_kospi_daily(
@@ -172,7 +180,7 @@ def normalize_kospi_stock(row: dict) -> dict:
     symbol = str(row.get("ISU_SRT_CD") or row.get("ISU_CD") or "").strip()
     name = str(row.get("ISU_ABBRV") or row.get("ISU_NM") or "").strip()
 
-    if len(symbol) != 6 or not symbol.isdigit():
+    if not is_valid_stock_symbol(symbol):
         raise ValueError(f"유효하지 않은 종목코드: {symbol}")
 
     if not name:

@@ -16,7 +16,11 @@ from sqlalchemy import bindparam, text
 from sqlalchemy.engine import Engine
 
 from pipelines.common.db import get_engine
-from pipelines.market.krx import fetch_kospi_stock_master, normalize_kospi_stock
+from pipelines.market.krx import (
+    fetch_kospi_stock_master,
+    is_valid_stock_symbol,
+    normalize_kospi_stock,
+)
 
 
 Fetcher = Callable[[date], list[dict]]
@@ -44,7 +48,7 @@ def load_kospi_symbols(
         if len(set(requested)) != len(requested):
             raise ValueError("명시한 수집 종목에 중복이 있습니다.")
         for symbol in requested:
-            if len(symbol) != 6 or not symbol.isdigit():
+            if not is_valid_stock_symbol(symbol):
                 raise ValueError(f"유효하지 않은 종목코드: {symbol}")
 
     statement = text(
@@ -127,7 +131,7 @@ def save_kospi_stocks(rows: Iterable[dict], *, engine: Engine | None = None) -> 
     for row in values:
         symbol = str(row.get("symbol", "")).strip()
         name = str(row.get("name", "")).strip()
-        if len(symbol) != 6 or not symbol.isdigit():
+        if not is_valid_stock_symbol(symbol):
             raise ValueError(f"유효하지 않은 종목코드: {symbol}")
         if not name or row.get("market") != "KOSPI":
             raise ValueError(f"KOSPI 종목 식별정보가 올바르지 않습니다: {symbol}")
