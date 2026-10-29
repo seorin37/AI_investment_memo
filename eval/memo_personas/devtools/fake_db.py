@@ -45,9 +45,13 @@ def seed(url: str, seed_value: int = 7) -> dict:
     from sqlalchemy import create_engine, text
 
     data = fake_data.all_rows(seed_value)
+    price_rows = [dict(row, source="KRX_OPEN_API") for row in data["prices"]]
     eng = create_engine(url)
     ins = {
-        "prices_daily": ("symbol, trade_date, open, high, low, close, volume", data["prices"]),
+        "prices_daily": (
+            "symbol, trade_date, open, high, low, close, volume, source",
+            price_rows,
+        ),
         "disclosures": ("rcept_no, symbol, title, kind, period_end, rcept_dt, source_url", data["disclosures"]),
         "disclosure_chunks": ("id, rcept_no, chunk_index, section, chunk_text", data["chunks"]),
         "news_articles": ("id, source_id, url, title, summary, published_at", data["news"]),

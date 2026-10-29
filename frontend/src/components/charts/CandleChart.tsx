@@ -14,7 +14,7 @@ const VOL_H = 66;
 const XLABEL_H = 26;
 
 /**
- * 일봉 캔들 + 거래량 (토스증권 OHLCV)
+ * 일봉 캔들 + 거래량 (KIS 확정 OHLCV)
  * - 웹: 마우스 오버로 시세 확인, 휠로 확대·축소 / 네이티브: 터치 드래그
  */
 export function CandleChart({

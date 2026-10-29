@@ -78,7 +78,7 @@ app.add_middleware(
 | PATCH | `/stocks/{code}` | `{status?, tags?}` | `MyStock` |
 | DELETE | `/stocks/{code}` | 휴지통으로 이동 | 204 |
 | GET | `/stocks/{code}/quote` | 현재가·등락 + 헤더 스파크라인(최근 ~24개 종가) | `Quote` |
-| GET | `/stocks/{code}/candles?range=1W\|1M\|3M\|1Y` | 일봉 OHLCV (오래된 → 최신) — 토스증권 Open API → `price_daily` | `Candle[]` |
+| GET | `/stocks/{code}/candles?range=1W\|1M\|3M\|1Y` | 일봉 OHLCV (오래된 → 최신) — KIS Open API → `prices_daily` | `Candle[]` |
 | GET | `/stocks/{code}/profile` | 기업 개요 + 시세/투자정보 + 52주 최고·최저 | `StockProfile` |
 | GET | `/stocks/{code}/financials` | 연간 실적(최근 7개년, 증감률 계산용 1년 포함) + 안정성 | `Financials` |
 
@@ -131,7 +131,7 @@ app.add_middleware(
 { "id": "a7", "stock_code": "000660", "stock_name": "SK하이닉스", "type": "price",
   "title": "종가 180,500원", "headline": "15만원 조건가에서 멀어졌어요",
   "summary": "종가 180,500원 · 조건가보다 30,500원(20.3%) 높아요. 아직 설정한 15만원 조건에 도달하지 않았어요.",
-  "source": "토스증권", "url": null, "published_at": "2026-10-11T15:30:00+09:00",
+  "source": "한국투자증권 KIS", "url": null, "published_at": "2026-10-11T15:30:00+09:00",
   "memo_id": "m4", "memo_title": "15만원 밑으로 오면 다시 생각", "memo_version": 2, "read": true, "relevance": 1.0 }
 
 // MemoTimeline.entries[] — 최신순. kind: update | memo_edit | memo_created | ai_linked
@@ -140,7 +140,7 @@ app.add_middleware(
 { "kind": "ai_linked", "at": "..." }
 ```
 
-`type`: `disclosure`(DART) · `news`(네이버 뉴스 검색 API/RSS) · `price`(토스증권 → 규칙·시계열 계산)
+`type`: `disclosure`(DART) · `news`(네이버 뉴스 검색 API/RSS) · `price`(KIS 확정 일봉 → 규칙·시계열 계산)
 
 ## 4. 최신 업데이트 (3.1 / 3.2)
 
@@ -212,7 +212,7 @@ app.add_middleware(
 |---|---|---|
 | 공시 원문·청크 임베딩 | Python Worker (DART 수집) → BGE-M3 | PostgreSQL + pgvector |
 | 뉴스 헤드라인·본문 임베딩 | Python Worker (네이버 뉴스 API/RSS, 중복 제거) → BGE-M3 | PostgreSQL + pgvector |
-| 일봉 OHLCV · 가격 이벤트 | Python Worker (토스증권 Open API) → 규칙 계산 | `price_daily` 등 |
+| 일봉 OHLCV · 가격 이벤트 | Python Worker (KIS Open API) → 규칙 계산 | `prices_daily`, `adjusted_prices_daily` 등 |
 | 메모 임베딩 | FastAPI (메모 저장/수정 시, `ai_linked=true`만) → BGE-M3 | pgvector |
 | `ai_updates` | Worker: 새 문서 ↔ 메모 임베딩 코사인 유사도 1차 필터 → LLM 관련성 최종 판단 → 짧은 요약 | PostgreSQL |
 | `price_conditions.status` | Worker: 종가 vs 조건 (LLM 없음) | PostgreSQL |

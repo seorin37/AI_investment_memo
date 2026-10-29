@@ -93,15 +93,14 @@ alembic heads
 
 주요 데이터:
 
-- 국내 개별 종목 OHLCV
+- KIS 파일럿 종목 원시·수정 OHLCV 및 투자지표
+- KRX 파일럿 종목 시가총액·상장주식수
 - KOSPI / KOSDAQ 지수
 - KRX 금 가격
 
-`pipeline.py`에는 백필 함수들이 정의되어 있습니다.
-
-**주의:** `python backend/pipelines/market/pipeline.py`를 직접 실행하면 코드에 지정된 2020~2026년 과거 데이터 수집이 시작됩니다.
-
-테스트할 때는 Python에서 백필 함수를 명시적인 날짜 범위와 종목 목록으로 호출합니다.
+KIS 백필 진입점은 `scripts/collect_kis_market_data.py`이며, `0011` migration과
+파일럿 검증이 끝난 DB에서만 명시적인 날짜 범위로 실행합니다. KRX 지수·금
+백필 함수는 `pipeline.py`, 시가총액·상장주식수 결합은 `metadata.py`에 있습니다.
 
 ### 경제지표
 
@@ -118,29 +117,29 @@ ECOS 및 FRED API를 이용해 경제지표를 수집합니다.
 
 경제 파이프라인은 호출할 기간과 상태 저장 경로를 지정해 Python에서 실행합니다.
 
-### 매일 09:00 증분 갱신
+### 일일 증분 갱신
 
-기존 KRX, ECOS, FRED 파이프라인을 재사용하는 통합 실행기입니다. 서울 기준
-실행일 전날까지 조회하며, 늦은 공표와 원천 데이터 수정을 반영하기 위해 KRX는
-최근 7일, ECOS/FRED는 최근 35일을 매번 UPSERT합니다.
+서울 기준 09:00에는 KRX 시가총액·상장주식수, 지수·금, ECOS, FRED를
+실행하고 18:30에는 KIS 원시·수정 OHLCV와 투자지표를 실행합니다.
 
 ```bash
-PYTHONPATH=backend python -m pipelines.daily_refresh --print-plan
-PYTHONPATH=backend python -m pipelines.daily_refresh
+PYTHONPATH=backend python -m pipelines.daily_refresh --profile morning --print-plan
+PYTHONPATH=backend python -m pipelines.daily_refresh --profile evening --print-plan
 ```
 
 운영 안전장치:
 
-- KOSPI 파일럿 4종목, KOSPI/KOSDAQ 지수, KRX 금, ECOS 5개, FRED 4개만 실행
+- KIS와 KRX 종목 메타데이터는 파일럿 4종목만 실행
+- KIS는 `DAILY_REFRESH_KIS_ENABLED=true`이고 `0011` 스키마가 준비된 경우에만 실행
 - PostgreSQL advisory lock으로 동일 DB 대상 중복 실행 방지
 - 기존 소스별 완료/실패 JSON과 `logs/daily_refresh/` 통합 단계 로그로 재개 가능
 - 한 소스가 실패해도 나머지 소스는 계속 실행하며, 하나라도 실패하면 종료 코드 1
-- API는 KRX, ECOS, FRED만 사용
 
 재조회/공표 지연 일수는 필요할 때 `.env`에서 조정할 수 있습니다.
 
 ```dotenv
 DAILY_REFRESH_KRX_LAG_DAYS=1
+DAILY_REFRESH_KIS_REQUERY_DAYS=35
 DAILY_REFRESH_ECOS_LAG_DAYS=1
 DAILY_REFRESH_FRED_LAG_DAYS=1
 DAILY_REFRESH_KRX_REQUERY_DAYS=7
@@ -152,14 +151,13 @@ DAILY_REFRESH_FRED_REQUERY_DAYS=35
 
 ```bash
 bash scripts/install_daily_market_refresh_timer.sh
-systemctl --user status memos-market-refresh.timer
-journalctl --user -u memos-market-refresh.service
+systemctl --user status memos-market-refresh-morning.timer
+systemctl --user status memos-market-refresh-evening.timer
 ```
 
-타이머는 `Asia/Seoul` 시간대를 명시해 매일 09:00에 실행되고, 컴퓨터가 꺼져
-있었던 경우 `Persistent=true`에 따라 다음 부팅 후 누락 실행을 보충합니다. 로그아웃
-상태에서도 사용자 서비스를 실행해야 하는 서버라면 관리자가 해당 계정에 lingering을
-활성화해야 합니다.
+두 타이머는 `Asia/Seoul` 시간대와 `Persistent=true`를 사용합니다. 설치
+스크립트는 신규 타이머를 활성화하고 상태를 검증한 뒤 기존 통합 09:00
+타이머를 비활성화합니다.
 
 ### 뉴스
 
