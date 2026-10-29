@@ -12,9 +12,12 @@ from pipelines import daily_refresh
 def test_build_refresh_plan_uses_safe_lags_and_requery_windows(monkeypatch):
     for name in (
         "DAILY_REFRESH_KRX_LAG_DAYS",
+        "DAILY_REFRESH_KIS_LAG_DAYS",
         "DAILY_REFRESH_ECOS_LAG_DAYS",
         "DAILY_REFRESH_FRED_LAG_DAYS",
         "DAILY_REFRESH_KRX_REQUERY_DAYS",
+        "DAILY_REFRESH_KIS_REQUERY_DAYS",
+        "DAILY_REFRESH_KIS_FULL_SYNC_WEEKDAY",
         "DAILY_REFRESH_ECOS_REQUERY_DAYS",
         "DAILY_REFRESH_FRED_REQUERY_DAYS",
     ):
@@ -24,6 +27,9 @@ def test_build_refresh_plan_uses_safe_lags_and_requery_windows(monkeypatch):
 
     assert plan.krx.start == date(2026, 10, 19)
     assert plan.krx.end == date(2026, 10, 25)
+    assert plan.kis.start == date(2026, 9, 22)
+    assert plan.kis.end == date(2026, 10, 26)
+    assert plan.kis_full_sync_symbol is None
     assert plan.ecos.start == date(2026, 9, 21)
     assert plan.ecos.end == date(2026, 10, 25)
     assert plan.fred == plan.ecos
@@ -41,6 +47,7 @@ def test_build_refresh_plan_allows_operational_overrides(monkeypatch):
 
 def test_default_steps_requery_and_reuse_existing_pipelines(monkeypatch):
     calls = []
+    monkeypatch.setenv("DAILY_REFRESH_KIS_ENABLED", "true")
 
     def fake(name):
         def runner(**kwargs):
@@ -48,7 +55,10 @@ def test_default_steps_requery_and_reuse_existing_pipelines(monkeypatch):
             return {"failed": []}
         return runner
 
-    monkeypatch.setattr(daily_refresh, "backfill_prices", fake("prices"))
+    monkeypatch.setattr(daily_refresh, "refresh_kis_market_data", fake("kis_market"))
+    monkeypatch.setattr(
+        daily_refresh, "backfill_market_metadata", fake("krx_stock_metadata")
+    )
     monkeypatch.setattr(daily_refresh, "backfill_market_indices", fake("indices"))
     monkeypatch.setattr(daily_refresh, "backfill_gold_prices", fake("gold"))
     monkeypatch.setattr(daily_refresh, "backfill_ecos", fake("ecos"))
@@ -59,11 +69,79 @@ def test_default_steps_requery_and_reuse_existing_pipelines(monkeypatch):
         runner()
 
     assert [name for name, _ in calls] == [
-        "prices", "indices", "gold", "ecos", "fred"
+        "kis_market", "krx_stock_metadata", "indices", "gold", "ecos", "fred"
     ]
-    assert all(kwargs["resume"] is False for _, kwargs in calls)
-    assert calls[0][1]["symbols"] == daily_refresh.TEST_SYMBOLS
-    assert calls[0][1]["scope"] == "test"
+    assert calls[0][1]["start_date"] == plan.kis.start
+    assert calls[0][1]["end_date"] == plan.kis.end
+    assert calls[0][1]["full_resync_symbol"] is None
+    assert calls[1][1]["start_date"] == plan.krx.start
+    assert calls[1][1]["end_date"] == plan.krx.end
+    assert all(
+        kwargs.get("resume") is False
+        for name, kwargs in calls
+        if name in {"indices", "gold", "ecos", "fred"}
+    )
+
+
+def test_sunday_rotates_one_symbol_for_full_kis_resync(monkeypatch):
+    monkeypatch.delenv("DAILY_REFRESH_KIS_FULL_SYNC_WEEKDAY", raising=False)
+    monkeypatch.setenv("DAILY_REFRESH_KIS_ENABLED", "true")
+    plan = daily_refresh.build_refresh_plan(date(2026, 11, 1))
+
+    assert plan.kis_full_sync_symbol in daily_refresh.PILOT_SYMBOLS
+    assert [name for name, _ in daily_refresh.default_steps(plan, 0)][0:2] == [
+        "kis_market", "krx_stock_metadata"
+    ]
+
+
+def test_kis_step_is_disabled_until_schema_is_approved(monkeypatch):
+    monkeypatch.delenv("DAILY_REFRESH_KIS_ENABLED", raising=False)
+    monkeypatch.setenv("DAILY_REFRESH_ADJUSTED_ENABLED", "true")
+    plan = daily_refresh.build_refresh_plan(date(2026, 10, 26))
+
+    assert [name for name, _ in daily_refresh.default_steps(plan, 0)] == [
+        "indices",
+        "gold",
+        "ecos",
+        "fred",
+    ]
+
+
+def test_metadata_deferred_rows_do_not_fail_other_refresh_steps():
+    assert daily_refresh._result_failed(
+        "krx_stock_metadata",
+        {"failed_dates": [], "deferred_keys": ["005930:2026-10-28"]},
+    ) is False
+    assert daily_refresh._result_failed(
+        "krx_stock_metadata",
+        {"failed_dates": ["2026-10-28"], "deferred_keys": []},
+    ) is True
+
+
+def test_profiles_separate_morning_and_evening_steps(monkeypatch):
+    monkeypatch.setenv("DAILY_REFRESH_KIS_ENABLED", "true")
+    plan = daily_refresh.build_refresh_plan(date(2026, 10, 28))
+
+    morning = [
+        name
+        for name, _ in daily_refresh.default_steps(plan, 0, profile="morning")
+    ]
+    evening = [
+        name
+        for name, _ in daily_refresh.default_steps(plan, 0, profile="evening")
+    ]
+
+    assert morning == ["krx_stock_metadata", "indices", "gold", "ecos", "fred"]
+    assert evening == ["kis_market"]
+    assert plan.krx.end == date(2026, 10, 27)
+    assert plan.kis.end == date(2026, 10, 28)
+
+
+def test_evening_profile_remains_empty_when_kis_is_disabled(monkeypatch):
+    monkeypatch.delenv("DAILY_REFRESH_KIS_ENABLED", raising=False)
+    plan = daily_refresh.build_refresh_plan(date(2026, 10, 28))
+
+    assert daily_refresh.default_steps(plan, 0, profile="evening") == []
 
 
 def test_run_refresh_logs_partial_failure_and_continues(tmp_path, monkeypatch):

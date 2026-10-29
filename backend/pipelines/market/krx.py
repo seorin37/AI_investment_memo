@@ -108,45 +108,6 @@ def parse_number(value, *, integer=False):
         raise ValueError(f"숫자 변환 실패: {value}") from exc
 
 
-def normalize_kospi_row(row: dict) -> dict:
-    """KRX API 응답 한 행을 prices_daily 형식으로 변환."""
-    if row.get("MKT_NM") != "KOSPI":
-        raise ValueError("KOSPI 데이터가 아닙니다.")
-
-    symbol = str(row["ISU_CD"]).strip()
-
-    if len(symbol) != 6 or not symbol.isdigit():
-        raise ValueError(f"잘못된 종목코드: {symbol}")
-
-    result = {
-        "symbol": symbol,
-        "trade_date": datetime.strptime(
-            row["BAS_DD"], "%Y%m%d"
-        ).date(),
-        "open": parse_number(row["TDD_OPNPRC"]),
-        "high": parse_number(row["TDD_HGPRC"]),
-        "low": parse_number(row["TDD_LWPRC"]),
-        "close": parse_number(row["TDD_CLSPRC"]),
-        "volume": parse_number(row["ACC_TRDVOL"], integer=True),
-        "trade_value": parse_number(row.get("ACC_TRDVAL")),
-        "market_cap": parse_number(row.get("MKTCAP")),
-        "listed_shares": parse_number(
-            row.get("LIST_SHRS"), integer=True
-        ),
-    }
-
-    required = ("open", "high", "low", "close", "volume")
-
-    for field in required:
-        if result[field] is None:
-            raise ValueError(
-                f"{symbol}: 필수 필드 {field}가 비어 있습니다."
-            )
-
-    return result
-
-
-
 def normalize_kospi_stock(row: dict) -> dict:
     """KRX 일별 시세 원본에서 KOSPI 종목 마스터 정보를 추출한다."""
 

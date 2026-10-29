@@ -187,7 +187,7 @@ export interface MarketUpdate {
   stock_name: string;
   type: UpdateType;
   title: string;
-  source: string; // 'DART' | '연합뉴스' | '토스증권' ...
+  source: string; // 'DART' | '연합뉴스' | '한국투자증권 KIS' ...
   url: string | null;
   published_at: ISODate;
 }
