@@ -44,6 +44,7 @@ KOSPI_BACKFILL_STATE_ROOT = STATE_ROOT / "kospi_all_v1"
 TOKEN_CACHE_PATH = STATE_ROOT / "kis_token_cache.json"
 RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 SEOUL = ZoneInfo("Asia/Seoul")
+REGULAR_MARKET_CLOSE = datetime_time(15, 30)
 
 
 class KisConfigError(RuntimeError):
@@ -530,6 +531,14 @@ def normalize_fundamentals(
 ) -> dict:
     basis_date = final_daily["trade_date"]
     collected_at = collected_at or datetime.now(timezone.utc)
+    collection_seoul = collected_at.astimezone(SEOUL)
+    collection_date = collection_seoul.date()
+    if basis_date != collection_date:
+        raise ValueError(
+            "KIS 투자지표 기준일과 최신 확정 원시 종가 거래일이 일치하지 않습니다."
+        )
+    if collection_seoul.time() < REGULAR_MARKET_CLOSE:
+        raise ValueError("KIS 투자지표는 정규장 마감 후에만 확정할 수 있습니다.")
     nullable_decimal = lambda key, label: _decimal(current.get(key), label, nullable=True)
     nullable_integer = lambda key, label: _integer(current.get(key), label, nullable=True)
     market_cap_units = nullable_decimal("hts_avls", "시가총액")
@@ -541,21 +550,14 @@ def normalize_fundamentals(
         raise ValueError("KIS 기준가격이 제공되지 않았습니다.")
     if reference_price != final_close:
         raise ValueError("KIS 기준가격이 최신 확정 원시 종가와 일치하지 않습니다.")
-    collection_seoul = collected_at.astimezone(SEOUL)
-    collection_date = collection_seoul.date()
-    # KIS keeps the previous session's cumulative volume overnight.  It is
-    # therefore safe to pair an unchanged reference price with the latest
-    # finalized daily close before the regular session starts.  Once 09:00
-    # KST is reached, a non-zero volume is treated conservatively as an
-    # ambiguous live-session response.
-    regular_session_started = collection_seoul.time() >= datetime_time(9, 0)
+    final_volume = final_daily.get("volume")
     if (
-        basis_date < collection_date
-        and current_volume != 0
-        and regular_session_started
+        final_volume is not None
+        and current_volume is not None
+        and current_volume != final_volume
     ):
         raise ValueError(
-            "이전 거래일 종가 기준 수집 중 당일 거래가 시작되어 기준일을 확정할 수 없습니다."
+            "KIS 누적거래량이 최신 확정 원시 거래량과 일치하지 않습니다."
         )
     result = {
         "symbol": symbol,
@@ -721,14 +723,14 @@ def load_latest_raw_prices(
     start_date: date,
     end_date: date,
 ) -> dict[str, dict]:
-    """Load the latest persisted KIS raw close for each target in one query."""
+    """Load the latest persisted KIS raw close and volume for each target."""
 
     requested = tuple(symbols)
     if not requested:
         return {}
     statement = text(
         """
-        SELECT DISTINCT ON (symbol) symbol, trade_date, close
+        SELECT DISTINCT ON (symbol) symbol, trade_date, close, volume
         FROM prices_daily
         WHERE source = 'KIS'
           AND trade_date BETWEEN :start_date AND :end_date
@@ -743,6 +745,7 @@ def load_latest_raw_prices(
                 "symbol": str(row.symbol).strip(),
                 "trade_date": row.trade_date,
                 "close": row.close,
+                "volume": row.volume,
             }
             for row in connection.execute(
                 statement,
@@ -1069,15 +1072,41 @@ def collect_fundamentals(
     final_rows: dict[str, dict],
     *,
     saver: Callable[[list[dict]], int] = save_fundamentals,
+    collected_at: datetime | None = None,
 ) -> dict:
-    result = {"saved_rows": 0, "failed_symbols": [], "errors": {}}
+    snapshot_at = collected_at or datetime.now(timezone.utc)
+    snapshot_seoul = snapshot_at.astimezone(SEOUL)
+    result = {
+        "saved_rows": 0,
+        "failed_symbols": [],
+        "errors": {},
+        "skipped_symbols": [],
+        "skip_reasons": {},
+    }
     for symbol in symbols:
         try:
             final_daily = final_rows.get(symbol)
             if final_daily is None:
-                raise ValueError("최신 확정 KIS 일봉이 없습니다.")
+                result["skipped_symbols"].append(symbol)
+                result["skip_reasons"][symbol] = "최신 확정 KIS 일봉이 없습니다."
+                continue
+            if final_daily["trade_date"] != snapshot_seoul.date():
+                result["skipped_symbols"].append(symbol)
+                result["skip_reasons"][symbol] = (
+                    "실행일과 최신 확정 KIS 일봉 거래일이 일치하지 않습니다."
+                )
+                continue
+            if snapshot_seoul.time() < REGULAR_MARKET_CLOSE:
+                result["skipped_symbols"].append(symbol)
+                result["skip_reasons"][symbol] = (
+                    "정규장 마감 전이므로 투자지표를 확정하지 않습니다."
+                )
+                continue
             row = normalize_fundamentals(
-                symbol, client.current_price(symbol), final_daily
+                symbol,
+                client.current_price(symbol),
+                final_daily,
+                collected_at=snapshot_at,
             )
             result["saved_rows"] += saver([row])
         except Exception as exc:
