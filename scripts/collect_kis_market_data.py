@@ -18,8 +18,6 @@ from pipelines.market.kis import (
     KOSPI_BACKFILL_STATE_ROOT,
     assert_kis_schema,
     backfill_kis_prices,
-    collect_fundamentals,
-    load_latest_raw_prices,
 )
 from pipelines.market.metadata import backfill_market_metadata
 from pipelines.market.stock_master import load_kospi_symbols
@@ -77,12 +75,6 @@ def main() -> int:
                 state_root=KOSPI_BACKFILL_STATE_ROOT,
             )
             if not args.adjusted_only:
-                latest_raw = load_latest_raw_prices(
-                    targets, args.start, args.end
-                )
-                result["fundamentals"] = collect_fundamentals(
-                    client, targets, latest_raw
-                )
                 result["market_metadata"] = backfill_market_metadata(
                     args.start,
                     args.end,
@@ -93,7 +85,6 @@ def main() -> int:
     print(json.dumps(result, ensure_ascii=False, indent=2))
     failed = bool(
         result["failed_symbols"]
-        or (result.get("fundamentals") or {}).get("failed_symbols")
         or (result.get("market_metadata") or {}).get("failed_dates")
     )
     return 1 if failed else 0
