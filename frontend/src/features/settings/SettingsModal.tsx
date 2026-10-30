@@ -673,7 +673,7 @@ function AboutPanel({ onClose }: { onClose: () => void }) {
       ))}
       <SectionLabel>데이터 출처</SectionLabel>
       <T size={13} color={colors.textSub} style={{ marginTop: 8 }}>
-        공시 · 금융감독원 DART{'   '}뉴스 · 네이버 뉴스{'   '}주가 · 토스증권 Open API
+        공시 · 금융감독원 DART{'   '}뉴스 · 네이버 뉴스{'   '}주가 · 한국투자증권 KIS Open API
       </T>
       <View style={{ backgroundColor: '#F7F8FA', borderRadius: 12, padding: 16, marginTop: 16 }}>
         <T size={12} color={colors.textSub} lh={1.6}>

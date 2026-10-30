@@ -45,9 +45,13 @@ def seed(url: str, seed_value: int = 7) -> dict:
     from sqlalchemy import create_engine, text
 
     data = fake_data.all_rows(seed_value)
+    price_rows = [dict(row, source="KRX_OPEN_API") for row in data["prices"]]
     eng = create_engine(url)
     ins = {
-        "prices_daily": ("symbol, trade_date, open, high, low, close, volume", data["prices"]),
+        "prices_daily": (
+            "symbol, trade_date, open, high, low, close, volume, source",
+            price_rows,
+        ),
         "disclosures": ("rcept_no, symbol, title, kind, period_end, rcept_dt, source_url", data["disclosures"]),
         "disclosure_chunks": ("id, rcept_no, chunk_index, section, chunk_text", data["chunks"]),
         "news_articles": ("id, source_id, url, title, summary, published_at", data["news"]),
@@ -55,7 +59,7 @@ def seed(url: str, seed_value: int = 7) -> dict:
         "financials": ("symbol, period_end, period_type, fs_div, revenue, operating_income, net_income, total_liabilities, "
                        "total_equity", data["financials"]),
         "financials_fin": ("symbol, period_end, period_type, net_interest_income, fee_income, loan_loss_provision, "
-                           "solvency_ratio", data["financials_fin"]),
+                           "bis_ratio", data["financials_fin"]),
         "economic_observations": ("indicator_code, observation_date, value", data["macro"]),
     }
     casts = {"kind": "CAST(:kind AS disclosure_kind)", "period_type": "CAST(:period_type AS report_period)"}

@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import random
 from datetime import date
@@ -10,8 +11,18 @@ from dotenv import load_dotenv
 load_dotenv()
 
 KRX_URL = "https://data-dbg.krx.co.kr/svc/apis/sto/stk_bydd_trd"
+KRX_KOSPI_STOCK_MASTER_URL = (
+    "https://data-dbg.krx.co.kr/svc/apis/sto/stk_isu_base_info"
+)
 
 RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
+STOCK_SYMBOL_PATTERN = re.compile(r"^[0-9A-Z]{6}$")
+
+
+def is_valid_stock_symbol(symbol: str) -> bool:
+    """Return whether *symbol* is a six-character KRX short code."""
+
+    return STOCK_SYMBOL_PATTERN.fullmatch(symbol) is not None
 
 
 def fetch_kospi_daily(
@@ -84,6 +95,56 @@ def fetch_kospi_daily(
     raise RuntimeError("KRX 요청 재시도 횟수를 초과했습니다.")
 
 
+def fetch_kospi_stock_master(
+    trade_date: date,
+    max_attempts: int = 3,
+) -> list[dict]:
+    """유가증권 종목기본정보를 한 기준일에 대해 조회한다."""
+
+    api_key = os.getenv("KRX_API_KEY")
+    if not api_key:
+        raise RuntimeError("KRX_API_KEY가 설정되지 않았습니다.")
+    if max_attempts < 1:
+        raise ValueError("max_attempts는 1 이상이어야 합니다.")
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            response = requests.get(
+                KRX_KOSPI_STOCK_MASTER_URL,
+                headers={"AUTH_KEY": api_key},
+                params={"basDd": trade_date.strftime("%Y%m%d")},
+                timeout=30,
+            )
+            response.raise_for_status()
+            data = response.json()
+            if not isinstance(data, dict):
+                raise ValueError("KRX 종목기본정보 응답이 JSON 객체가 아닙니다.")
+            rows = data.get("OutBlock_1")
+            if not isinstance(rows, list):
+                raise ValueError("KRX 종목기본정보 응답 형식이 올바르지 않습니다.")
+            return rows
+        except (requests.Timeout, requests.ConnectionError) as exc:
+            retryable = True
+            error = exc
+        except requests.HTTPError as exc:
+            retryable = (
+                exc.response is not None
+                and exc.response.status_code in RETRY_STATUS_CODES
+            )
+            error = exc
+        if not retryable or attempt == max_attempts:
+            raise error
+        delay = min(2 ** (attempt - 1), 30) + random.uniform(0, 0.5)
+        print(
+            f"[KRX 종목정보 재시도] {trade_date} "
+            f"{attempt}/{max_attempts}, {delay:.1f}초 대기: "
+            f"{error.__class__.__name__}"
+        )
+        time.sleep(delay)
+
+    raise RuntimeError("KRX 종목기본정보 재시도 횟수를 초과했습니다.")
+
+
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
@@ -108,55 +169,18 @@ def parse_number(value, *, integer=False):
         raise ValueError(f"숫자 변환 실패: {value}") from exc
 
 
-def normalize_kospi_row(row: dict) -> dict:
-    """KRX API 응답 한 행을 prices_daily 형식으로 변환."""
-    if row.get("MKT_NM") != "KOSPI":
-        raise ValueError("KOSPI 데이터가 아닙니다.")
-
-    symbol = str(row["ISU_CD"]).strip()
-
-    if len(symbol) != 6 or not symbol.isdigit():
-        raise ValueError(f"잘못된 종목코드: {symbol}")
-
-    result = {
-        "symbol": symbol,
-        "trade_date": datetime.strptime(
-            row["BAS_DD"], "%Y%m%d"
-        ).date(),
-        "open": parse_number(row["TDD_OPNPRC"]),
-        "high": parse_number(row["TDD_HGPRC"]),
-        "low": parse_number(row["TDD_LWPRC"]),
-        "close": parse_number(row["TDD_CLSPRC"]),
-        "volume": parse_number(row["ACC_TRDVOL"], integer=True),
-        "trade_value": parse_number(row.get("ACC_TRDVAL")),
-        "market_cap": parse_number(row.get("MKTCAP")),
-        "listed_shares": parse_number(
-            row.get("LIST_SHRS"), integer=True
-        ),
-    }
-
-    required = ("open", "high", "low", "close", "volume")
-
-    for field in required:
-        if result[field] is None:
-            raise ValueError(
-                f"{symbol}: 필수 필드 {field}가 비어 있습니다."
-            )
-
-    return result
-
-
-
 def normalize_kospi_stock(row: dict) -> dict:
-    """KRX 일별 시세 원본에서 KOSPI 종목 마스터 정보를 추출한다."""
+    """KRX 유가증권 기본정보(또는 기존 일별 응답)를 종목 식별정보로 정제한다."""
 
-    if row.get("MKT_NM") != "KOSPI":
+    is_base_info = bool(str(row.get("ISU_SRT_CD") or "").strip())
+    market = row.get("MKT_TP_NM") if is_base_info else row.get("MKT_NM")
+    if market != "KOSPI":
         raise ValueError("KOSPI 종목이 아닙니다.")
 
-    symbol = str(row.get("ISU_CD", "")).strip()
-    name = str(row.get("ISU_NM") or "").strip()
+    symbol = str(row.get("ISU_SRT_CD") or row.get("ISU_CD") or "").strip()
+    name = str(row.get("ISU_ABBRV") or row.get("ISU_NM") or "").strip()
 
-    if len(symbol) != 6 or not symbol.isdigit():
+    if not is_valid_stock_symbol(symbol):
         raise ValueError(f"유효하지 않은 종목코드: {symbol}")
 
     if not name:

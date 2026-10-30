@@ -1,4 +1,4 @@
-"""financials · financials_fin 적재 (스키마 변경 없음, WO-015).
+"""financials · financials_fin 적재 (WO-015, 금융 업종 컬럼·NULL 사유는 마이그레이션 0012).
 
 함수는 Connection을 받아 쓰기만 하고 commit하지 않는다. 트랜잭션 경계는 호출자가 정한다
 (실행 진입점은 기업·기간 하나당 `engine.begin()` 하나).
@@ -6,9 +6,9 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
+import json
 from datetime import date
+from pathlib import Path
 
 from sqlalchemy import bindparam, text
 from sqlalchemy.engine import Connection
@@ -24,10 +24,15 @@ FINANCIALS_VALUES = {
     "interest_expense": AMOUNT, "retained_earnings": AMOUNT, "eps": PER_SHARE, "bps": PER_SHARE,
     "capital_stock": AMOUNT, "capital_surplus": AMOUNT,
 }
-FIN_VALUES = {"net_interest_income": AMOUNT, "fee_income": AMOUNT, "loan_loss_provision": AMOUNT}
+FIN_VALUES = {
+    "net_interest_income": AMOUNT, "fee_income": AMOUNT, "loan_loss_provision": AMOUNT, "loans": AMOUNT, "deposits": AMOUNT,
+    "insurance_revenue": AMOUNT, "securities_operating_revenue": AMOUNT,
+}
+RATIO = "numeric(8,2)"
+FIN_RATIOS = {"bis_ratio": RATIO, "kics_ratio": RATIO, "ncr_ratio": RATIO}  # 공시 본문 추출 단계 소관
 EXPECTED_COLUMNS = {
-    "financials": {**KEY_COLUMNS, **FINANCIALS_VALUES, "fs_div": "text"},
-    "financials_fin": {**KEY_COLUMNS, **FIN_VALUES, "solvency_ratio": "numeric(8,2)"},
+    "financials": {**KEY_COLUMNS, **FINANCIALS_VALUES, "fs_div": "text", "null_reasons": "jsonb"},
+    "financials_fin": {**KEY_COLUMNS, **FIN_VALUES, **FIN_RATIOS, "null_reasons": "jsonb"},
 }
 
 
@@ -47,7 +52,7 @@ def table_columns(conn: Connection, table: str) -> dict[str, str]:
 
 
 def preflight(conn: Connection, symbols: list[str]) -> None:
-    """alembic 0005, 두 테이블 컬럼·타입이 명세와 정확히 같은지, stocks에 대상 종목이 있는지. 하나라도 다르면 중단."""
+    """alembic head, 두 테이블 컬럼·타입이 명세와 정확히 같은지, stocks에 대상 종목이 있는지. 하나라도 다르면 중단."""
     problems: list[str] = []
     from alembic.config import Config
     from alembic.script import ScriptDirectory
@@ -90,34 +95,71 @@ def _key(period: MappedPeriod) -> dict:
     return {"symbol": period.symbol, "period_end": date.fromisoformat(period.period_end), "period_type": period.period_type}
 
 
-def upsert_financials(conn: Connection, period: MappedPeriod) -> None:
+def _reasons(reasons: dict[str, str], values: dict) -> str:
+    """값이 있는 컬럼의 사유는 넣지 않는다 (NULL 컬럼만)."""
+    return json.dumps({c: r for c, r in sorted(reasons.items()) if values.get(c) is None}, ensure_ascii=False)
+
+
+def upsert_financials(conn: Connection, period: MappedPeriod, *, keep_direct: bool = False) -> bool:
+    """keep_direct=True(전기 값)면 이미 있는 행은 건드리지 않는다 — 그 기간 보고서에서 직접 받은 값이 우선.
+    쓴 경우 True."""
     columns = list(FINANCIALS_VALUES) + ["fs_div"]
     names = ", ".join(columns)
     params = ", ".join(f":{c}" for c in columns)
-    updates = ", ".join(f"{c} = EXCLUDED.{c}" for c in columns)
-    conn.execute(
+    updates = ", ".join(f"{c} = EXCLUDED.{c}" for c in columns + ["null_reasons"])
+    conflict = "DO NOTHING" if keep_direct else f"DO UPDATE SET {updates}"
+    result = conn.execute(
         text(
-            f"INSERT INTO financials (symbol, period_end, period_type, {names})"
-            f" VALUES (:symbol, :period_end, CAST(:period_type AS report_period), {params})"
-            f" ON CONFLICT (symbol, period_end, period_type) DO UPDATE SET {updates}"
+            f"INSERT INTO financials (symbol, period_end, period_type, {names}, null_reasons)"
+            f" VALUES (:symbol, :period_end, CAST(:period_type AS report_period), {params}, CAST(:null_reasons AS jsonb))"
+            f" ON CONFLICT (symbol, period_end, period_type) {conflict}"
         ),
-        {**_key(period), **{c: period.values.get(c) for c in FINANCIALS_VALUES}, "fs_div": period.fs_div},
+        {**_key(period), **{c: period.values.get(c) for c in FINANCIALS_VALUES}, "fs_div": period.fs_div,
+         "null_reasons": _reasons(period.null_reasons, period.values)},
     )
+    return result.rowcount == 1
 
 
-def upsert_financials_fin(conn: Connection, period: MappedPeriod) -> None:
-    """financials_fin의 재무 API 항목만 UPSERT한다. solvency_ratio는 bis 단계 소관이라 건드리지 않는다."""
+def upsert_financials_fin(conn: Connection, period: MappedPeriod, *, keep_direct: bool = False) -> bool:
+    """financials_fin의 재무 API 항목만 UPSERT한다. 비율(bis·kics·ncr)과 그 NULL 사유는 비율 단계 소관이라 건드리지 않는다."""
     if period.fin_values is None:
         raise ValueError(f"{period.symbol}은 financials_fin 대상이 아닙니다.")
     columns = list(FIN_VALUES)
     names = ", ".join(columns)
     params = ", ".join(f":{c}" for c in columns)
     updates = ", ".join(f"{c} = EXCLUDED.{c}" for c in columns)
-    conn.execute(
+    # 기존 사유에서 재무 API 항목 키만 지우고 새 사유를 합친다 (비율 키는 유지)
+    api_keys = ", ".join(f"'{c}'" for c in columns)
+    reasons = f"null_reasons = (financials_fin.null_reasons - ARRAY[{api_keys}]) || EXCLUDED.null_reasons"
+    conflict = "DO NOTHING" if keep_direct else f"DO UPDATE SET {updates}, {reasons}"
+    result = conn.execute(
         text(
-            f"INSERT INTO financials_fin (symbol, period_end, period_type, {names})"
-            f" VALUES (:symbol, :period_end, CAST(:period_type AS report_period), {params})"
-            f" ON CONFLICT (symbol, period_end, period_type) DO UPDATE SET {updates}"
+            f"INSERT INTO financials_fin (symbol, period_end, period_type, {names}, null_reasons)"
+            f" VALUES (:symbol, :period_end, CAST(:period_type AS report_period), {params}, CAST(:null_reasons AS jsonb))"
+            f" ON CONFLICT (symbol, period_end, period_type) {conflict}"
         ),
-        {**_key(period), **{c: period.fin_values.get(c) for c in FIN_VALUES}},
+        {**_key(period), **{c: period.fin_values.get(c) for c in FIN_VALUES},
+         "null_reasons": _reasons(period.fin_null_reasons, period.fin_values)},
+    )
+    return result.rowcount == 1
+
+
+def set_ratio(conn: Connection, symbol: str, period_end: str, ptype: str, column: str, value, null_code: str | None) -> int:
+    """비율 컬럼 하나와 그 NULL 사유를 함께 쓴다. 바뀐 행 수 반환 (행이 없으면 0)."""
+    if column not in FIN_RATIOS:
+        raise ValueError(f"비율 컬럼이 아닙니다: {column}")
+    reasons = ("null_reasons - CAST(:c AS text)" if value is not None or null_code is None
+               else "null_reasons || jsonb_build_object(CAST(:c AS text), CAST(:code AS text))")
+    return conn.execute(
+        text(f"UPDATE financials_fin SET {column} = :v, null_reasons = {reasons}"
+             " WHERE symbol = :s AND period_end = CAST(:p AS date) AND period_type = CAST(:t AS report_period)"),
+        {"v": value, "c": column, "code": null_code, "s": symbol, "p": period_end, "t": ptype},
+    ).rowcount
+
+
+def update_stock_sector(conn: Connection, symbol: str, fin_type: str | None) -> None:
+    """금융 판별 결과를 stocks.sector·fin_type에 반영한다."""
+    conn.execute(
+        text("UPDATE stocks SET sector = CAST(:sector AS sector_type), fin_type = :ft WHERE symbol = :s"),
+        {"sector": "financial" if fin_type else "general", "ft": fin_type, "s": symbol},
     )

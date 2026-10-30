@@ -43,3 +43,7 @@
 - `prices_daily.trade_value`가 KRX 일별매매정보의 거래대금 `ACC_TRDVAL`을 저장하는 단일 컬럼이다.
 - 기존 `trading_value` 값은 migration에서 `trade_value`로 병합한다.
 - 두 컬럼에 서로 다른 non-NULL 값이 존재하면 migration은 임의 선택하지 않고 중단한다.
+
+위 내용은 `0005` 당시 정책이다. `0011_kis_market_data` 이후 신규 개별 종목
+OHLCV·거래대금은 KIS가 공급하고, KRX는 일별 시가총액·상장주식수만 결합한다.
+현재 정책은 `docs/kis-market-data-policy.md`를 따른다.
