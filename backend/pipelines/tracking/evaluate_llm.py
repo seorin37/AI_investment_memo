@@ -3,7 +3,7 @@
     PYTHONPATH=backend python -m pipelines.tracking.evaluate_llm --limit 3      # 메모 3개만 (호출 3회 이하)
     PYTHONPATH=backend python -m pipelines.tracking.evaluate_llm                # 35개 전체
 
-외부 API(Gemini)를 호출한다. 실행 전에 사용자 승인을 받는다. API 키는 출력하지 않는다.
+외부 API(OpenAI)를 호출한다. 실행 전에 사용자 승인을 받는다. API 키는 출력하지 않는다.
 
 지표 (최종 판정 기준)
 - 추적 여부 일치(추적/안 함/확인 필요 3분류, normal·partial은 같은 "추적"), 판정·분류 정확도, 추적 의도 놓침(정답 normal·partial → 최종 full_fallback), 과잉 추적, 확인 필요 비율
@@ -123,7 +123,7 @@ def call_stats(calls) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="메모 문장 판정 LLM 단계 평가 (Gemini 실호출)")
+    ap = argparse.ArgumentParser(description="메모 문장 판정 LLM 단계 평가 (OpenAI 실호출)")
     ap.add_argument("--gold", default="eval/memo_eval_v0/memo_eval_v0.jsonl")
     ap.add_argument("--lexicon", default=DEFAULT_PATH)
     ap.add_argument("--model", default=None, help="기본: .env LLM_MODEL")
@@ -133,13 +133,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", default=None)
     args = ap.parse_args(argv)
 
-    from .gemini import GeminiClient
+    from .openai_client import OpenAIClient
 
     gold = load_gold(resolve_path(args.gold))[: args.limit]
     if args.memos:
         wanted = set(args.memos.split(","))
         gold = [m for m in gold if m["memo_id"] in wanted]
-    client = GeminiClient.from_env(args.model)
+    client = OpenAIClient.from_env(args.model)
     print(f"모델 {client.model} · 메모 {len(gold)}개", file=sys.stderr)
     result = evaluate_llm(gold, load_lexicon(args.lexicon), client, sleep=args.sleep)
     result["calls"] = call_stats(client.calls)

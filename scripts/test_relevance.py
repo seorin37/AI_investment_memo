@@ -1,4 +1,4 @@
-"""뉴스 활용 테스트 (네이버 뉴스 + Gemini).
+"""뉴스 활용 테스트 (네이버 뉴스 + OpenAI).
 
 
 사용법:
@@ -30,7 +30,7 @@ load_dotenv()
 # ---------- 설정 ----------
 KST = timezone(timedelta(hours=9))
 NAVER_URL = "https://naverapihub.apigw.ntruss.com/search/v1/news"
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 PRICES_CSV = "data/sample/prices2.csv"
 
 
@@ -46,7 +46,7 @@ RECENT_DAYS = 3  # relevance 모드: 최근 며칠 기사만 볼지
 
 nid, nsecret = os.getenv("NAVER_CLIENT_ID"), os.getenv("NAVER_CLIENT_SECRET")
 gkey = os.getenv("LLM_API_KEY")
-model = os.getenv("LLM_MODEL", "gemini-3.1-flash-lite")
+model = os.getenv("LLM_MODEL", "gpt-4.1-mini")
 if not (nid and nsecret and gkey):
     raise SystemExit(".env에 NAVER_CLIENT_ID / NAVER_CLIENT_SECRET / LLM_API_KEY가 필요해요.")
 
@@ -98,19 +98,19 @@ def in_event_window(pub_date, event_date):
 
 
 
-def call_gemini(prompt):
+def call_llm(prompt):
     for attempt in range(4):
         res = requests.post(
-            GEMINI_URL.format(model=model),
-            headers={"x-goog-api-key": gkey},
-            json={"contents": [{"parts": [{"text": prompt}]}]},
+            OPENAI_URL,
+            headers={"Authorization": f"Bearer {gkey}"},
+            json={"model": model, "messages": [{"role": "user", "content": prompt}]},
             timeout=30,
         )
-        if res.status_code in (429, 500, 503):  # 일시적 오류는 기다렸다 재시도
+        if res.status_code in (429, 500, 502, 503):  # 일시적 오류는 기다렸다 재시도
             time.sleep(2 ** attempt)
             continue
         res.raise_for_status()
-        return res.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+        return res.json()["choices"][0]["message"]["content"].strip()
     raise RuntimeError(f"재시도 후에도 실패: HTTP {res.status_code}")
 
 
@@ -145,7 +145,7 @@ def judge_relevance(memo, news):
         f"<뉴스>제목: {news['title']}\n요약: {news['desc']}</뉴스>\n\n"
         "첫 줄에 '관련 있음' 또는 '관련 없음'만 쓰고, 둘째 줄에 근거를 한 문장으로 쓴다."
     )
-    return call_gemini(prompt)
+    return call_llm(prompt)
 
 
 
@@ -204,7 +204,7 @@ def judge_cause(event, news):
         "2줄: 근거가 있으면 뉴스 제목·요약에서 그대로 옮긴 문장, 없으면 '-'\n"
         "3줄: 한 문장 설명"
     )
-    return call_gemini(prompt)
+    return call_llm(prompt)
 
 
 

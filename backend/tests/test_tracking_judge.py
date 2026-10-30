@@ -229,7 +229,7 @@ if __name__ == "__main__":
     unittest.main()
 
 
-class GeminiClientTest(unittest.TestCase):
+class OpenAIClientTest(unittest.TestCase):
     """HTTP는 가짜로 바꾼다 — 네트워크·API 키 없음 (WO-022)."""
 
     class FakeResponse:
@@ -240,7 +240,7 @@ class GeminiClientTest(unittest.TestCase):
             return self._body
 
     def make(self, responses):
-        from pipelines.tracking.gemini import GeminiClient
+        from pipelines.tracking.openai_client import OpenAIClient
 
         sent = []
 
@@ -249,24 +249,26 @@ class GeminiClientTest(unittest.TestCase):
                 sent.append((url, headers, json))
                 return responses.pop(0)
 
-        client = GeminiClient(api_key="TEST-KEY", model="m", session=Session())
+        client = OpenAIClient(api_key="TEST-KEY", model="m", session=Session())
         return client, sent
 
     def ok_body(self, text):
-        return {"candidates": [{"content": {"parts": [{"text": text}]}}],
-                "usageMetadata": {"promptTokenCount": 120, "candidatesTokenCount": 30}}
+        return {"choices": [{"message": {"content": text}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 120, "completion_tokens": 30}}
 
     def test_success_records_usage_and_json_mode(self):
         client, sent = self.make([self.FakeResponse(200, self.ok_body("[]"))])
         self.assertEqual(client("p"), "[]")
         url, headers, body = sent[0]
-        self.assertIn("/models/m:generateContent", url)
-        self.assertEqual(headers["x-goog-api-key"], "TEST-KEY")
-        self.assertEqual(body["generationConfig"]["responseMimeType"], "application/json")
+        self.assertIn("api.openai.com/v1/chat/completions", url)
+        self.assertEqual(headers["Authorization"], "Bearer TEST-KEY")
+        self.assertEqual(body["model"], "m")
+        self.assertEqual(body["response_format"], {"type": "json_object"})
+        self.assertEqual(body["temperature"], 0)
+        self.assertIn("JSON", body["messages"][0]["content"])      # json_object 모드는 메시지에 JSON이라는 말이 필요하다
         self.assertEqual((client.calls[0].prompt_tokens, client.calls[0].output_tokens, client.calls[0].ok), (120, 30, True))
 
     def test_retry_on_quota_then_success(self):
-        from pipelines.tracking import gemini
         from unittest import mock
 
         client, sent = self.make([self.FakeResponse(429), self.FakeResponse(200, self.ok_body("[1]"))])
@@ -277,6 +279,21 @@ class GeminiClientTest(unittest.TestCase):
     def test_key_not_in_repr(self):
         client, _ = self.make([])
         self.assertNotIn("TEST-KEY", repr(client))
+
+    def test_temperature_dropped_when_model_rejects_it(self):
+        reject = self.FakeResponse(400, {"error": {"message": "Unsupported value: 'temperature' does not support 0 with this model."}})
+        client, sent = self.make([reject, self.FakeResponse(200, self.ok_body("[2]"))])
+        self.assertEqual(client("p"), "[2]")
+        self.assertIn("temperature", sent[0][2])
+        self.assertNotIn("temperature", sent[1][2])
+
+    def test_out_of_credit_is_not_retried(self):
+        credit = self.FakeResponse(429, {"error": {"code": "insufficient_quota", "message": "quota"}})
+        client, sent = self.make([credit])
+        with self.assertRaises(RuntimeError):
+            client("p")
+        self.assertEqual(len(sent), 1)
+        self.assertFalse(client.calls[0].ok)
 
 
 class EvaluateLLMTest(unittest.TestCase):

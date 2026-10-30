@@ -43,14 +43,14 @@ def test_judge_counts_and_budget():
     assert judge.last_reason == "호출 한도 초과"
 
 
-def test_gemini_key_comes_only_from_gemini_api_key(monkeypatch):
+def test_llm_key_comes_only_from_openai_api_key(monkeypatch):
     monkeypatch.setattr("backend.pipelines.common.db.load_env", lambda: None)
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("LLM_API_KEY", "other-key")
-    with pytest.raises(RuntimeError, match="GEMINI_API_KEY"):
-        sj.gemini_from_env()
-    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-    monkeypatch.setenv("GEMINI_MODEL", "gemini-test")
-    client = sj.gemini_from_env()
-    assert client.api_key == "test-key" and client.model == "gemini-test"
+    with pytest.raises(RuntimeError, match="OPENAI_API_KEY"):
+        sj.llm_from_env()
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_MODEL", "gpt-test")
+    client = sj.llm_from_env()
+    assert client.api_key == "test-key" and client.model == "gpt-test"
     assert "test-key" not in repr(client)                                 # 키는 repr에 안 나옴

@@ -47,12 +47,12 @@ RSS 4개 매체 (30분마다) ──┐
 - **중복 묶음** (`clustering.py`, `cluster_assigner.py`, `same_event_judge.py`): 새 기사를 24시간 안의 기존 묶음에 붙인다(48시간은 다른 날의 일까지 묶여 2026-10-28 줄임). 한 번 정한 소속은 바꾸지 않는다. 브리핑·[부고]·[인사]·운세 같은 고정 꼭지는 항상 혼자 둔다. 결과는 `news_clusters`, `news_cluster_members`(`decided_by`에 무엇이 정했는지). 판정은 세 단계다 (v4, 2026-10-28).
   1. **유사도**: 묶음의 **모든** 기사와 dense 유사도 0.70 이상 (실험값)
   2. **규칙** (외부 요청 없음): 묶음 기사 중 하나라도 ① 발행일(한국 시간)이 다르거나 ② 제목의 시·도가 겹치지 않거나 ③ 제목의 금액(억·조)이 겹치지 않으면 합류하지 않는다. 지역·금액은 양쪽 제목에 다 있을 때만 비교한다. 다른 날 후속 기사(부캉이 나감 ↔ 돌아옴), 지역별 특보(경기 ↔ 강원 한파주의보 해제), 다른 회사 유상증자(17억 ↔ 7억)를 여기서 막는다.
-  3. **LLM** (`--llm`을 붙였을 때만): 최소 유사도가 0.85 미만인 애매한 묶음은 Gemini에 "같은 사건인가"를 묻는다. 기사 1건당 최대 2개 묶음, 한 번 실행에 최대 300회(`--llm-max-calls`). '다르다'거나 답을 못 받으면(오류·한도) 합류하지 않는다. 같은 날 다른 기관의 반응(PHP 결함 ↔ 미국·일본 대응), 전망 ↔ 결정(한은 동결 유력 ↔ 동결)처럼 규칙으로 못 가르는 경우를 맡는다. `--llm`이 없으면 규칙까지만 보고 합류한다.
-- LLM 키는 **환경변수 `GEMINI_API_KEY`**에서만 읽는다(모델은 `GEMINI_MODEL`, 기본 gemini-3.1-flash-lite). 저장소 루트 `.env`에 한 줄 넣거나 수집기 컨테이너의 환경변수로 넘긴다. 다른 기능이 쓰는 `LLM_API_KEY`와는 따로 읽는다. 테스트 DB(2,226건) 기준 LLM 판정 대상은 하루 150~300건쯤이다.
+  3. **LLM** (`--llm`을 붙였을 때만): 최소 유사도가 0.85 미만인 애매한 묶음은 OpenAI에 "같은 사건인가"를 묻는다. 기사 1건당 최대 2개 묶음, 한 번 실행에 최대 300회(`--llm-max-calls`). '다르다'거나 답을 못 받으면(오류·한도) 합류하지 않는다. 같은 날 다른 기관의 반응(PHP 결함 ↔ 미국·일본 대응), 전망 ↔ 결정(한은 동결 유력 ↔ 동결)처럼 규칙으로 못 가르는 경우를 맡는다. `--llm`이 없으면 규칙까지만 보고 합류한다.
+- LLM 키는 **환경변수 `OPENAI_API_KEY`**에서만 읽는다(모델은 `OPENAI_MODEL`, 기본 gpt-4.1-mini). 저장소 루트 `.env`에 한 줄 넣거나 수집기 컨테이너의 환경변수로 넘긴다. 다른 기능이 쓰는 `LLM_API_KEY`와는 따로 읽는다. 테스트 DB(2,226건) 기준 LLM 판정 대상은 하루 150~300건쯤이다.
 - 테이블은 `alembic/versions/0008_news_article_leads.py`, `0009_news_clusters.py`. **공시 적재 코드는 DB와 코드의 마이그레이션 버전이 같아야 돌므로, 이 코드를 합칠 때 중앙 DB에도 0008·0009를 같이 적용한다.**
 
     python -m backend.pipelines.news.cluster_assigner --report 10        # 미배정 기사 배정 + 큰 묶음 10개 출력 (유사도+규칙)
-    python -m backend.pipelines.news.cluster_assigner --llm --report 10  # 애매한 묶음은 Gemini 판정 (외부 API)
+    python -m backend.pipelines.news.cluster_assigner --llm --report 10  # 애매한 묶음은 OpenAI 판정 (외부 API)
     python -m backend.pipelines.news.pipeline hourly --embed --cluster --cluster-llm --loop 1800   # 수집기에서 상시 실행
     python -m backend.pipelines.news.lead_fetcher --dry-run --days 7     # 매체별 보충 대상 건수 (요청·쓰기 없음)
     scripts/with_test_db.sh python -m backend.pipelines.news.pipeline hourly --skip-rss --embed --fill-lead --cluster
@@ -67,8 +67,8 @@ RSS 4개 매체 (30분마다) ──┐
     python -m backend.pipelines.news.cluster_eval score eval/news_dedup/boundary_pairs_v2.csv    # 기준값별 결과
     python -m backend.pipelines.news.cluster_eval score eval/news_dedup/boundary_pairs_v2.csv --rules   # 규칙까지 적용한 결과
     python -m backend.pipelines.news.cluster_eval llm eval/news_dedup/boundary_pairs_v2.csv --out eval/news_dedup/llm_check.csv
-        # 0.70~0.85·규칙 통과 쌍만 Gemini에 물어 사람 정답과 비교 (외부 API, 호출 전 확인, 기본 최대 60회)
-        # Gemini 정확도와 '0.70 + 규칙 + LLM' 전체의 잘못 묶음·놓침을 보여 주고, 쌍별 답·이유를 --out에 저장
+        # 0.70~0.85·규칙 통과 쌍만 OpenAI에 물어 사람 정답과 비교 (외부 API, 호출 전 확인, 기본 최대 60회)
+        # OpenAI 정확도와 '0.70 + 규칙 + LLM' 전체의 잘못 묶음·놓침을 보여 주고, 쌍별 답·이유를 --out에 저장
 
 - **같은 사건** = 같은 일(누가·무엇을·언제)을 다룬 기사. 같은 발표·사고·판결·거래를 여러 매체가 쓴 속보, 같은 매체의 속보와 종합(1보·2보)은 같은 사건이다.
 - **다른 사건** = 같은 날·같은 종목·같은 주제라도 일이 다르면 다른 사건이다.
@@ -145,7 +145,7 @@ BGE-M3 hybrid 임베딩은 기사 1건에서 두 가지를 함께 만들어 `new
 | embedder.py | BGE-M3 임베딩 -> news_embedding_variants. hybrid는 dense와 sparse를 한 번에 저장. 한 기사가 오류를 내도 나머지는 계속 처리한다 |
 | lead_fetcher.py, lead_sources.yaml | 요약 없는 기사의 리드 보충 (link: 기사 첫 문단 / naver: 검색 API description). `--probe`로 본문 칸 찾기 |
 | clustering.py | 중복 묶음 판정 규칙 (DB 없음): complete-link 0.70, 24시간, 최대 30건, 같은 날·지역·금액 규칙, LLM 판정 자리, 대표 선정, 고정 꼭지 단독 처리 |
-| same_event_judge.py | 애매한 묶음의 같은 사건 여부를 Gemini에 묻는다 (`GEMINI_API_KEY`, 실행당 호출 한도, 답 못 받으면 합류 안 함) |
+| same_event_judge.py | 애매한 묶음의 같은 사건 여부를 OpenAI에 묻는다 (`OPENAI_API_KEY`, 실행당 호출 한도, 답 못 받으면 합류 안 함) |
 | cluster_assigner.py | 미배정 기사를 발행 순서대로 묶음에 배정해 저장 (pgvector 후보 검색, advisory lock) |
 | cluster_eval.py | 묶음 기준값 평가: 경계 구간 쌍 CSV 내보내기(`export`), 사람 체크 결과로 기준값별 계산(`score`) |
 | scoring.py | dense / sparse / hybrid 점수 식 (가중치는 인자로 받는다) |

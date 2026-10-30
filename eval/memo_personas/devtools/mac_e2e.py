@@ -1,4 +1,4 @@
-"""맥북 전체 흐름 점검 — 임시 Postgres + 목업 Gemini로 서린이 실행할 명령을 처음부터 끝까지 돌리고,
+"""맥북 전체 흐름 점검 — 임시 Postgres + 목업 LLM으로 서린이 실행할 명령을 처음부터 끝까지 돌리고,
 실패 상황(.env 누락, DB 연결 실패, 429, 깨진 JSON, 중간 중단 후 재개, 일일 한도)에서 안내가 맞게 나오는지 본다.
 
     pip install -r eval/memo_personas/requirements-dev.txt

@@ -6,8 +6,8 @@
 
     # 1) 검색만 (API 비용 없음): 유사도 분포와 후보 제목을 눈으로 확인
     PYTHONPATH=backend python -m pipelines.updates.experiment --llm none
-    # 2) LLM 카드 + 코드 검사까지 (Gemini 호출, .env의 LLM_API_KEY 필요)
-    PYTHONPATH=backend python -m pipelines.updates.experiment --llm gemini --limit 10
+    # 2) LLM 카드 + 코드 검사까지 (OpenAI 호출, .env의 LLM_API_KEY 필요)
+    PYTHONPATH=backend python -m pipelines.updates.experiment --llm openai --limit 10
 """
 
 from __future__ import annotations
@@ -85,17 +85,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--symbols", default=",".join(PILOT))
     ap.add_argument("--since", help="뉴스 시작일 YYYY-MM-DD (기본: 설정의 lookback_days 전)")
     ap.add_argument("--disclosure-since", default="2024-01-01")
-    ap.add_argument("--llm", choices=["none", "gemini"], default="none")
+    ap.add_argument("--llm", choices=["none", "openai"], default="none")
     ap.add_argument("--limit", type=int, help="앞에서 N개 항목만")
     ap.add_argument("--out-dir", help="결과 폴더 (기본: results/updates)")
-    ap.add_argument("--response-schema", action="store_true", help="Gemini responseSchema 사용 (미검증, 기본 꺼짐)")
+    ap.add_argument("--response-schema", action="store_true", help="OpenAI Structured Outputs(json_schema) 사용 (미검증, 기본 꺼짐)")
     args = ap.parse_args(argv)
 
     import psycopg
 
     from ..common.db import get_read_dsn
     from ..news.embedder import make_bge_m3_encoder
-    from ..tracking.gemini import GeminiClient
+    from ..tracking.openai_client import OpenAIClient
 
     cfg = load_config(args.config)
     tcfg = cfg["topic"]
@@ -112,12 +112,12 @@ def main(argv: list[str] | None = None) -> int:
         encode = make_bge_m3_encoder("dense")
         vectors = {it.item_id: d for it, (d, _) in zip(topic_items, encode([it.query_text for it in topic_items]))}
     client = None
-    if args.llm == "gemini":
+    if args.llm == "openai":
         if args.response_schema:
-            from .gemini_schema import SchemaGeminiClient
-            client = SchemaGeminiClient.from_env()
+            from .openai_schema import SchemaOpenAIClient
+            client = SchemaOpenAIClient.from_env()
         else:
-            client = GeminiClient.from_env()
+            client = OpenAIClient.from_env()
 
     names: dict[str, str] = {}
     sims: list[float] = []

@@ -64,7 +64,8 @@ INSTANT_INPUT_TEMPLATE = """# 질문 정보
 _EVIDENCE = {"type": "OBJECT", "properties": {"source_id": {"type": "STRING"}, "fact": {"type": "STRING"}},
              "required": ["source_id", "fact"]}
 
-# Gemini responseSchema. 지침서 스키마에서 additionalProperties·maxLength는 API가 받아 주는지 확인되지 않아 뺐다.
+# 응답 스키마 원본 (대문자 type 표기). OpenAI Structured Outputs로 보낼 때는 openai_schema.to_json_schema가
+# 소문자 JSON Schema(additionalProperties=false)로 바꾸고 maxItems 같은 길이 제한은 뺀다.
 # 길이·형식은 코드(checks.py)가 다시 검사한다. 미검증이므로 기본은 꺼 둔다 (--response-schema).
 RESPONSE_SCHEMA = {
     "type": "OBJECT",

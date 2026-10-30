@@ -1,4 +1,4 @@
-"""generate_memos 흐름 (목업 Gemini, DB 없이 만든 근거 묶음)."""
+"""generate_memos 흐름 (목업 LLM, DB 없이 만든 근거 묶음)."""
 
 import json
 from pathlib import Path
@@ -38,7 +38,7 @@ def test_pilot_then_all(env, capsys):
     assert len(memos) == 1000 and len({m["memo_id"] for m in memos}) == 1000
     usage = read_jsonl(memos_dir / "usage.jsonl")
     assert len(usage) == 100 and all({"prompt_tokens", "output_tokens", "thinking_tokens"} <= set(u) for u in usage)
-    assert all(m["review_status"] == "pending" and m["generator_model"] == "mock-gemini" for m in memos)
+    assert all(m["review_status"] == "pending" and m["generator_model"] == "mock-openai" for m in memos)
 
 
 def test_resume_after_interrupt(env, monkeypatch, capsys):

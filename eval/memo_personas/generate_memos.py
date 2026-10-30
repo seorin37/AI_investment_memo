@@ -1,4 +1,4 @@
-"""3) 메모 생성 — 1명당 Gemini 1회 호출로 메모 10개. 사람 단위로 저장해서 끊겨도 같은 명령으로 이어서 한다.
+"""3) 메모 생성 — 1명당 OpenAI 1회 호출로 메모 10개. 사람 단위로 저장해서 끊겨도 같은 명령으로 이어서 한다.
 
     python -m eval.memo_personas.generate_memos --pilot   # 파일럿 10명(100개) 만들고 멈춤
     python -m eval.memo_personas.generate_memos --all     # 나머지 전부 (완료한 사람은 건너뜀)
@@ -6,7 +6,7 @@
 - 슬롯(기업·문장 유형·근거·계기)은 코드가 먼저 정한다(slots.py). 설계는 slot_design.json에 저장해 재실행 때 그대로 쓴다.
 - 자동 검사(checks.py)에 걸리면 그 사람만 최대 2번 다시 만들고, 그래도 안 되면 failed.jsonl에 남기고 다음 사람으로 넘어간다.
 - 429(분당 한도)는 기다렸다 재시도, 일일 한도에 닿으면 "내일 같은 명령을 다시 실행"을 안내하고 멈춘다.
-- usage_metadata(입력·출력·thinking 토큰)는 호출마다 usage.jsonl에 남긴다.
+- usage(입력·출력·thinking(reasoning) 토큰)는 호출마다 usage.jsonl에 남긴다.
 """
 
 from __future__ import annotations
@@ -237,7 +237,7 @@ def main(argv=None) -> int:
     todo = [pid for pid in targets if pid not in done_before]
     label = "파일럿" if args.pilot else "전체"
     print(f"{label} {len(targets)}명 중 완료 {len(targets) - len(todo)}명 · 이번에 할 사람 {len(todo)}명"
-          + (" (목업 모드: Gemini를 부르지 않음)" if cfg["llm"].get("mock") else f" · 모델 {client.model}"))
+          + (" (목업 모드: OpenAI를 부르지 않음)" if cfg["llm"].get("mock") else f" · 모델 {client.model}"))
 
     code = 0
     try:

@@ -122,12 +122,62 @@ class ParseTest(unittest.TestCase):
         self.assertIsNone(parse_card('{"status":"maybe"}'))
         self.assertIsNone(parse_card('{"status":"update","summary":"x"}'))
 
-    def test_summary_as_string_is_split_into_sentences(self):     # Gemini가 배열 대신 문자열로 줄 때
+    def test_summary_as_string_is_split_into_sentences(self):     # LLM이 배열 대신 문자열로 줄 때
         raw = json.dumps({**GOOD, "summary": "HBM 매출이 8.0% 늘었어요 [E1]. 출하량도 늘었어요 [E1]."})
         self.assertEqual(parse_card(raw).summary, ["HBM 매출이 8.0% 늘었어요 [E1].", "출하량도 늘었어요 [E1]."])
 
     def test_code_fence(self):
         self.assertEqual(parse_card("```json\n" + json.dumps(GOOD) + "\n```").status, "update")
+
+
+class OpenAISchemaTest(unittest.TestCase):
+    """judge.py의 대문자 스키마 → OpenAI strict JSON Schema 변환."""
+
+    def check_strict(self, node):
+        if isinstance(node, dict):
+            if node.get("type") == "object":
+                self.assertIs(node["additionalProperties"], False)
+                self.assertEqual(set(node["required"]), set(node["properties"]))
+            for key in ("maxItems", "minItems", "maxLength", "minLength"):
+                self.assertNotIn(key, node)
+            if "type" in node and isinstance(node["type"], str):
+                self.assertEqual(node["type"], node["type"].lower())
+            for v in node.values():
+                self.check_strict(v)
+
+    def test_response_schema_is_converted(self):
+        from pipelines.updates.judge import INSTANT_RESPONSE_SCHEMA, RESPONSE_SCHEMA
+        from pipelines.updates.openai_schema import to_json_schema
+
+        for original in (RESPONSE_SCHEMA, INSTANT_RESPONSE_SCHEMA):
+            self.check_strict(to_json_schema(original))
+        converted = to_json_schema(RESPONSE_SCHEMA)
+        self.assertEqual(converted["properties"]["status"]["enum"], ["update", "no_update"])
+        self.assertEqual(converted["properties"]["summary"]["items"], {"type": "string"})
+        self.assertEqual(RESPONSE_SCHEMA["type"], "OBJECT")        # 원본은 바꾸지 않는다
+        self.assertIn("maxItems", RESPONSE_SCHEMA["properties"]["summary"])
+
+    def test_schema_client_sends_json_schema(self):
+        from pipelines.updates.openai_schema import SchemaOpenAIClient
+
+        sent = []
+
+        class Res:
+            status_code, text = 200, "{}"
+
+            def json(self):
+                return {"choices": [{"message": {"content": "{}"}, "finish_reason": "stop"}], "usage": {}}
+
+        class Session:
+            def post(_self, url, headers, json, timeout):
+                sent.append(json)
+                return Res()
+
+        SchemaOpenAIClient(api_key="k", model="m", session=Session())("p")
+        fmt = sent[0]["response_format"]
+        self.assertEqual(fmt["type"], "json_schema")
+        self.assertTrue(fmt["json_schema"]["strict"])
+        self.assertEqual(fmt["json_schema"]["schema"]["type"], "object")
 
 
 class PromptTest(unittest.TestCase):

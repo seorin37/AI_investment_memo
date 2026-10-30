@@ -2,7 +2,7 @@
 
     python -m eval.memo_personas.report
 
-- review.md: 유형·근거·기업·길이 분포, 무작위 3명×10개 전체, B/C 문항 10개, 메모↔근거 예시 5개, 실패 목록, Gemini 토큰 사용량
+- review.md: 유형·근거·기업·길이 분포, 무작위 3명×10개 전체, B/C 문항 10개, 메모↔근거 예시 5개, 실패 목록, LLM 토큰 사용량
 - summary.txt: 카톡으로 보내기 쉬운 20줄 요약
 """
 
@@ -74,7 +74,7 @@ def build(cfg: dict) -> tuple[str, str] | None:
 
     L = ["# 메모 생성 결과 검수", ""]
     if is_mock:
-        L += ["> ⚠️ 목업(mock-gemini)으로 만든 결과입니다. 실제 Gemini 결과가 아니므로 평가에 쓰지 않습니다.", ""]
+        L += ["> ⚠️ 목업(mock-openai)으로 만든 결과입니다. 실제 OpenAI 결과가 아니므로 평가에 쓰지 않습니다.", ""]
     L += [f"- 메모 {len(memos)}개 · 완료 {len(people)}명 · 실패 {len(failed)}명 · 모델 {', '.join(models)}",
           f"- 추적형(A) {len(track)}개 중 복합 근거 {comp_share:.1%}, 자료 부족 {ins_share:.1%}",
           f"- 오타 후처리 적용 {typo_n}개 (원문은 memo_text_raw) · 유사 메모 표시 {len(flags)}쌍 · "
@@ -108,7 +108,7 @@ def build(cfg: dict) -> tuple[str, str] | None:
     L += ["## 유사 메모 표시 (삭제하지 않음)", ""] + ([f"- {f}" for f in flags] or ["- 없음"]) + [""]
     L += ["## 실패 목록", ""]
     L += [f"- {f['persona_id']} (시도 {f['attempts']}회): " + "; ".join(f["problems"][:3]) for f in failed] or ["- 없음"]
-    L += ["", "## Gemini 토큰 사용량", "",
+    L += ["", "## LLM 토큰 사용량", "",
           f"- 호출 {len(usage)}회 · 입력 {tok['prompt_tokens']:,} · 출력 {tok['output_tokens']:,} · thinking {tok['thinking_tokens']:,}"
           f" · 합계 {tok['total_tokens']:,}",
           f"- 완료한 사람 1명당 평균 합계 {tok['total_tokens'] / max(len(people), 1):,.0f} 토큰", ""]

@@ -34,7 +34,7 @@ evidence:
     거시: 2
 
 llm:
-  mock: false               # true면 Gemini를 부르지 않고 목업 응답(테스트용). 실제 생성 때는 false
+  mock: false               # true면 OpenAI를 부르지 않고 목업 응답(테스트용). 실제 생성 때는 false
   temperature: 0.9
   max_output_tokens: 16384  # thinking 토큰을 쓰는 모델은 여유가 필요. '응답이 중간에 끊김'이 반복되면 올리세요
   timeout_sec: 120
