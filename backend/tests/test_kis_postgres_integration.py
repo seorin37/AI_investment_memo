@@ -208,6 +208,7 @@ def test_prices_fundamentals_and_metadata_upsert_idempotently(pg_engine):
             "symbol": "005930",
             "trade_date": trade_date,
             "close": Decimal("110.00"),
+            "volume": 7,
         }
     }
 
@@ -345,6 +346,43 @@ def test_metadata_uses_database_source_and_preserves_non_kis_ohlcv(pg_engine):
     assert saved["market_cap"] is None
     assert saved["listed_shares"] is None
     assert saved["market_metadata_source"] is None
+
+
+def test_missing_only_metadata_does_not_overwrite_complete_kis_row(pg_engine):
+    trade_date = date(2026, 10, 23)
+    raw, adjusted = _price_rows("005930", trade_date)
+    kis.save_price_pair(raw, adjusted)
+    original = {
+        "symbol": "005930",
+        "trade_date": trade_date,
+        "market_cap": Decimal("1000000"),
+        "listed_shares": 1000,
+        "market_metadata_source": "KRX_OPEN_API",
+    }
+    metadata.save_market_metadata([original])
+
+    changed = {
+        **original,
+        "market_cap": Decimal("2000000"),
+        "listed_shares": 2000,
+    }
+    result = metadata.save_market_metadata([changed], missing_only=True)
+
+    assert result["updated_rows"] == 0
+    with pg_engine.connect() as connection:
+        saved = connection.execute(
+            text(
+                """
+                SELECT market_cap, listed_shares, market_metadata_source
+                FROM prices_daily
+                WHERE symbol = '005930' AND trade_date = :day
+                """
+            ),
+            {"day": trade_date},
+        ).mappings().one()
+    assert saved["market_cap"] == Decimal("1000000.00")
+    assert saved["listed_shares"] == 1000
+    assert saved["market_metadata_source"] == "KRX_OPEN_API"
 
 
 def test_price_pair_rolls_back_when_adjusted_insert_fails(pg_engine):

@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 KRX_URL = "https://data-dbg.krx.co.kr/svc/apis/sto/stk_bydd_trd"
+KRX_KOSDAQ_URL = "https://data-dbg.krx.co.kr/svc/apis/sto/ksq_bydd_trd"
 KRX_KOSPI_STOCK_MASTER_URL = (
     "https://data-dbg.krx.co.kr/svc/apis/sto/stk_isu_base_info"
 )
@@ -25,9 +26,11 @@ def is_valid_stock_symbol(symbol: str) -> bool:
     return STOCK_SYMBOL_PATTERN.fullmatch(symbol) is not None
 
 
-def fetch_kospi_daily(
+def _fetch_stock_daily(
+    endpoint: str,
     trade_date: date,
-    max_attempts: int = 3,
+    *,
+    max_attempts: int,
 ) -> list[dict]:
     """KRX KOSPI 일별 데이터를 요청하고 일시적 오류만 재시도한다."""
 
@@ -42,7 +45,7 @@ def fetch_kospi_daily(
     for attempt in range(1, max_attempts + 1):
         try:
             response = requests.get(
-                KRX_URL,
+                endpoint,
                 headers={"AUTH_KEY": api_key},
                 params={"basDd": trade_date.strftime("%Y%m%d")},
                 timeout=30,
@@ -93,6 +96,28 @@ def fetch_kospi_daily(
         time.sleep(delay)
 
     raise RuntimeError("KRX 요청 재시도 횟수를 초과했습니다.")
+
+
+def fetch_kospi_daily(
+    trade_date: date,
+    max_attempts: int = 3,
+) -> list[dict]:
+    """Fetch the KRX KOSPI daily trading response."""
+
+    return _fetch_stock_daily(KRX_URL, trade_date, max_attempts=max_attempts)
+
+
+def fetch_kosdaq_daily(
+    trade_date: date,
+    max_attempts: int = 3,
+) -> list[dict]:
+    """Fetch the KRX KOSDAQ daily trading response."""
+
+    return _fetch_stock_daily(
+        KRX_KOSDAQ_URL,
+        trade_date,
+        max_attempts=max_attempts,
+    )
 
 
 def fetch_kospi_stock_master(
