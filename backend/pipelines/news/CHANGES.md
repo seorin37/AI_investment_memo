@@ -1,9 +1,46 @@
-# 예빈에게: 뉴스 코드 변경 사항 (2026-10-22)
+# 뉴스 코드 변경 사항
 
-이 폴더의 파일을 같은 이름의 파일로 교체하면 된다 (`backend/pipelines/news/`에 넣고, `tests/`는 그 안의 `tests/`에, `alembic_versions/`의 파일은 `alembic/versions/`에 넣는다).
-넣지 않은 것: `__init__.py`(빈 파일, 그대로), `tests/test_rss.py`, `tests/test_db_integration.py`(바꾸지 않았다), `backend/pipelines/common/db.py`(팀 파일이니 덮어쓰지 말 것).
-`_구버전_무시_`로 시작하는 파일은 이전에 잘못 올린 것이니 쓰지 않는다.
-예전에 받은 Drive 코드와 달라진 점은 아래와 같다.
+## dev2 기반 뉴스 기능 선별 이전 (2026-10-26)
+
+개인 브랜치 `feature/yebin-next`에서 원본 커밋
+`dc1caddab7e66f0ee54d7b38071ba5f7b2b352ed`를 읽어 신규 12개 파일을 그대로 이전한다.
+기존 백업·worktree는 변경하지 않으며 폴더 전체 교체나 커밋 병합은 하지 않는다.
+
+- `clustering.py`: 실제 norm 기반 dense 코사인·complete-link, 결정적인 대표 기사와 결과 순서.
+- `evaluate_clustering.py`와 라벨 파일 3개: 승인된 관계만 평가하고 미승인·브리핑·판단 보류를
+  기본 제외한다. 라벨 없는 쌍은 negative가 아니다. 메타데이터·coverage·버전·해시를 검증·보고한다.
+- `preview.py`: 메모리 조회 행 검증, 기존 군집 함수 호출, JSON 직렬화 가능한 미리보기.
+- `preview_repository.py`: 빌린 활성 읽기 전용 연결에서 제한된 SELECT만 수행한다.
+  누락 임베딩은 보존하고 중복·상충은 거부한다. 연결·트랜잭션 수명은 호출자 책임이다.
+- 위 기능과 임베딩의 테스트 5개: 합성 데이터·가짜 커서·모델 mock만 사용한다.
+- 기존 `embedder.py`에는 지정 ID 바인딩, 빈 ID 목록의 0건 처리, 내부·외부 배치 일치,
+  fail_fast, 출력 개수 및 dense/sparse 저장 전 검증을 변경분으로 반영한다.
+  기존 함수의 위치 인자·기본값, 제목+요약 규칙 및 기존 임베딩 제외는 유지한다.
+- 기존 `test_pipeline.py`의 합성 벡터만 1,024차원으로 맞춘다. 이 파일은 이번에 실행하지 않는다.
+
+기존 승인 라벨 15건·미승인 26건의 ID·근거·승인자·기록 시각·development 분할은
+원본 그대로 보존한다. 이전 DB의 기사 ID를 새 DB 기사와 같다고 가정하지 않는다.
+기사 127 및 127–237의 미승인 상태도 유지한다. 이 라벨은 독립 검증·팀 공식 승인이 아니다.
+
+`environment.yml`, 공용 DB 코드, 기존 `evaluate.py`의 읽기용 DSN 선택,
+`pipeline.py`, 모든 마이그레이션은 dev2 그대로 유지한다.
+뉴스 0006은 이미 존재하며 시장·공시·병합 revision을 덮어쓰지 않는다.
+**공유 DB 마이그레이션 적용은 별도 팀 승인 사항**이다.
+feedparser는 현재 환경 선언에서 누락돼 있어 `feedparser==6.0.14` 추가를 후속 검토한다.
+이번에는 패키지 설치·새 환경 생성·실제 DB·모델·수집·성능 평가를 실행하지 않는다.
+
+기존 환경의 DB 없는 회귀 검증 기록은 클러스터링 58개·개발용 평가 97개·미리보기 106개·
+조회 계층 116개, 합계 377개 통과다. 이번 이전에서는 임베딩 mock 테스트도 함께 선택한다.
+현재 실행 결과는 완료 보고에서 별도로 기록하며 이전 기록을 신규 환경 검증으로 간주하지 않는다.
+새 DB의 스키마·데이터·권한, 모델 캐시·GPU 및 전체 환경 설치는 미검증이다.
+클러스터링은 pipeline·API에 자동 연결되지 않았고 결과 저장도 하지 않는다.
+0.65는 실험용 임계값이다. 자동 정리의 기본 30일·기사/임베딩 연쇄 삭제와
+DB 테스트의 DROP/TRUNCATE 위험은 README를 참고한다.
+
+## 초기 뉴스 파이프라인 변경 기록 (2026-10-22)
+
+아래는 기존 수집·검색 기능의 이력이다. 현재 실행 준비는 README를 우선하며
+개인 간 파일 전달이나 폴더 전체 교체 절차로 사용하지 않는다.
 
 ## 1. 방향이 바뀐 것
 
@@ -23,7 +60,7 @@
 | 파일 | 변경 |
 |---|---|
 | pipeline.py | `hourly --embed --loop SECONDS`, `--keep-days`, `--include-untagged`, `--skip-naver` 추가. 모델은 한 번만 불러 계속 쓴다 |
-| embedder.py | BGE-M3 로딩 시 `dtype` 오류를 고치는 호환 코드 추가(`_patch_dtype_compat`), `include_untagged`. 한 기사가 오류를 내도 나머지는 계속 처리하고(실패 기사는 다음 주기에 재시도), 회차마다 대상·성공·실패 건수와 걸린 시간을 로그로 남긴다 |
+| embedder.py | BGE-M3 `dtype` 호환 코드, `include_untagged`. 기본 모델 오류는 개별 재시도하며 fail_fast=True는 중단한다. 출력 검증 오류는 항상 저장 전 중단한다 |
 | tagger.py | `title_only`(제목에 있을 때만 연결) 지원 |
 | naver.py | 네이버 수집. 검색어에서 종목이 정해져 `news_stocks`에 바로 연결. `--hours`, `--dry-run` |
 | rss.py | 매체 코드를 DB 값(`sedaily`, `mk`, `hankyung`, `yonhap`)에 맞춤 |
@@ -33,25 +70,25 @@
 | seed.sql | `news_feeds`에 RSS 4개만 넣는다. 위치는 `backend/pipelines/news/seed.sql` (여러 번 실행해도 중복 없음) |
 | evaluate.py (새 파일) | Recall@k, MRR, nDCG. 가중치와 sparse 정규화 방식을 바꿔 가며 비교. `--only-tagged`로 종목 연결 기사만 검색하는 경우와 전체 검색을 비교 |
 | tests/ | 위 변경에 맞춘 테스트. `tests/conftest.py`(새 파일): `TEST_DATABASE_URL`의 DB 이름에 `test`가 없으면 테스트를 시작하지 않는다 |
-| alembic/0006_news_embedding_variants.py | 임베딩 테이블. 팀의 0005 다음 번호(0006). **팀 승인 전이라 자기 로컬 DB에만 적용**하고 커밋하지 않는다 |
+| alembic/0006_news_embedding_variants.py | 임베딩 테이블. dev2에 이미 포함돼 있고 후속 병합 이력도 보존한다. 공유 DB 적용은 팀 승인 후 별도 진행 |
 
 ## 3. 지금 하면 되는 것
 
-README.md의 "처음 시작하는 순서" 1~10을 서린과 같은 순서로 돌린다. 요점만:
+README.md의 전제조건을 먼저 검토하고, 아래 DB·수집·모델 작업은 별도 승인 후에만 진행한다.
 
-1. 새 파일로 뉴스 폴더 교체. `alembic/versions/`에는 `0006_news_embedding_variants.py`를 넣는다 (`revision = "0006"`, `down_revision = "0005"`).
+1. dev2 기존 뉴스·공용 파일과 마이그레이션을 보존하고 승인된 뉴스 변경분만 반영한다.
 2. `seed.sql` 적용 -> `rss --dry-run` -> `pipeline hourly` 두 번(두 번째 신규가 줄어야 함).
 3. `naver --dry-run`으로 종목별 조회·보관 건수 확인. (네이버 키는 `.env`에 있어야 한다.)
-4. `alembic upgrade head` (자기 로컬 DB에만).
-5. `pipeline hourly --embed --loop 1800` 을 켜 둔다. 절전 설정은 끈다.
+4. 실제 DB revision과 팀 승인에 따라 마이그레이션 적용 필요 여부를 별도로 판단한다.
+5. 반복 수집·임베딩이 승인된 환경에서 `pipeline hourly --embed --loop 1800 --keep-days 0`을 사용한다.
 6. `SELECT variant, count(*) FROM news_embedding_variants GROUP BY variant;` 에 `hybrid`가 쌓이는지 확인.
 
 주의:
-- DB는 각자 따로라서 서로의 기사는 보이지 않는다. 평가는 한쪽 DB에서 돌리거나 기사 집합을 맞춘 뒤에 한다.
+- DB가 달라지면 기사 ID·기사 집합·벡터도 같다고 가정할 수 없다. 실제 대상과 접근 권한을 확인하고 평가는 기사 메타데이터를 대조한 뒤에 한다.
 - 정리(자동 삭제)는 하루 한 번, 종목 연결이 없고 `--keep-days`일(기본 **30**)이 지난 기사를 지운다. 기사를 지우면 그 임베딩도 같이 지워진다. `hourly --loop`과 `daily` 둘 다 이 값을 쓰고, `--keep-days 0`이면 지우지 않는다. 평가 정답으로 적은 기사는 이 코드가 알지 못하므로 평가가 끝날 때까지는 0으로 두는 것이 안전하다.
-- DB 테스트는 테이블을 비운다. 실제 작업 DB(`memos`)를 `TEST_DATABASE_URL`에 넣지 말고, 버려도 되는 별도 DB(이름에 `test` 포함)에서만 돌린다. 지금은 전체 pytest를 DB 없이(`TEST_DATABASE_URL` 없이) 돌리면 DB 테스트는 자동으로 건너뛴다.
+- DB 테스트는 테이블을 비운다. 실제 작업 DB를 `TEST_DATABASE_URL`에 넣지 않는다. 이번 검증은 README의 지정된 순수/mock 테스트 5개만 실행하며 DB 초기화 테스트와 전체 pytest는 실행하지 않는다.
 - 평가(`evaluate.py`): 정답 기사가 검색 풀에 없으면(태그가 없어 `--only-tagged`에서 빠졌거나 기간 밖) 정답에서 지우지 않고 **못 찾은 것으로 계산**한다. DB에 아예 없는 정답 URL(오타, 삭제)은 경고하고 정답에서 뺀다.
-- 빈 sparse 결과는 NULL 대신 빈 사전 `{}`로 저장한다 (hybrid의 sparse는 NULL이면 안 되는 DB 규칙 때문).
+- 빈 sparse 사전 `{}`은 허용하지만 hybrid의 None sparse는 출력 오류로 중단한다. 누락 출력을 빈 사전으로 보정하지 않는다.
 - 임베딩 작업은 한 번에 하나만 실행한다.
 - 팀 공용 DB는 임베딩 비교가 끝난 뒤 따로 정한다.
 

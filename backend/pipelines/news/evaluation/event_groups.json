@@ -1,0 +1,164 @@
+{
+  "schema_version": 1,
+  "dataset_id": "news-clustering-development-v1",
+  "label_policy_version": "1",
+  "note": "기존 DB·공개 원문 조사에 근거한 개발용 후보. 모든 초기 라벨은 미승인. 모델 점수는 정답 근거가 아님. 사건 시점이 미확인인 값은 명시적으로 남김. 복수 사건 기사는 기본 평가 제외. 이 파일은 전체 기사 집합의 완전한 사건 분할이 아님.",
+  "groups": [
+    {
+      "event_id": "E_LONESTAR_001",
+      "event_description": "론스타 1682억 원 세금 반환소송 파기환송심 판결",
+      "member_ids": [
+        10,
+        59,
+        106,
+        201
+      ],
+      "event_time": "정확한 선고 시각 미확인",
+      "evidence_urls": [
+        "https://www.sedaily.com/article/20104689",
+        "https://www.mk.co.kr/news/business/12182588",
+        "https://www.hankyung.com/article/2026102279717",
+        "https://www.yna.co.kr/view/AKR20261022061800004"
+      ],
+      "reason": "제목의 금액·소송 종류·심급·결과가 대응. 정부 승소와 론스타 패소는 같은 판결의 양쪽 표현. 201번 요약 불량.",
+      "confidence": "high",
+      "review_status": "proposed",
+      "reviewed_at": "",
+      "reviewer": "",
+      "split": "development"
+    },
+    {
+      "event_id": "E_RATE_001",
+      "event_description": "한국은행 기준금리 3.00% 동결",
+      "member_ids": [
+        27,
+        242
+      ],
+      "event_time": "2026-10-22 결정; 정확한 발표 시각 미확인",
+      "evidence_urls": [
+        "https://www.sedaily.com/article/20104674",
+        "https://www.yna.co.kr/view/AKR20261022050500002"
+      ],
+      "reason": "242번 DB 요약에 22일 금통위 동결 명시. 제목의 기관·금리·결정이 일치.",
+      "confidence": "high",
+      "review_status": "proposed",
+      "reviewed_at": "",
+      "reviewer": "",
+      "split": "development"
+    },
+    {
+      "event_id": "E_YONSEI_001",
+      "event_description": "연세대 포털 개인정보 유출 사고",
+      "member_ids": [
+        39,
+        267
+      ],
+      "event_time": "침해·발견·공지 시각 미확인",
+      "evidence_urls": [
+        "https://www.sedaily.com/article/20104661",
+        "https://www.yna.co.kr/view/AKR20261022048700004"
+      ],
+      "reason": "기관·개인정보 유출 대상이 대응. 실제 침해 시각과 기사 게시 시각을 구분해야 함.",
+      "confidence": "high",
+      "review_status": "proposed",
+      "reviewed_at": "",
+      "reviewer": "",
+      "split": "development"
+    },
+    {
+      "event_id": "E_POSCO_001",
+      "event_description": "포스코퓨처엠의 팔란티어 AI 플랫폼 도입",
+      "member_ids": [
+        30,
+        184
+      ],
+      "event_time": "계약·발표 시각 미확인",
+      "evidence_urls": [
+        "https://www.sedaily.com/article/20104671",
+        "https://www.yna.co.kr/view/AKR20261022057600003"
+      ],
+      "reason": "도입 기업·공급사·행위·목적이 대응. 같은 도입 계약인지 사람이 최종 확인해야 함.",
+      "confidence": "high",
+      "review_status": "proposed",
+      "reviewed_at": "",
+      "reviewer": "",
+      "split": "development"
+    },
+    {
+      "event_id": "E_HANWHA_001",
+      "event_description": "한화에어로의 2026 사천에어쇼 참가 및 전시",
+      "member_ids": [
+        36,
+        175
+      ],
+      "event_time": "2026-10-22 개막; 36번 원문은 25일까지 진행으로 설명",
+      "evidence_urls": [
+        "https://www.sedaily.com/article/20104665",
+        "https://www.yna.co.kr/view/AKR20261022059400003"
+      ],
+      "reason": "기존 원문 검증에서 같은 회사·행사 회차·전시 품목 일치 확인. 과거 발사·협약은 현재 참가의 배경.",
+      "confidence": "high",
+      "review_status": "approved",
+      "reviewed_at": "2026-10-26T11:09:33+09:00",
+      "reviewer": "yebin",
+      "split": "development"
+    },
+    {
+      "event_id": "E_SEONGNAM_001",
+      "event_description": "성남시 제3회 커넥터스 참가자 모집 및 개최 안내",
+      "member_ids": [
+        14,
+        254
+      ],
+      "event_time": "모집 2026-10-26~11-13; 행사 2026-11-29",
+      "evidence_urls": [
+        "https://www.sedaily.com/article/20104684",
+        "https://www.yna.co.kr/view/AKR20261022052800061"
+      ],
+      "reason": "기존 원문 검증에서 제3회·여행 주제·300명·밀리토피아 호텔·모집 일정 일치 확인. 이전 두 회차는 배경.",
+      "confidence": "high",
+      "review_status": "approved",
+      "reviewed_at": "2026-10-26T11:09:33+09:00",
+      "reviewer": "yebin",
+      "split": "development"
+    },
+    {
+      "event_id": "E_CHOICHUNGRAK_001",
+      "event_description": "최충락 사이코패스 검사 기준 미달 결과",
+      "member_ids": [
+        101,
+        210
+      ],
+      "event_time": "검사·결과 공개 시각 미확인",
+      "evidence_urls": [
+        "https://www.hankyung.com/article/2026102280077",
+        "https://www.yna.co.kr/view/AKR20261022058500065"
+      ],
+      "reason": "인물·검사 종류·결과가 대응. 범행 자체가 아니라 검사 결과를 사건으로 지정.",
+      "confidence": "high",
+      "review_status": "proposed",
+      "reviewed_at": "",
+      "reviewer": "",
+      "split": "development"
+    },
+    {
+      "event_id": "E_BUKANG_001",
+      "event_description": "부캉이의 3차 외해 유도 후 수로 재진입",
+      "member_ids": [
+        76,
+        245
+      ],
+      "event_time": "2026-10-21 3차 유도 후 재진입 목격; 22일 아침 상황 보도",
+      "evidence_urls": [
+        "https://www.mk.co.kr/news/society/12182524",
+        "https://www.yna.co.kr/view/AKR20261022023851051"
+      ],
+      "reason": "기존 원문 검증에서 같은 개체·장소·3차 유도 이후 재진입 회차 확인. 그물 통과 경로·정확한 시각은 추정이며 대응 계획은 상황 보강.",
+      "confidence": "high",
+      "review_status": "approved",
+      "reviewed_at": "2026-10-26T11:09:33+09:00",
+      "reviewer": "yebin",
+      "split": "development"
+    }
+  ]
+}

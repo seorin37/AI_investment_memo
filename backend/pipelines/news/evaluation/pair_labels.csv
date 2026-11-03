@@ -1,0 +1,6 @@
+"article_id_a","article_id_b","relation","scope","evidence_urls","reason","confidence","review_status","reviewed_at","reviewer","split"
+"53","239","different_event","whole_article","https://www.mk.co.kr/news/realestate/12182597|https://www.yna.co.kr/view/AKR20261022041000030","삼성물산 건설부문의 고령자 주거시설 MOU와 패션부문의 빈폴골프 판촉으로 대상·행위가 다름.","high","approved","2026-10-26T13:16:11.221232+09:00","yebin","development"
+"107","266","different_event","whole_article","https://www.hankyung.com/article/202610227882g|https://www.yna.co.kr/view/AKR20261022043800003","현대차그룹의 특성화고 지원 사업과 소프티어 기술 콘퍼런스 공개로 행위·대상이 다름.","high","approved","2026-10-26T13:16:11.221232+09:00","yebin","development"
+"127","237","different_event","whole_article","https://www.hankyung.com/article/202610227750i|https://www.yna.co.kr/view/AKR20261022048900017","네이버페이 금융상품 혜택과 네이버 엔터테인먼트 광고 전략으로 사업·행위가 다름.","high","proposed","","","development"
+"30","181","different_event","whole_article","https://www.sedaily.com/article/20104671|https://www.yna.co.kr/view/AKR20261022057800003","포스코퓨처엠의 팔란티어 도입과 에쓰오일 S-imoms 고도화로 회사·시스템·적용 활동이 다름.","high","proposed","","","development"
+"15","22","undecided","whole_article","https://www.sedaily.com/article/20104682|https://www.sedaily.com/article/20104649","원문상 대표 사건은 로봇 센싱 협업과 자율제조로 다르지만 22번은 6개 뉴스 브리핑. 기사 전체의 단일 사건 negative로 확정하지 않음.","high","needs_review","","","development"

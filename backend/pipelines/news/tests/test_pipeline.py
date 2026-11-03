@@ -199,7 +199,7 @@ def test_embed_window_skips_a_poison_article_and_keeps_going(monkeypatch):
     def encode(texts):
         if any("제목3" in t for t in texts):
             raise RuntimeError("bad text")
-        return [([0.1], {"1": 0.5}) for _ in texts]
+        return [([0.1] * 1024, {"1": 0.5}) for _ in texts]
 
     conn = _FakeConn()
     done = embedder.embed_window(conn, "hybrid", encode, since, until)
