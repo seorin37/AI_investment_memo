@@ -16,12 +16,35 @@ from sqlalchemy import bindparam, text
 from pipelines.common.db import get_engine
 from pipelines.market.calendar import is_krx_trading_day
 from pipelines.market.kis import assert_kis_schema
-from pipelines.market.krx import fetch_kospi_daily, is_valid_stock_symbol
+from pipelines.market.krx import (
+    fetch_kosdaq_daily,
+    fetch_kospi_daily,
+    is_valid_stock_symbol,
+)
 from pipelines.market.stock_master import load_kospi_symbols
 
 
 SOURCE = "KRX_OPEN_API"
 Fetcher = Callable[[date], list[dict]]
+
+
+class MarketMetadataRows(list[dict]):
+    """Normalized rows plus diagnostics for the KOSDAQ fallback."""
+
+    def __init__(
+        self,
+        rows: Iterable[dict],
+        *,
+        fallback_attempted: bool = False,
+        fallback_rows: int = 0,
+        missing_symbols: Iterable[str] = (),
+        fallback_error: Exception | None = None,
+    ) -> None:
+        super().__init__(rows)
+        self.fallback_attempted = fallback_attempted
+        self.fallback_rows = fallback_rows
+        self.missing_symbols = tuple(missing_symbols)
+        self.fallback_error = fallback_error
 
 
 def _target_symbols(symbols: Iterable[str]) -> tuple[str, ...]:
@@ -57,9 +80,9 @@ def _integer(value: object, field: str) -> int:
     return result
 
 
-def normalize_market_metadata(row: dict) -> dict:
-    if row.get("MKT_NM") != "KOSPI":
-        raise ValueError("KOSPI 메타데이터가 아닙니다.")
+def normalize_market_metadata(row: dict, *, expected_market: str = "KOSPI") -> dict:
+    if row.get("MKT_NM") != expected_market:
+        raise ValueError(f"{expected_market} 메타데이터가 아닙니다.")
     symbol = str(row.get("ISU_CD", "")).strip()
     if not is_valid_stock_symbol(symbol):
         raise ValueError("종목코드는 6자리 영문 대문자 또는 숫자여야 합니다.")
@@ -81,13 +104,16 @@ def fetch_market_metadata(
     *,
     symbols: Iterable[str] | None = None,
     fetcher: Fetcher = fetch_kospi_daily,
-) -> list[dict]:
-    """Call the all-KOSPI endpoint once and retain the frozen target set."""
+    kosdaq_fetcher: Fetcher = fetch_kosdaq_daily,
+) -> MarketMetadataRows:
+    """Fetch KOSPI metadata, then use one KOSDAQ request for missing symbols."""
     targets = _target_symbols(
         load_kospi_symbols() if symbols is None else symbols
     )
     requested = set(targets)
     raw_rows = fetcher(trade_date)
+    if not raw_rows:
+        raise ValueError("KRX KOSPI daily response is empty.")
     selected = []
     found: set[str] = set()
     for row in raw_rows:
@@ -101,10 +127,52 @@ def fetch_market_metadata(
             raise ValueError(f"KRX 응답에 중복 종목이 있습니다: {symbol}")
         found.add(symbol)
         selected.append(normalized)
-    return selected
+    missing = requested - found
+    if not missing:
+        return MarketMetadataRows(selected)
+
+    try:
+        kosdaq_rows = kosdaq_fetcher(trade_date)
+    except Exception as exc:
+        return MarketMetadataRows(
+            selected,
+            fallback_attempted=True,
+            missing_symbols=sorted(missing),
+            fallback_error=exc,
+        )
+
+    fallback_count = 0
+    try:
+        for row in kosdaq_rows:
+            symbol = str(row.get("ISU_CD", "")).strip()
+            if symbol not in missing or row.get("MKT_NM") != "KOSDAQ":
+                continue
+            normalized = normalize_market_metadata(row, expected_market="KOSDAQ")
+            if normalized["trade_date"] != trade_date:
+                raise ValueError("KRX response date does not match the requested date.")
+            if symbol in found:
+                raise ValueError(f"KRX response contains a duplicate symbol: {symbol}")
+            found.add(symbol)
+            selected.append(normalized)
+            fallback_count += 1
+    except Exception as exc:
+        return MarketMetadataRows(
+            selected,
+            fallback_attempted=True,
+            fallback_rows=fallback_count,
+            missing_symbols=sorted(requested - found),
+            fallback_error=exc,
+        )
+
+    return MarketMetadataRows(
+        selected,
+        fallback_attempted=True,
+        fallback_rows=fallback_count,
+        missing_symbols=sorted(requested - found),
+    )
 
 
-def save_market_metadata(rows: list[dict]) -> dict:
+def save_market_metadata(rows: list[dict], *, missing_only: bool = False) -> dict:
     """Enrich existing KIS price rows; never create metadata-only price rows."""
     if not rows:
         return {"updated_rows": 0, "deferred_keys": []}
@@ -115,6 +183,17 @@ def save_market_metadata(rows: list[dict]) -> dict:
     symbols = [row["symbol"] for row in rows]
     if len(symbols) != len(set(symbols)):
         raise ValueError("메타데이터 저장 대상에 중복 종목이 있습니다.")
+    missing_clause = (
+        """
+          AND (
+            market_cap IS NULL
+            OR listed_shares IS NULL
+            OR market_metadata_source IS NULL
+          )
+        """
+        if missing_only
+        else ""
+    )
     select_statement = text(
         """
         SELECT symbol
@@ -138,7 +217,7 @@ def save_market_metadata(rows: list[dict]) -> dict:
             OR listed_shares IS DISTINCT FROM :listed_shares
             OR market_metadata_source IS DISTINCT FROM :market_metadata_source
           )
-        """
+        """ + missing_clause
     )
     engine = get_engine()
     with engine.begin() as connection:
@@ -174,6 +253,7 @@ def backfill_market_metadata(
     symbols: Iterable[str] | None = None,
     request_interval: float = 0.5,
     fetcher: Fetcher = fetch_kospi_daily,
+    kosdaq_fetcher: Fetcher = fetch_kosdaq_daily,
     saver: Callable[[list[dict]], dict] = save_market_metadata,
     check_schema: bool = True,
 ) -> dict:
@@ -195,6 +275,10 @@ def backfill_market_metadata(
         "updated_rows": 0,
         "deferred_keys": [],
         "missing_keys": [],
+        "kosdaq_fallback_dates": [],
+        "kosdaq_fallback_rows": 0,
+        "kosdaq_fallback_failed_dates": [],
+        "partial_dates": [],
     }
     cursor = start_date
     while cursor <= end_date:
@@ -203,8 +287,13 @@ def backfill_market_metadata(
             cursor += timedelta(days=1)
             continue
         try:
-            rows = fetch_market_metadata(cursor, symbols=targets, fetcher=fetcher)
-            if not rows:
+            rows = fetch_market_metadata(
+                cursor,
+                symbols=targets,
+                fetcher=fetcher,
+                kosdaq_fetcher=kosdaq_fetcher,
+            )
+            if not rows and not rows.fallback_attempted:
                 raise ValueError("KRX KOSPI 일별 응답이 비어 있습니다.")
             found = {row["symbol"] for row in rows}
             result["processed_target_dates"] += len(targets)
@@ -215,9 +304,22 @@ def backfill_market_metadata(
                 if symbol not in found
             )
             saved = saver(rows)
-            result["success_dates"] += 1
             result["updated_rows"] += saved["updated_rows"]
             result["deferred_keys"].extend(saved["deferred_keys"])
+            if rows.fallback_attempted:
+                result["kosdaq_fallback_dates"].append(cursor.isoformat())
+                result["kosdaq_fallback_rows"] += rows.fallback_rows
+            if rows.fallback_error is not None:
+                day = cursor.isoformat()
+                result["failed_dates"].append(day)
+                result["kosdaq_fallback_failed_dates"].append(day)
+                result["partial_dates"].append(day)
+                result["errors"][day] = {
+                    "stage": "KOSDAQ_FALLBACK",
+                    "type": type(rows.fallback_error).__name__,
+                }
+            else:
+                result["success_dates"] += 1
         except Exception as exc:
             result["failed_dates"].append(cursor.isoformat())
             result["errors"][cursor.isoformat()] = type(exc).__name__

@@ -453,8 +453,8 @@ def test_fundamentals_reject_price_mismatch_and_intraday_ambiguity():
         "hts_avls": "1", "lstn_stcn": "1000",
         "stck_prpr": "101", "acml_vol": "0",
     }
-    final = {"trade_date": date(2026, 10, 27), "close": Decimal("100")}
-    collected = datetime(2026, 10, 28, 0, 5, tzinfo=timezone.utc)
+    final = {"trade_date": date(2026, 10, 28), "close": Decimal("100")}
+    collected = datetime(2026, 10, 28, 8, 0, tzinfo=timezone.utc)
 
     with pytest.raises(ValueError, match="일치하지 않습니다"):
         kis.normalize_fundamentals(
@@ -462,14 +462,16 @@ def test_fundamentals_reject_price_mismatch_and_intraday_ambiguity():
         )
 
     current["stck_prpr"] = "100"
-    current["acml_vol"] = "1"
-    with pytest.raises(ValueError, match="당일 거래"):
+    with pytest.raises(ValueError, match="장 마감 후"):
         kis.normalize_fundamentals(
-            "005930", current, final, collected_at=collected
+            "005930",
+            current,
+            final,
+            collected_at=datetime(2026, 10, 28, 6, 0, tzinfo=timezone.utc),
         )
 
 
-def test_fundamentals_accept_previous_session_volume_before_market_open():
+def test_fundamentals_reject_previous_session_even_before_market_open():
     current = {
         "per": "1", "pbr": "1", "eps": "100", "bps": "100",
         "w52_hgpr": "120", "w52_hgpr_date": "20261001",
@@ -477,15 +479,71 @@ def test_fundamentals_accept_previous_session_volume_before_market_open():
         "hts_avls": "1", "lstn_stcn": "1000",
         "stck_prpr": "100", "acml_vol": "12345",
     }
-    result = kis.normalize_fundamentals(
-        "005930",
-        current,
-        {"trade_date": date(2026, 10, 28), "close": Decimal("100")},
-        collected_at=datetime(2026, 10, 28, 15, 15, tzinfo=timezone.utc),
+    with pytest.raises(ValueError, match="기준일"):
+        kis.normalize_fundamentals(
+            "005930",
+            current,
+            {"trade_date": date(2026, 10, 28), "close": Decimal("100")},
+            collected_at=datetime(2026, 10, 28, 15, 15, tzinfo=timezone.utc),
+        )
+
+
+def test_collect_fundamentals_skips_holiday_or_unfinalized_date_without_api():
+    class Client:
+        def current_price(self, _symbol):
+            raise AssertionError("투자지표 API를 호출하면 안 됩니다.")
+
+    result = kis.collect_fundamentals(
+        Client(),
+        ("005930", "000660"),
+        {
+            "005930": {
+                "trade_date": date(2026, 10, 29),
+                "close": Decimal("100"),
+            }
+        },
+        collected_at=datetime(2026, 10, 30, 9, 30, tzinfo=timezone.utc),
     )
 
-    assert result["basis_trade_date"] == date(2026, 10, 28)
-    assert result["reference_price"] == Decimal("100")
+    assert result["saved_rows"] == 0
+    assert result["failed_symbols"] == []
+    assert result["skipped_symbols"] == ["005930", "000660"]
+
+
+def test_collect_fundamentals_saves_same_day_post_close_snapshot():
+    calls = []
+
+    class Client:
+        def current_price(self, symbol):
+            calls.append(symbol)
+            return {
+                "per": "10", "pbr": "1", "eps": "10", "bps": "100",
+                "w52_hgpr": "120", "w52_hgpr_date": "20261001",
+                "w52_lwpr": "80", "w52_lwpr_date": "20251101",
+                "hts_avls": "1", "lstn_stcn": "1000",
+                "stck_prpr": "100", "acml_vol": "12345",
+            }
+
+    saved = []
+    result = kis.collect_fundamentals(
+        Client(),
+        ("005930",),
+        {
+            "005930": {
+                "trade_date": date(2026, 10, 30),
+                "close": Decimal("100"),
+                "volume": 12345,
+            }
+        },
+        saver=lambda rows: saved.extend(rows) or len(rows),
+        collected_at=datetime(2026, 10, 30, 9, 30, tzinfo=timezone.utc),
+    )
+
+    assert calls == ["005930"]
+    assert result["saved_rows"] == 1
+    assert result["failed_symbols"] == []
+    assert result["skipped_symbols"] == []
+    assert saved[0]["basis_trade_date"] == date(2026, 10, 30)
 
 
 def test_backfill_isolates_symbol_failure_and_preserves_success(tmp_path):
@@ -580,7 +638,11 @@ def test_901_symbol_mock_run_has_no_missing_duplicates_or_order_drift(tmp_path):
         for symbol in symbols
     }
     fundamentals = kis.collect_fundamentals(
-        client, symbols, final_rows, saver=lambda rows: len(rows)
+        client,
+        symbols,
+        final_rows,
+        saver=lambda rows: len(rows),
+        collected_at=datetime(2026, 10, 28, 8, 0, tzinfo=timezone.utc),
     )
 
     assert result["completed_symbols"] == list(symbols)
@@ -595,7 +657,13 @@ def test_901_symbol_mock_run_has_no_missing_duplicates_or_order_drift(tmp_path):
     assert client.calls[1802:] == [
         (symbol, "fundamentals") for symbol in symbols
     ]
-    assert fundamentals == {"saved_rows": 901, "failed_symbols": [], "errors": {}}
+    assert fundamentals == {
+        "saved_rows": 901,
+        "failed_symbols": [],
+        "errors": {},
+        "skipped_symbols": [],
+        "skip_reasons": {},
+    }
 
 
 def test_incomplete_date_detection_recovers_gap_and_partial_checkpoint(tmp_path):

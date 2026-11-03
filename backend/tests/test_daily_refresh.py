@@ -1,12 +1,44 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from datetime import date
+from datetime import date, datetime
 
 import pytest
 
 from pipelines import daily_refresh
+
+
+def test_atomic_json_allows_concurrent_profiles(tmp_path):
+    path = tmp_path / "latest.json"
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        list(executor.map(
+            lambda number: daily_refresh._atomic_json(path, {"number": number}),
+            range(40),
+        ))
+
+    assert json.loads(path.read_text(encoding="utf-8"))["number"] in range(40)
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_evening_timer_catchup_before_1830_does_not_collect(monkeypatch, capsys):
+    class BeforeClose:
+        @classmethod
+        def now(cls, _timezone):
+            return datetime(2026, 11, 2, 13, 19, tzinfo=daily_refresh.SEOUL)
+
+    monkeypatch.setattr(daily_refresh, "datetime", BeforeClose)
+    monkeypatch.setattr(
+        daily_refresh,
+        "run_refresh",
+        lambda *_args, **_kwargs: pytest.fail("KIS refresh must not start"),
+    )
+
+    assert daily_refresh.main(["--profile", "evening"]) == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["status"] == "skipped_before_18_30"
 
 
 def test_build_refresh_plan_uses_safe_lags_and_requery_windows(monkeypatch):

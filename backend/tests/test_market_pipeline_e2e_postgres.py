@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pytest
@@ -170,7 +170,12 @@ def test_full_pipeline_defers_recovers_and_is_idempotent(pg_engine, tmp_path):
     assert first_prices["failed_symbols"] == ["910003"]
 
     latest = kis.load_latest_raw_prices(targets, trade_date, trade_date)
-    first_fundamentals = kis.collect_fundamentals(client, targets, latest)
+    first_fundamentals = kis.collect_fundamentals(
+        client,
+        targets,
+        latest,
+        collected_at=datetime(2026, 10, 28, 8, 0, tzinfo=timezone.utc),
+    )
     assert first_fundamentals["saved_rows"] == 2
     assert first_fundamentals["failed_symbols"] == ["910003"]
 
@@ -198,7 +203,12 @@ def test_full_pipeline_defers_recovers_and_is_idempotent(pg_engine, tmp_path):
     assert recovered["failed_count"] == 0
     assert recovered["completed_count"] == 3
     latest = kis.load_latest_raw_prices(targets, trade_date, trade_date)
-    recovered_fundamentals = kis.collect_fundamentals(client, targets, latest)
+    recovered_fundamentals = kis.collect_fundamentals(
+        client,
+        targets,
+        latest,
+        collected_at=datetime(2026, 10, 28, 8, 0, tzinfo=timezone.utc),
+    )
     assert recovered_fundamentals["saved_rows"] == 3
     assert recovered_fundamentals["failed_symbols"] == []
 

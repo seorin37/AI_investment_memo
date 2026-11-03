@@ -5,12 +5,18 @@ from decimal import Decimal
 
 import pytest
 
-from pipelines.market import metadata
+from pipelines.market import krx, metadata
 
 
-def raw_row(symbol="005930", day="20261027", market_cap="1000000", shares="1000"):
+def raw_row(
+    symbol="005930",
+    day="20261027",
+    market_cap="1000000",
+    shares="1000",
+    market="KOSPI",
+):
     return {
-        "MKT_NM": "KOSPI",
+        "MKT_NM": market,
         "ISU_CD": symbol,
         "BAS_DD": day,
         "MKTCAP": market_cap,
@@ -32,6 +38,26 @@ def test_normalize_uses_only_daily_market_metadata():
         "market_metadata_source": "KRX_OPEN_API",
     }
     assert not {"open", "high", "low", "close", "volume"} & result.keys()
+
+
+def test_kosdaq_daily_uses_the_official_daily_market_endpoint(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        krx,
+        "_fetch_stock_daily",
+        lambda endpoint, trade_date, **kwargs: captured.update(
+            endpoint=endpoint,
+            trade_date=trade_date,
+            **kwargs,
+        ) or [],
+    )
+
+    assert krx.fetch_kosdaq_daily(date(2026, 10, 27), max_attempts=2) == []
+    assert captured == {
+        "endpoint": "https://data-dbg.krx.co.kr/svc/apis/sto/ksq_bydd_trd",
+        "trade_date": date(2026, 10, 27),
+        "max_attempts": 2,
+    }
 
 
 def test_metadata_accepts_uppercase_alphanumeric_symbol():
@@ -79,6 +105,85 @@ def test_fetch_rejects_duplicate_krx_symbol():
         )
 
 
+def test_fetch_uses_one_kosdaq_request_only_for_missing_symbols():
+    kospi_calls = []
+    kosdaq_calls = []
+    day = date(2026, 10, 27)
+
+    result = metadata.fetch_market_metadata(
+        day,
+        symbols=("005930", "034230", "066970"),
+        fetcher=lambda value: kospi_calls.append(value) or [raw_row("005930")],
+        kosdaq_fetcher=lambda value: kosdaq_calls.append(value) or [
+            raw_row("034230", market="KOSDAQ"),
+            raw_row("066970", market="KOSDAQ"),
+            raw_row("999999", market="KOSDAQ"),
+        ],
+    )
+
+    assert kospi_calls == [day]
+    assert kosdaq_calls == [day]
+    assert [row["symbol"] for row in result] == ["005930", "034230", "066970"]
+    assert result.fallback_attempted is True
+    assert result.fallback_rows == 2
+    assert result.missing_symbols == ()
+
+
+def test_fetch_does_not_call_kosdaq_when_kospi_is_complete():
+    result = metadata.fetch_market_metadata(
+        date(2026, 10, 27),
+        symbols=("005930",),
+        fetcher=lambda _day: [raw_row("005930")],
+        kosdaq_fetcher=lambda _day: pytest.fail("unexpected KOSDAQ request"),
+    )
+
+    assert result.fallback_attempted is False
+
+
+def test_backfill_distinguishes_kosdaq_failure_from_data_absence(monkeypatch):
+    monkeypatch.setattr(metadata, "is_krx_trading_day", lambda _day: True)
+    saved = []
+
+    result = metadata.backfill_market_metadata(
+        date(2026, 10, 27),
+        date(2026, 10, 27),
+        symbols=("005930", "034230"),
+        request_interval=0,
+        fetcher=lambda _day: [raw_row("005930")],
+        kosdaq_fetcher=lambda _day: (_ for _ in ()).throw(RuntimeError("down")),
+        saver=lambda rows: saved.extend(rows) or {
+            "updated_rows": len(rows),
+            "deferred_keys": [],
+        },
+        check_schema=False,
+    )
+
+    assert [row["symbol"] for row in saved] == ["005930"]
+    assert result["failed_dates"] == ["2026-10-27"]
+    assert result["kosdaq_fallback_failed_dates"] == ["2026-10-27"]
+    assert result["errors"]["2026-10-27"]["stage"] == "KOSDAQ_FALLBACK"
+    assert result["missing_keys"] == ["034230:2026-10-27"]
+
+
+def test_successful_empty_kosdaq_response_is_recorded_as_data_absence(monkeypatch):
+    monkeypatch.setattr(metadata, "is_krx_trading_day", lambda _day: True)
+
+    result = metadata.backfill_market_metadata(
+        date(2026, 10, 27),
+        date(2026, 10, 27),
+        symbols=("034230",),
+        request_interval=0,
+        fetcher=lambda _day: [raw_row("005930")],
+        kosdaq_fetcher=lambda _day: [],
+        saver=lambda rows: {"updated_rows": 0, "deferred_keys": []},
+        check_schema=False,
+    )
+
+    assert result["success_dates"] == 1
+    assert result["failed_dates"] == []
+    assert result["missing_keys"] == ["034230:2026-10-27"]
+
+
 def test_903_targets_are_joined_once_and_missing_members_are_reported(monkeypatch):
     monkeypatch.setattr(metadata, "is_krx_trading_day", lambda _day: True)
     targets = tuple(f"{number:06d}" for number in range(1, 904))
@@ -108,6 +213,7 @@ def test_903_targets_are_joined_once_and_missing_members_are_reported(monkeypatc
         symbols=targets,
         request_interval=0,
         fetcher=fetcher,
+        kosdaq_fetcher=lambda _day: [],
         saver=saver,
         check_schema=False,
     )
@@ -168,6 +274,47 @@ def test_save_updates_only_existing_kis_rows_and_defers_missing(monkeypatch):
     assert "source = 'KIS'" in update_sql
     assert "open" not in update_sql.lower()
     assert [row["symbol"] for row in update_rows] == ["005930"]
+
+
+def test_missing_only_save_never_overwrites_complete_metadata(monkeypatch):
+    statements = []
+
+    class ScalarRows:
+        def scalars(self):
+            return iter(["034230"])
+
+    class UpdateResult:
+        rowcount = 0
+
+    class Connection:
+        def execute(self, statement, params=None):
+            statements.append((str(statement), params))
+            if str(statement).lstrip().startswith("SELECT"):
+                return ScalarRows()
+            return UpdateResult()
+
+    class Begin:
+        def __enter__(self):
+            return Connection()
+
+        def __exit__(self, *_):
+            return False
+
+    class Engine:
+        def begin(self):
+            return Begin()
+
+    monkeypatch.setattr(metadata, "get_engine", lambda: Engine())
+    row = metadata.normalize_market_metadata(raw_row("034230"))
+
+    result = metadata.save_market_metadata([row], missing_only=True)
+
+    assert result["updated_rows"] == 0
+    assert result["deferred_keys"] == []
+    update_sql = statements[1][0]
+    assert "market_cap IS NULL" in update_sql
+    assert "listed_shares IS NULL" in update_sql
+    assert "market_metadata_source IS NULL" in update_sql
 
 
 def test_backfill_isolates_failed_date_and_continues(monkeypatch):
