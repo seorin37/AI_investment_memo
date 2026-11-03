@@ -140,6 +140,7 @@ def main(argv: list[str] | None = None) -> int:
         wanted = set(args.memos.split(","))
         gold = [m for m in gold if m["memo_id"] in wanted]
     client = OpenAIClient.from_env(args.model)
+    client.response_format = None   # 문장 판정은 JSON 배열 응답이라 객체 모드를 끈다
     print(f"모델 {client.model} · 메모 {len(gold)}개", file=sys.stderr)
     result = evaluate_llm(gold, load_lexicon(args.lexicon), client, sleep=args.sleep)
     result["calls"] = call_stats(client.calls)
