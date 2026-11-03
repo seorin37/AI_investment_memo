@@ -46,7 +46,19 @@ _UNSUPPORTED = [
     re.compile(r"(PBR|PER|PSR|EV/EBITDA)\s*\d" + _COND_MARK, re.IGNORECASE),
     re.compile(r"거래량.{0,6}(터지|급증|폭증|늘)" + _COND_MARK),
     re.compile(r"(지금|현재|평단|매수가|고점|저점)\w*\s*(보다|대비|에서)?\s*\d+(\.\d+)?\s*%" + _COND_MARK),
+    # 거래량 배수·평소 대비 ("거래량 평소 두 배 넘으면")
+    re.compile(r"거래량.{0,10}(\d+(\.\d+)?\s*배|[두세네]\s*배|평소|평균|전일|전날)" + _COND_MARK),
+    # 52주 표시가 없는 신저가·신고가, 직전 저점·고점, 이동평균선 ("전저점 깨지면", "60일선 넘으면")
+    re.compile(r"(신저가|신고가|전저점|전고점|역사적\s*(저점|고점)|\d+\s*일\s*(이동평균)?\s*선|이평선|이동평균선)" + _COND_MARK),
 ]
+# 기준어 없는 상대 % 조건 ("10% 오르면 체크"). 실적·배당 같은 사업 수치의 변화("영업이익 10% 늘면")와 구분하려고
+# % 앞 12자 안에 사업 수치 단어가 있으면 가격 조건으로 보지 않는다.
+_RELATIVE_PCT = re.compile(r"\d+(\.\d+)?\s*%\s*(오르|올라|내리|내려|빠지|떨어지|하락|상승|급락|급등)" + _COND_MARK)
+_NOT_PRICE_SUBJECT = re.compile(r"(이익|매출|실적|배당|수익|금리|환율|이자|점유율|마진|성장|증가|비중|비용|부채)")
+
+
+def _relative_pct_condition(text: str) -> bool:
+    return any(not _NOT_PRICE_SUBJECT.search(text[max(0, m.start() - 12):m.start()]) for m in _RELATIVE_PCT.finditer(text))
 
 
 def find_amounts(text: str) -> list[Amount]:
@@ -89,7 +101,7 @@ def parse_price(text: str, lex: Lexicon) -> PriceResult | None:
 def parse_conditions(text: str, lex: Lexicon) -> list[PriceResult]:
     """문장 안의 가격 조건을 모두 찾는다 ("30만 뚫으면 익절, 25만 깨지면 손절" → 2개).
     각 조건의 rest는 그 조건 뒤에서 다음 가격 표현 전까지의 말이다. 미지원 조건이면 [unsupported] 하나."""
-    if any(p.search(text) for p in _UNSUPPORTED):
+    if any(p.search(text) for p in _UNSUPPORTED) or _relative_pct_condition(text):
         return [PriceResult("unsupported", rest=_rest_after_condition(text))]
     amounts = find_amounts(text)
     if len(amounts) >= 2 and re.search(r"사이|~|∼|부터", text):

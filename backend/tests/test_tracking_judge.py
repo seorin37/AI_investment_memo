@@ -105,6 +105,15 @@ class PriceTest(unittest.TestCase):
             self.assertEqual(parse_price(text, LEX).kind, "unsupported", text)
         self.assertIsNone(parse_price("PER 5배는 너무 싼 거 아닌가 싶음", LEX))
 
+    def test_unsupported_relative_and_technical(self):
+        """평가 메모 1,000개에서 규칙을 빠져나가 LLM으로 간 가격 조건들 (거래량 배수·신저가·전저점·이동평균선·기준어 없는 %)."""
+        for text in ["삼성 거래량 평소 두 배 넘으면 다시 볼 생각", "naver 전저점 깨지면 알려줘...", "NAVER 신저가 깨지면 알려줘",
+                     "네이버 10% 오르면 체크해야지", "하이닉스 60일선 넘으면 알려줘"]:
+            self.assertEqual(parse_price(text, LEX).kind, "unsupported", text)
+        # 사업 수치의 변화나 일반 문장은 가격 조건이 아니다
+        for text in ["영업이익 10% 늘면 좋겠다", "배당 5% 오르면 좋겠다", "거래량 많은 종목 보기", "60일 동안 지켜보기"]:
+            self.assertIsNone(parse_price(text, LEX), text)
+
 
 class JudgeTest(unittest.TestCase):
     def test_c1_price_with_action(self):
