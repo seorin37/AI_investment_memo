@@ -21,6 +21,41 @@ load_dotenv()
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 FAILURE_DIR = PROJECT_ROOT / "logs" / "market"
+GOLD_PRODUCT = {
+    "code": "04020000",
+    "name": "금 99.99K",
+    "category": "gold",
+    "source": "KRX",
+    "price_unit": "KRW/g",
+    "volume_unit": "g",
+}
+
+
+def ensure_gold_product(connection) -> int:
+    """Insert the KRX gold master row when absent without changing existing data."""
+
+    statement = text("""
+        INSERT INTO commodity_products (
+            code,
+            name,
+            category,
+            source,
+            price_unit,
+            volume_unit
+        )
+        VALUES (
+            :code,
+            :name,
+            :category,
+            :source,
+            :price_unit,
+            :volume_unit
+        )
+        ON CONFLICT (code) DO NOTHING
+    """)
+    result = connection.execute(statement, GOLD_PRODUCT)
+    rowcount = getattr(result, "rowcount", None)
+    return rowcount if isinstance(rowcount, int) and rowcount >= 0 else 0
 
 
 def save_market_index(index_data: dict) -> int:
@@ -323,6 +358,7 @@ def save_gold_price(gold_data: dict) -> int:
 
     try:
         with engine.begin() as conn:
+            ensure_gold_product(conn)
             conn.execute(stmt, params)
     finally:
         engine.dispose()

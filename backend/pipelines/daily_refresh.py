@@ -13,7 +13,7 @@ import os
 import sys
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time as datetime_time, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Iterable, Iterator
 from uuid import uuid4
@@ -140,10 +140,13 @@ def build_refresh_plan(as_of: date) -> RefreshPlan:
 
 def _atomic_json(path: Path, value: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    with temporary.open("w", encoding="utf-8") as handle:
-        json.dump(value, handle, ensure_ascii=False, indent=2, default=str)
-    temporary.replace(path)
+    temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+    try:
+        with temporary.open("w", encoding="utf-8") as handle:
+            json.dump(value, handle, ensure_ascii=False, indent=2, default=str)
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 class RunLog:
@@ -440,7 +443,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    as_of = args.as_of or datetime.now(SEOUL).date()
+    now = datetime.now(SEOUL)
+    if (
+        args.profile == "evening"
+        and args.as_of is None
+        and now.time() < datetime_time(18, 30)
+    ):
+        print(json.dumps({
+            "profile": "evening",
+            "status": "skipped_before_18_30",
+            "as_of": now.date().isoformat(),
+        }, ensure_ascii=False, indent=2))
+        return 0
+    as_of = args.as_of or now.date()
     plan = build_refresh_plan(as_of)
 
     if args.print_plan:
