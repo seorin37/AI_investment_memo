@@ -29,8 +29,8 @@
 
 [필드 규칙]
 - status: "update" 또는 "no_update"
-- title: 20자 이내, 바뀐 사실 한 줄, 평가·전망 표현 금지
-- summary: 1~3문장, 문장당 60자 이내, 존댓말 "~어요"체
+- title: {title_max}자 이내, 바뀐 사실 한 줄, 평가·전망 표현 금지
+- summary: 1~{max_sentences}문장, 문장당 {sentence_max_chars}자 이내, 존댓말 "~어요"체
 - summary의 모든 문장 끝에는 실제 사용한 근거 번호를 [E1] 형식으로 1개 이상 표시
 - reason: 메모의 어떤 관심사와 연결되는지 1문장으로 설명. 메모 표현은 필요한 부분만 짧게 따옴표로 표시
 - evidence: summary에서 실제 사용한 근거만 포함

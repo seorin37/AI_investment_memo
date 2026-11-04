@@ -5,6 +5,7 @@
 - 형식·금지 표현·숫자·출처·확신도 검사에 걸리면 고정 문구 카드로 대체한다 (on_check_fail="fixed"; "drop"이면 만들지 않는다).
 - LLM 호출이 실패해도 고정 문구로 대체하지만, CreditsExhausted는 대체하지 않고 그대로 올린다 (AI 업데이트 일시 중지).
 - 크레딧 확인은 호출자가 call 함수 안에서 한다. call이 None이면 근거 준비까지만 한다.
+- 옵션 verify_call: 코드 검사를 통과한 카드를 LLM이 한 번 더 문장별로 근거와 대조한다 (항목당 호출 +1). 하나라도 근거에 없다고 하면 검사 실패로 본다.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ from typing import Callable
 from .checks import check_card, check_no_update
 from .evidence import build_evidence, related_news
 from .fixed import fixed_card
-from .judge import build_prompt, parse_card
+from .judge import build_prompt, build_verify_prompt, parse_card, parse_verify
 from .models import Candidate, CreditsExhausted, TopicOutcome, TrackingItem, UpdateDraft
 
 
@@ -23,12 +24,32 @@ _REPAIR_REASON = {"FORMAT_TITLE": "title이 {title_max}자(공백 포함)를 넘
                   "FORMAT_SUMMARY": "summary가 {max_sentences}문장을 넘었거나, 한 문장이 [E#]를 뺀 {sentence_max_chars}자를 넘었거나, 문장 끝에 [E#]가 없어요"}
 
 
+def _limits(cfg: dict) -> dict:
+    """카드 규격 설정값. 프롬프트({title_max} 등)와 형식 재시도 안내 문구가 같은 값을 쓴다."""
+    return {"title_max": cfg.get("title_max", 20), "max_sentences": cfg.get("max_sentences", 3),
+            "sentence_max_chars": cfg.get("sentence_max_chars", 60)}
+
+
 def _repair_prompt(prompt: str, raw: str, codes: list[str], cfg: dict) -> str:
-    limits = {"title_max": cfg.get("title_max", 20), "max_sentences": cfg.get("max_sentences", 3),
-              "sentence_max_chars": cfg.get("sentence_max_chars", 60)}
+    limits = _limits(cfg)
     reasons = "\n".join("- " + _REPAIR_REASON[c].format(**limits) for c in dict.fromkeys(codes))
     return (f"{prompt}\n\n# 수정 요청\n직전 답변이 아래 규칙을 어겼어요.\n{reasons}\n\n직전 답변:\n{raw}\n\n"
             "같은 근거만 사용하고 새 사실이나 숫자는 넣지 말고, 규칙을 지켜 JSON 하나로 다시 작성하세요. 문장은 줄이거나 나눠서 쓰세요.")
+
+
+def _verify(card, evidence, call: Callable[[str], str]) -> list[str]:
+    """카드 문장이 근거로 뒷받침되는지 LLM에게 다시 묻는다. 빈 목록이면 통과.
+    응답을 읽을 수 없으면 통과시키지 않는다 ("틀릴 바엔 말하지 않는다")."""
+    try:
+        raw = call(build_verify_prompt(card, evidence))
+    except CreditsExhausted:
+        raise
+    except Exception as exc:
+        return [f"VERIFY_CALL_FAILED:{type(exc).__name__}"]
+    flags = parse_verify(raw, len(card.summary))
+    if flags is None:
+        return ["VERIFY_PARSE"]
+    return [] if all(flags) else ["VERIFY_UNSUPPORTED"]
 
 
 def check_topic(item: TrackingItem, candidates: list[Candidate], call: Callable[[str], str] | None,
@@ -57,7 +78,7 @@ def check_topic(item: TrackingItem, candidates: list[Candidate], call: Callable[
             draft.related_news = related_news(evidence, set(), cfg.get("related_news_min_similarity", 0.6))
         return TopicOutcome("fixed_card", evidence, card, codes, draft, raw, retried)
 
-    prompt = build_prompt(item, evidence)                      # 설정 파일이 없으면 여기서 바로 실패시킨다 (호출 실패로 숨기지 않는다)
+    prompt = build_prompt(item, evidence, limits=_limits(cfg))   # 설정 파일이 없으면 여기서 바로 실패시킨다 (호출 실패로 숨기지 않는다)
     try:
         raw = call(prompt)
     except CreditsExhausted:
@@ -92,6 +113,10 @@ def check_topic(item: TrackingItem, candidates: list[Candidate], call: Callable[
         codes = check_card(card, evidence, banned, cfg)
     if codes:
         return replace(codes, card, retried=retried)
+    if cfg.get("verify_call"):                                 # 코드 검사를 통과한 카드만 검수한다 (호출 +1)
+        vcodes = _verify(card, evidence, call)
+        if vcodes:
+            return replace(vcodes, card, retried=retried)
     by_id = {e.eid: e for e in evidence}
     sources = [(by_id[sid].candidate.ref, fact) for sid, fact in card.evidence]
     kinds = {by_id[sid].candidate.kind for sid, _ in card.evidence}
