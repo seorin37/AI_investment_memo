@@ -85,11 +85,11 @@ export interface UploadFile {
  */
 export interface Api {
   // 인증
-  loginEmail(email: string, password: string): Promise<AuthToken>;
-  signupEmail(name: string, email: string, password: string): Promise<AuthToken>;
+  refreshAuth(refreshToken?: string): Promise<AuthToken>;
+  exchangeMobileAuth(code: string, codeVerifier: string): Promise<AuthToken>;
   me(): Promise<User>;
   updateMe(patch: Partial<Pick<User, 'name' | 'bio'>>): Promise<User>;
-  logout(): Promise<void>;
+  logout(refreshToken?: string): Promise<void>;
 
   // 종목
   listMyStocks(): Promise<MyStock[]>;

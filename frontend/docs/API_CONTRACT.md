@@ -39,14 +39,14 @@ app.add_middleware(
 
 ### 소셜 로그인 (카카오·네이버·구글)
 
-클라이언트 시크릿은 **백엔드에만** 둡니다. 프론트는 브라우저만 열고, 토큰은 리다이렉트로 받습니다.
+클라이언트 시크릿은 **백엔드에만** 둡니다. 프론트는 시스템 브라우저만 열며 토큰을 리다이렉트 URL로 받지 않습니다.
 
-1. 프론트 → `GET /auth/{provider}/login?redirect_uri=<앱 콜백>` (provider = `kakao` | `naver` | `google`)
+1. 프론트 → `GET /auth/{provider}/start?client=&return_to=&code_challenge=` (provider = `kakao` | `naver` | `google`)
 2. 백엔드 → 각 사 OAuth 동의 화면으로 302
-3. 백엔드 콜백에서 사용자 생성/조회 + JWT 발급 → `302 <redirect_uri>?token=<JWT>` (실패 시 `?error=메시지`)
-4. 프론트 `/auth/callback` 화면이 토큰 저장 → `GET /me`
+3. 백엔드 콜백에서 사용자 생성/조회. 웹은 HttpOnly 쿠키, Android는 짧은 수명의 단일 사용 code만 전달
+4. Android 앱은 앱 PKCE verifier와 code를 `/auth/mobile/exchange`에서 교환하고 Refresh Token만 SecureStore에 저장
 
-허용해야 할 `redirect_uri` 예시: `http://localhost:8081/auth/callback`(웹), `memos://auth/callback`(개발 빌드), `exp://<IP>:8081/--/auth/callback`(Expo Go)
+허용할 복귀 주소 예시: `http://localhost:8081/auth/callback`(웹), `memos://auth/callback`(Development Build). Expo Go 전용 주소는 운영 allowlist에 넣지 않습니다.
 
 ---
 
@@ -54,16 +54,17 @@ app.add_middleware(
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| POST | `/auth/email/login` | `{email, password}` | `AuthToken` |
-| POST | `/auth/email/signup` | `{name, email, password}` | `AuthToken` |
-| GET | `/auth/{provider}/login` | `?redirect_uri=` | 302 |
-| POST | `/auth/logout` | – | 204 |
-| GET | `/me` | – | `User` |
+| GET | `/auth/{provider}/start` | `?client=web\|mobile&return_to=&code_challenge=` | 302 |
+| GET | `/auth/{provider}/callback` | Provider `code`, `state` | 302 (웹 쿠키 또는 모바일 1회용 code) |
+| POST | `/auth/mobile/exchange` | `{code, code_verifier}` | `AuthToken` |
+| POST | `/auth/refresh` | 웹: 쿠키 / Android: `{refresh_token}` | `AuthToken` |
+| POST | `/auth/logout` | 웹: 쿠키 / Android: `{refresh_token}` | 204 |
+| GET | `/auth/me` | – | `User` |
 | PATCH | `/me` | `{name?, bio?}` | `User` |
 
 ```json
 // AuthToken
-{ "access_token": "eyJ...", "token_type": "bearer",
+{ "access_token": "eyJ...", "refresh_token": "Android 응답에만 포함", "expires_in": 900, "token_type": "bearer",
   "user": { "id": "u_1", "name": "김나라", "bio": "대학생", "avatar_url": null, "email": "nara@kakao.example",
             "providers": [{ "provider": "kakao", "email": "nara@kakao.example", "connected": true, "current": true }] } }
 ```

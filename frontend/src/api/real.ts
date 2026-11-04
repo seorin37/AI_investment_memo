@@ -8,11 +8,12 @@ import type { Api } from './types';
 
 export const realApi: Api = {
   // 인증
-  loginEmail: (email, password) => http.post('/auth/email/login', { email, password }),
-  signupEmail: (name, email, password) => http.post('/auth/email/signup', { name, email, password }),
-  me: () => http.get('/me'),
+  refreshAuth: (refreshToken) => http.post('/auth/refresh', { refresh_token: refreshToken }),
+  exchangeMobileAuth: (code, codeVerifier) =>
+    http.post('/auth/mobile/exchange', { code, code_verifier: codeVerifier }),
+  me: () => http.get('/auth/me'),
   updateMe: (patch) => http.patch('/me', patch),
-  logout: () => http.post('/auth/logout'),
+  logout: (refreshToken) => http.post('/auth/logout', refreshToken ? { refresh_token: refreshToken } : undefined),
 
   // 종목
   listMyStocks: () => http.get('/stocks'),
