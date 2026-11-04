@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import fcntl
 import json
 import os
 import sys
@@ -40,6 +39,7 @@ from pathlib import Path
 from app.dart_reports import DartError, DartRateLimitError
 
 from ..common.config import data_path, load_config, resolve_path
+from ..common.file_lock import LockUnavailable, acquire_file_lock
 from ..common.logging import REDACTOR, get_logger, setup_logging
 from . import financials, financials_dart
 from .fin_classify import classify
@@ -313,10 +313,9 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_OK
 
     state_dir.mkdir(parents=True, exist_ok=True)
-    lock = (state_dir / ".lock").open("w")
     try:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
+        _process_lock = acquire_file_lock(state_dir / ".lock", timeout=0)
+    except LockUnavailable:
         print("다른 run_financials_all이 이미 실행 중입니다.", file=sys.stderr)
         return EXIT_FAILURES
 
