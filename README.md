@@ -34,6 +34,8 @@ PyTorch의 CUDA 빌드는 `environment.yml`에서 별도로 고정하지 않았�
 
 GPU 환경에서는 NVIDIA 드라이버와 CUDA 호환성을 확인하고, PyTorch 공식 설치 안내에 따라 적절한 빌드를 설치해야 합니다.
 
+Windows 네이티브 Python과 Git Bash로 실행하려면 [Windows 네이티브 실행 가이드](docs/windows-native-setup.md)를 따릅니다.
+
 설치 후 확인:
 
 ```bash

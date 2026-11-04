@@ -25,6 +25,7 @@ import requests
 from sqlalchemy import bindparam, text
 
 from pipelines.common.db import get_engine, load_env
+from pipelines.common.file_lock import file_lock
 from pipelines.market.calendar import is_krx_trading_day
 from pipelines.market.krx import is_valid_stock_symbol
 from pipelines.market.stock_master import load_kospi_symbols
@@ -183,18 +184,9 @@ class KisClient:
         if self.token_cache_path is None:
             yield
             return
-        import fcntl
-
         lock_path = self.token_cache_path.with_suffix(".lock")
-        lock_path.parent.mkdir(parents=True, exist_ok=True)
-        descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
-        os.chmod(lock_path, 0o600)
-        with os.fdopen(descriptor, "r+") as handle:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
-            try:
-                yield
-            finally:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        with file_lock(lock_path):
+            yield
 
     def _load_cached_token(self) -> bool:
         path = self.token_cache_path
