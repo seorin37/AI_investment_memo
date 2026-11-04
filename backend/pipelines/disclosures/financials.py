@@ -113,6 +113,7 @@ class Mapping:
     financials_fin: tuple[ColumnRule, ...]
     owners_equity: ColumnRule
     continuing_fallback: dict
+    accounting_identity_fallback: dict
     capital_note_fallback_periods: tuple[str, ...]
     fin_type_overrides: dict[str, str] = field(default_factory=dict)  # 기존 파이프라인(TARGET_SYMBOLS)용 고정 분류
 
@@ -162,6 +163,7 @@ def load_mapping(path: str | Path) -> Mapping:
         financials_fin=tuple(_rule(c, s) for c, s in fin["columns"].items()),
         owners_equity=_rule("owners_equity", data["bps"]["owners_equity"]),
         continuing_fallback=dict(data.get("continuing_operations_fallback") or {}),
+        accounting_identity_fallback=dict(data.get("accounting_identity_fallback") or {}),
         capital_note_fallback_periods=tuple(str(v) for v in data["bps"].get("capital_note_fallback_periods", [])),
         fin_type_overrides=overrides,
     )
@@ -342,6 +344,72 @@ def continuing_operations_fallback(rows: list[dict], symbol: str, period_end: st
     return {"net_income": values["owners_profit_loss"], "eps": values["basic_eps"], "source": source}
 
 
+def apply_accounting_identity_fallback(
+    rows: list[dict], symbol: str, period_end: str, source_file: str, mapping: Mapping,
+    values: dict[str, Decimal | None], provenance: list[dict], *, prior: bool = False,
+) -> bool:
+    """Repair explicitly approved DART total-account defects with auditable provenance.
+
+    Some filings expose stale ``Assets``/``Liabilities`` values in the structured API
+    while ``EquityAndLiabilities`` and ``Equity`` match the filed statement.  The
+    fallback is deliberately restricted to configured symbol/period/receipt triples.
+    """
+    spec = mapping.accounting_identity_fallback
+    targets = {str(k): str(v) for k, v in (spec.get("targets") or {}).items()}
+    expected_rcept = targets.get(f"{symbol} {period_end}")
+    if prior or expected_rcept is None:
+        return False
+    rcept_nos = {str(row["rcept_no"]) for row in rows if row.get("rcept_no")}
+    if rcept_nos != {expected_rcept}:
+        return False
+    assets, liabilities, equity = (values.get(c) for c in ("total_assets", "total_liabilities", "total_equity"))
+    if None in (assets, liabilities, equity) or assets == liabilities + equity:
+        return False
+
+    account_id = str(spec.get("account_id") or "ifrs-full_EquityAndLiabilities")
+    combined = pick(
+        rows, ColumnRule("total_assets", ("BS",), "balance", (account_id,)),
+        symbol, period_end, source_file, ptype=period_type(period_end), fs_div="CFS",
+    )
+    if combined.value is None:
+        return False
+    corrected = {
+        "total_assets": combined.value,
+        "total_liabilities": combined.value - equity,
+    }
+    equity_source = next(p for p in provenance if p["table"] == "financials" and p["column"] == "total_equity")
+    for column, value in corrected.items():
+        source = next(p for p in provenance if p["table"] == "financials" and p["column"] == column)
+        original = {k: source.get(k) for k in ("value", "account_id", "sj_div", "field", "file") if k in source}
+        replacement = {
+            "symbol": symbol,
+            "period_end": period_end,
+            "table": "financials",
+            "column": column,
+            "value": value,
+            "fallback_rule": "filed_accounting_identity",
+            "verified_rcept_no": expected_rcept,
+            "replaced_source": original,
+            "file": source_file,
+        }
+        if column == "total_assets":
+            replacement.update(combined.source)
+            replacement["formula"] = account_id
+        else:
+            replacement.update({
+                "formula": f"{account_id} - ifrs-full_Equity",
+                "components": {
+                    "equity_and_liabilities": str(combined.value),
+                    "equity": str(equity),
+                    "equity_account_id": equity_source.get("account_id"),
+                },
+            })
+        source.clear()
+        source.update(replacement)
+        values[column] = value
+    return corrected["total_assets"] == corrected["total_liabilities"] + equity
+
+
 # ── 기간 1건 매핑 ───────────────────────────────────
 FROM_MAPPING = object()  # map_period(fin_type=...) 기본값: 설정의 fin_type_overrides를 쓴다 (기존 4개사 파이프라인)
 
@@ -406,6 +474,9 @@ def map_period(
         return picked.value
 
     values = {rule.column: take(rule, "financials") for rule in mapping.financials}
+    apply_accounting_identity_fallback(
+        rows, symbol, period_end, statement_file, mapping, values, provenance, prior=prior,
+    )
     net_source = next(p for p in provenance if p["table"] == "financials" and p["column"] == "net_income")
     eps_source = next(p for p in provenance if p["table"] == "financials" and p["column"] == "eps")
     base_missing = all(str(source.get("reason", "")).startswith("후보 account_id 없음") for source in (net_source, eps_source))
