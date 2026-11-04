@@ -115,11 +115,8 @@ const currentPrice = (code: string) => candlesOf(code).at(-1)!.close;
 
 export const mockApi: Api = {
   // ─── 인증
-  loginEmail: async () => wait({ access_token: 'mock-token', token_type: 'bearer' as const, user: db.user }),
-  signupEmail: async (name) => {
-    db.user.name = name || db.user.name;
-    return wait({ access_token: 'mock-token', token_type: 'bearer' as const, user: db.user });
-  },
+  refreshAuth: async () => wait({ access_token: 'mock-token', refresh_token: 'mock-refresh', token_type: 'bearer' as const, expires_in: 900, user: db.user }),
+  exchangeMobileAuth: async () => wait({ access_token: 'mock-token', refresh_token: 'mock-refresh', token_type: 'bearer' as const, expires_in: 900, user: db.user }),
   me: async () => wait(db.user),
   updateMe: async (patch) => {
     Object.assign(db.user, patch);

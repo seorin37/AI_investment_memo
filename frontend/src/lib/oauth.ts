@@ -1,38 +1,61 @@
-/**
- * 소셜 로그인 (카카오 · 네이버 · 구글)
- *
- * 흐름: 앱 → FastAPI `/auth/{provider}/login?redirect_uri=...` → 각 사 OAuth 동의
- *       → FastAPI 콜백에서 사용자 생성/조회 + JWT 발급 → redirect_uri?token=JWT 로 리다이렉트
- * - 웹: 같은 탭에서 이동 → /auth/callback 화면이 토큰을 저장
- * - 네이티브: WebBrowser.openAuthSessionAsync 로 열고, memos://auth/callback?token=… 를 받아 저장
- * 클라이언트 시크릿은 전부 백엔드에만 둡니다.
- */
+/** Browser-based social OAuth with an app-bound one-time exchange code. */
 import { Platform } from 'react-native';
-import * as Linking from 'expo-linking';
+import * as AuthSession from 'expo-auth-session';
+import * as Crypto from 'expo-crypto';
 import * as WebBrowser from 'expo-web-browser';
+import { api } from '@/api';
 import { env } from '@/config/env';
-import type { AuthProvider } from '@/types/models';
+import type { AuthProvider, AuthToken } from '@/types/models';
 
 WebBrowser.maybeCompleteAuthSession();
 
-export function callbackUrl() {
-  return Linking.createURL('auth/callback');
+function base64Url(bytes: Uint8Array): string {
+  let binary = '';
+  bytes.forEach((value) => {
+    binary += String.fromCharCode(value);
+  });
+  return globalThis.btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
 
-export function providerLoginUrl(provider: Exclude<AuthProvider, 'email'>) {
-  return `${env.apiBaseUrl}/auth/${provider}/login?redirect_uri=${encodeURIComponent(callbackUrl())}`;
+async function createPkce(): Promise<{ verifier: string; challenge: string }> {
+  const verifier = base64Url(await Crypto.getRandomBytesAsync(48));
+  const digest = await Crypto.digest(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    new TextEncoder().encode(verifier),
+  );
+  return { verifier, challenge: base64Url(new Uint8Array(digest)) };
 }
 
-/** 네이티브: 토큰 문자열 반환 / 웹: 페이지 이동(반환 없음) */
-export async function startSocialLogin(provider: Exclude<AuthProvider, 'email'>): Promise<string | null> {
-  const url = providerLoginUrl(provider);
+export function callbackUrl(): string {
+  if (Platform.OS === 'web' && typeof globalThis.location !== 'undefined') {
+    return `${globalThis.location.origin}/auth/callback`;
+  }
+  return AuthSession.makeRedirectUri({ scheme: 'memos', path: 'auth/callback' });
+}
+
+function providerLoginUrl(provider: AuthProvider, challenge?: string): string {
+  const params = new URLSearchParams({
+    client: Platform.OS === 'web' ? 'web' : 'mobile',
+    return_to: callbackUrl(),
+  });
+  if (challenge) params.set('code_challenge', challenge);
+  return `${env.apiBaseUrl}/auth/${provider}/start?${params.toString()}`;
+}
+
+/** Web redirects and restores via cookies; native returns first-party session tokens. */
+export async function startSocialLogin(provider: AuthProvider): Promise<AuthToken | null> {
   if (Platform.OS === 'web') {
-    globalThis.location?.assign(url);
+    globalThis.location?.assign(providerLoginUrl(provider));
     return null;
   }
-  const result = await WebBrowser.openAuthSessionAsync(url, callbackUrl());
+  const { verifier, challenge } = await createPkce();
+  const result = await WebBrowser.openAuthSessionAsync(
+    providerLoginUrl(provider, challenge),
+    callbackUrl(),
+  );
   if (result.type !== 'success') return null;
-  const { queryParams } = Linking.parse(result.url);
-  const token = queryParams?.token;
-  return typeof token === 'string' ? token : null;
+  const response = new URL(result.url);
+  const code = response.searchParams.get('code');
+  if (!code) throw new Error('인증 교환 코드가 없습니다.');
+  return api.exchangeMobileAuth(code, verifier);
 }

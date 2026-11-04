@@ -7,7 +7,7 @@
 export type ISODate = string; // '2026-10-21T09:30:00+09:00'
 
 // ─── 사용자 · 인증 ───────────────────────────────────────────
-export type AuthProvider = 'kakao' | 'naver' | 'google' | 'email';
+export type AuthProvider = 'kakao' | 'naver' | 'google';
 
 export interface User {
   id: string;
@@ -19,8 +19,10 @@ export interface User {
 }
 
 export interface AuthToken {
-  access_token: string;
+  access_token: string | null;
+  refresh_token?: string | null;
   token_type: 'bearer';
+  expires_in: number;
   user: User;
 }
 
