@@ -1,0 +1,2460 @@
+{
+ "seed": 2026,
+ "batches": [
+  [
+   "P029",
+   "P032",
+   "P036",
+   "P040",
+   "P051",
+   "P056",
+   "P059",
+   "P072",
+   "P076",
+   "P082"
+  ],
+  [
+   "P001",
+   "P002",
+   "P003",
+   "P004",
+   "P005",
+   "P006",
+   "P007",
+   "P008",
+   "P009",
+   "P010"
+  ],
+  [
+   "P011",
+   "P012",
+   "P013",
+   "P014",
+   "P015",
+   "P016",
+   "P017",
+   "P018",
+   "P019",
+   "P020"
+  ],
+  [
+   "P021",
+   "P022",
+   "P023",
+   "P024",
+   "P025",
+   "P026",
+   "P027",
+   "P028",
+   "P030",
+   "P031"
+  ],
+  [
+   "P033",
+   "P034",
+   "P035",
+   "P037",
+   "P038",
+   "P039",
+   "P041",
+   "P042",
+   "P043",
+   "P044"
+  ],
+  [
+   "P045",
+   "P046",
+   "P047",
+   "P048",
+   "P049",
+   "P050",
+   "P052",
+   "P053",
+   "P054",
+   "P055"
+  ],
+  [
+   "P057",
+   "P058",
+   "P060",
+   "P061",
+   "P062",
+   "P063",
+   "P064",
+   "P065",
+   "P066",
+   "P067"
+  ],
+  [
+   "P068",
+   "P069",
+   "P070",
+   "P071",
+   "P073",
+   "P074",
+   "P075",
+   "P077",
+   "P078",
+   "P079"
+  ],
+  [
+   "P080",
+   "P081",
+   "P083",
+   "P084",
+   "P085",
+   "P086",
+   "P087",
+   "P088",
+   "P089",
+   "P090"
+  ],
+  [
+   "P091",
+   "P092",
+   "P093",
+   "P094",
+   "P095",
+   "P096",
+   "P097",
+   "P098",
+   "P099",
+   "P100"
+  ]
+ ],
+ "persons": {
+  "P001": [
+   {
+    "slot": 1,
+    "company": "NAVER",
+    "status": "보유",
+    "primary_type": "B8",
+    "trigger": "커뮤니티 글 보고"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "관심",
+    "primary_type": "B9",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 3,
+    "company": "SK하이닉스",
+    "status": "관찰",
+    "primary_type": "A4",
+    "trigger": "커뮤니티 글 보고"
+   }
+  ],
+  "P002": [
+   {
+    "slot": 1,
+    "company": "삼성전자",
+    "status": "관찰",
+    "primary_type": "A3",
+    "trigger": "공시 알림 보고"
+   },
+   {
+    "slot": 2,
+    "company": "NAVER",
+    "status": "관찰",
+    "primary_type": "C5",
+    "trigger": "출근길에"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "A1",
+    "trigger": "유튜브 보고"
+   }
+  ],
+  "P003": [
+   {
+    "slot": 1,
+    "company": "삼성전자",
+    "status": "관찰",
+    "primary_type": "C3",
+    "trigger": "커뮤니티 글 보고",
+    "other_company": "SK하이닉스"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "관찰",
+    "primary_type": "A5",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "C1",
+    "trigger": "차트 보다가"
+   }
+  ],
+  "P004": [
+   {
+    "slot": 1,
+    "company": "삼성전자",
+    "status": "보유",
+    "primary_type": "A3",
+    "trigger": "일정 보다가"
+   },
+   {
+    "slot": 2,
+    "company": "NAVER",
+    "status": "관심",
+    "primary_type": "A2",
+    "trigger": "주가 알림 보고"
+   },
+   {
+    "slot": 3,
+    "company": "SK하이닉스",
+    "status": "모름",
+    "primary_type": "B2",
+    "trigger": "매매하고 나서"
+   }
+  ],
+  "P005": [
+   {
+    "slot": 1,
+    "company": "NAVER",
+    "status": "보유",
+    "primary_type": "A4",
+    "trigger": "지인 얘기 듣고"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "보유",
+    "primary_type": "A3",
+    "trigger": "일정 보다가"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "C5",
+    "trigger": "출근길에"
+   }
+  ],
+  "P006": [
+   {
+    "slot": 1,
+    "company": "NAVER",
+    "status": "보유",
+    "primary_type": "A2",
+    "trigger": "차트 보다가"
+   },
+   {
+    "slot": 2,
+    "company": "NAVER",
+    "status": "보유",
+    "primary_type": "A1",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 3,
+    "company": "SK하이닉스",
+    "status": "모름",
+    "primary_type": "C3",
+    "trigger": "뉴스 보고",
+    "other_company": "KB금융"
+   }
+  ],
+  "P007": [
+   {
+    "slot": 1,
+    "company": "삼성전자",
+    "status": "보유",
+    "primary_type": "A5",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "관찰",
+    "primary_type": "A5",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "B8",
+    "trigger": "커뮤니티 글 보고"
+   }
+  ],
+  "P008": [
+   {
+    "slot": 1,
+    "company": "KB금융",
+    "status": "보유",
+    "primary_type": "A2",
+    "trigger": "주가 알림 보고"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "관심",
+    "primary_type": "A4",
+    "trigger": "지인 얘기 듣고"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "보유",
+    "primary_type": "A2",
+    "trigger": "차트 보다가"
+   }
+  ],
+  "P009": [
+   {
+    "slot": 1,
+    "company": "NAVER",
+    "status": "관심",
+    "primary_type": "A5",
+    "trigger": "실적 기사 보고"
+   },
+   {
+    "slot": 2,
+    "company": "NAVER",
+    "status": "관심",
+    "primary_type": "C2",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 3,
+    "company": "SK하이닉스",
+    "status": "모름",
+    "primary_type": "A2",
+    "trigger": "차트 보다가"
+   }
+  ],
+  "P010": [
+   {
+    "slot": 1,
+    "company": "KB금융",
+    "status": "관심",
+    "primary_type": "B2",
+    "trigger": "매매하고 나서"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "관심",
+    "primary_type": "A4",
+    "trigger": "커뮤니티 글 보고"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "관심",
+    "primary_type": "A1",
+    "trigger": "기사 보고"
+   }
+  ],
+  "P011": [
+   {
+    "slot": 1,
+    "company": "NAVER",
+    "status": "관심",
+    "primary_type": "A5",
+    "trigger": "실적 기사 보고"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "관심",
+    "primary_type": "B8",
+    "trigger": "커뮤니티 글 보고"
+   },
+   {
+    "slot": 3,
+    "company": "삼성전자",
+    "status": "모름",
+    "primary_type": "B2",
+    "trigger": "매매하고 나서"
+   }
+  ],
+  "P012": [
+   {
+    "slot": 1,
+    "company": "삼성전자",
+    "status": "보유",
+    "primary_type": "A2",
+    "trigger": "차트 보다가"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "보유",
+    "primary_type": "B9",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "A2",
+    "trigger": "차트 보다가"
+   }
+  ],
+  "P013": [
+   {
+    "slot": 1,
+    "company": "KB금융",
+    "status": "관찰",
+    "primary_type": "A4",
+    "trigger": "지인 얘기 듣고"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "관심",
+    "primary_type": "A5",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 3,
+    "company": "NAVER",
+    "status": "관심",
+    "primary_type": "A2",
+    "trigger": "주가 알림 보고"
+   }
+  ],
+  "P014": [
+   {
+    "slot": 1,
+    "company": "SK하이닉스",
+    "status": "다시 보기",
+    "primary_type": "C1",
+    "trigger": "차트 보다가"
+   },
+   {
+    "slot": 2,
+    "company": "NAVER",
+    "status": "관심",
+    "primary_type": "C5",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "관심",
+    "primary_type": "A3",
+    "trigger": "일정 보다가"
+   }
+  ],
+  "P015": [
+   {
+    "slot": 1,
+    "company": "삼성전자",
+    "status": "관심",
+    "primary_type": "B3",
+    "trigger": "계좌 보다가"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "관찰",
+    "primary_type": "B2",
+    "trigger": "매매하고 나서"
+   },
+   {
+    "slot": 3,
+    "company": "NAVER",
+    "status": "관찰",
+    "primary_type": "B3",
+    "trigger": "계좌 보다가"
+   }
+  ],
+  "P016": [
+   {
+    "slot": 1,
+    "company": "KB금융",
+    "status": "보유",
+    "primary_type": "C4",
+    "trigger": "차트 보다가"
+   },
+   {
+    "slot": 2,
+    "company": "KB금융",
+    "status": "보유",
+    "primary_type": "C1",
+    "trigger": "차트 보다가"
+   },
+   {
+    "slot": 3,
+    "company": "SK하이닉스",
+    "status": "모름",
+    "primary_type": "A3",
+    "trigger": "공시 알림 보고"
+   }
+  ],
+  "P017": [
+   {
+    "slot": 1,
+    "company": "KB금융",
+    "status": "관찰",
+    "primary_type": "B3",
+    "trigger": "계좌 보다가"
+   },
+   {
+    "slot": 2,
+    "company": "KB금융",
+    "status": "관찰",
+    "primary_type": "A4",
+    "trigger": "지인 얘기 듣고"
+   },
+   {
+    "slot": 3,
+    "company": "삼성전자",
+    "status": "모름",
+    "primary_type": "A2",
+    "trigger": "차트 보다가"
+   }
+  ],
+  "P018": [
+   {
+    "slot": 1,
+    "company": "삼성전자",
+    "status": "다시 보기",
+    "primary_type": "A2",
+    "trigger": "주가 알림 보고"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "다시 보기",
+    "primary_type": "A2",
+    "trigger": "주가 알림 보고"
+   },
+   {
+    "slot": 3,
+    "company": "NAVER",
+    "status": "모름",
+    "primary_type": "C4",
+    "trigger": "실적 기사 보고"
+   }
+  ],
+  "P019": [
+   {
+    "slot": 1,
+    "company": "NAVER",
+    "status": "관찰",
+    "primary_type": "C2",
+    "trigger": "계좌 보다가"
+   },
+   {
+    "slot": 2,
+    "company": "NAVER",
+    "status": "관찰",
+    "primary_type": "A4",
+    "trigger": "커뮤니티 글 보고"
+   },
+   {
+    "slot": 3,
+    "company": "SK하이닉스",
+    "status": "모름",
+    "primary_type": "C4",
+    "trigger": "차트 보다가"
+   }
+  ],
+  "P020": [
+   {
+    "slot": 1,
+    "company": "삼성전자",
+    "status": "보유",
+    "primary_type": "A4",
+    "trigger": "커뮤니티 글 보고"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "보유",
+    "primary_type": "C4",
+    "trigger": "실적 기사 보고"
+   },
+   {
+    "slot": 3,
+    "company": "SK하이닉스",
+    "status": "모름",
+    "primary_type": "B3",
+    "trigger": "계좌 보다가"
+   }
+  ],
+  "P021": [
+   {
+    "slot": 1,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "A2",
+    "trigger": "차트 보다가"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "관심",
+    "primary_type": "A3",
+    "trigger": "공시 알림 보고"
+   },
+   {
+    "slot": 3,
+    "company": "NAVER",
+    "status": "보유",
+    "primary_type": "C1",
+    "trigger": "차트 보다가"
+   }
+  ],
+  "P022": [
+   {
+    "slot": 1,
+    "company": "SK하이닉스",
+    "status": "관심",
+    "primary_type": "A3",
+    "trigger": "일정 보다가"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "관심",
+    "primary_type": "A2",
+    "trigger": "차트 보다가"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "A4",
+    "trigger": "지인 얘기 듣고"
+   }
+  ],
+  "P023": [
+   {
+    "slot": 1,
+    "company": "NAVER",
+    "status": "다시 보기",
+    "primary_type": "B3",
+    "trigger": "계좌 보다가"
+   },
+   {
+    "slot": 2,
+    "company": "NAVER",
+    "status": "다시 보기",
+    "primary_type": "A2",
+    "trigger": "차트 보다가"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "A3",
+    "trigger": "공시 알림 보고"
+   }
+  ],
+  "P024": [
+   {
+    "slot": 1,
+    "company": "KB금융",
+    "status": "보유",
+    "primary_type": "A2",
+    "trigger": "주가 알림 보고"
+   },
+   {
+    "slot": 2,
+    "company": "NAVER",
+    "status": "관찰",
+    "primary_type": "A5",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 3,
+    "company": "SK하이닉스",
+    "status": "모름",
+    "primary_type": "B3",
+    "trigger": "계좌 보다가"
+   }
+  ],
+  "P025": [
+   {
+    "slot": 1,
+    "company": "SK하이닉스",
+    "status": "관찰",
+    "primary_type": "A5",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "관심",
+    "primary_type": "A4",
+    "trigger": "지인 얘기 듣고"
+   },
+   {
+    "slot": 3,
+    "company": "삼성전자",
+    "status": "관심",
+    "primary_type": "A2",
+    "trigger": "주가 알림 보고"
+   }
+  ],
+  "P026": [
+   {
+    "slot": 1,
+    "company": "삼성전자",
+    "status": "관찰",
+    "primary_type": "A4",
+    "trigger": "커뮤니티 글 보고"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "관찰",
+    "primary_type": "B8",
+    "trigger": "커뮤니티 글 보고"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "A3",
+    "trigger": "일정 보다가"
+   }
+  ],
+  "P027": [
+   {
+    "slot": 1,
+    "company": "삼성전자",
+    "status": "보유",
+    "primary_type": "C1",
+    "trigger": "차트 보다가"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "C5",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 3,
+    "company": "NAVER",
+    "status": "보유",
+    "primary_type": "A4",
+    "trigger": "뉴스 보고"
+   }
+  ],
+  "P028": [
+   {
+    "slot": 1,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "A5",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 2,
+    "company": "NAVER",
+    "status": "관심",
+    "primary_type": "A2",
+    "trigger": "차트 보다가"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "보유",
+    "primary_type": "A3",
+    "trigger": "공시 알림 보고"
+   }
+  ],
+  "P029": [
+   {
+    "slot": 1,
+    "company": "삼성전자",
+    "status": "보유",
+    "primary_type": "A2",
+    "trigger": "주가 알림 보고"
+   },
+   {
+    "slot": 2,
+    "company": "NAVER",
+    "status": "관심",
+    "primary_type": "A1",
+    "trigger": "유튜브 보고"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "A3",
+    "trigger": "일정 보다가"
+   }
+  ],
+  "P030": [
+   {
+    "slot": 1,
+    "company": "삼성전자",
+    "status": "보유",
+    "primary_type": "A3",
+    "trigger": "일정 보다가"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "보유",
+    "primary_type": "C3",
+    "trigger": "뉴스 보고",
+    "other_company": "SK하이닉스"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "C4",
+    "trigger": "실적 기사 보고"
+   }
+  ],
+  "P031": [
+   {
+    "slot": 1,
+    "company": "KB금융",
+    "status": "보유",
+    "primary_type": "B2",
+    "trigger": "매매하고 나서"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "관심",
+    "primary_type": "A4",
+    "trigger": "지인 얘기 듣고"
+   },
+   {
+    "slot": 3,
+    "company": "SK하이닉스",
+    "status": "모름",
+    "primary_type": "A3",
+    "trigger": "공시 알림 보고"
+   }
+  ],
+  "P032": [
+   {
+    "slot": 1,
+    "company": "삼성전자",
+    "status": "다시 보기",
+    "primary_type": "A2",
+    "trigger": "차트 보다가"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "B9",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 3,
+    "company": "NAVER",
+    "status": "관찰",
+    "primary_type": "A1",
+    "trigger": "지인 얘기 듣고"
+   }
+  ],
+  "P033": [
+   {
+    "slot": 1,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "A2",
+    "trigger": "주가 알림 보고"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "보유",
+    "primary_type": "A4",
+    "trigger": "커뮤니티 글 보고"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "A4",
+    "trigger": "지인 얘기 듣고"
+   }
+  ],
+  "P034": [
+   {
+    "slot": 1,
+    "company": "NAVER",
+    "status": "관심",
+    "primary_type": "A2",
+    "trigger": "차트 보다가"
+   },
+   {
+    "slot": 2,
+    "company": "KB금융",
+    "status": "보유",
+    "primary_type": "C3",
+    "trigger": "커뮤니티 글 보고",
+    "other_company": "SK하이닉스"
+   },
+   {
+    "slot": 3,
+    "company": "NAVER",
+    "status": "관심",
+    "primary_type": "C2",
+    "trigger": "계좌 보다가"
+   }
+  ],
+  "P035": [
+   {
+    "slot": 1,
+    "company": "KB금융",
+    "status": "보유",
+    "primary_type": "A3",
+    "trigger": "공시 알림 보고"
+   },
+   {
+    "slot": 2,
+    "company": "KB금융",
+    "status": "보유",
+    "primary_type": "A2",
+    "trigger": "차트 보다가"
+   },
+   {
+    "slot": 3,
+    "company": "SK하이닉스",
+    "status": "모름",
+    "primary_type": "C3",
+    "trigger": "커뮤니티 글 보고",
+    "other_company": "KB금융"
+   }
+  ],
+  "P036": [
+   {
+    "slot": 1,
+    "company": "KB금융",
+    "status": "관심",
+    "primary_type": "A1",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 2,
+    "company": "KB금융",
+    "status": "관심",
+    "primary_type": "C1",
+    "trigger": "차트 보다가"
+   },
+   {
+    "slot": 3,
+    "company": "NAVER",
+    "status": "모름",
+    "primary_type": "A5",
+    "trigger": "뉴스 보고"
+   }
+  ],
+  "P037": [
+   {
+    "slot": 1,
+    "company": "NAVER",
+    "status": "보유",
+    "primary_type": "B2",
+    "trigger": "매매하고 나서"
+   },
+   {
+    "slot": 2,
+    "company": "NAVER",
+    "status": "보유",
+    "primary_type": "B8",
+    "trigger": "커뮤니티 글 보고"
+   },
+   {
+    "slot": 3,
+    "company": "SK하이닉스",
+    "status": "모름",
+    "primary_type": "A5",
+    "trigger": "실적 기사 보고"
+   }
+  ],
+  "P038": [
+   {
+    "slot": 1,
+    "company": "NAVER",
+    "status": "보유",
+    "primary_type": "A3",
+    "trigger": "일정 보다가"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "C3",
+    "trigger": "커뮤니티 글 보고",
+    "other_company": "NAVER"
+   },
+   {
+    "slot": 3,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "A2",
+    "trigger": "차트 보다가"
+   }
+  ],
+  "P039": [
+   {
+    "slot": 1,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "B9",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "A5",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 3,
+    "company": "삼성전자",
+    "status": "모름",
+    "primary_type": "B3",
+    "trigger": "계좌 보다가"
+   }
+  ],
+  "P040": [
+   {
+    "slot": 1,
+    "company": "SK하이닉스",
+    "status": "관심",
+    "primary_type": "A3",
+    "trigger": "공시 알림 보고"
+   },
+   {
+    "slot": 2,
+    "company": "NAVER",
+    "status": "보유",
+    "primary_type": "A1",
+    "trigger": "유튜브 보고"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "A5",
+    "trigger": "뉴스 보고"
+   }
+  ],
+  "P041": [
+   {
+    "slot": 1,
+    "company": "KB금융",
+    "status": "관심",
+    "primary_type": "A5",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 2,
+    "company": "NAVER",
+    "status": "보유",
+    "primary_type": "A5",
+    "trigger": "실적 기사 보고"
+   },
+   {
+    "slot": 3,
+    "company": "삼성전자",
+    "status": "모름",
+    "primary_type": "B8",
+    "trigger": "커뮤니티 글 보고"
+   }
+  ],
+  "P042": [
+   {
+    "slot": 1,
+    "company": "SK하이닉스",
+    "status": "다시 보기",
+    "primary_type": "C5",
+    "trigger": "출근길에"
+   },
+   {
+    "slot": 2,
+    "company": "NAVER",
+    "status": "관심",
+    "primary_type": "A2",
+    "trigger": "차트 보다가"
+   },
+   {
+    "slot": 3,
+    "company": "삼성전자",
+    "status": "모름",
+    "primary_type": "A2",
+    "trigger": "차트 보다가"
+   }
+  ],
+  "P043": [
+   {
+    "slot": 1,
+    "company": "KB금융",
+    "status": "보유",
+    "primary_type": "B9",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "관심",
+    "primary_type": "C3",
+    "trigger": "커뮤니티 글 보고",
+    "other_company": "KB금융"
+   },
+   {
+    "slot": 3,
+    "company": "삼성전자",
+    "status": "모름",
+    "primary_type": "A5",
+    "trigger": "뉴스 보고"
+   }
+  ],
+  "P044": [
+   {
+    "slot": 1,
+    "company": "KB금융",
+    "status": "보유",
+    "primary_type": "A4",
+    "trigger": "커뮤니티 글 보고"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "관찰",
+    "primary_type": "C1",
+    "trigger": "차트 보다가"
+   },
+   {
+    "slot": 3,
+    "company": "NAVER",
+    "status": "관찰",
+    "primary_type": "C4",
+    "trigger": "차트 보다가"
+   }
+  ],
+  "P045": [
+   {
+    "slot": 1,
+    "company": "NAVER",
+    "status": "다시 보기",
+    "primary_type": "A3",
+    "trigger": "공시 알림 보고"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "A2",
+    "trigger": "주가 알림 보고"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "A2",
+    "trigger": "주가 알림 보고"
+   }
+  ],
+  "P046": [
+   {
+    "slot": 1,
+    "company": "NAVER",
+    "status": "관심",
+    "primary_type": "C4",
+    "trigger": "차트 보다가"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "보유",
+    "primary_type": "C2",
+    "trigger": "계좌 보다가"
+   },
+   {
+    "slot": 3,
+    "company": "삼성전자",
+    "status": "보유",
+    "primary_type": "A1",
+    "trigger": "유튜브 보고"
+   }
+  ],
+  "P047": [
+   {
+    "slot": 1,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "A1",
+    "trigger": "지인 얘기 듣고"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "A4",
+    "trigger": "커뮤니티 글 보고"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "A3",
+    "trigger": "공시 알림 보고"
+   }
+  ],
+  "P048": [
+   {
+    "slot": 1,
+    "company": "KB금융",
+    "status": "보유",
+    "primary_type": "A1",
+    "trigger": "유튜브 보고"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "관심",
+    "primary_type": "A5",
+    "trigger": "실적 기사 보고"
+   },
+   {
+    "slot": 3,
+    "company": "NAVER",
+    "status": "관찰",
+    "primary_type": "A1",
+    "trigger": "뉴스 보고"
+   }
+  ],
+  "P049": [
+   {
+    "slot": 1,
+    "company": "삼성전자",
+    "status": "관찰",
+    "primary_type": "A1",
+    "trigger": "지인 얘기 듣고"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "관찰",
+    "primary_type": "A1",
+    "trigger": "기사 보고"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "A2",
+    "trigger": "차트 보다가"
+   }
+  ],
+  "P050": [
+   {
+    "slot": 1,
+    "company": "삼성전자",
+    "status": "보유",
+    "primary_type": "A3",
+    "trigger": "공시 알림 보고"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "A1",
+    "trigger": "기사 보고"
+   },
+   {
+    "slot": 3,
+    "company": "NAVER",
+    "status": "모름",
+    "primary_type": "A3",
+    "trigger": "공시 알림 보고"
+   }
+  ],
+  "P051": [
+   {
+    "slot": 1,
+    "company": "SK하이닉스",
+    "status": "관심",
+    "primary_type": "A4",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 2,
+    "company": "NAVER",
+    "status": "관찰",
+    "primary_type": "A2",
+    "trigger": "차트 보다가"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "A5",
+    "trigger": "실적 기사 보고"
+   }
+  ],
+  "P052": [
+   {
+    "slot": 1,
+    "company": "KB금융",
+    "status": "보유",
+    "primary_type": "A3",
+    "trigger": "공시 알림 보고"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "보유",
+    "primary_type": "A4",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 3,
+    "company": "NAVER",
+    "status": "관심",
+    "primary_type": "A5",
+    "trigger": "뉴스 보고"
+   }
+  ],
+  "P053": [
+   {
+    "slot": 1,
+    "company": "KB금융",
+    "status": "관찰",
+    "primary_type": "B2",
+    "trigger": "매매하고 나서"
+   },
+   {
+    "slot": 2,
+    "company": "KB금융",
+    "status": "관찰",
+    "primary_type": "B2",
+    "trigger": "매매하고 나서"
+   },
+   {
+    "slot": 3,
+    "company": "SK하이닉스",
+    "status": "모름",
+    "primary_type": "A1",
+    "trigger": "기사 보고"
+   }
+  ],
+  "P054": [
+   {
+    "slot": 1,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "A3",
+    "trigger": "일정 보다가"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "A2",
+    "trigger": "차트 보다가"
+   },
+   {
+    "slot": 3,
+    "company": "NAVER",
+    "status": "모름",
+    "primary_type": "C4",
+    "trigger": "실적 기사 보고"
+   }
+  ],
+  "P055": [
+   {
+    "slot": 1,
+    "company": "KB금융",
+    "status": "보유",
+    "primary_type": "C5",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 2,
+    "company": "NAVER",
+    "status": "관심",
+    "primary_type": "A1",
+    "trigger": "기사 보고"
+   },
+   {
+    "slot": 3,
+    "company": "삼성전자",
+    "status": "모름",
+    "primary_type": "A3",
+    "trigger": "일정 보다가"
+   }
+  ],
+  "P056": [
+   {
+    "slot": 1,
+    "company": "KB금융",
+    "status": "관심",
+    "primary_type": "A1",
+    "trigger": "기사 보고"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "보유",
+    "primary_type": "A1",
+    "trigger": "유튜브 보고"
+   },
+   {
+    "slot": 3,
+    "company": "SK하이닉스",
+    "status": "관심",
+    "primary_type": "B9",
+    "trigger": "뉴스 보고"
+   }
+  ],
+  "P057": [
+   {
+    "slot": 1,
+    "company": "삼성전자",
+    "status": "다시 보기",
+    "primary_type": "C3",
+    "trigger": "커뮤니티 글 보고",
+    "other_company": "SK하이닉스"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "관심",
+    "primary_type": "B3",
+    "trigger": "계좌 보다가"
+   },
+   {
+    "slot": 3,
+    "company": "NAVER",
+    "status": "모름",
+    "primary_type": "C2",
+    "trigger": "뉴스 보고"
+   }
+  ],
+  "P058": [
+   {
+    "slot": 1,
+    "company": "삼성전자",
+    "status": "관찰",
+    "primary_type": "A4",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "관심",
+    "primary_type": "C1",
+    "trigger": "차트 보다가"
+   },
+   {
+    "slot": 3,
+    "company": "NAVER",
+    "status": "관심",
+    "primary_type": "A5",
+    "trigger": "뉴스 보고"
+   }
+  ],
+  "P059": [
+   {
+    "slot": 1,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "A4",
+    "trigger": "커뮤니티 글 보고"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "관찰",
+    "primary_type": "A4",
+    "trigger": "커뮤니티 글 보고"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "C2",
+    "trigger": "뉴스 보고"
+   }
+  ],
+  "P060": [
+   {
+    "slot": 1,
+    "company": "삼성전자",
+    "status": "보유",
+    "primary_type": "A2",
+    "trigger": "차트 보다가"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "A3",
+    "trigger": "일정 보다가"
+   },
+   {
+    "slot": 3,
+    "company": "NAVER",
+    "status": "모름",
+    "primary_type": "A5",
+    "trigger": "실적 기사 보고"
+   }
+  ],
+  "P061": [
+   {
+    "slot": 1,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "A3",
+    "trigger": "공시 알림 보고"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "C5",
+    "trigger": "출근길에"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "A3",
+    "trigger": "공시 알림 보고"
+   }
+  ],
+  "P062": [
+   {
+    "slot": 1,
+    "company": "NAVER",
+    "status": "관심",
+    "primary_type": "A4",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 2,
+    "company": "NAVER",
+    "status": "관심",
+    "primary_type": "A2",
+    "trigger": "차트 보다가"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "A4",
+    "trigger": "지인 얘기 듣고"
+   }
+  ],
+  "P063": [
+   {
+    "slot": 1,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "B9",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "A3",
+    "trigger": "일정 보다가"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "A5",
+    "trigger": "뉴스 보고"
+   }
+  ],
+  "P064": [
+   {
+    "slot": 1,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "A4",
+    "trigger": "지인 얘기 듣고"
+   },
+   {
+    "slot": 2,
+    "company": "NAVER",
+    "status": "관심",
+    "primary_type": "A1",
+    "trigger": "유튜브 보고"
+   },
+   {
+    "slot": 3,
+    "company": "삼성전자",
+    "status": "모름",
+    "primary_type": "A5",
+    "trigger": "뉴스 보고"
+   }
+  ],
+  "P065": [
+   {
+    "slot": 1,
+    "company": "삼성전자",
+    "status": "보유",
+    "primary_type": "B3",
+    "trigger": "계좌 보다가"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "관찰",
+    "primary_type": "C1",
+    "trigger": "계좌 보다가"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "보유",
+    "primary_type": "A1",
+    "trigger": "기사 보고"
+   }
+  ],
+  "P066": [
+   {
+    "slot": 1,
+    "company": "삼성전자",
+    "status": "보유",
+    "primary_type": "A3",
+    "trigger": "일정 보다가"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "보유",
+    "primary_type": "C3",
+    "trigger": "커뮤니티 글 보고",
+    "other_company": "NAVER"
+   },
+   {
+    "slot": 3,
+    "company": "NAVER",
+    "status": "모름",
+    "primary_type": "A4",
+    "trigger": "커뮤니티 글 보고"
+   }
+  ],
+  "P067": [
+   {
+    "slot": 1,
+    "company": "삼성전자",
+    "status": "보유",
+    "primary_type": "A1",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "보유",
+    "primary_type": "A2",
+    "trigger": "주가 알림 보고"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "A5",
+    "trigger": "실적 기사 보고"
+   }
+  ],
+  "P068": [
+   {
+    "slot": 1,
+    "company": "KB금융",
+    "status": "보유",
+    "primary_type": "A4",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "관심",
+    "primary_type": "A3",
+    "trigger": "일정 보다가"
+   },
+   {
+    "slot": 3,
+    "company": "NAVER",
+    "status": "모름",
+    "primary_type": "B9",
+    "trigger": "뉴스 보고"
+   }
+  ],
+  "P069": [
+   {
+    "slot": 1,
+    "company": "KB금융",
+    "status": "관찰",
+    "primary_type": "A3",
+    "trigger": "일정 보다가"
+   },
+   {
+    "slot": 2,
+    "company": "NAVER",
+    "status": "관심",
+    "primary_type": "C4",
+    "trigger": "차트 보다가"
+   },
+   {
+    "slot": 3,
+    "company": "NAVER",
+    "status": "관심",
+    "primary_type": "A1",
+    "trigger": "지인 얘기 듣고"
+   }
+  ],
+  "P070": [
+   {
+    "slot": 1,
+    "company": "KB금융",
+    "status": "보유",
+    "primary_type": "A2",
+    "trigger": "주가 알림 보고"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "관찰",
+    "primary_type": "A5",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 3,
+    "company": "NAVER",
+    "status": "모름",
+    "primary_type": "C5",
+    "trigger": "뉴스 보고"
+   }
+  ],
+  "P071": [
+   {
+    "slot": 1,
+    "company": "NAVER",
+    "status": "보유",
+    "primary_type": "A1",
+    "trigger": "유튜브 보고"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "관심",
+    "primary_type": "A1",
+    "trigger": "기사 보고"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "B3",
+    "trigger": "계좌 보다가"
+   }
+  ],
+  "P072": [
+   {
+    "slot": 1,
+    "company": "NAVER",
+    "status": "관찰",
+    "primary_type": "A3",
+    "trigger": "일정 보다가"
+   },
+   {
+    "slot": 2,
+    "company": "KB금융",
+    "status": "보유",
+    "primary_type": "A1",
+    "trigger": "유튜브 보고"
+   },
+   {
+    "slot": 3,
+    "company": "SK하이닉스",
+    "status": "모름",
+    "primary_type": "A4",
+    "trigger": "커뮤니티 글 보고"
+   }
+  ],
+  "P073": [
+   {
+    "slot": 1,
+    "company": "SK하이닉스",
+    "status": "관심",
+    "primary_type": "A3",
+    "trigger": "공시 알림 보고"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "관심",
+    "primary_type": "C2",
+    "trigger": "계좌 보다가"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "C5",
+    "trigger": "출근길에"
+   }
+  ],
+  "P074": [
+   {
+    "slot": 1,
+    "company": "KB금융",
+    "status": "보유",
+    "primary_type": "A5",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 2,
+    "company": "NAVER",
+    "status": "관심",
+    "primary_type": "A5",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 3,
+    "company": "삼성전자",
+    "status": "모름",
+    "primary_type": "A1",
+    "trigger": "뉴스 보고"
+   }
+  ],
+  "P075": [
+   {
+    "slot": 1,
+    "company": "SK하이닉스",
+    "status": "관심",
+    "primary_type": "A5",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "관심",
+    "primary_type": "A1",
+    "trigger": "지인 얘기 듣고"
+   },
+   {
+    "slot": 3,
+    "company": "NAVER",
+    "status": "모름",
+    "primary_type": "A4",
+    "trigger": "뉴스 보고"
+   }
+  ],
+  "P076": [
+   {
+    "slot": 1,
+    "company": "NAVER",
+    "status": "보유",
+    "primary_type": "A2",
+    "trigger": "차트 보다가"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "관심",
+    "primary_type": "A5",
+    "trigger": "실적 기사 보고"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "관찰",
+    "primary_type": "A2",
+    "trigger": "주가 알림 보고"
+   }
+  ],
+  "P077": [
+   {
+    "slot": 1,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "A4",
+    "trigger": "지인 얘기 듣고"
+   },
+   {
+    "slot": 2,
+    "company": "KB금융",
+    "status": "보유",
+    "primary_type": "B9",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 3,
+    "company": "삼성전자",
+    "status": "모름",
+    "primary_type": "A1",
+    "trigger": "유튜브 보고"
+   }
+  ],
+  "P078": [
+   {
+    "slot": 1,
+    "company": "KB금융",
+    "status": "관심",
+    "primary_type": "B8",
+    "trigger": "커뮤니티 글 보고"
+   },
+   {
+    "slot": 2,
+    "company": "NAVER",
+    "status": "보유",
+    "primary_type": "A1",
+    "trigger": "지인 얘기 듣고"
+   },
+   {
+    "slot": 3,
+    "company": "삼성전자",
+    "status": "모름",
+    "primary_type": "A5",
+    "trigger": "실적 기사 보고"
+   }
+  ],
+  "P079": [
+   {
+    "slot": 1,
+    "company": "KB금융",
+    "status": "보유",
+    "primary_type": "A3",
+    "trigger": "일정 보다가"
+   },
+   {
+    "slot": 2,
+    "company": "NAVER",
+    "status": "관심",
+    "primary_type": "A4",
+    "trigger": "커뮤니티 글 보고"
+   },
+   {
+    "slot": 3,
+    "company": "삼성전자",
+    "status": "모름",
+    "primary_type": "A2",
+    "trigger": "주가 알림 보고"
+   }
+  ],
+  "P080": [
+   {
+    "slot": 1,
+    "company": "NAVER",
+    "status": "보유",
+    "primary_type": "A5",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "관심",
+    "primary_type": "A1",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 3,
+    "company": "삼성전자",
+    "status": "모름",
+    "primary_type": "A4",
+    "trigger": "뉴스 보고"
+   }
+  ],
+  "P081": [
+   {
+    "slot": 1,
+    "company": "SK하이닉스",
+    "status": "관심",
+    "primary_type": "A1",
+    "trigger": "유튜브 보고"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "관심",
+    "primary_type": "A4",
+    "trigger": "커뮤니티 글 보고"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "A5",
+    "trigger": "뉴스 보고"
+   }
+  ],
+  "P082": [
+   {
+    "slot": 1,
+    "company": "삼성전자",
+    "status": "보유",
+    "primary_type": "A1",
+    "trigger": "유튜브 보고"
+   },
+   {
+    "slot": 2,
+    "company": "NAVER",
+    "status": "관심",
+    "primary_type": "A4",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 3,
+    "company": "NAVER",
+    "status": "관심",
+    "primary_type": "A3",
+    "trigger": "공시 알림 보고"
+   }
+  ],
+  "P083": [
+   {
+    "slot": 1,
+    "company": "KB금융",
+    "status": "보유",
+    "primary_type": "C2",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "보유",
+    "primary_type": "A1",
+    "trigger": "기사 보고"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "보유",
+    "primary_type": "A4",
+    "trigger": "뉴스 보고"
+   }
+  ],
+  "P084": [
+   {
+    "slot": 1,
+    "company": "NAVER",
+    "status": "보유",
+    "primary_type": "C2",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "관심",
+    "primary_type": "A5",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 3,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "C1",
+    "trigger": "차트 보다가"
+   }
+  ],
+  "P085": [
+   {
+    "slot": 1,
+    "company": "삼성전자",
+    "status": "다시 보기",
+    "primary_type": "B8",
+    "trigger": "커뮤니티 글 보고"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "A5",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "A3",
+    "trigger": "일정 보다가"
+   }
+  ],
+  "P086": [
+   {
+    "slot": 1,
+    "company": "NAVER",
+    "status": "관찰",
+    "primary_type": "A2",
+    "trigger": "차트 보다가"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "관심",
+    "primary_type": "A1",
+    "trigger": "지인 얘기 듣고"
+   },
+   {
+    "slot": 3,
+    "company": "NAVER",
+    "status": "관찰",
+    "primary_type": "A1",
+    "trigger": "지인 얘기 듣고"
+   }
+  ],
+  "P087": [
+   {
+    "slot": 1,
+    "company": "SK하이닉스",
+    "status": "관찰",
+    "primary_type": "C5",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "관찰",
+    "primary_type": "B2",
+    "trigger": "매매하고 나서"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "A5",
+    "trigger": "실적 기사 보고"
+   }
+  ],
+  "P088": [
+   {
+    "slot": 1,
+    "company": "삼성전자",
+    "status": "보유",
+    "primary_type": "A1",
+    "trigger": "기사 보고"
+   },
+   {
+    "slot": 2,
+    "company": "KB금융",
+    "status": "관심",
+    "primary_type": "A4",
+    "trigger": "지인 얘기 듣고"
+   },
+   {
+    "slot": 3,
+    "company": "NAVER",
+    "status": "모름",
+    "primary_type": "A3",
+    "trigger": "공시 알림 보고"
+   }
+  ],
+  "P089": [
+   {
+    "slot": 1,
+    "company": "삼성전자",
+    "status": "관심",
+    "primary_type": "A1",
+    "trigger": "기사 보고"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "A5",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "A2",
+    "trigger": "차트 보다가"
+   }
+  ],
+  "P090": [
+   {
+    "slot": 1,
+    "company": "NAVER",
+    "status": "보유",
+    "primary_type": "A2",
+    "trigger": "주가 알림 보고"
+   },
+   {
+    "slot": 2,
+    "company": "KB금융",
+    "status": "관찰",
+    "primary_type": "A1",
+    "trigger": "유튜브 보고"
+   },
+   {
+    "slot": 3,
+    "company": "NAVER",
+    "status": "보유",
+    "primary_type": "B2",
+    "trigger": "매매하고 나서"
+   }
+  ],
+  "P091": [
+   {
+    "slot": 1,
+    "company": "NAVER",
+    "status": "다시 보기",
+    "primary_type": "A3",
+    "trigger": "일정 보다가"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "관심",
+    "primary_type": "A3",
+    "trigger": "일정 보다가"
+   },
+   {
+    "slot": 3,
+    "company": "삼성전자",
+    "status": "모름",
+    "primary_type": "A5",
+    "trigger": "실적 기사 보고"
+   }
+  ],
+  "P092": [
+   {
+    "slot": 1,
+    "company": "SK하이닉스",
+    "status": "관찰",
+    "primary_type": "A5",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "관찰",
+    "primary_type": "A3",
+    "trigger": "일정 보다가"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "B8",
+    "trigger": "커뮤니티 글 보고"
+   }
+  ],
+  "P093": [
+   {
+    "slot": 1,
+    "company": "NAVER",
+    "status": "보유",
+    "primary_type": "A3",
+    "trigger": "일정 보다가"
+   },
+   {
+    "slot": 2,
+    "company": "NAVER",
+    "status": "보유",
+    "primary_type": "C2",
+    "trigger": "계좌 보다가"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "A2",
+    "trigger": "주가 알림 보고"
+   }
+  ],
+  "P094": [
+   {
+    "slot": 1,
+    "company": "NAVER",
+    "status": "관심",
+    "primary_type": "C4",
+    "trigger": "실적 기사 보고"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "A4",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 3,
+    "company": "삼성전자",
+    "status": "모름",
+    "primary_type": "A2",
+    "trigger": "주가 알림 보고"
+   }
+  ],
+  "P095": [
+   {
+    "slot": 1,
+    "company": "NAVER",
+    "status": "관찰",
+    "primary_type": "C3",
+    "trigger": "커뮤니티 글 보고",
+    "other_company": "SK하이닉스"
+   },
+   {
+    "slot": 2,
+    "company": "KB금융",
+    "status": "관심",
+    "primary_type": "A1",
+    "trigger": "지인 얘기 듣고"
+   },
+   {
+    "slot": 3,
+    "company": "SK하이닉스",
+    "status": "모름",
+    "primary_type": "B9",
+    "trigger": "뉴스 보고"
+   }
+  ],
+  "P096": [
+   {
+    "slot": 1,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "A1",
+    "trigger": "지인 얘기 듣고"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "A4",
+    "trigger": "지인 얘기 듣고"
+   },
+   {
+    "slot": 3,
+    "company": "삼성전자",
+    "status": "모름",
+    "primary_type": "B8",
+    "trigger": "커뮤니티 글 보고"
+   }
+  ],
+  "P097": [
+   {
+    "slot": 1,
+    "company": "KB금융",
+    "status": "보유",
+    "primary_type": "A5",
+    "trigger": "실적 기사 보고"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "관심",
+    "primary_type": "A5",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 3,
+    "company": "삼성전자",
+    "status": "모름",
+    "primary_type": "A5",
+    "trigger": "실적 기사 보고"
+   }
+  ],
+  "P098": [
+   {
+    "slot": 1,
+    "company": "SK하이닉스",
+    "status": "관찰",
+    "primary_type": "A4",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 2,
+    "company": "SK하이닉스",
+    "status": "관찰",
+    "primary_type": "A5",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "모름",
+    "primary_type": "A4",
+    "trigger": "커뮤니티 글 보고"
+   }
+  ],
+  "P099": [
+   {
+    "slot": 1,
+    "company": "SK하이닉스",
+    "status": "보유",
+    "primary_type": "A3",
+    "trigger": "공시 알림 보고"
+   },
+   {
+    "slot": 2,
+    "company": "NAVER",
+    "status": "보유",
+    "primary_type": "A3",
+    "trigger": "공시 알림 보고"
+   },
+   {
+    "slot": 3,
+    "company": "삼성전자",
+    "status": "모름",
+    "primary_type": "A1",
+    "trigger": "뉴스 보고"
+   }
+  ],
+  "P100": [
+   {
+    "slot": 1,
+    "company": "NAVER",
+    "status": "보유",
+    "primary_type": "A1",
+    "trigger": "기사 보고"
+   },
+   {
+    "slot": 2,
+    "company": "삼성전자",
+    "status": "관심",
+    "primary_type": "A4",
+    "trigger": "뉴스 보고"
+   },
+   {
+    "slot": 3,
+    "company": "KB금융",
+    "status": "관심",
+    "primary_type": "A4",
+    "trigger": "지인 얘기 듣고"
+   }
+  ]
+ },
+ "type_pool": {
+  "A1": 42,
+  "A2": 42,
+  "A3": 42,
+  "A4": 42,
+  "A5": 42,
+  "C1": 10,
+  "C2": 10,
+  "C3": 10,
+  "C4": 10,
+  "C5": 10,
+  "B2": 10,
+  "B3": 10,
+  "B8": 10,
+  "B9": 10
+ },
+ "companies": {
+  "NAVER": 75,
+  "삼성전자": 74,
+  "SK하이닉스": 77,
+  "KB금융": 74
+ },
+ "source": "long.make_design — 배치는 memos_direct 설계와 같음"
+}
