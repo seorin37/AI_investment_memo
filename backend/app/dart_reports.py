@@ -156,16 +156,50 @@ def list_reports(
     상태 013은 DartNoDataError, 020은 DartRateLimitError, 그 밖의 오류는 DartError.
     `last_reprt_at="Y"`는 최종 정정본만, `"N"`은 최초 제출본을 포함한 전체 이력이다.
     """
+    return list_disclosures(
+        api_key,
+        bgn_de=bgn_de,
+        end_de=end_de,
+        pblntf_ty="A",
+        pblntf_detail_ty=detail_type,
+        corp_code=corp_code,
+        last_reprt_at=last_reprt_at,
+        session=session,
+    )
+
+
+def list_disclosures(
+    api_key: str,
+    *,
+    bgn_de: str,
+    end_de: str,
+    pblntf_ty: str,
+    pblntf_detail_ty: str | None = None,
+    corp_code: str | None = None,
+    corp_cls: str | None = None,
+    last_reprt_at: str = "Y",
+    page_count: int = 100,
+    session=None,
+) -> list[dict]:
+    """공시 목록(list.json)을 모든 페이지에서 모은다. 정기보고서·수시공시 공용.
+
+    corp_code 없이 부르면 DART 규칙상 조회 기간이 3개월 이내여야 한다.
+    상태 013은 DartNoDataError, 020은 DartRateLimitError, 그 밖의 오류는 DartError.
+    """
     common_params = {
         "crtfc_key": api_key,
-        "corp_code": corp_code,
         "bgn_de": bgn_de,
         "end_de": end_de,
-        "pblntf_ty": "A",
-        "pblntf_detail_ty": detail_type,
+        "pblntf_ty": pblntf_ty,
         "last_reprt_at": last_reprt_at,
-        "page_count": 100,
+        "page_count": page_count,
     }
+    if corp_code:
+        common_params["corp_code"] = corp_code
+    if pblntf_detail_ty:
+        common_params["pblntf_detail_ty"] = pblntf_detail_ty
+    if corp_cls:
+        common_params["corp_cls"] = corp_cls
     items: list[dict] = []
     page_no = 1
     total_page = 1
