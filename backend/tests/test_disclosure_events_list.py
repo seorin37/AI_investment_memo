@@ -1,6 +1,7 @@
+import os
 import tempfile
 import unittest
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from app import dart_reports
@@ -206,6 +207,48 @@ class FetchDayTest(unittest.TestCase):
         self.assertEqual((first["bgn_de"], first["end_de"], first["corp_cls"], first["last_reprt_at"]), ("20261029", "20261029", "Y", "N"))
         self.assertNotIn("corp_code", first)
         self.assertNotIn("pblntf_detail_ty", first)
+
+    def one_type_response(self, rcept_no):
+        return [FakeResponse(json_data={"status": "000", "total_page": 1, "list": [item("유상증자결정", rcept_no)]}),
+                FakeResponse(json_data={"status": "013", "message": "없음"}),
+                FakeResponse(json_data={"status": "013", "message": "없음"})]
+
+    def test_today_is_not_cached_so_late_filings_are_fetched_next_day(self):
+        day = date(2026, 11, 5)
+        evening = datetime(2026, 11, 5, 19, 30, tzinfo=events_list.KST)
+        next_morning = datetime(2026, 11, 6, 12, 30, tzinfo=events_list.KST)
+        with tempfile.TemporaryDirectory() as directory:
+            raw = Path(directory)
+            first = events_list.fetch_day(API_KEY, day, self.LIST_CONFIG, raw,
+                                          session=FakeSession(self.one_type_response("1")), now=evening)
+            self.assertEqual([i["rcept_no"] for i in first], ["1"])
+            self.assertFalse((raw / "lists" / "20261105.json").exists())  # 오늘 목록은 쓰지 않는다
+            # 다음 날 다시 받으면 19:30 뒤에 나온 공시(2)까지 들어온다. 이제 지난 날짜라 캐시에 쓴다.
+            later = events_list.fetch_day(API_KEY, day, self.LIST_CONFIG, raw,
+                                          session=FakeSession(self.one_type_response("2")), now=next_morning)
+            self.assertEqual([i["rcept_no"] for i in later], ["2"])
+            self.assertTrue((raw / "lists" / "20261105.json").exists())
+
+    def test_cache_written_on_the_same_day_is_not_trusted(self):
+        # 예전 코드가 그날 쓴 캐시: 그날 마지막 실행 뒤 공시가 빠져 있을 수 있어 다시 받는다
+        day = date(2026, 11, 5)
+        with tempfile.TemporaryDirectory() as directory:
+            raw = Path(directory)
+            cache = raw / "lists" / "20261105.json"
+            cache.parent.mkdir(parents=True)
+            cache.write_text('[{"rcept_no": "old"}]\n', encoding="utf-8")
+            same_day = datetime(2026, 11, 5, 19, 30, tzinfo=events_list.KST).timestamp()
+            os.utime(cache, (same_day, same_day))
+            items = events_list.fetch_day(API_KEY, day, self.LIST_CONFIG, raw,
+                                          session=FakeSession(self.one_type_response("new")),
+                                          now=datetime(2026, 11, 6, 12, 30, tzinfo=events_list.KST))
+            self.assertEqual([i["rcept_no"] for i in items], ["new"])
+            # 다시 쓴 캐시는 다음 날 쓴 것이라 완성본으로 믿는다 (실제 시계 대신 다음 날 12:30에 쓴 것으로 맞춘다)
+            next_day = datetime(2026, 11, 6, 12, 30, tzinfo=events_list.KST).timestamp()
+            os.utime(cache, (next_day, next_day))
+            again = events_list.fetch_day(API_KEY, day, self.LIST_CONFIG, raw, session=FakeSession([]),
+                                          now=datetime(2026, 11, 7, 12, 30, tzinfo=events_list.KST))
+            self.assertEqual(again, items)
 
     def test_rate_limit_propagates(self):
         session = FakeSession([FakeResponse(json_data={"status": "020", "message": "limit"})])

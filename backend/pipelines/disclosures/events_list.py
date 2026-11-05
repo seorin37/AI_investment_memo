@@ -13,6 +13,7 @@ from collections import Counter
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from app.dart_reports import DartNoDataError, list_disclosures
 
@@ -203,6 +204,18 @@ def select_events(
     return refs, report
 
 
+KST = ZoneInfo("Asia/Seoul")
+
+
+def _cache_is_final(cache: Path, day: date) -> bool:
+    """그날이 끝난 뒤(다음 날 이후, KST)에 쓴 캐시만 완성본으로 본다.
+
+    예전 코드는 오늘 목록도 캐시에 썼다. 그날 마지막 실행 뒤에 나온 공시가 빠진 파일이라 믿지 않고 다시 받는다.
+    """
+    written = datetime.fromtimestamp(cache.stat().st_mtime, KST).date()
+    return written > day
+
+
 def fetch_day(
     api_key: str,
     day: date,
@@ -211,16 +224,20 @@ def fetch_day(
     *,
     session=None,
     use_cache: bool = True,
+    now: datetime | None = None,
 ) -> list[dict]:
     """하루치 목록을 공시유형별로 받아 `_pblntf_ty`를 붙여 반환한다.
 
-    지난 날짜(오늘 이전)는 data/raw/dart/events/lists/YYYYMMDD.json에 캐시해 다시 받지 않는다.
-    오늘 목록은 하루 중에도 늘어나므로 캐시를 읽지 않는다(쓰기는 한다).
+    지난 날짜(오늘 이전, KST)는 data/raw/dart/events/lists/YYYYMMDD.json에 캐시해 다시 받지 않는다.
+    오늘 목록은 하루 중에도 늘어나므로 캐시를 읽지도 쓰지도 않는다. 쓰면 다음 날 그 파일을 완성본으로 믿어
+    그날 마지막 실행 뒤에 나온 공시를 영영 놓친다. 그래서 자동 실행은 어제~오늘을 받는다.
     DartRateLimitError(020)는 그대로 올린다.
     """
+    today = (now or datetime.now(KST)).astimezone(KST).date()
+    is_past = day < today
     yyyymmdd = day.strftime("%Y%m%d")
     cache = raw_dir / "lists" / f"{yyyymmdd}.json"
-    if use_cache and cache.exists() and day < date.today():
+    if use_cache and is_past and cache.exists() and _cache_is_final(cache, day):
         with cache.open(encoding="utf-8") as handle:
             return json.load(handle)
     items: list[dict] = []
@@ -240,10 +257,11 @@ def fetch_day(
             listed = []
         items.extend({**entry, "_pblntf_ty": pblntf_ty} for entry in listed)
         log.info("목록: %s 유형=%s %d건", day.isoformat(), pblntf_ty, len(listed))
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    with cache.open("w", encoding="utf-8", newline="\n") as handle:
-        json.dump(items, handle, ensure_ascii=False, indent=0)
-        handle.write("\n")
+    if is_past:
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        with cache.open("w", encoding="utf-8", newline="\n") as handle:
+            json.dump(items, handle, ensure_ascii=False, indent=0)
+            handle.write("\n")
     return items
 
 
