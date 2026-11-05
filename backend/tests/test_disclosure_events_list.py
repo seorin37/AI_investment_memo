@@ -90,6 +90,8 @@ class ClassifyTest(unittest.TestCase):
         "생산재개(자율공시)": "operation_disruption",
         "중대재해발생": "operation_disruption",
         "감사보고서제출": "audit_report",
+        # 2026-11-05 자동 실행 dry-run에서 미분류로 나와 추가한 것
+        "기술도입ㆍ이전ㆍ제휴계약체결(자율공시)": "tech_alliance",
     }
     EXCLUDED = [
         "최대주주등소유주식변동신고서",
@@ -101,6 +103,7 @@ class ClassifyTest(unittest.TestCase):
         "자기전환사채만기전취득결정",
         "자기주식취득결과보고서",
         "유상증자또는주식관련사채등의발행결과(자율공시)",
+        "유상증자또는주식관련사채등의청약결과(자율공시)",
     ]
 
     def test_known_titles(self):

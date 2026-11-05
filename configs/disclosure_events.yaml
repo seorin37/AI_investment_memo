@@ -47,6 +47,7 @@ exclude:
   - '^단기차입금증가결정'
   - '^(신탁계약에의한취득상황|신탁계약해지결과|자기주식취득결과|자기주식처분결과|합병등종료)보고서'
   - '^유상증자또는주식관련사채등의발행결과'
+  - '^유상증자또는주식관련사채등의청약결과'   # 이미 받은 유상증자·CB 결정의 후속 결과 (발행결과와 같은 기준)
   - '^자기(전환|교환|신주인수권부)사채'
   - '^상각형조건부자본증권발행결정'
   - '^지속가능경영보고서'
@@ -83,6 +84,7 @@ events:
   - {type: equity_investment,   topic: business, patterns: ['^타법인주식및출자증권(취득|처분|양수|양도)결정']}
   - {type: asset_deal,          topic: business, patterns: ['^유형자산(취득|처분|양수|양도)결정', '^부동산투자회사부동산(취득|처분)']}
   - {type: business_transfer,   topic: business, patterns: ['^영업(양수|양도)결정']}
+  - {type: tech_alliance,       topic: business, patterns: ['^기술(도입|이전|제휴)']}  # 기술이전·라이선스·제휴 (11-05 추가)
   - {type: business_plan,       topic: business, patterns: ['^장래사업ㆍ경영계획']}
   - {type: material_event,      topic: business, patterns: ['^투자판단관련주요경영사항', '^기타경영사항']}
   # ── 자본·구조
