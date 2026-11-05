@@ -94,6 +94,7 @@ export interface Api {
   // 종목
   listMyStocks(): Promise<MyStock[]>;
   searchStocks(q: string): Promise<StockMaster[]>;
+  getStock(code: string): Promise<StockMaster>;
   addStock(code: string, status: StockStatus): Promise<MyStock>;
   updateStock(code: string, patch: Partial<Pick<MyStock, 'status' | 'tags'>>): Promise<MyStock>;
   removeStock(code: string): Promise<void>;
@@ -104,12 +105,14 @@ export interface Api {
 
   // 메모 보드
   listBoard(code: string): Promise<BoardItem[]>;
+  getBoardItem(id: string): Promise<BoardItem>;
   createMemo(code: string, input: MemoInput): Promise<Memo>;
   createChecklist(code: string, input: ChecklistInput): Promise<Checklist>;
   createReference(code: string, input: ReferenceInput): Promise<ReferenceBoard>;
   updateBoardItem(id: string, patch: BoardItemPatch): Promise<BoardItem>;
   deleteBoardItem(id: string): Promise<void>;
   setAiLink(memoId: string, enabled: boolean): Promise<Memo>;
+  setBoardChecklistItem(checklistId: string, itemId: string, done: boolean): Promise<void>;
   getMemoTimeline(memoId: string): Promise<MemoTimeline>;
   listStockAiUpdates(code: string): Promise<AiUpdate[]>;
   markAiUpdateRead(id: string): Promise<void>;

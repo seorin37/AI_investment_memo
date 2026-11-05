@@ -48,6 +48,32 @@ npm run web                   # http://localhost:8081
 3. 엔드포인트·JSON 모양은 **`docs/API_CONTRACT.md`** 그대로 구현. 필드는 snake_case.
 4. 개발 서버 재시작 (`EXPO_PUBLIC_*` 값은 번들 시점에 들어가므로 `.env`를 바꾸면 재시작 필요)
 
+### 종목 CRUD만 먼저 연결하기
+
+다른 화면은 목업을 유지하면서 인증과 종목 검색·목록·추가·변경·삭제만 FastAPI에 연결할 수 있습니다.
+
+```env
+EXPO_PUBLIC_USE_MOCK=true
+EXPO_PUBLIC_USE_REAL_STOCKS=true
+EXPO_PUBLIC_API_BASE_URL=http://localhost:8000/api/v1
+EXPO_PUBLIC_ANDROID_API_BASE_URL=http://10.0.2.2:8000/api/v1
+```
+
+실제 종목 API는 인증을 요구하므로 이 혼합 모드에서도 로그인은 실제 OAuth/JWT 흐름을 사용합니다. OAuth Client 설정이 없으면 계약·오류 처리 검증까지만 가능하며 운영용 인증 우회는 제공하지 않습니다. 종목 태그는 현재 백엔드 스키마에 저장 구조가 없어 실서버 종목 모드에서는 편집 UI를 표시하지 않습니다.
+
+### 메모 보드 CRUD만 연결하기
+
+다른 화면은 목업을 유지하면서 메모·체크리스트·참고자료만 FastAPI에 연결할 수 있습니다.
+
+```env
+EXPO_PUBLIC_USE_MOCK=true
+EXPO_PUBLIC_USE_REAL_BOARD=true
+EXPO_PUBLIC_API_BASE_URL=http://localhost:8000/api/v1
+EXPO_PUBLIC_ANDROID_API_BASE_URL=http://10.0.2.2:8000/api/v1
+```
+
+Real 보드 모드도 실제 OAuth/JWT 로그인이 필요합니다. 메모의 AI 연결 상태는 저장하지만 AI 업데이트·타임라인·가격 조건과 파일 업로드는 아직 실제 API가 없으므로 Real 보드 화면에서 성공한 것처럼 표시하지 않습니다.
+
 ### 강의실 PC(WSL2 + Docker) 네트워크 메모
 
 | 상황 | API 주소 | 할 일 |

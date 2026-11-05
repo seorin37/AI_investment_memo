@@ -4,7 +4,12 @@
  */
 import { Platform } from 'react-native';
 import { http } from './http';
+import { createRealBoardApi } from './board';
+import { createRealStockApi } from './stocks';
 import type { Api } from './types';
+
+export const realStockApi = createRealStockApi(http);
+export const realBoardApi = createRealBoardApi(http);
 
 export const realApi: Api = {
   // 인증
@@ -16,24 +21,14 @@ export const realApi: Api = {
   logout: (refreshToken) => http.post('/auth/logout', refreshToken ? { refresh_token: refreshToken } : undefined),
 
   // 종목
-  listMyStocks: () => http.get('/stocks'),
-  searchStocks: (q) => http.get('/stocks/search', { q }),
-  addStock: (code, status) => http.post('/stocks', { code, status }),
-  updateStock: (code, patch) => http.patch(`/stocks/${code}`, patch),
-  removeStock: (code) => http.del(`/stocks/${code}`),
+  ...realStockApi,
   getQuote: (code) => http.get(`/stocks/${code}/quote`),
   getCandles: (code, range) => http.get(`/stocks/${code}/candles`, { range }),
   getProfile: (code) => http.get(`/stocks/${code}/profile`),
   getFinancials: (code) => http.get(`/stocks/${code}/financials`),
 
   // 메모 보드
-  listBoard: (code) => http.get(`/stocks/${code}/board`),
-  createMemo: (code, input) => http.post(`/stocks/${code}/memos`, input),
-  createChecklist: (code, input) => http.post(`/stocks/${code}/checklists`, input),
-  createReference: (code, input) => http.post(`/stocks/${code}/references`, input),
-  updateBoardItem: (id, patch) => http.patch(`/board-items/${id}`, patch),
-  deleteBoardItem: (id) => http.del(`/board-items/${id}`),
-  setAiLink: (memoId, enabled) => http.put(`/memos/${memoId}/ai-link`, { enabled }),
+  ...realBoardApi,
   getMemoTimeline: (memoId) => http.get(`/memos/${memoId}/timeline`),
   listStockAiUpdates: (code) => http.get(`/stocks/${code}/ai-updates`),
   markAiUpdateRead: (id) => http.post(`/ai-updates/${id}/read`),
@@ -62,7 +57,8 @@ export const realApi: Api = {
   listNews: () => http.get('/news/headlines'),
   listPinnedMemos: () => http.get('/memos/pinned'),
   listHomeChecklist: () => http.get('/checklist-items'),
-  setChecklistItem: (checklistId, itemId, done) => http.patch(`/checklists/${checklistId}/items/${itemId}`, { done }),
+  setChecklistItem: (checklistId, itemId, done) =>
+    realBoardApi.setBoardChecklistItem(checklistId, itemId, done),
   addChecklistItem: (stockCode, text) => http.post('/checklist-items', { stock_code: stockCode, text }),
   listPriceConditions: () => http.get('/price-conditions'),
   setPriceConditionTracking: (memoId, conditionId, tracking) =>

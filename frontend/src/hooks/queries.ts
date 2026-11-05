@@ -10,11 +10,13 @@ import type { BoardItem, ChartRange, FeedbackPayload, HomeLayout, Settings, Stoc
 export const qk = {
   stocks: ['stocks'] as const,
   stockSearch: (q: string) => ['stockSearch', q] as const,
+  stock: (code: string) => ['stock', code] as const,
   quote: (code: string) => ['quote', code] as const,
   candles: (code: string, range: ChartRange) => ['candles', code, range] as const,
   profile: (code: string) => ['profile', code] as const,
   financials: (code: string) => ['financials', code] as const,
   board: (code: string) => ['board', code] as const,
+  boardItem: (id: string) => ['boardItem', id] as const,
   timeline: (memoId: string) => ['timeline', memoId] as const,
   stockAiUpdates: (code: string) => ['stockAiUpdates', code] as const,
   updates: (code?: string) => ['updates', code ?? 'all'] as const,
@@ -50,6 +52,9 @@ export const useMyStocks = () => useQuery({ queryKey: qk.stocks, queryFn: api.li
 export const useStockSearch = (q: string) =>
   useQuery({ queryKey: qk.stockSearch(q), queryFn: () => api.searchStocks(q), enabled: q.trim().length > 0, placeholderData: keepPreviousData });
 
+export const useStock = (code: string) =>
+  useQuery({ queryKey: qk.stock(code), queryFn: () => api.getStock(code), enabled: code.length > 0 });
+
 export const useQuote = (code: string) => useQuery({ queryKey: qk.quote(code), queryFn: () => api.getQuote(code), refetchInterval: 60_000 });
 
 export const useCandles = (code: string, range: ChartRange) =>
@@ -81,6 +86,8 @@ export function useRemoveStock() {
 
 // ─── 메모 보드 ───────────────────────────────────────────────
 export const useBoard = (code: string) => useQuery({ queryKey: qk.board(code), queryFn: () => api.listBoard(code) });
+export const useBoardItem = (id: string, enabled = true) =>
+  useQuery({ queryKey: qk.boardItem(id), queryFn: () => api.getBoardItem(id), enabled: enabled && id.length > 0 });
 export const useMemoTimeline = (memoId: string, enabled = true) =>
   useQuery({ queryKey: qk.timeline(memoId), queryFn: () => api.getMemoTimeline(memoId), enabled });
 export const useStockAiUpdates = (code: string) => useQuery({ queryKey: qk.stockAiUpdates(code), queryFn: () => api.listStockAiUpdates(code) });
@@ -105,6 +112,7 @@ export function useUpdateBoardItem(code: string) {
   return useMutation({
     mutationFn: ({ id, patch }: { id: string; patch: BoardItemPatch }) => api.updateBoardItem(id, patch),
     onSuccess: (item) => {
+      qc.setQueryData(qk.boardItem(item.id), item);
       void qc.invalidateQueries({ queryKey: qk.timeline(item.id) });
       return inv(qk.board(code), ...memoDependents);
     },
@@ -130,8 +138,15 @@ export function usePatchMemoFor() {
 }
 
 export function useDeleteBoardItem(code: string) {
+  const qc = useQueryClient();
   const inv = useInvalidate();
-  return useMutation({ mutationFn: (id: string) => api.deleteBoardItem(id), onSuccess: () => inv(qk.board(code), qk.trash, ...memoDependents) });
+  return useMutation({
+    mutationFn: (id: string) => api.deleteBoardItem(id),
+    onSuccess: (_data, id) => {
+      qc.removeQueries({ queryKey: qk.boardItem(id) });
+      return inv(qk.board(code), qk.trash, ...memoDependents);
+    },
+  });
 }
 
 export function useSetAiLink(code: string) {
@@ -149,7 +164,16 @@ export function useSetAiLink(code: string) {
       return { prev };
     },
     onError: (_e, _v, ctx) => ctx?.prev && qc.setQueryData(qk.board(code), ctx.prev),
-    onSettled: (_d, _e, v) => inv(qk.board(code), qk.timeline(v.memoId), qk.stockAiUpdates(code), ...memoDependents),
+    onSettled: (_d, _e, v) => inv(qk.board(code), qk.boardItem(v.memoId), qk.timeline(v.memoId), qk.stockAiUpdates(code), ...memoDependents),
+  });
+}
+
+export function useSetBoardChecklistItem() {
+  const inv = useInvalidate();
+  return useMutation({
+    mutationFn: (v: { checklistId: string; itemId: string; done: boolean; stockCode: string }) =>
+      api.setBoardChecklistItem(v.checklistId, v.itemId, v.done),
+    onSuccess: (_data, value) => inv(qk.board(value.stockCode)),
   });
 }
 
