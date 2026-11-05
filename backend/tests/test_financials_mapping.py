@@ -158,6 +158,43 @@ class RealMappingTest(unittest.TestCase):
         bps = next(p for p in period.provenance if p["column"] == "bps")
         self.assertEqual((bps["shares_basis"], bps["issued"], bps["owners_equity"]["account_id"]), ("합계", 100, "ifrs-full_EquityAttributableToOwnersOfParent"))
 
+    def test_verified_accounting_identity_fallback(self):
+        cases = [
+            ("032830", "2025-06-30", "CFS", "20250813000585",
+             "318858553000000", "287368034000000", "33657838000000", "319124603000000", "285466765000000"),
+            ("032830", "2025-09-30", "CFS", "20251114002091",
+             "318858553000000", "287368034000000", "40923920000000", "335306866000000", "294382946000000"),
+            ("008040", "2026-06-30", "OFS", "20260930000510",
+             "0", "0", "111932093545", "470511381854", "358579288309"),
+        ]
+        for symbol, period_end, fs_div, rcept_no, bad_assets, bad_liabilities, equity, filed_total, filed_liabilities in cases:
+            statement = self.statement([row("BS", "ifrs-full_EquityAndLiabilities", filed_total, rcept_no=rcept_no)])
+            replacements = {
+                "ifrs-full_Assets": bad_assets,
+                "ifrs-full_Liabilities": bad_liabilities,
+                "ifrs-full_Equity": equity,
+            }
+            for item in statement["list"]:
+                item["rcept_no"] = rcept_no
+                if item["sj_div"] == "BS" and item["account_id"] in replacements:
+                    item["thstrm_amount"] = replacements[item["account_id"]]
+            mapped = fm.map_period(symbol, period_end, fs_div, statement, "file.json", None, None, self.mapping)
+            self.assertEqual(mapped.values["total_assets"], Decimal(filed_total))
+            self.assertEqual(mapped.values["total_liabilities"], Decimal(filed_liabilities))
+            self.assertEqual(mapped.values["total_equity"], Decimal(equity))
+            self.assertEqual(mapped.values["total_assets"], mapped.values["total_liabilities"] + mapped.values["total_equity"])
+            sources = {p["column"]: p for p in mapped.provenance if p["table"] == "financials"}
+            self.assertEqual(sources["total_assets"]["fallback_rule"], "filed_accounting_identity")
+            self.assertEqual(sources["total_liabilities"]["verified_rcept_no"], rcept_no)
+            self.assertEqual(sources["total_assets"]["replaced_source"]["value"], Decimal(bad_assets))
+
+    def test_accounting_identity_fallback_does_not_apply_outside_allowlist(self):
+        statement = self.statement([row("BS", "ifrs-full_EquityAndLiabilities", "1200")])
+        mapped = fm.map_period("032830", "2025-03-31", "CFS", statement, "file.json", None, None, self.mapping)
+        self.assertEqual(mapped.values["total_assets"], Decimal("1000"))
+        source = next(p for p in mapped.provenance if p["table"] == "financials" and p["column"] == "total_assets")
+        self.assertNotIn("fallback_rule", source)
+
     def test_samsung_capital_surplus_override_and_separate_label(self):
         period = fm.map_period("005930", "2025-12-31", "OFS", self.statement(), "f.json", None, None, self.mapping)
         self.assertEqual(period.values["capital_surplus"], Decimal("44"))

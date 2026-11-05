@@ -1,0 +1,283 @@
+# 수시공시(주요사항·거래소·기타 공시) 수집 설정 — run_events
+# 상대 경로는 저장소 루트 기준이다.
+#
+# 보고서명 정규화: 앞의 [기재정정]·[첨부정정] 같은 꼬리표와 공백을 지우고,
+# "주요사항보고서(X)"는 안쪽 X만 남긴다. 아래 패턴은 정규화된 보고서명의 앞부분에 맞춘다(re.match).
+# 예) "[기재정정]주요사항보고서(자기주식취득결정)(자회사의주요경영사항)" → "자기주식취득결정(자회사의주요경영사항)"
+#
+# 판정 순서: exclude → events(위에서부터 처음 맞는 것). 어느 쪽에도 안 맞으면 unclassified로
+# 수집하지 않고 dry-run 보고서에만 남긴다(새 공시 종류를 놓치지 않게 주기적으로 확인).
+
+list:
+  corp_cls: "Y"            # 코스피
+  pblntf_types:            # B 주요사항보고서 → kind=major, I 거래소공시·E 기타공시 → kind=other
+    B: major
+    I: other
+    E: other
+  last_reprt_at: "N"       # 정정 전 원본도 받는다 (원본은 지우지 않고 정정본과 연결)
+  page_count: 100
+
+# 자회사·종속회사 공시 "(자회사의주요경영사항)" 등도 받되 is_subsidiary로 표시한다.
+include_subsidiary: true
+subsidiary_markers:
+  - "(자회사의주요경영사항)"
+  - "(종속회사의주요경영사항)"
+
+paths:
+  raw_dir: data/raw/dart/events    # 날짜별 목록 원본 JSON, 원문 ZIP
+  out_dir: data/events             # dry-run 보고서, 상태 파일
+
+# 받지 않을 종류 (양이 많거나 카드로 쓸 일이 거의 없음). dry-run 보고서에는 건수만 남긴다.
+exclude:
+  - '^최대주주등소유주식변동신고서'
+  - '^(임시|정기)?주주총회'
+  - '^주주명부폐쇄'
+  - '^현금ㆍ현물배당을위한주주명부폐쇄'
+  - '^공정거래자율준수프로그램'
+  - '^독립이사의선임'
+  - '^사외이사의선임'
+  - '^대표이사\(대표집행임원\)변경'
+  - '^금전대여결정'
+  - '^타인에대한(채무보증|담보제공)결정'
+  - '^채무인수결정'
+  - '^단기차입금증가결정'
+  - '^(신탁계약에의한취득상황|신탁계약해지결과|자기주식취득결과|자기주식처분결과|합병등종료)보고서'
+  - '^유상증자또는주식관련사채등의발행결과'
+  - '^자기(전환|교환|신주인수권부)사채'
+  - '^상각형조건부자본증권발행결정'
+  - '^지속가능경영보고서'
+  - '^부동산투자회사자산관리위탁계약'
+  - '^지주회사의자회사(탈퇴|편입)'
+  - '^유상증자신주발행가액'
+  - '^수시공시의무관련사항'
+  - '^벌금등의부과'
+  - '^주식매수선택권부여'
+  - '^전환가액ㆍ신주인수권행사가액ㆍ교환가액의조정'
+  - '^자본으로인정되는채무증권발행결정'
+  - '^주권관련사채권의취득결정'
+  - '^상장채권관련기타주요사항'
+  - '^해외증권시장주권등상장결정'
+  - '^부동산투자회사자금차입'
+  - '^기타안내사항\(안내공시\)'
+
+# 받을 종류. type: disclosure_events.event_type, topic: 메모 주제와 맞출 때 쓰는 큰 분류.
+events:
+  # ── 실적
+  - {type: prelim_earnings,     topic: earnings, patterns: ['^(연결재무제표기준)?영업\(잠정\)실적']}
+  - {type: earnings_change,     topic: earnings, patterns: ['^(연결재무제표기준)?매출액또는손익구조']}
+  - {type: earnings_guidance,   topic: earnings, patterns: ['^(연결재무제표기준)?영업실적등에대한전망']}
+  - {type: earnings_preannounce, topic: earnings, patterns: ['^결산실적공시예고']}
+  # ── 주주환원
+  - {type: dividend,            topic: shareholder_return, patterns: ['^[^()]*배당결정']}
+  - {type: treasury_buy,        topic: shareholder_return, patterns: ['^자기주식취득결정', '^자기주식취득신탁계약체결결정']}
+  - {type: treasury_sell,       topic: shareholder_return, patterns: ['^자기주식처분결정', '^자기주식취득신탁계약해지결정']}
+  - {type: share_cancel,        topic: shareholder_return, patterns: ['^주식소각결정']}
+  - {type: value_up,            topic: shareholder_return, patterns: ['^기업가치제고계획']}
+  # ── 사업
+  - {type: supply_contract,     topic: business, patterns: ['^단일판매ㆍ공급계약(체결|해지)']}
+  - {type: facility_investment, topic: business, patterns: ['^신규시설투자']}
+  - {type: equity_investment,   topic: business, patterns: ['^타법인주식및출자증권(취득|처분|양수|양도)결정']}
+  - {type: asset_deal,          topic: business, patterns: ['^유형자산(취득|처분|양수|양도)결정', '^부동산투자회사부동산(취득|처분)']}
+  - {type: business_transfer,   topic: business, patterns: ['^영업(양수|양도)결정']}
+  - {type: business_plan,       topic: business, patterns: ['^장래사업ㆍ경영계획']}
+  - {type: material_event,      topic: business, patterns: ['^투자판단관련주요경영사항', '^기타경영사항']}
+  # ── 자본·구조
+  - {type: rights_offering,     topic: capital, patterns: ['^유상증자결정']}
+  - {type: bonus_issue,         topic: capital, patterns: ['^(유)?무상증자결정']}
+  - {type: hybrid_bond,         topic: capital, patterns: ['^(전환사채권|신주인수권부사채권|교환사채권)발행결정']}
+  - {type: restructuring,       topic: capital, patterns: ['^(회사분할|회사합병|회사분할합병|주식교환ㆍ이전)결정']}
+  - {type: share_count_change,  topic: capital, patterns: ['^(주식병합|주식분할)결정']}
+  - {type: capital_reduction,   topic: capital, patterns: ['^감자결정']}
+  - {type: control_change,      topic: capital, patterns: ['^최대주주변경']}
+  # ── 위험 (풍문 해명을 조회공시 요구보다 먼저 본다)
+  - {type: rumor_clarification, topic: risk, patterns: ['^풍문또는보도에대한해명', '^조회공시요구\(풍문또는보도\)에대한답변']}
+  - {type: inquiry,             topic: risk, patterns: ['^조회공시요구']}
+  - {type: market_warning,      topic: risk, patterns: ['^투자유의안내', '^투자(주의|경고|위험)종목', '^관리종목', '^기타시장안내\(.*(상장적격성|개선기간|상장폐지|기업심사위원회)', '^상장적격성', '^불성실공시법인지정', '^회계처리기준위반']}
+  - {type: operation_disruption, topic: risk, patterns: ['^(거래처와의거래중단|생산중단|생산재개|중대재해발생)']}
+  - {type: audit_report,        topic: risk, patterns: ['^감사보고서제출']}
+  - {type: trading_halt,        topic: risk, patterns: ['^매매거래정지']}
+  - {type: insolvency,          topic: risk, patterns: ['^(파산신청|회생절차개시신청|부도발생|영업정지|해산사유발생)']}
+  - {type: lawsuit,             topic: risk, patterns: ['^소송등의(제기|판결)']}
+  # ── 일정
+  - {type: ir,                  topic: schedule, patterns: ['^기업설명회\(IR\)개최']}
+
+# ── 종류별로 뽑을 항목 (events_fields.py)
+# path는 공백을 지운 "항목 경로"에 re.search, acode는 주요사항보고서(XML) 값 칸의 항목 코드.
+# 서식마다 번호("3.")가 달라질 수 있어 (\d+\.)? 로 둔다. 규칙이 없는 종류는 pairs(항목-값 전체)만 저장한다.
+# required의 "a|b"는 둘 중 하나만 있으면 된다. required가 빠지면 parse_status=partial.
+# type: text(기본) | int | float | number(정수면 int) | date | krw(scale 단위를 곱해 원) | unit("단위 : 백만원" → 1000000)
+fields:
+  prelim_earnings:
+    required: [unit, revenue|op_income]
+    rules:
+      unit:                     {path: '^(\d+\.)?\S*실적내용$', type: unit}
+      period_start:             {path: '^당기실적$', type: date}
+      period_end:               {path: '^당기실적#2$', type: date}
+      revenue:                  {path: '^(매출액|영업수익)>당해실적>당기실적$', type: krw, scale: unit}
+      revenue_prev_q:           {path: '^(매출액|영업수익)>당해실적>전기실적$', type: krw, scale: unit}
+      revenue_prev_y:           {path: '^(매출액|영업수익)>당해실적>전년동기실적$', type: krw, scale: unit}
+      revenue_ytd:              {path: '^(매출액|영업수익)>누계실적>당기실적$', type: krw, scale: unit}
+      revenue_ytd_prev_y:       {path: '^(매출액|영업수익)>누계실적>전년동기실적$', type: krw, scale: unit}
+      op_income:                {path: '^영업이익>당해실적>당기실적$', type: krw, scale: unit}
+      op_income_prev_q:         {path: '^영업이익>당해실적>전기실적$', type: krw, scale: unit}
+      op_income_prev_y:         {path: '^영업이익>당해실적>전년동기실적$', type: krw, scale: unit}
+      op_income_ytd:            {path: '^영업이익>누계실적>당기실적$', type: krw, scale: unit}
+      op_income_ytd_prev_y:     {path: '^영업이익>누계실적>전년동기실적$', type: krw, scale: unit}
+      net_income:               {path: '^당기순이익>당해실적>당기실적$', type: krw, scale: unit}
+      net_income_prev_q:        {path: '^당기순이익>당해실적>전기실적$', type: krw, scale: unit}
+      net_income_prev_y:        {path: '^당기순이익>당해실적>전년동기실적$', type: krw, scale: unit}
+      net_income_owners:        {path: '^지배기업소유주지분순이익>당해실적>당기실적$', type: krw, scale: unit}
+      net_income_owners_prev_y: {path: '^지배기업소유주지분순이익>당해실적>전년동기실적$', type: krw, scale: unit}
+
+  dividend:
+    required: [dps_common|dps_preferred, record_date]
+    rules:
+      dividend_kind:   {path: '^(\d+\.)?배당구분$'}
+      payout_type:     {path: '^(\d+\.)?배당종류$'}
+      dps_common:      {path: '^(\d+\.)?1주당배당금\(원\)>보통주', type: number}
+      dps_preferred:   {path: '^(\d+\.)?1주당배당금\(원\)>종류주', type: number}
+      yield_common:    {path: '^(\d+\.)?시가배당률\(%\)>보통주', type: float}
+      yield_preferred: {path: '^(\d+\.)?시가배당률\(%\)>종류주', type: float}
+      total_krw:       {path: '^(\d+\.)?배당금총액\(원\)$', type: int}
+      record_date:     {path: '^(\d+\.)?배당기준일$', type: date}
+      pay_date:        {path: '^(\d+\.)?배당금지급예정일자$', type: date}
+      board_date:      {path: '이사회결의일', type: date}
+
+  treasury_buy:
+    required: [shares_common|amount_common|trust_amount]
+    rules:
+      shares_common:  {acode: ACQ_OSTK, path: '취득예정주식\(주\)>보통주', type: int}
+      amount_common:  {acode: ACQ_OSTK_PRC, path: '취득예정금액\(원\)>보통주', type: int}
+      period_start:   {path: '취득예상기간>시작일$', type: date}
+      period_end:     {path: '취득예상기간>종료일$', type: date}
+      purpose:        {acode: ACQ_PPS, path: '^(\d+\.)?(취득목적|계약목적)$'}
+      method:         {acode: ACQ_MTH, path: '^(\d+\.)?취득방법$'}
+      broker:         {path: '^(\d+\.)?(위탁투자중개업자|계약체결기관)$'}
+      trust_amount:   {path: '^(\d+\.)?계약금액\(원\)$', type: int}
+      trust_start:    {path: '^(\d+\.)?계약기간>시작일$', type: date}
+      trust_end:      {path: '^(\d+\.)?계약기간>종료일$', type: date}
+      decision_date:  {path: '(취득결정일|이사회결의일)', type: date}
+
+  treasury_sell:
+    required: [shares_common|amount_common|trust_amount_before]
+    rules:
+      shares_common:        {path: '처분예정주식\(주\)>보통주', type: int}
+      amount_common:        {path: '처분예정금액\(원\)>보통주', type: int}
+      price_common:         {path: '처분대상주식가격\(원\)>보통주', type: int}
+      period_start:         {path: '처분예정기간>시작일$', type: date}
+      period_end:           {path: '처분예정기간>종료일$', type: date}
+      purpose:              {path: '^(\d+\.)?(처분목적|해지목적)$'}
+      method:               {path: '처분방법'}
+      trust_amount_before:  {acode: CLN_PRC_PRE, path: '계약금액\(원\)>해지전$', type: int}
+      trust_amount_after:   {acode: CLN_PRC_AFT, path: '계약금액\(원\)>해지후$', type: int}
+      cancel_shares_common: {acode: CNL_OSTK, path: '해지예정주식\(주\)>보통주', type: int}
+      decision_date:        {path: '이사회결의일', type: date}
+
+  share_cancel:
+    required: [shares_common|shares_preferred]
+    rules:
+      shares_common:    {path: '^(\d+\.)?소각할주식의종류와수>보통주', type: int}
+      shares_preferred: {path: '^(\d+\.)?소각할주식의종류와수>종류주', type: int}
+      issued_common:    {path: '^(\d+\.)?발행주식총수>보통주', type: int}
+      amount_krw:       {path: '^(\d+\.)?소각예정금액\(원\)$', type: int}
+      method:           {path: '^(\d+\.)?소각할주식의취득방법$'}
+      cancel_date:      {path: '^(\d+\.)?소각예정일$', type: date}
+      board_date:       {path: '이사회결의일', type: date}
+
+  supply_contract:
+    required: [contract_amount|contract_name|withheld_reason]
+    rules:
+      # 체결 서식과 해지 서식("해지계약명", "해지내역>해지금액") 둘 다
+      contract_kind:   {path: '^(\d+\.)?판매ㆍ공급계약(해지)?구분$'}
+      contract_name:   {path: '^(\d+\.)?(체결계약명|해지계약명|판매ㆍ공급계약내용)$'}
+      contract_amount: {path: '(계약내역>(계약금액|확정계약금액)|해지내역>해지금액)(\(원\))?$', type: int}
+      recent_revenue:  {path: '(계약|해지)내역>최근매출액(\(원\))?$', type: int}
+      revenue_pct:     {path: '(계약|해지)내역>매출액대비\(%\)$', type: float}
+      terminate_reason: {path: '^(\d+\.)?해지주요사유$'}
+      terminate_date:  {path: '^(\d+\.)?해지일자$', type: date}
+      withheld_reason: {path: '공시유보관련내용>유보사유$'}
+      withheld_until:  {path: '공시유보관련내용>유보기한$', type: date}
+      counterparty:    {path: '^(\d+\.)?계약상대(방)?$'}
+      region:          {path: '^(\d+\.)?판매ㆍ공급지역$'}
+      start_date:      {path: '계약기간>시작일$', type: date}
+      end_date:        {path: '계약기간>종료일$', type: date}
+      contract_date:   {path: '^(\d+\.)?계약\(수주\)일자$', type: date}
+
+  rumor_clarification:
+    required: [rumor|clarification]
+    rules:
+      # 해명 서식(1.풍문또는보도의내용 … 4.해명내용)과 조회공시 답변 서식(1.제목, 2.내용)
+      rumor:         {path: '^(\d+\.)?(풍문또는보도의내용|제목)$'}
+      media:         {path: '^(\d+\.)?풍문또는보도의매체$'}
+      rumor_date:    {path: '^(\d+\.)?풍문또는보도의발생일자$', type: date}
+      clarification: {path: '((해명|답변)내용|^(\d+\.)?내용)$'}
+      recheck_date:  {path: '^(\d+\.)?재공시예정일$', type: date}
+
+  business_plan:
+    required: [plan]
+    rules:
+      plan:            {path: '^(\d+\.)?장래계획사항$'}
+      purpose:         {path: '주요내용및추진일정>목적$'}
+      detail:          {path: '주요내용및추진일정>세부내용$'}
+      start_date:      {path: '추진일정>시작일$', type: date}
+      end_date:        {path: '추진일정>종료일$', type: date}
+      investment:      {path: '예상투자금액$'}
+      expected_effect: {path: '기대효과$'}
+
+  facility_investment:
+    required: [amount_krw]
+    rules:
+      investment_kind: {path: '^(\d+\.)?투자구분$'}
+      target:          {path: '^(\d+\.)?투자대상$'}
+      amount_krw:      {path: '투자내역>투자금액\(원\)$', type: int}
+      equity_krw:      {path: '투자내역>자기자본\(원\)$', type: int}
+      equity_pct:      {path: '투자내역>자기자본대비\(%\)$', type: float}
+      purpose:         {path: '^(\d+\.)?투자목적$'}
+      start_date:      {path: '투자기간>시작일$', type: date}
+      end_date:        {path: '투자기간>종료일$', type: date}
+      board_date:      {path: '이사회결의일', type: date}
+
+  earnings_preannounce:
+    required: [announce_date]
+    rules:
+      period_start:  {path: '결산대상기간>시작일$', type: date}
+      period_end:    {path: '결산대상기간>종료일$', type: date}
+      announce_date: {path: '^(\d+\.)?결산실적공시예정일$', type: date}
+
+  ir:
+    required: [event_date]
+    rules:
+      event_date: {path: '^(\d+\.)?일시및장소>일시$', type: date}
+      event_time: {path: '^(\d+\.)?일시및장소>일시#2$'}
+      place:      {path: '^(\d+\.)?일시및장소>장소$'}
+      audience:   {path: '^(\d+\.)?참가대상자$'}
+      purpose:    {path: '^(\d+\.)?개최목적$'}
+      method:     {path: '^(\d+\.)?개최방법$'}
+      summary:    {path: '^(\d+\.)?주요설명회내용'}
+
+  material_event:
+    required: [subject|content]
+    rules:
+      subject:       {path: '^(\d+\.)?제목$'}
+      content:       {path: '^(\d+\.)?주요내용$'}
+      decision_date: {path: '결정\(확인\)일자$', type: date}
+
+  rights_offering:
+    # 해외 종속회사 증자는 주식 수 없이 조달 금액만 있는 경우가 많다
+    required: [new_shares_common|new_shares_other|use_facility_krw|use_operating_krw|use_debt_krw|use_acquisition_krw|use_business_krw|use_other_krw]
+    rules:
+      new_shares_common:    {acode: CST_CNT, path: '신주의종류와수>보통주', type: int}
+      new_shares_other:     {acode: PST_CNT, path: '신주의종류와수>기타주', type: int}
+      shares_before_common: {acode: BFR_CST_CNT, path: '증자전발행주식총수.*>보통주', type: int}
+      method:               {path: '^(\d+\.)?증자방식$'}
+      issue_price_common:   {acode: CST_ISS_VAL, path: '신주발행가액>보통주', type: int}
+      issue_price_other:    {acode: PST_ISS_VAL, path: '신주발행가액>기타주', type: int}
+      discount_pct:         {acode: DC_RATE, type: float}
+      use_facility_krw:     {acode: FND_USE1, path: '자금조달의목적>시설자금', type: int}
+      use_operating_krw:    {acode: FND_USE2, path: '자금조달의목적>운영자금', type: int}
+      use_debt_krw:         {acode: FND_USE_RD, path: '자금조달의목적>채무상환자금', type: int}
+      use_acquisition_krw:  {acode: ANC_ACQ_AMT, path: '자금조달의목적>타법인증권취득자금', type: int}
+      use_business_krw:     {acode: FND_USE_SQ, path: '자금조달의목적>영업양수자금', type: int}
+      use_other_krw:        {acode: FND_USE3, path: '자금조달의목적>기타자금', type: int}
+      pay_date:             {path: '^(\d+\.)?납입일$', type: date}
+      listing_date:         {path: '^(\d+\.)?신주의상장예정일$', type: date}

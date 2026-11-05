@@ -45,6 +45,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     ap.add_argument("--mapping", default="configs/financials_mapping.yaml")
     ap.add_argument("--steps", default=",".join(STEPS), help="쉼표 구분: " + ",".join(STEPS))
     ap.add_argument("--symbols", default="", help="쉼표 구분 종목코드 (기본: TARGET_SYMBOLS)")
+    ap.add_argument("--periods", default="", help="쉼표 구분 period_end (기본: config targets.periods)")
     ap.add_argument("--refresh", action="store_true", help="저장된 원본 JSON이 있어도 다시 받는다")
     ap.add_argument("--dry-run", action="store_true", help="DART 호출·DB 쓰기 없이 계획(collect)·매핑 결과만 출력")
     ap.add_argument("--root", default=str(REPO_ROOT), help="상대 경로와 .env 기준 디렉터리 (기본: 저장소 루트)")
@@ -134,7 +135,8 @@ class Run:
         self.logs_dir = data_path(config, "logs_dir", self.root)
         self.provenance_path = data_path(config, "financials_dir", self.root) / "provenance.jsonl"
         self.mapping_path = resolve_path(args.mapping)
-        self.periods = [str(p) for p in config["targets"]["periods"]]
+        requested_periods = [p.strip() for p in args.periods.split(",") if p.strip()]
+        self.periods = requested_periods or [str(p) for p in config["targets"]["periods"]]
         self.symbols = [s.strip() for s in args.symbols.split(",") if s.strip()] or list(TARGET_SYMBOLS)
         self.engine = engine
         self.session = session
@@ -458,3 +460,7 @@ def main(argv: list[str] | None = None, *, engine=None, session=None) -> int:
     setup_logging()
     config = load_config(args.config)
     return Run(args, config, engine=engine, session=session).execute()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
