@@ -145,6 +145,30 @@ PYTHONPATH=backend python -m pipelines.disclosures.run_events --since 2026-10-21
 - **점검**: 저장 전 DB의 alembic 버전이 코드와 같은지, `disclosure_events`가 있는지 확인한다. 다르면 시작하지 않는다.
 - 결과: `data/events/run_*.json` (저장 건수, parse_status별 건수, 실패 목록, 임베딩 결과)
 
+### 5-1. 매일 자동 실행 (Windows 작업 스케줄러)
+
+GPU가 있는 Windows PC에서 매일 12:30, 19:30에 돈다. 기간은 **어제~오늘(KST)** 이다(목록 캐시 규칙 참고).
+
+```powershell
+# 미리 시험 (DB에 쓰지 않음)
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run_event_disclosures.ps1 -DryRun
+# 작업 등록 / 해제
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install_event_disclosure_task.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install_event_disclosure_task.ps1 -Uninstall
+# 상태 확인 / 지금 한 번 실행
+Get-ScheduledTask -TaskName MemoEventDisclosures | Get-ScheduledTaskInfo
+Start-ScheduledTask -TaskName MemoEventDisclosures
+```
+
+- `scripts/run_event_disclosures.ps1`: 한 번 실행. ai_memo 환경의 python, `.env`의 `DATABASE_URL`, 모델은 로컬 캐시(`--offline`).
+  같은 실행이 이미 돌고 있으면 바로 끝낸다(종료 코드 10).
+- `scripts/install_event_disclosure_task.ps1`: 작업 `MemoEventDisclosures` 등록. 로그인한 사용자로, 로그인해 있을 때만 돈다(비밀번호 저장 안 함).
+  PC가 꺼져 시간을 놓치면 켜진 뒤 한 번 돈다. 앞 실행이 돌고 있으면 건너뛰고, 2시간이 넘으면 멈춘다.
+- 로그: `logs/event_disclosures/`
+  - `history.log`: 실행마다 한 줄(시각, 기간, 종료 코드와 뜻, 걸린 시간). **먼저 이것만 보면 된다.**
+  - `run_*.log`(요약 출력), `run_*.err.log`(진행·경고·오류 로그). 30일 지나면 지운다.
+- 종료 코드 3(DART 한도)은 다음 실행에서 이어 받으므로 따로 할 일이 없다. 1이 이어지면 `run_*.err.log`를 본다.
+
 ## 6. 규모 (2026-10-21 ~ 11-03, 영업일 10일 기준)
 
 - DART 목록 1,280건 → 거르고 남은 것 932건 (하루 약 90건, 정정본 약 15%)
