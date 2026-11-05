@@ -279,7 +279,7 @@ def main(argv: list[str] | None = None) -> int:
     summary = collect_events(engine, refs, api_key, raw_dir / "docs", field_rules, session=session, reparse=args.reparse)
 
     embed_result = None
-    if summary.loaded and not args.no_embed:
+    if refs and not args.no_embed:  # 새로 저장한 게 없어도 빠진 임베딩은 채운다
         if args.offline:
             from .embedder import set_offline
 
