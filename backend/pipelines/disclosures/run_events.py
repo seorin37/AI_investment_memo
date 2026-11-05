@@ -288,7 +288,9 @@ def main(argv: list[str] | None = None) -> int:
 
         encoder, _ = load_encoder(common["model"], args.offline, args.allow_cpu)
         model_name, revision, config_hash = embedding_identity(common["model"])
-        report_embed = embed_pending(engine.begin, encoder, summary.loaded, model_name=model_name,
+        # 이번에 저장한 것만이 아니라 기간 안 전부: 앞 실행이 임베딩 전에 멈췄거나 --no-embed였던 청크도 채운다.
+        # embed_pending은 임베딩이 없거나 모델 설정이 다른 청크만 고르므로, 이미 된 것은 다시 하지 않는다.
+        report_embed = embed_pending(engine.begin, encoder, [ref.rcept_no for ref in refs], model_name=model_name,
                                      model_revision=revision, config_hash=config_hash)
         embed_result = {"pending": report_embed.pending, "embedded": report_embed.embedded, "failed": report_embed.failed}
 
