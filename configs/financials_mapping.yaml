@@ -110,6 +110,15 @@ continuing_operations_fallback:
   noncontrolling_profit_loss: ifrs-full_ProfitLossFromContinuingOperationsAttributableToNoncontrollingInterests
   basic_eps: ifrs-full_BasicEarningsLossPerShareFromContinuingOperations
 
+# DART structured API defects verified against the filed financial statements.
+# Only these exact receipt numbers may replace stale/zero Assets and Liabilities.
+accounting_identity_fallback:
+  account_id: ifrs-full_EquityAndLiabilities
+  targets:
+    "032830 2025-06-30": "20250813000585"
+    "032830 2025-09-30": "20251114002091"
+    "008040 2026-06-30": "20260930000510"
+
 bps:
   # BPS 분자: 지배주주지분 (BS). 분모는 stockTotqySttus 발행주식총수 − 자기주식수
   owners_equity:
