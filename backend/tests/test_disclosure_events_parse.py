@@ -4,6 +4,7 @@ from pathlib import Path
 from pipelines.common.config import REPO_ROOT, load_config
 from pipelines.disclosures.events_fields import (
     EventFieldRules,
+    extract_correction,
     extract_fields,
     parse_date,
     parse_number,
@@ -216,6 +217,26 @@ class RealDocumentTest(unittest.TestCase):
         self.assertEqual(result.correction["date"], "2026-10-26")
         self.assertEqual(result.correction["original_date"], "2026-10-12")
         self.assertIn("정정", result.correction["reason"])
+
+    def test_correction_with_swapped_cells(self):
+        # 한화오션 자회사 정정공시: 1번(서류명) 칸에 날짜, 2번(제출일) 칸에 서류명을 적었다
+        swapped = [
+            Pair("정정일자", "2026-10-30"),
+            Pair("1. 정정관련 공시서류", "2026-09-18"),
+            Pair("2. 정정관련 공시서류제출일", "타법인 주식 및 출자증권 처분결정(종속회사의 주요경영사항)"),
+            Pair("3. 정정사유", "처분예정일자 변경"),
+        ]
+        self.assertEqual(extract_correction(swapped), {
+            "date": "2026-10-30",
+            "original_title": "타법인 주식 및 출자증권 처분결정(종속회사의 주요경영사항)",
+            "original_date": "2026-09-18",
+            "reason": "처분예정일자 변경",
+        })
+
+    def test_correction_with_non_date_original_is_not_used(self):
+        pairs = [Pair("1. 정정관련 공시서류", "회사합병결정"), Pair("2. 정정관련 공시서류제출일", "원공시 참조")]
+        self.assertEqual(extract_correction(pairs), {"original_title": "회사합병결정", "original_date_raw": "원공시 참조"})
+        self.assertEqual(extract_correction([Pair("2. 정정관련 공시서류제출일", "-")]), {"original_date": None})
 
     def test_dividend(self):
         _, result = self.extract("dividend", "033920_20261022800228")  # 무학

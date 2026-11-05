@@ -66,6 +66,7 @@ class EventRules:
     events: list[tuple[str, str, list[re.Pattern]]]  # (type, topic, patterns)
     subsidiary_markers: list[str]
     include_subsidiary: bool = True
+    skip_prefixes: list[str] = field(default_factory=list)
 
     @classmethod
     def from_config(cls, config: dict) -> "EventRules":
@@ -82,6 +83,7 @@ class EventRules:
             events=events,
             subsidiary_markers=list(config.get("subsidiary_markers", [])),
             include_subsidiary=bool(config.get("include_subsidiary", True)),
+            skip_prefixes=list(config.get("skip_prefixes", [])),
         )
 
     def classify(self, base_title: str) -> tuple[str, str | None]:
@@ -107,6 +109,7 @@ class SelectReport:
     excluded_titles: Counter = field(default_factory=Counter)
     unclassified_titles: Counter = field(default_factory=Counter)
     skipped_subsidiary: int = 0
+    skipped_prefix: Counter = field(default_factory=Counter)  # 꼬리표 → 건수 ([첨부정정] 등)
     not_in_universe: Counter = field(default_factory=Counter)  # 종목코드 → 건수
     no_stock_code: int = 0
     corrections: int = 0
@@ -122,6 +125,7 @@ class SelectReport:
             "excluded_titles": dict(self.excluded_titles.most_common()),
             "unclassified_titles": dict(self.unclassified_titles.most_common()),
             "skipped_subsidiary": self.skipped_subsidiary,
+            "skipped_prefix": dict(self.skipped_prefix.most_common()),
             "not_in_universe": dict(self.not_in_universe.most_common()),
             "no_stock_code": self.no_stock_code,
             "duplicates": self.duplicates,
@@ -155,6 +159,9 @@ def select_events(
         report.total += 1
         title = str(item.get("report_nm", "")).strip()
         base, prefix = normalize_title(title)
+        if any(marker in prefix for marker in rules.skip_prefixes):
+            report.skipped_prefix[prefix] += 1
+            continue
         event_type, topic = rules.classify(base)
         if topic is None:
             target = report.excluded_titles if event_type == "excluded" else report.unclassified_titles

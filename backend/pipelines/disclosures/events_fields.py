@@ -200,7 +200,27 @@ def extract_correction(pairs: list[Pair]) -> dict:
                         pass
                 result[key] = value
                 break
+    # 제출 회사가 1·2번 칸을 바꿔 적은 경우(예: 서류명 칸에 날짜): 날짜인 쪽을 제출일로 쓴다
+    if result.get("original_date") and not _is_iso_date(result["original_date"]) \
+            and _is_iso_date(_try_date(result.get("original_title"))):
+        result["original_title"], result["original_date"] = result["original_date"], _try_date(result["original_title"])
+    # 그래도 날짜가 아니면 원본 연결에 쓰지 않는다(추측 금지) — 원래 글자는 따로 남긴다
+    if result.get("original_date") and not _is_iso_date(result["original_date"]):
+        result["original_date_raw"] = result.pop("original_date")
     return result
+
+
+def _try_date(value: str | None) -> str | None:
+    if not value:
+        return None
+    try:
+        return parse_date(value)
+    except ValueError:
+        return None
+
+
+def _is_iso_date(value: str | None) -> bool:
+    return bool(value) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", value) is not None
 
 
 def extract_fields(event_type: str, pairs: list[Pair], rules: EventFieldRules) -> ExtractResult:

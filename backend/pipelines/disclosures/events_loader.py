@@ -83,8 +83,11 @@ def find_original(conn: Connection, ref: EventRef, original_date: str | None) ->
     )
     params: dict = {"symbol": ref.symbol, "base": ref.base_title, "rcept_no": ref.rcept_no}
     if original_date:
+        try:
+            params["original_date"] = date.fromisoformat(original_date)
+        except ValueError:
+            return None  # 날짜가 아닌 값이면 추측하지 않는다
         sql += " AND d.rcept_dt = :original_date"
-        params["original_date"] = date.fromisoformat(original_date)
     sql += " ORDER BY d.rcept_no DESC LIMIT 1"
     return conn.execute(text(sql), params).scalar()
 
