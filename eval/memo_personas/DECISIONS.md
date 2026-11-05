@@ -46,9 +46,9 @@
 - 실행에 필요한 패키지는 모두 environment.yml에 이미 있다(requirements.txt는 확인용 목록). 맥북 점검용 pgserver·pytest는 requirements-dev.txt로 분리했다.
   내 `.venv`에는 pgserver 0.1.4와 lint용 pyflakes를 추가 설치했다(레포 파일에는 영향 없음).
 
-### B-2. DB는 DATABASE_URL 하나만, 연결 단위로 읽기 전용
-- 지시대로 .env의 3개 변수만 쓴다. 레포에 있는 `READONLY_DATABASE_URL`은 쓰지 않는다.
-- 대신 모든 연결에 `default_transaction_read_only=on`과 `statement_timeout=120s`를 걸고 commit하지 않는다. 쓰기 시도가 거부되는 것을 테스트로 확인했다.
+### B-2. DB는 역할별 조회 URL을 선택하고, 연결 단위로도 읽기 전용
+- 조회는 `READONLY_DATABASE_URL`을 우선 사용하며, 비어 있거나 없으면 기존 환경과의 호환을 위해 `DATABASE_URL`로 폴백한다.
+- 모든 연결에 `default_transaction_read_only=on`과 `statement_timeout=120s`를 걸고 commit하지 않는다. URL 값은 화면이나 결과 파일에 남기지 않는다.
 
 ### B-3. 스키마 해석 (근거 파일은 export_evidence.py 주석에 줄 번호로)
 - 거시 지표는 `market_indices`가 아니라 `economic_observations`(코드 KR_POLICY_RATE·USD_KRW·KR_GOV_3Y·KR_GOV_10Y·WTI_SPOT)에서 읽는다.

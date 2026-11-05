@@ -34,17 +34,17 @@ conda activate ai_memo
 
 `git status`에서 "Your branch is up to date"가 보이면 됩니다.
 
-### 0-2. `.env`에 3줄 넣기
-레포 맨 위 폴더의 `.env` 파일을 엽니다(없으면 `cp .env.example .env`로 먼저 만듭니다). 아래 3줄이 있어야 합니다. 이미 있는 줄은 그대로 두세요.
+### 0-2. `.env` 설정 확인
+레포 맨 위 폴더의 `.env` 파일을 엽니다(없으면 `cp .env.example .env`로 먼저 만듭니다). 아래 항목을 확인합니다. 이미 있는 줄은 그대로 두세요.
 
 ```
 LLM_API_KEY=여기에_Gemini_API_키
 LLM_MODEL=여기에_모델_이름
-DATABASE_URL=postgresql+psycopg://사용자:비밀번호@localhost:포트/DB이름
+READONLY_DATABASE_URL=postgresql+psycopg://조회사용자:비밀번호@호스트:포트/DB이름
 ```
 
 - `LLM_API_KEY`, `LLM_MODEL`: 상규가 카톡으로 따로 알려 줍니다. 따옴표나 앞뒤 공백 없이 붙여 넣습니다.
-- `DATABASE_URL`: 같은 `.env`의 `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_PORT`, `POSTGRES_DB` 값을 그대로 넣으면 됩니다.
+- `READONLY_DATABASE_URL`: 조회 전용 계정 URL을 사용합니다. 이 변수가 없거나 비어 있으면 기존 `DATABASE_URL`을 사용합니다.
 - `.env`는 비밀번호가 들어 있으니 카톡·깃에 올리지 않습니다. 이 도구는 값을 화면에 절대 출력하지 않습니다.
 
 ### 0-3. (필요할 때만) 패키지 설치
@@ -76,7 +76,7 @@ python -m eval.memo_personas.preflight
 ✅ 페르소나 검증 — 100명 · 1,000슬롯 · 기업별 250
 ✅ .env LLM_API_KEY — 있음 (값은 표시하지 않음)
 ✅ .env LLM_MODEL — 있음 (값은 표시하지 않음)
-✅ .env DATABASE_URL — 있음 (값은 표시하지 않음)
+✅ .env READONLY_DATABASE_URL — 있음 (조회 전용 URL 선택, 값은 표시하지 않음)
 ✅ DB 연결 — PostgreSQL 16.x, 읽기 전용으로 접속
 ✅ 필요한 테이블·컬럼 — 10개 테이블 확인
 ✅ 데이터 삼성전자(005930) — 주가 …건(…~…) · 공시 …건 · 공시 청크 …건 · 뉴스 …건 · 재무 …건
@@ -110,7 +110,7 @@ DB를 **읽기만** 합니다(쓰기·삭제 없음). 정상 예시:
 다음 단계: python -m eval.memo_personas.generate_memos --pilot
 ```
 
-⚠️ 줄이 나오면 그대로 진행합니다(근거가 모자란 유형은 자동으로 다른 유형으로 옮겨집니다). 
+⚠️ 줄이 나오면 그대로 진행합니다(근거가 모자란 유형은 자동으로 다른 유형으로 옮겨집니다).
 **이 단계는 파일럿 전에 한 번만** 실행합니다. 파일럿 뒤에 다시 실행하면 근거가 바뀌어 4단계에서 멈춥니다(아래 문제 해결표 참고).
 
 ## 3. 파일럿 10명(100개) — generate_memos --pilot, report
@@ -206,8 +206,8 @@ git commit·push는 하지 않아도 됩니다. 상규가 돌아와서 확인한
 | 필요한 패키지 | 환경에 일부 패키지가 없음 | `pip install -r eval/memo_personas/requirements.txt` |
 | 페르소나 파일 / 페르소나 검증 | 브랜치를 못 받았거나 파일이 바뀜 | `git checkout feature/sanggue-next && git pull`, 그래도 안 되면 `git checkout -- results/memo_personas/personas_100` |
 | .env 파일 | `.env`가 없음 | `cp .env.example .env` 후 0-2의 3줄 채우기 |
-| .env LLM_API_KEY / LLM_MODEL / DATABASE_URL | 그 줄이 없거나 비어 있음 | 0-2 참고. `키=값` 형식, 따옴표·공백 없이 |
-| DB 연결 | DB가 꺼짐, 포트·비밀번호·DB 이름 틀림 | `docker compose ps`로 memos-db 확인, 꺼져 있으면 `docker compose up -d`. 안내에 나온 대로 `DATABASE_URL`의 해당 부분 확인 |
+| .env LLM_API_KEY / LLM_MODEL / 조회용 DB URL | 그 줄이 없거나 비어 있음 | 0-2 참고. `키=값` 형식, 따옴표·공백 없이 |
+| DB 연결 | DB 상태 이상 또는 호스트·포트·인증정보·DB 이름 오류 | `READONLY_DATABASE_URL`(없으면 `DATABASE_URL`) 설정을 확인. 비밀값은 화면에 공유하지 않음 |
 | 필요한 테이블·컬럼 | 팀 DB에 최신 마이그레이션이 안 됨 | DB 담당자에게 `alembic current` 확인 요청 (직접 `alembic upgrade`는 담당자와 상의 후) |
 | 데이터 ○○ (주가 0건) | 그 기업 주가가 DB에 없음 | 진행 불가. 화면을 상규에게 보내 주세요 |
 | Gemini 테스트 호출 | 키·모델 이름·한도 | ↳ 안내대로. 429면 1~2분 뒤 다시, 일일 한도면 내일 |

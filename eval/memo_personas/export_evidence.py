@@ -18,8 +18,8 @@ import sys
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
-from .common import (FAIL, OK, WARN, company_codes, env_value, load_config, load_env, rpath, say, setup_console,
-                     write_json, write_text)
+from .common import (FAIL, OK, WARN, company_codes, load_config, load_env, read_database_url, rpath, say,
+                     setup_console, write_json, write_text)
 
 KST = timezone(timedelta(hours=9))
 NONE = "없음"
@@ -42,7 +42,7 @@ REQUIRED_COLUMNS = {
                    "total_liabilities", "total_equity"],
     # 0001 sql:240
     "financials_fin": ["symbol", "period_end", "period_type", "net_interest_income", "fee_income",
-                       "loan_loss_provision", "solvency_ratio"],
+                       "loan_loss_provision", "bis_ratio"],
     # 0001 sql:520·533 (지표 코드는 sql:859 시드, 수집은 backend/pipelines/economic/pipeline.py ECOS_SERIES·FRED_SERIES)
     "economic_indicators": ["code", "name", "unit"],
     "economic_observations": ["indicator_code", "observation_date", "value"],
@@ -117,7 +117,7 @@ ORDER BY period_end
 # financials_fin (0001 sql:240): 금융권 전용
 SQL_FINANCIALS_FIN = """
 SELECT period_end, period_type::text AS period_type, net_interest_income, fee_income, loan_loss_provision,
-       solvency_ratio
+       bis_ratio
 FROM financials_fin WHERE symbol = :symbol AND period_end <= :as_of
 ORDER BY period_end
 """
@@ -429,7 +429,7 @@ def financial_block(symbol: str, rows: list[dict], fin_rows: list[dict]):
         fin_extra.append({"id": f"financials_fin:{symbol}:{r['period_end']}:{r['period_type']}",
                           "period_end": str(r["period_end"]), "period_type": r["period_type"], "cumulative": True,
                           **{k: num(r.get(k)) for k in ("net_interest_income", "fee_income", "loan_loss_provision",
-                                                        "solvency_ratio")}})
+                                                        "bis_ratio")}})
 
     items = []
     for x in recent:
@@ -460,13 +460,13 @@ def financial_block(symbol: str, rows: list[dict], fin_rows: list[dict]):
         label = {"q1": "1분기", "half": "상반기", "q3": "3분기", "annual": "연간"}[x["period_type"]]
         parts = [f"{ko} {won(x[k])}" for k, ko in (("net_interest_income", "순이자이익"), ("fee_income", "수수료이익"),
                                                     ("loan_loss_provision", "대손충당금")) if x[k] is not None]
-        if x["solvency_ratio"] is not None:
-            parts.append(f"자본비율(BIS 등) {x['solvency_ratio']:.2f}%")
+        if x["bis_ratio"] is not None:
+            parts.append(f"자본비율(BIS 등) {x['bis_ratio']:.2f}%")
         if parts:
             y = x["period_end"][:4]
             items.append(item(f"{symbol}/finfin/{x['period_end']}", "재무", "fin_financial_sector", [x["id"]],
                               f"{y}년 {label} 누적(금융 항목) " + " · ".join(parts), f"{y}년 {label} 순이자이익",
-                              [x[k] for k in ("net_interest_income", "fee_income", "loan_loss_provision", "solvency_ratio")],
+                              [x[k] for k in ("net_interest_income", "fee_income", "loan_loss_provision", "bis_ratio")],
                               [x["period_end"]]))
     block = {"basis": "손익은 분기 단독값(누적값 차감), 재무상태는 기말값. ROE=순이익/기말자본, 부채비율=부채/자본",
              "quarters": recent or NONE, "annual": annual or NONE, "financial_sector": fin_extra or NONE}
@@ -624,9 +624,10 @@ def main(argv=None) -> int:
     ap.parse_args(argv)
     load_env()
     cfg = load_config()
-    url = env_value("DATABASE_URL")
+    url = read_database_url()
     if not url:
-        say(FAIL, ".env에 DATABASE_URL이 없습니다", fix="python -m eval.memo_personas.preflight 를 먼저 실행해 안내대로 고치세요.")
+        say(FAIL, ".env에 READONLY_DATABASE_URL 또는 DATABASE_URL이 없습니다",
+            fix="python -m eval.memo_personas.preflight 를 먼저 실행해 안내대로 고치세요.")
         return 1
     try:
         engine = make_engine(url)
@@ -641,7 +642,7 @@ def main(argv=None) -> int:
     except Exception as exc:  # noqa: BLE001 — 사람이 읽을 안내로 바꿔 보여 준다
         if type(exc).__name__ in ("OperationalError", "InterfaceError"):
             say(FAIL, "DB에 연결하지 못했습니다", type(exc).__name__,
-                fix="docker compose ps 로 memos-db가 실행 중인지, .env의 DATABASE_URL 호스트·포트·비밀번호가 맞는지 확인하세요.")
+                fix="DB 상태와 .env의 조회용 DB URL 설정을 확인하세요 (값은 화면에 공유하지 마세요).")
             return 1
         raise
     out = rpath(cfg["paths"]["evidence_dir"])

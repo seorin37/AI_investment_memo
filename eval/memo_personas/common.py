@@ -2,7 +2,7 @@
 
 모든 명령은 레포 루트에서 `python -m eval.memo_personas.<모듈>`로 실행한다.
 Windows+WSL2에서도 같은 결과가 나오도록 경로는 pathlib, 파일은 UTF-8로만 읽고 쓴다.
-비밀값(.env의 LLM_API_KEY·DATABASE_URL)은 프로그램 안에서만 쓰고 화면·파일에 남기지 않는다.
+비밀값(.env의 LLM_API_KEY·DB URL)은 프로그램 안에서만 쓰고 화면·파일에 남기지 않는다.
 """
 
 from __future__ import annotations
@@ -18,7 +18,8 @@ PKG_DIR = Path(__file__).resolve().parent
 REPO_ROOT = PKG_DIR.parents[1]
 CONFIG_PATH = PKG_DIR / "config.yaml"
 ENV_PATH = REPO_ROOT / ".env"
-ENV_KEYS = ("LLM_API_KEY", "LLM_MODEL", "DATABASE_URL")
+ENV_KEYS = ("LLM_API_KEY", "LLM_MODEL")
+READ_DATABASE_KEYS = ("READONLY_DATABASE_URL", "DATABASE_URL")
 
 COMPANIES = ["삼성전자", "SK하이닉스", "NAVER", "KB금융"]
 # 메모 속 기업 언급 판정용 별명 (소문자로 비교). 페르소나 nickname(sample_personas.NICKNAME)을 모두 포함한다.
@@ -58,6 +59,16 @@ def load_env() -> None:
 def env_value(name: str) -> str | None:
     v = os.environ.get(name)
     return v.strip() if v and v.strip() else None
+
+
+def read_database_url(environ=None) -> str | None:
+    """조회 URL을 역할별 변수에서 고른다. 값은 오류나 로그에 포함하지 않는다."""
+    env = os.environ if environ is None else environ
+    for name in READ_DATABASE_KEYS:
+        value = env.get(name)
+        if value and value.strip():
+            return value.strip()
+    return None
 
 
 def load_config(path: Path | None = None) -> dict:

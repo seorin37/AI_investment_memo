@@ -12,8 +12,8 @@ import csv
 import importlib
 import sys
 
-from .common import (ENV_KEYS, ENV_PATH, FAIL, OK, WARN, company_codes, env_value, load_config, load_env, read_json,
-                     read_jsonl, rpath, say, setup_console)
+from .common import (ENV_KEYS, ENV_PATH, FAIL, OK, WARN, company_codes, env_value, load_config, load_env,
+                     read_database_url, read_json, read_jsonl, rpath, say, setup_console)
 
 PACKAGES = {"requests": "requests", "sqlalchemy": "sqlalchemy", "psycopg": "psycopg[binary]", "yaml": "PyYAML",
             "dotenv": "python-dotenv"}
@@ -112,35 +112,44 @@ def check_personas(r: Result, cfg: dict):
 
 def check_env(r: Result) -> dict:
     present = {k: bool(env_value(k)) for k in ENV_KEYS}
+    readonly_set = bool(env_value("READONLY_DATABASE_URL"))
+    database_set = bool(env_value("DATABASE_URL"))
+    present["DB_URL"] = readonly_set or database_set
     if not ENV_PATH.exists() and not all(present.values()):
         r.fail(".env 파일", "레포 루트에 .env가 없음",
-               "레포 루트에서 cp .env.example .env 로 만든 뒤 LLM_API_KEY, LLM_MODEL, DATABASE_URL 값을 채우세요.")
-    for k, ok in present.items():
+               "레포 루트에서 cp .env.example .env 로 만든 뒤 필요한 값을 채우세요.")
+    for k in ENV_KEYS:
+        ok = present[k]
         if ok:
             r.ok(f".env {k}", "있음 (값은 표시하지 않음)")
         else:
             hint = {"LLM_API_KEY": "Gemini API 키를 LLM_API_KEY=... 한 줄로 넣으세요 (따옴표·공백 없이).",
-                    "LLM_MODEL": "모델 이름을 LLM_MODEL=... 한 줄로 넣으세요. 상규가 카톡으로 알려 준 이름을 그대로 씁니다.",
-                    "DATABASE_URL": "팀 DB 주소를 DATABASE_URL=postgresql+psycopg://사용자:비밀번호@localhost:포트/DB이름 형식으로 넣으세요."}[k]
+                    "LLM_MODEL": "모델 이름을 LLM_MODEL=... 한 줄로 넣으세요. 상규가 카톡으로 알려 준 이름을 그대로 씁니다."}[k]
             r.fail(f".env {k}", "없음", hint)
+    if readonly_set:
+        r.ok(".env READONLY_DATABASE_URL", "있음 (조회 전용 URL 선택, 값은 표시하지 않음)")
+    elif database_set:
+        r.ok(".env DATABASE_URL", "있음 (조회 URL 폴백, 값은 표시하지 않음)")
+    else:
+        r.fail(".env READONLY_DATABASE_URL 또는 DATABASE_URL", "둘 다 없음",
+               "조회 전용 READONLY_DATABASE_URL을 넣으세요. 기존 환경은 DATABASE_URL로도 동작합니다.")
     return present
 
 
 def db_fix(exc: Exception) -> str:
     msg = str(exc).lower()
     if "password" in msg or "authentication" in msg:
-        return ".env DATABASE_URL의 사용자 이름·비밀번호를 확인하세요 (.env의 POSTGRES_USER·POSTGRES_PASSWORD와 같아야 함)."
+        return ".env의 조회용 DB URL 사용자 이름·비밀번호를 확인하세요. 값은 화면에 공유하지 마세요."
     if "does not exist" in msg:
-        return ".env DATABASE_URL 끝의 DB 이름을 확인하세요 (POSTGRES_DB와 같아야 함)."
-    return ("DB가 켜져 있는지 확인하세요: docker compose ps (memos-db가 running이어야 함). 꺼져 있으면 docker compose up -d\n"
-            "켜져 있는데도 안 되면 DATABASE_URL의 호스트(localhost)·포트(POSTGRES_PORT)를 확인하세요.")
+        return ".env의 조회용 DB URL에 지정된 DB 이름을 확인하세요."
+    return "DB 상태와 .env의 조회용 DB URL 호스트·포트를 확인하세요."
 
 
 def check_db(r: Result, cfg: dict):
     from .export_evidence import MACRO_CODES, check_schema, make_engine, q
 
     try:
-        engine = make_engine(env_value("DATABASE_URL"))
+        engine = make_engine(read_database_url())
         conn = engine.connect()
     except Exception as exc:  # noqa: BLE001
         r.fail("DB 연결", f"{type(exc).__name__} (주소·비밀번호는 표시하지 않음)", db_fix(exc))
@@ -204,10 +213,10 @@ def main(argv=None) -> int:
     cfg = load_config()
     check_personas(r, cfg)
     present = check_env(r)
-    if present["DATABASE_URL"]:
+    if present["DB_URL"]:
         check_db(r, cfg)
     else:
-        r.fail("DB 연결", "DATABASE_URL이 없어 건너뜀")
+        r.fail("DB 연결", "READONLY_DATABASE_URL과 DATABASE_URL이 모두 없어 건너뜀")
     if present["LLM_API_KEY"] and present["LLM_MODEL"] or cfg["llm"].get("mock"):
         check_gemini(r, cfg)
     else:

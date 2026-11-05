@@ -36,8 +36,22 @@ class FakeResult:
         return self.value
 
 
+def _code_head() -> str:
+    from pathlib import Path
+
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    root = Path(__file__).resolve().parents[2]
+    cfg = Config(str(root / "alembic.ini"))
+    cfg.set_main_option("script_location", str(root / "alembic"))
+    return ScriptDirectory.from_config(cfg).get_current_head()
+
+
 class FakeConn:
-    def __init__(self, alembic="0007_disclosure_embeddings", vector="0.8.7", symbols=("005930",), column="vector(1024)", sparse="jsonb"):
+    def __init__(self, alembic=None, vector="0.8.7", symbols=("005930",), column="vector(1024)", sparse="jsonb"):
+        # 기본값은 코드의 현재 alembic head (마이그레이션이 추가될 때마다 고치지 않게)
+        alembic = alembic or _code_head()
         self.answers = [[alembic], vector, list(symbols), column, sparse]
 
     def execute(self, *args, **kwargs):

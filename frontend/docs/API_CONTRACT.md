@@ -39,14 +39,14 @@ app.add_middleware(
 
 ### 소셜 로그인 (카카오·네이버·구글)
 
-클라이언트 시크릿은 **백엔드에만** 둡니다. 프론트는 브라우저만 열고, 토큰은 리다이렉트로 받습니다.
+클라이언트 시크릿은 **백엔드에만** 둡니다. 프론트는 시스템 브라우저만 열며 토큰을 리다이렉트 URL로 받지 않습니다.
 
-1. 프론트 → `GET /auth/{provider}/login?redirect_uri=<앱 콜백>` (provider = `kakao` | `naver` | `google`)
+1. 프론트 → `GET /auth/{provider}/start?client=&return_to=&code_challenge=` (provider = `kakao` | `naver` | `google`)
 2. 백엔드 → 각 사 OAuth 동의 화면으로 302
-3. 백엔드 콜백에서 사용자 생성/조회 + JWT 발급 → `302 <redirect_uri>?token=<JWT>` (실패 시 `?error=메시지`)
-4. 프론트 `/auth/callback` 화면이 토큰 저장 → `GET /me`
+3. 백엔드 콜백에서 사용자 생성/조회. 웹은 HttpOnly 쿠키, Android는 짧은 수명의 단일 사용 code만 전달
+4. Android 앱은 앱 PKCE verifier와 code를 `/auth/mobile/exchange`에서 교환하고 Refresh Token만 SecureStore에 저장
 
-허용해야 할 `redirect_uri` 예시: `http://localhost:8081/auth/callback`(웹), `memos://auth/callback`(개발 빌드), `exp://<IP>:8081/--/auth/callback`(Expo Go)
+허용할 복귀 주소 예시: `http://localhost:8081/auth/callback`(웹), `memos://auth/callback`(Development Build). Expo Go 전용 주소는 운영 allowlist에 넣지 않습니다.
 
 ---
 
@@ -54,16 +54,17 @@ app.add_middleware(
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| POST | `/auth/email/login` | `{email, password}` | `AuthToken` |
-| POST | `/auth/email/signup` | `{name, email, password}` | `AuthToken` |
-| GET | `/auth/{provider}/login` | `?redirect_uri=` | 302 |
-| POST | `/auth/logout` | – | 204 |
-| GET | `/me` | – | `User` |
+| GET | `/auth/{provider}/start` | `?client=web\|mobile&return_to=&code_challenge=` | 302 |
+| GET | `/auth/{provider}/callback` | Provider `code`, `state` | 302 (웹 쿠키 또는 모바일 1회용 code) |
+| POST | `/auth/mobile/exchange` | `{code, code_verifier}` | `AuthToken` |
+| POST | `/auth/refresh` | 웹: 쿠키 / Android: `{refresh_token}` | `AuthToken` |
+| POST | `/auth/logout` | 웹: 쿠키 / Android: `{refresh_token}` | 204 |
+| GET | `/auth/me` | – | `User` |
 | PATCH | `/me` | `{name?, bio?}` | `User` |
 
 ```json
 // AuthToken
-{ "access_token": "eyJ...", "token_type": "bearer",
+{ "access_token": "eyJ...", "refresh_token": "Android 응답에만 포함", "expires_in": 900, "token_type": "bearer",
   "user": { "id": "u_1", "name": "김나라", "bio": "대학생", "avatar_url": null, "email": "nara@kakao.example",
             "providers": [{ "provider": "kakao", "email": "nara@kakao.example", "connected": true, "current": true }] } }
 ```
@@ -78,7 +79,7 @@ app.add_middleware(
 | PATCH | `/stocks/{code}` | `{status?, tags?}` | `MyStock` |
 | DELETE | `/stocks/{code}` | 휴지통으로 이동 | 204 |
 | GET | `/stocks/{code}/quote` | 현재가·등락 + 헤더 스파크라인(최근 ~24개 종가) | `Quote` |
-| GET | `/stocks/{code}/candles?range=1W\|1M\|3M\|1Y` | 일봉 OHLCV (오래된 → 최신) — 토스증권 Open API → `price_daily` | `Candle[]` |
+| GET | `/stocks/{code}/candles?range=1W\|1M\|3M\|1Y` | 일봉 OHLCV (오래된 → 최신) — KIS Open API → `prices_daily` | `Candle[]` |
 | GET | `/stocks/{code}/profile` | 기업 개요 + 시세/투자정보 + 52주 최고·최저 | `StockProfile` |
 | GET | `/stocks/{code}/financials` | 연간 실적(최근 7개년, 증감률 계산용 1년 포함) + 안정성 | `Financials` |
 
@@ -131,7 +132,7 @@ app.add_middleware(
 { "id": "a7", "stock_code": "000660", "stock_name": "SK하이닉스", "type": "price",
   "title": "종가 180,500원", "headline": "15만원 조건가에서 멀어졌어요",
   "summary": "종가 180,500원 · 조건가보다 30,500원(20.3%) 높아요. 아직 설정한 15만원 조건에 도달하지 않았어요.",
-  "source": "토스증권", "url": null, "published_at": "2026-10-11T15:30:00+09:00",
+  "source": "한국투자증권 KIS", "url": null, "published_at": "2026-10-11T15:30:00+09:00",
   "memo_id": "m4", "memo_title": "15만원 밑으로 오면 다시 생각", "memo_version": 2, "read": true, "relevance": 1.0 }
 
 // MemoTimeline.entries[] — 최신순. kind: update | memo_edit | memo_created | ai_linked
@@ -140,7 +141,7 @@ app.add_middleware(
 { "kind": "ai_linked", "at": "..." }
 ```
 
-`type`: `disclosure`(DART) · `news`(네이버 뉴스 검색 API/RSS) · `price`(토스증권 → 규칙·시계열 계산)
+`type`: `disclosure`(DART) · `news`(네이버 뉴스 검색 API/RSS) · `price`(KIS 확정 일봉 → 규칙·시계열 계산)
 
 ## 4. 최신 업데이트 (3.1 / 3.2)
 
@@ -212,7 +213,7 @@ app.add_middleware(
 |---|---|---|
 | 공시 원문·청크 임베딩 | Python Worker (DART 수집) → BGE-M3 | PostgreSQL + pgvector |
 | 뉴스 헤드라인·본문 임베딩 | Python Worker (네이버 뉴스 API/RSS, 중복 제거) → BGE-M3 | PostgreSQL + pgvector |
-| 일봉 OHLCV · 가격 이벤트 | Python Worker (토스증권 Open API) → 규칙 계산 | `price_daily` 등 |
+| 일봉 OHLCV · 가격 이벤트 | Python Worker (KIS Open API) → 규칙 계산 | `prices_daily`, `adjusted_prices_daily` 등 |
 | 메모 임베딩 | FastAPI (메모 저장/수정 시, `ai_linked=true`만) → BGE-M3 | pgvector |
 | `ai_updates` | Worker: 새 문서 ↔ 메모 임베딩 코사인 유사도 1차 필터 → LLM 관련성 최종 판단 → 짧은 요약 | PostgreSQL |
 | `price_conditions.status` | Worker: 종가 vs 조건 (LLM 없음) | PostgreSQL |

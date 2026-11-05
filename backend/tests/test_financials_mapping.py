@@ -158,6 +158,43 @@ class RealMappingTest(unittest.TestCase):
         bps = next(p for p in period.provenance if p["column"] == "bps")
         self.assertEqual((bps["shares_basis"], bps["issued"], bps["owners_equity"]["account_id"]), ("합계", 100, "ifrs-full_EquityAttributableToOwnersOfParent"))
 
+    def test_verified_accounting_identity_fallback(self):
+        cases = [
+            ("032830", "2025-06-30", "CFS", "20250813000585",
+             "318858553000000", "287368034000000", "33657838000000", "319124603000000", "285466765000000"),
+            ("032830", "2025-09-30", "CFS", "20251114002091",
+             "318858553000000", "287368034000000", "40923920000000", "335306866000000", "294382946000000"),
+            ("008040", "2026-06-30", "OFS", "20260930000510",
+             "0", "0", "111932093545", "470511381854", "358579288309"),
+        ]
+        for symbol, period_end, fs_div, rcept_no, bad_assets, bad_liabilities, equity, filed_total, filed_liabilities in cases:
+            statement = self.statement([row("BS", "ifrs-full_EquityAndLiabilities", filed_total, rcept_no=rcept_no)])
+            replacements = {
+                "ifrs-full_Assets": bad_assets,
+                "ifrs-full_Liabilities": bad_liabilities,
+                "ifrs-full_Equity": equity,
+            }
+            for item in statement["list"]:
+                item["rcept_no"] = rcept_no
+                if item["sj_div"] == "BS" and item["account_id"] in replacements:
+                    item["thstrm_amount"] = replacements[item["account_id"]]
+            mapped = fm.map_period(symbol, period_end, fs_div, statement, "file.json", None, None, self.mapping)
+            self.assertEqual(mapped.values["total_assets"], Decimal(filed_total))
+            self.assertEqual(mapped.values["total_liabilities"], Decimal(filed_liabilities))
+            self.assertEqual(mapped.values["total_equity"], Decimal(equity))
+            self.assertEqual(mapped.values["total_assets"], mapped.values["total_liabilities"] + mapped.values["total_equity"])
+            sources = {p["column"]: p for p in mapped.provenance if p["table"] == "financials"}
+            self.assertEqual(sources["total_assets"]["fallback_rule"], "filed_accounting_identity")
+            self.assertEqual(sources["total_liabilities"]["verified_rcept_no"], rcept_no)
+            self.assertEqual(sources["total_assets"]["replaced_source"]["value"], Decimal(bad_assets))
+
+    def test_accounting_identity_fallback_does_not_apply_outside_allowlist(self):
+        statement = self.statement([row("BS", "ifrs-full_EquityAndLiabilities", "1200")])
+        mapped = fm.map_period("032830", "2025-03-31", "CFS", statement, "file.json", None, None, self.mapping)
+        self.assertEqual(mapped.values["total_assets"], Decimal("1000"))
+        source = next(p for p in mapped.provenance if p["table"] == "financials" and p["column"] == "total_assets")
+        self.assertNotIn("fallback_rule", source)
+
     def test_samsung_capital_surplus_override_and_separate_label(self):
         period = fm.map_period("005930", "2025-12-31", "OFS", self.statement(), "f.json", None, None, self.mapping)
         self.assertEqual(period.values["capital_surplus"], Decimal("44"))
@@ -225,8 +262,16 @@ class RealMappingTest(unittest.TestCase):
             self.assertIsNone(v[column], column)  # 일반 기업 전용 항목은 값이 있어도 NULL
         self.assertEqual(v["operating_income"], Decimal("85"))
         self.assertEqual(v["interest_expense"], Decimal("160"))
-        self.assertEqual(period.fin_values, {"net_interest_income": Decimal("130"), "fee_income": Decimal("41"), "loan_loss_provision": Decimal("20")})
-        self.assertEqual(period.review, [])
+        self.assertEqual(period.fin_type, "holding")  # fin_type_overrides
+        self.assertEqual(period.fin_values, {
+            "net_interest_income": Decimal("130"), "fee_income": Decimal("41"), "loan_loss_provision": Decimal("20"),
+            "loans": None, "deposits": None, "insurance_revenue": None, "securities_operating_revenue": None,
+        })
+        self.assertEqual(period.fin_null_reasons, {"loans": "not_reported", "deposits": "not_reported",
+                                                   "insurance_revenue": "not_reported", "securities_operating_revenue": "not_applicable"})
+        self.assertEqual(period.null_reasons, {c: "not_applicable" for c in ("revenue", "current_assets", "current_liabilities", "inventories")})
+        self.assertEqual({line.split(": ")[0] for line in period.review},
+                         {f"105560 2025-12-31 financials_fin.{c}" for c in ("loans", "deposits", "insurance_revenue")})
 
 
 def general_statement(extra=()):
@@ -311,12 +356,12 @@ class PreflightTest(unittest.TestCase):
             fl.preflight(self.FakeConn(head, ["105560"]), ["105560"])
         bad = {t: dict(c) for t, c in fl.EXPECTED_COLUMNS.items()}
         bad["financials"]["eps"] = "numeric(20,0)"
-        del bad["financials_fin"]["solvency_ratio"]
+        del bad["financials_fin"]["bis_ratio"]
         with mock.patch.object(fl, "table_columns", side_effect=lambda conn, t: bad[t]):
             with self.assertRaises(fl.FinancialsPreflightError) as ctx:
                 fl.preflight(self.FakeConn("0004", []), ["105560"])
         message = str(ctx.exception)
-        for part in ("0004", "eps", "solvency_ratio", "105560"):
+        for part in ("0004", "eps", "bis_ratio", "105560"):
             self.assertIn(part, message)
 
 
@@ -335,7 +380,7 @@ def _engine_or_skip():
 class UpsertDbTest(unittest.TestCase):
     """실제 DB, 트랜잭션 롤백. 대상 기간 밖(1999년) 날짜만 쓴다."""
 
-    def test_upsert_is_idempotent_and_keeps_solvency_ratio(self):
+    def test_upsert_is_idempotent_and_keeps_bis_ratio(self):
         from sqlalchemy import text
 
         engine = _engine_or_skip()
@@ -352,12 +397,12 @@ class UpsertDbTest(unittest.TestCase):
                 for _ in range(2):
                     fl.upsert_financials(conn, period)
                     fl.upsert_financials_fin(conn, period)
-                conn.execute(text("UPDATE financials_fin SET solvency_ratio = 15.5 WHERE symbol = '105560' AND period_end = '1999-12-31'"))
+                conn.execute(text("UPDATE financials_fin SET bis_ratio = 15.5 WHERE symbol = '105560' AND period_end = '1999-12-31'"))
                 period.values["total_assets"] = Decimal("200")
                 fl.upsert_financials(conn, period)
                 fl.upsert_financials_fin(conn, period)
                 rows = conn.execute(text("SELECT total_assets, eps, fs_div FROM financials WHERE symbol = '105560' AND period_end = '1999-12-31'")).all()
-                fin = conn.execute(text("SELECT net_interest_income, loan_loss_provision, solvency_ratio FROM financials_fin WHERE symbol = '105560' AND period_end = '1999-12-31'")).all()
+                fin = conn.execute(text("SELECT net_interest_income, loan_loss_provision, bis_ratio FROM financials_fin WHERE symbol = '105560' AND period_end = '1999-12-31'")).all()
                 self.assertEqual(rows, [(Decimal("200"), Decimal("1.50"), "consolidated")])
                 self.assertEqual(fin, [(Decimal("7"), Decimal("3"), Decimal("15.50"))])  # load 재실행이 BIS 값을 지우지 않음
             finally:

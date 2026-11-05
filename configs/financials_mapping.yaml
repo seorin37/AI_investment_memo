@@ -7,6 +7,9 @@
 # ids: 우선순위 순 후보. 앞 후보가 허용 sj_div에 없을 때만 다음 후보를 본다.
 # overrides: 종목별 후보 교체. 근거를 주석으로 남긴다.
 # null_symbols / null_periods: 항상 NULL로 둘 종목·기간과 사유 (검토 결정)
+# fin_types: 이 금융 세부 업종에만 값을 찾는다 / not_for_fin_types: 이 업종이면 not_applicable (docs/financials-kospi-plan.md)
+# ofs_ids: 별도재무제표(OFS)일 때만 뒤에 붙이는 후보. 별도에는 비지배지분이 없어 총액 = 지배주주분
+# name_hint: 후보 ID가 없을 때 '-표준계정코드 미사용-' 행 중 이 계정명 정규식에 맞는 것을 검토 CSV에 올린다 (값은 채우지 않음)
 # sign: 저장 부호. 1이면 응답 값 그대로
 
 financials:
@@ -14,6 +17,8 @@ financials:
     sj_div: [IS, CIS]
     kind: flow
     ids: [ifrs-full_Revenue]
+    not_for_fin_types: [bank, insurance, securities, holding]  # 금융사는 해당 없음 (증권 영업수익은 financials_fin)
+    name_hint: '^(매출액?|수익\(매출액\)|영업수익)$'
     null_symbols:
       "105560": 금융지주는 매출 항목이 없음 (일반 기업 전용 항목, 명세 §2-9)
   operating_income:
@@ -21,11 +26,15 @@ financials:
     kind: flow
     # 삼성·SK하이닉스·NAVER는 dart_OperatingIncomeLoss, KB금융은 ifrs-full_ProfitLossFromOperatingActivities만 있음
     ids: [dart_OperatingIncomeLoss, ifrs-full_ProfitLossFromOperatingActivities]
+    name_hint: '^영업(이익|손익|이익\(손실\))$'
   net_income:
     sj_div: [IS, CIS]
     kind: flow
     # 지배주주 순이익 (ProfitLoss = 지배+비지배 아님). EPS·BPS 기준과 맞춘다
     ids: [ifrs-full_ProfitLossAttributableToOwnersOfParent]
+    # 별도재무제표만 있는 회사(리츠 등)는 지배주주 귀속 행이 없다 → 당기순이익 (비지배지분 없음)
+    ofs_ids: [ifrs-full_ProfitLoss]
+    name_hint: '지배기업.*(소유주|지분)'
   total_assets:
     sj_div: [BS]
     kind: balance
@@ -43,18 +52,21 @@ financials:
     sj_div: [BS]
     kind: balance
     ids: [ifrs-full_CurrentAssets]
+    not_for_fin_types: [bank, insurance, securities, holding]  # 금융사는 해당 없음 (증권 영업수익은 financials_fin)
     null_symbols:
       "105560": 금융지주는 유동·비유동 구분 재무상태표를 쓰지 않음 (일반 기업 전용 항목, 명세 §2-9)
   current_liabilities:
     sj_div: [BS]
     kind: balance
     ids: [ifrs-full_CurrentLiabilities]
+    not_for_fin_types: [bank, insurance, securities, holding]  # 금융사는 해당 없음 (증권 영업수익은 financials_fin)
     null_symbols:
       "105560": 금융지주는 유동·비유동 구분 재무상태표를 쓰지 않음 (일반 기업 전용 항목, 명세 §2-9)
   inventories:
     sj_div: [BS]
     kind: balance
     ids: [ifrs-full_Inventories, ifrs-full_InventoriesTotal]
+    not_for_fin_types: [bank, insurance, securities, holding]  # 금융사는 해당 없음 (증권 영업수익은 financials_fin)
     null_symbols:
       "105560": 금융지주는 재고자산 계정이 없음 (응답 10기간 모두 없음)
   interest_expense:
@@ -65,6 +77,7 @@ financials:
     # KB금융 ifrs-full_InterestExpense는 이자비용 합계 = 은행 등 이자비용(-표준계정코드 미사용-) + 보험금융이자비용
     # (2025 사업보고서: 16,083,007백만 = 14,578,519 + 1,504,488). 합계를 쓴다 (사용자 결정 2026-10-22)
     ids: [ifrs-full_InterestExpense]
+    name_hint: '^이자비용$'
   retained_earnings:
     sj_div: [BS]
     kind: balance
@@ -86,6 +99,7 @@ financials:
     kind: per_share
     # 기본주당이익. 분기·반기는 누적
     ids: [ifrs-full_BasicEarningsLossPerShare]
+    name_hint: '기본.*주당.*(이익|손실)|^주당(순)?(이익|손익)'
 
 # 기본 net_income·eps 계정이 둘 다 없고 총손익=계속영업손익(중단영업 0)일 때만 두 값을 함께 대체한다.
 continuing_operations_fallback:
@@ -96,30 +110,47 @@ continuing_operations_fallback:
   noncontrolling_profit_loss: ifrs-full_ProfitLossFromContinuingOperationsAttributableToNoncontrollingInterests
   basic_eps: ifrs-full_BasicEarningsLossPerShareFromContinuingOperations
 
+# DART structured API defects verified against the filed financial statements.
+# Only these exact receipt numbers may replace stale/zero Assets and Liabilities.
+accounting_identity_fallback:
+  account_id: ifrs-full_EquityAndLiabilities
+  targets:
+    "032830 2025-06-30": "20250813000585"
+    "032830 2025-09-30": "20251114002091"
+    "008040 2026-06-30": "20260930000510"
+
 bps:
   # BPS 분자: 지배주주지분 (BS). 분모는 stockTotqySttus 발행주식총수 − 자기주식수
   owners_equity:
     sj_div: [BS]
     kind: balance
     ids: [ifrs-full_EquityAttributableToOwnersOfParent]
+    ofs_ids: [ifrs-full_Equity]  # 별도재무제표는 자본총계 = 지배주주지분
   # 이 두 분기보고서는 의결권 현황 표를 생략했지만 같은 보고서 연결 자본금 주석에 당기 발행·유통주식수가 있다.
   # 사용자 승인(2026-10-22)에 따라 이 두 슬롯에만 제한적으로 주석 fallback을 허용한다.
   capital_note_fallback_periods: ["005930 2024-09-30", "005930 2025-09-30"]
 
 financials_fin:
+  # 기존 4개사 파이프라인(financials_pipeline)용 고정 목록. 코스피 전체(run_financials_all)는 자동 판별(fin_classify)을 쓴다
   symbols: ["105560"]
+  fin_type_overrides:
+    "105560": holding
+  # 비율(bis_ratio·kics_ratio·ncr_ratio)은 공시 본문 추출 단계 소관이라 여기 없다
   columns:
     net_interest_income:
+      fin_types: [bank, holding, other]
       sj_div: [IS, CIS]
       kind: flow
       # 순이자손익 (이자수익 − 이자비용)
       ids: [ifrs-full_InterestRevenueExpense]
     fee_income:
+      fin_types: [bank, holding, other]
       sj_div: [IS, CIS]
       kind: flow
       # 순수수료손익 (수수료수익 − 수수료비용)
       ids: [ifrs-full_FeeAndCommissionIncomeExpense]
     loan_loss_provision:
+      fin_types: [bank, holding, other]
       sj_div: [IS, CIS]
       kind: flow
       # 신용손실충당금 전입액, 양수 = 비용. 기간마다 태그가 달라 세 ID를 후보로 둔다 (기간당 정확히 하나만 등장):
@@ -133,3 +164,29 @@ financials_fin:
         - dart_AdditionReversalOfCreditLossFinancialAssets
         - ifrs-full_AdditionalAllowanceRecognisedInProfitOrLossAllowanceAccountForCreditLossesOfFinancialAssets
       sign: 1
+    loans:
+      sj_div: [BS]
+      kind: balance
+      fin_types: [bank, holding, other]
+      # 상각후원가 측정 대출채권. 2025 사업보고서 기업은행·KB금융 확인
+      ids: [dart_LoansAtAmortisedCost]
+    deposits:
+      sj_div: [BS]
+      kind: balance
+      fin_types: [bank, holding, other]
+      # 예수부채. 2025 사업보고서 기업은행·KB금융 확인
+      ids: [ifrs-full_DepositsFromCustomers]
+    insurance_revenue:
+      sj_div: [IS, CIS]
+      kind: flow
+      fin_types: [insurance, holding]
+      # IFRS17 보험수익 (재보험수익 제외). 삼성생명은 이 ID를 '일반보험서비스수익'으로 표시하고,
+      # dart_OperatingIncomeInsurance(보험서비스수익)는 여기에 재보험수익을 더한 합계라 회사 간 비교용으로 쓰지 않는다.
+      # 2025 사업보고서 삼성생명 9.72조 + 재보험 0.17조 = 9.89조, KB금융 11.65조 + 0.72조 = 12.38조
+      ids: [ifrs-full_InsuranceRevenue]
+    securities_operating_revenue:
+      sj_div: [IS, CIS]
+      kind: flow
+      fin_types: [securities]
+      # 증권사 영업수익 (파생·평가이익 포함). 제조업 매출과 의미가 달라 financials.revenue에는 넣지 않는다
+      ids: [ifrs-full_Revenue]

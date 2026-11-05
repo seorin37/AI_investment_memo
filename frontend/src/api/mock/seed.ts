@@ -317,7 +317,7 @@ export const aiUpdates: AiUpdate[] = [
   },
   {
     id: 'a3', stock_code: '000660', stock_name: 'SK하이닉스', type: 'price', title: '주가 +7.1% 상승',
-    headline: '최근 5거래일 동안 7.1% 올랐어요', source: '토스증권', url: null, published_at: ago({ d: 2, h: 3 }),
+    headline: '최근 5거래일 동안 7.1% 올랐어요', source: '한국투자증권 KIS', url: null, published_at: ago({ d: 2, h: 3 }),
     memo_id: 'm2', memo_title: '요즘 반도체 분위기 좋아 보여', memo_version: 1, read: false, relevance: 0.7,
     summary: '최근 5거래일 동안 7.1% 올랐고 거래량도 평소보다 늘었어요.',
   },
@@ -342,13 +342,13 @@ export const aiUpdates: AiUpdate[] = [
   },
   {
     id: 'a7', stock_code: '000660', stock_name: 'SK하이닉스', type: 'price', title: '종가 180,500원',
-    headline: '15만원 조건가에서 멀어졌어요', source: '토스증권', url: null, published_at: '2026-10-11T15:30:00+09:00',
+    headline: '15만원 조건가에서 멀어졌어요', source: '한국투자증권 KIS', url: null, published_at: '2026-10-11T15:30:00+09:00',
     memo_id: 'm4', memo_title: '15만원 밑으로 오면 다시 생각', memo_version: 2, read: true, relevance: 1,
     summary: '종가 180,500원 · 조건가보다 30,500원(20.3%) 높아요. 아직 설정한 15만원 조건에 도달하지 않았어요.',
   },
   {
     id: 'a8', stock_code: '000660', stock_name: 'SK하이닉스', type: 'price', title: '종가 156,800원',
-    headline: '15만원 조건가에 가까워졌어요', source: '토스증권', url: null, published_at: '2026-10-02T15:30:00+09:00',
+    headline: '15만원 조건가에 가까워졌어요', source: '한국투자증권 KIS', url: null, published_at: '2026-10-02T15:30:00+09:00',
     memo_id: 'm4', memo_title: '15만원 밑으로 오면 다시 생각', memo_version: 1, read: true, relevance: 1,
     summary: '최근 5거래일 동안 6.2% 내렸어요. 종가 156,800원으로, 설정한 15만원보다 6,800원(4.5%) 높아요.',
   },
@@ -367,7 +367,7 @@ export const aiUpdates: AiUpdate[] = [
   },
   {
     id: 'a11', stock_code: '005930', stock_name: '삼성전자', type: 'price', title: '종가 69,800원',
-    headline: '설정한 7만원 조건에 도달했어요', source: '토스증권', url: null, published_at: '2026-10-16T15:30:00+09:00',
+    headline: '설정한 7만원 조건에 도달했어요', source: '한국투자증권 KIS', url: null, published_at: '2026-10-16T15:30:00+09:00',
     memo_id: 'm7', memo_title: '7만원 밑이면 다시 보기', memo_version: 1, read: false, relevance: 1,
     summary: '종가가 7만원 아래로 내려왔어요. 메모에 적어 둔 대로 밸류에이션을 다시 확인해 볼 시점이에요.',
   },

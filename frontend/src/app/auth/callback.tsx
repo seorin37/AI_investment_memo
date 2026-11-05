@@ -7,20 +7,19 @@ import { useAuth } from '@/store/auth';
 import { colors } from '@/theme/tokens';
 
 /**
- * 소셜 로그인 콜백 — FastAPI 가 `/auth/callback?token=<JWT>` 로 리다이렉트합니다.
- * (실패 시 `?error=메시지`)
+ * 웹 OAuth 콜백. 세션은 HttpOnly 쿠키에 있으므로 URL에는 토큰이 없습니다.
  */
 export default function AuthCallback() {
-  const { token, error } = useLocalSearchParams<{ token?: string; error?: string }>();
+  const { status: callbackStatus, error } = useLocalSearchParams<{ status?: string; error?: string }>();
   const router = useRouter();
-  const signIn = useAuth((s) => s.signIn);
+  const completeWebLogin = useAuth((s) => s.completeWebLogin);
   const status = useAuth((s) => s.status);
   const [signInError, setSignInError] = useState<string | null>(null);
-  const failed = error ?? (!token ? '로그인 토큰이 없어요.' : signInError);
+  const failed = error ?? (callbackStatus !== 'success' ? '로그인 결과를 확인할 수 없어요.' : signInError);
 
   useEffect(() => {
-    if (token && status !== 'signedIn') signIn(token).catch(() => setSignInError('로그인 정보를 확인하지 못했어요.'));
-  }, [token, status, signIn]);
+    if (callbackStatus === 'success' && status !== 'signedIn') completeWebLogin().catch(() => setSignInError('로그인 정보를 확인하지 못했어요.'));
+  }, [callbackStatus, status, completeWebLogin]);
 
   if (status === 'signedIn') return <Redirect href="/" />;
   if (failed)

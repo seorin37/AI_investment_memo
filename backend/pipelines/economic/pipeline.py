@@ -4,6 +4,152 @@ from decimal import Decimal
 
 from sqlalchemy import create_engine, text
 
+from pipelines.common.db import load_env
+
+
+load_env()
+
+
+ECONOMIC_INDICATORS = {
+    "USD_KRW": {
+        "code": "USD_KRW",
+        "name": "원/달러 환율",
+        "category": "fx",
+        "country": "KR",
+        "source": "ECOS",
+        "series_code": "731Y003/0000003",
+        "unit": "KRW/USD",
+        "frequency": "D",
+        "description": "ECOS 원/달러 환율",
+    },
+    "KR_POLICY_RATE": {
+        "code": "KR_POLICY_RATE",
+        "name": "한국은행 기준금리",
+        "category": "policy_rate",
+        "country": "KR",
+        "source": "ECOS",
+        "series_code": "722Y001/0101000",
+        "unit": "%",
+        "frequency": "EVENT",
+        "description": "공표일 기준 변경 이벤트",
+    },
+    "KR_GOV_3Y": {
+        "code": "KR_GOV_3Y",
+        "name": "국고채 3년",
+        "category": "bond_yield",
+        "country": "KR",
+        "source": "ECOS",
+        "series_code": "817Y002/010200000",
+        "unit": "%",
+        "frequency": "D",
+        "description": None,
+    },
+    "KR_GOV_10Y": {
+        "code": "KR_GOV_10Y",
+        "name": "국고채 10년",
+        "category": "bond_yield",
+        "country": "KR",
+        "source": "ECOS",
+        "series_code": "817Y002/010210000",
+        "unit": "%",
+        "frequency": "D",
+        "description": None,
+    },
+    "KR_GOV_30Y": {
+        "code": "KR_GOV_30Y",
+        "name": "국고채 30년",
+        "category": "bond_yield",
+        "country": "KR",
+        "source": "ECOS",
+        "series_code": "817Y002/010230000",
+        "unit": "%",
+        "frequency": "D",
+        "description": None,
+    },
+    "US_TREASURY_2Y": {
+        "code": "US_TREASURY_2Y",
+        "name": "미국 국채 2년",
+        "category": "bond_yield",
+        "country": "US",
+        "source": "FRED",
+        "series_code": "DGS2",
+        "unit": "%",
+        "frequency": "D",
+        "description": None,
+    },
+    "US_TREASURY_10Y": {
+        "code": "US_TREASURY_10Y",
+        "name": "미국 국채 10년",
+        "category": "bond_yield",
+        "country": "US",
+        "source": "FRED",
+        "series_code": "DGS10",
+        "unit": "%",
+        "frequency": "D",
+        "description": None,
+    },
+    "US_TREASURY_30Y": {
+        "code": "US_TREASURY_30Y",
+        "name": "미국 국채 30년",
+        "category": "bond_yield",
+        "country": "US",
+        "source": "FRED",
+        "series_code": "DGS30",
+        "unit": "%",
+        "frequency": "D",
+        "description": None,
+    },
+    "WTI_SPOT": {
+        "code": "WTI_SPOT",
+        "name": "WTI 현물가격",
+        "category": "crude_oil",
+        "country": "US",
+        "source": "FRED",
+        "series_code": "DCOILWTICO",
+        "unit": "USD/barrel",
+        "frequency": "D",
+        "description": "선물가격이 아닌 현물가격",
+    },
+}
+
+
+def ensure_economic_indicators(connection, indicator_codes: set[str]) -> int:
+    """Create missing indicator masters without modifying existing definitions."""
+
+    unknown = indicator_codes - ECONOMIC_INDICATORS.keys()
+    if unknown:
+        raise ValueError(f"정의되지 않은 경제지표 코드: {sorted(unknown)}")
+    if not indicator_codes:
+        return 0
+    statement = text("""
+        INSERT INTO economic_indicators (
+            code,
+            name,
+            category,
+            country,
+            source,
+            series_code,
+            unit,
+            frequency,
+            description
+        ) VALUES (
+            :code,
+            :name,
+            :category,
+            :country,
+            :source,
+            :series_code,
+            :unit,
+            :frequency,
+            :description
+        )
+        ON CONFLICT (code) DO NOTHING
+    """)
+    params = [ECONOMIC_INDICATORS[code] for code in sorted(indicator_codes)]
+    result = connection.execute(statement, params)
+    rowcount = getattr(result, "rowcount", None)
+    return rowcount if isinstance(rowcount, int) and rowcount >= 0 else 0
+
 
 def save_economic_observations(rows: list[dict]) -> int:
     """경제지표 관측치를 PostgreSQL에 UPSERT한다."""
@@ -45,6 +191,10 @@ def save_economic_observations(rows: list[dict]) -> int:
 
     try:
         with engine.begin() as conn:
+            ensure_economic_indicators(
+                conn,
+                {row["indicator_code"] for row in rows},
+            )
             conn.execute(stmt, rows)
     finally:
         engine.dispose()
@@ -159,6 +309,11 @@ def backfill_ecos(
             )
 
             rows = normalize_ecos_rows(indicator_code, raw)
+            rows = [
+                row
+                for row in rows
+                if start_date <= row["observation_date"] <= end_date
+            ]
 
             if not rows:
                 raise ValueError("ECOS 관측치가 없습니다.")
@@ -189,11 +344,6 @@ def backfill_ecos(
                     rows,
                     previous_value=previous_value,
                 )
-
-                # 전체 초기 적재 시작일의 직전 상태를
-                # 실제 관측일(2019-12-31)에 보존한다.
-                if start_date == date(2020, 1, 1):
-                    rows = previous_rows + rows
 
             saved = save_economic_observations(rows)
 
@@ -335,6 +485,11 @@ def backfill_fred(
                 indicator_code,
                 raw,
             )
+            rows = [
+                row
+                for row in rows
+                if start_date <= row["observation_date"] <= end_date
+            ]
 
             if not rows:
                 raise ValueError("FRED 유효 관측치가 없습니다.")

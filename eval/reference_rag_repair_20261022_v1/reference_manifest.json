@@ -1,0 +1,51 @@
+{
+  "run_id": "rag_repair_20261022_v1",
+  "purpose": "source-grounded evaluation reference table only",
+  "created_from": {
+    "query_metadata": "eval/package_eval_20261022_135833_726451/query_metadata.jsonl",
+    "query_metadata_sha256": "3908996059a8fbfab86488cf5096b8c7f71b3db26d493eb5fcae4f4d232f1861",
+    "fact_spec": "eval/rag_repair_20261022_v1/reference_fact_spec.tsv",
+    "fact_spec_sha256": "899f2289b0bdb39b9e75246fc045ff39baac158db34dde2019dbba1921bc27f7"
+  },
+  "execution_scope": {
+    "reembedding": false,
+    "database_write": false,
+    "retrieval_run": false,
+    "retrieval_evaluation": false
+  },
+  "outputs": {
+    "reference_annotations.jsonl": {
+      "sha256": "6440cd13d44b61c5bfcd8c356e13313e85f406d227590b6686356e304bb48ae7",
+      "bytes": 1770217
+    },
+    "reference_review.csv": {
+      "sha256": "7c6b87aff6fc4166a513ec69652f3a516d51efab77c56f58aa384d9e69eea0fc",
+      "bytes": 429947
+    },
+    "gold_change_log.csv": {
+      "sha256": "efa2347b9fde3f39232fe07f920407f059a28dd011626478d7c9f3b438912ce4",
+      "bytes": 73639
+    },
+    "unresolved_items.csv": {
+      "sha256": "46f8e128e1a4c604d20e7ccc1f72fa45920def033934c874de06eab1b50b13f8",
+      "bytes": 7622
+    },
+    "reference_table_summary.json": {
+      "sha256": "c1602ff89b1e47e15bd45d19a4d2f671f4caa0ca048763348e3088298fe3b17c",
+      "bytes": 808
+    },
+    "reference_validation.json": {
+      "sha256": "a362377dcbe018c6ea7451016527d529f15a67d720f718213318c1f3b903945f",
+      "bytes": 1656
+    },
+    "baseline_audit.md": {
+      "sha256": "5ef4f1aa865841b79fbc8bd31b413df87354455d82b8b69cab11b2abeb974f2a",
+      "bytes": 2123
+    },
+    "reference_table_report.md": {
+      "sha256": "c06704dc4400e59953432cc3e8c4348e6725e05348cfcb80f2f758d57d3a5f9a",
+      "bytes": 1891
+    }
+  },
+  "validation_passed": true
+}

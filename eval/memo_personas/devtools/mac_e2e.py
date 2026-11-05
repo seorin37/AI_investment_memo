@@ -54,8 +54,11 @@ def main() -> int:
     try:
         fake_db.migrate(url)
         seeded = fake_db.seed(url)
-        base = {k: v for k, v in os.environ.items() if k not in ("MEMO_MOCK_SCENARIO", "LLM_API_KEY", "LLM_MODEL", "DATABASE_URL")}
-        base.update(MEMO_CONFIG=str(cfg_path), LLM_API_KEY=SECRET, LLM_MODEL="mock-model", DATABASE_URL=url)
+        isolated = ("MEMO_MOCK_SCENARIO", "LLM_API_KEY", "LLM_MODEL", "DATABASE_URL",
+                    "READONLY_DATABASE_URL", "READ_DATABASE_URL", "ALEMBIC_DATABASE_URL")
+        base = {k: v for k, v in os.environ.items() if k not in isolated}
+        base.update(MEMO_CONFIG=str(cfg_path), LLM_API_KEY=SECRET, LLM_MODEL="mock-model",
+                    DATABASE_URL=url, READONLY_DATABASE_URL=url)
 
         def step(no, title, args, expect_rc, must=(), env_over=None):
             nonlocal ok_all
@@ -71,10 +74,10 @@ def main() -> int:
 
         step(1, "preflight: .env LLM_MODEL 누락", ["eval.memo_personas.preflight"], 1,
              ["❌ .env LLM_MODEL", "LLM_MODEL=..."], {"LLM_MODEL": ""})
-        step(2, "preflight: DB 연결 실패", ["eval.memo_personas.preflight"], 1, ["❌ DB 연결", "docker compose"],
-             {"DATABASE_URL": "postgresql+psycopg://postgres:wrong@127.0.0.1:1/nodb"})
+        step(2, "preflight: DB 연결 실패", ["eval.memo_personas.preflight"], 1, ["❌ DB 연결", "DB 상태"],
+             {"READONLY_DATABASE_URL": "postgresql+psycopg://postgres:wrong@127.0.0.1:1/nodb"})
         step(3, "export_evidence: DB 연결 실패", ["eval.memo_personas.export_evidence"], 1, ["DB에 연결하지 못했습니다"],
-             {"DATABASE_URL": "postgresql+psycopg://postgres:wrong@127.0.0.1:1/nodb"})
+             {"READONLY_DATABASE_URL": "postgresql+psycopg://postgres:wrong@127.0.0.1:1/nodb"})
         step(4, "preflight: 정상", ["eval.memo_personas.preflight"], 0, ["다음 명령: python -m eval.memo_personas.export_evidence"])
         step(5, "export_evidence: 정상", ["eval.memo_personas.export_evidence"], 0, ["저장 완료", "generate_memos --pilot"])
         step(6, "generate --pilot: 429·깨진 JSON·검사 실패 후 재생성, 6회 호출 뒤 강제 중단",

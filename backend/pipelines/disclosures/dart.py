@@ -7,10 +7,11 @@
 
 from __future__ import annotations
 
+import calendar
 import json
 import re
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field, replace
 from datetime import date, datetime
 from pathlib import Path
 
@@ -53,6 +54,7 @@ class ReportRef:
     period_end: str  # YYYY-MM-DD
     rcept_dt: str  # YYYY-MM-DD (KST)
     corp_code: str = ""
+    period_label: str = ""  # 청크 헤더용 (1분기·반기·3분기·사업보고서). 비어 있으면 period_end 월로 정한다.
 
     @property
     def source_url(self) -> str:
@@ -166,6 +168,90 @@ def select_disclosure_candidates(
         candidates.sort(key=lambda ref: (ref.rcept_dt, ref.rcept_no), reverse=True)
     missing = sorted(key for key, candidates in grouped.items() if not candidates)
     return {key: candidates for key, candidates in grouped.items() if candidates}, missing
+
+
+def fiscal_period_label(kind: str, period_end: str, fy_end_month: int) -> str | None:
+    """결산월 기준으로 몇 번째 분기인지 정한다. 12월 결산이면 월 기준 라벨과 같다. 유형과 안 맞으면 None."""
+    offset = (int(period_end[5:7]) - fy_end_month) % 12
+    label = {3: "1분기", 6: "반기", 9: "3분기", 0: "사업보고서"}.get(offset)
+    expected = {"1분기": "quarterly", "3분기": "quarterly", "반기": "half", "사업보고서": "annual"}.get(label or "")
+    return label if expected == kind else None
+
+
+def _any_period_end(report_nm: str) -> str:
+    """report_nm의 `(YYYY.MM)`에서 그 달 말일을 구한다 (결산월 제한 없음)."""
+    matches = PERIOD_RE.findall(report_nm)
+    if not matches:
+        raise DartError(f"보고서명에서 기간을 찾을 수 없습니다: {report_nm}")
+    year, month = int(matches[-1][0]), int(matches[-1][1])
+    if not 1 <= month <= 12:
+        raise DartError(f"보고서명의 기간 월이 올바르지 않습니다: {report_nm}")
+    return date(year, month, calendar.monthrange(year, month)[1]).isoformat()
+
+
+def select_window_candidates(
+    symbol: str,
+    corp_code: str,
+    items_by_type: dict[str, list[dict]],
+    start: str,
+    end: str,
+    max_slots: int,
+) -> tuple[dict[CandidateKey, list[ReportRef]], list[CandidateKey]]:
+    """결산월과 무관하게 대상 기간(start~end) 안의 정기보고서 슬롯을 최근 max_slots개까지 고른다.
+
+    결산월은 목록에 있는 가장 최근 사업보고서의 기간 월로 정한다 (없으면 반기보고서 월 + 6, 그것도 없으면 12월).
+    누락 슬롯 개념이 없으므로 두 번째 반환값은 항상 빈 목록이다.
+    """
+    entries: list[tuple[str, str, dict]] = []  # (kind, period_end, item)
+    seen: set[str] = set()
+    for _, items in sorted(items_by_type.items()):
+        for item in items:
+            title = str(item.get("report_nm", "")).strip()
+            rcept_no = str(item["rcept_no"])
+            if rcept_no in seen:
+                continue
+            seen.add(rcept_no)
+            kind = kind_from_title(title)
+            if kind is None or not PERIOD_RE.search(title):
+                log.warning("정기보고서 형식이 아닌 항목 건너뜀: %s %s", rcept_no, title)
+                continue
+            try:
+                entries.append((kind, _any_period_end(title), item))
+            except DartError as exc:
+                log.warning("기간을 읽을 수 없는 항목 건너뜀: %s %s (%s)", rcept_no, title, exc)
+
+    annual = sorted(period for kind, period, _ in entries if kind == "annual")
+    half = sorted(period for kind, period, _ in entries if kind == "half")
+    if annual:
+        fy_end_month = int(annual[-1][5:7])
+    elif half:
+        fy_end_month = (int(half[-1][5:7]) + 6 - 1) % 12 + 1
+    else:
+        fy_end_month = 12
+
+    grouped: dict[CandidateKey, list[ReportRef]] = {}
+    for kind, period_end, item in entries:
+        if not start <= period_end <= end:
+            continue
+        title = str(item.get("report_nm", "")).strip()
+        label = fiscal_period_label(kind, period_end, fy_end_month)
+        if label is None:
+            log.warning("결산월(%d월)과 유형이 맞지 않는 항목 건너뜀: %s %s %s", fy_end_month, symbol, item["rcept_no"], title)
+            continue
+        grouped.setdefault((kind, period_end), []).append(ReportRef(
+            symbol=symbol,
+            rcept_no=str(item["rcept_no"]),
+            title=title,
+            kind=kind,
+            period_end=period_end,
+            rcept_dt=_iso(str(item["rcept_dt"])),
+            corp_code=corp_code,
+            period_label=label,
+        ))
+    for candidates in grouped.values():
+        candidates.sort(key=lambda ref: (ref.rcept_dt, ref.rcept_no), reverse=True)
+    keep = sorted(grouped, key=lambda key: key[1])[-max_slots:] if max_slots > 0 else []
+    return {key: grouped[key] for key in keep}, []
 
 
 def select_reports(symbol: str, corp_code: str, items_by_type: dict[str, list[dict]], periods: list[str]) -> tuple[list[ReportRef], list[str]]:
@@ -295,6 +381,20 @@ class CollectResult:
     reports: list[ReportRef]
     corp_codes: dict[str, str]
     failures: list[str]
+    failed_items: list[dict] = field(default_factory=list)  # failure_item() 형식, 실패 목록 파일용
+
+
+def failure_item(symbol: str, stage: str, reason: str, *, period_end: str = "", kind: str = "", rcept_no: str = "", title: str = "") -> dict:
+    """실패 1건을 한 행으로. stage: corp_code·list·missing·download·parse·chunk·load·embed·validate·run"""
+    return {
+        "symbol": symbol,
+        "period_end": period_end,
+        "kind": kind,
+        "stage": stage,
+        "rcept_no": rcept_no,
+        "title": title,
+        "reason": reason,
+    }
 
 
 def collect(
@@ -308,19 +408,23 @@ def collect(
     corp_cache_days: float,
     session=None,
     download: bool = True,
+    selector=None,
 ) -> CollectResult:
     """대상 기업별 보고서 후보를 확정하고 슬롯마다 유효한 첫 원문 ZIP을 받는다.
 
+    selector(symbol, corp_code, items_by_type)를 주면 고정 periods 대신 그 함수로 슬롯을 고른다.
     DartRateLimitError(020)는 잡지 않고 그대로 올려 전체 수집을 중단시킨다.
     """
     corp_codes_all = load_corp_codes(api_key, raw_dir / "corpCode.xml", corp_cache_days, session)
     reports: list[ReportRef] = []
     corp_codes: dict[str, str] = {}
     failures: list[str] = []
+    failed_items: list[dict] = []
     for symbol in symbols:
         corp_code = corp_codes_all.get(symbol)
         if not corp_code:
             failures.append(f"{symbol}: corpCode에 고유번호가 없습니다.")
+            failed_items.append(failure_item(symbol, "corp_code", "corpCode에 고유번호가 없습니다."))
             continue
         corp_codes[symbol] = corp_code
         try:
@@ -338,14 +442,22 @@ def collect(
                     )
                 except DartNoDataError:
                     items_by_type[detail_type] = []
-            grouped, missing = select_disclosure_candidates(symbol, corp_code, items_by_type, periods)
+            if selector is not None:
+                grouped, missing = selector(symbol, corp_code, items_by_type)
+            else:
+                grouped, missing = select_disclosure_candidates(symbol, corp_code, items_by_type, periods)
         except DartRateLimitError:
             raise
         except DartError as exc:
             failures.append(f"{symbol}: {_safe_message(exc, api_key)}")
+            failed_items.append(failure_item(symbol, "list", _safe_message(exc, api_key)))
             continue
         failures.extend(
             f"{symbol} {period[:4]}년 {period} {KIND_LABELS[kind]}: 대상 보고서 후보가 목록에 없습니다."
+            for kind, period in missing
+        )
+        failed_items.extend(
+            failure_item(symbol, "missing", "대상 보고서 후보가 목록에 없습니다.", period_end=period, kind=kind)
             for kind, period in missing
         )
         for _, candidates in sorted(grouped.items(), key=lambda entry: entry[0][1]):
@@ -356,6 +468,15 @@ def collect(
                     raise
                 except AllCandidatesFailed as exc:
                     failures.append(_safe_message(exc, api_key))
+                    failed_items.append(failure_item(
+                        symbol,
+                        "download",
+                        _safe_message("; ".join(f"{f.rcept_no} [{f.code}: {f.message}]" for f in exc.failures), api_key),
+                        period_end=exc.period_end,
+                        kind=exc.kind,
+                        rcept_no=",".join(f.rcept_no for f in exc.failures),
+                        title=candidates[0].title,
+                    ))
                     continue
             else:
                 ref = candidates[0]
@@ -372,7 +493,7 @@ def collect(
                     )
             reports.append(ref)
             log.info("선택: %s %s %s %s", symbol, ref.period_end, ref.rcept_no, ref.title)
-    return CollectResult(reports=reports, corp_codes=corp_codes, failures=failures)
+    return CollectResult(reports=reports, corp_codes=corp_codes, failures=failures, failed_items=failed_items)
 
 
 def ref_from_zip(zip_path: Path, document_name: str, period_to: str | None) -> ReportRef:
