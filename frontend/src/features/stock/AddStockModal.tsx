@@ -16,7 +16,7 @@ export function AddStockModal({ onClose, preset }: { onClose: () => void; preset
   const [q, setQ] = useState(preset?.name ?? '');
   const [picked, setPicked] = useState<StockMaster | null>(preset ?? null);
   const [status, setStatus] = useState<StockStatus>('holding');
-  const { data: results = [], isFetching } = useStockSearch(q);
+  const { data: results = [], isFetching, isError: searchFailed, error: searchError } = useStockSearch(q);
   const { data: mine = [] } = useMyStocks();
   const add = useAddStock();
 
@@ -32,6 +32,7 @@ export function AddStockModal({ onClose, preset }: { onClose: () => void; preset
           onClose();
           router.navigate(`/stocks/${s.code}`);
         },
+        onError: (error) => toast(error instanceof Error ? error.message : '종목을 추가하지 못했어요.'),
       },
     );
   };
@@ -61,7 +62,12 @@ export function AddStockModal({ onClose, preset }: { onClose: () => void; preset
         style={{ height: 48, borderColor: q ? colors.text : colors.border, backgroundColor: q ? '#F6F7F9' : colors.surface }}
       />
       <View style={{ marginTop: 8, minHeight: 40, gap: 2 }}>
-        {q.trim() && results.length === 0 && !isFetching && (
+        {searchFailed && (
+          <T size={13} color={colors.danger} style={{ padding: 12 }}>
+            {searchError instanceof Error ? searchError.message : '종목 검색에 실패했어요.'}
+          </T>
+        )}
+        {q.trim() && results.length === 0 && !isFetching && !searchFailed && (
           <T size={13} color={colors.textMuted} style={{ padding: 12 }}>
             검색 결과가 없어요
           </T>

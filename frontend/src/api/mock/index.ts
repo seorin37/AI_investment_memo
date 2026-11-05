@@ -134,6 +134,11 @@ export const mockApi: Api = {
     if (!k) return wait([]);
     return wait(seed.stockMaster.filter((s) => s.name.toLowerCase().includes(k) || s.code.includes(k)).slice(0, 8));
   },
+  getStock: async (code) => {
+    const stock = seed.stockMaster.find((s) => s.code === code);
+    if (!stock) throw new Error('종목을 찾을 수 없어요');
+    return wait(stock);
+  },
   addStock: async (code, status) => {
     const master = seed.stockMaster.find((s) => s.code === code);
     if (!master) throw new Error('종목을 찾을 수 없어요');
@@ -208,6 +213,11 @@ export const mockApi: Api = {
     recountUnread();
     return wait(db.board.filter((b) => b.stock_code === code).sort((a, b) => a.position - b.position));
   },
+  getBoardItem: async (id) => {
+    const item = db.board.find((boardItem) => boardItem.id === id);
+    if (!item) throw new Error('항목을 찾을 수 없어요');
+    return wait(item);
+  },
   createMemo: async (code, input) => {
     const now = new Date().toISOString();
     const pos = Math.max(0, ...db.board.filter((b) => b.stock_code === code).map((b) => b.position)) + 1;
@@ -277,6 +287,12 @@ export const mockApi: Api = {
     m.ai_linked = enabled;
     if (enabled && !m.ai_linked_at) m.ai_linked_at = new Date().toISOString();
     return wait(m);
+  },
+  setBoardChecklistItem: async (checklistId, itemId, done) => {
+    const checklist = db.board.find((item): item is Checklist => item.id === checklistId && item.kind === 'checklist');
+    const checklistItem = checklist?.items.find((item) => item.id === itemId);
+    if (checklistItem) checklistItem.done = done;
+    return wait(undefined);
   },
   getMemoTimeline: async (memoId) => {
     const m = memosOf().find((x) => x.id === memoId);
