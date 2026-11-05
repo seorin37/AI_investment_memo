@@ -1,0 +1,1 @@
+"""Authenticated memo board service."""

@@ -41,7 +41,9 @@
     "tunnel": "expo start --tunnel",
     "export:web": "expo export --platform web",
     "typecheck": "tsc --noEmit",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "test:stocks": "node --test tests/stock-api-contract.test.mjs",
+    "test:board": "node --test tests/board-api-contract.test.mjs"
   },
   "private": true
 }

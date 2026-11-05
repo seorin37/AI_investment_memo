@@ -31,7 +31,7 @@ export const useAuth = create<AuthState>()((set, get) => ({
   user: null,
 
   async bootstrap() {
-    if (env.useMock) {
+    if (env.useMockAuth) {
       const mock = await storage.get(MOCK_TOKEN_KEY);
       if (!mock) return set({ status: 'signedOut' });
       httpAuth.setToken(mock);
@@ -63,7 +63,7 @@ export const useAuth = create<AuthState>()((set, get) => ({
   },
 
   async refresh() {
-    if (env.useMock) return false;
+    if (env.useMockAuth) return false;
     try {
       const refreshToken = await storedRefresh();
       if (Platform.OS !== 'web' && !refreshToken) return false;
@@ -86,7 +86,7 @@ export const useAuth = create<AuthState>()((set, get) => ({
   async signOut() {
     const refreshToken = await storedRefresh();
     try {
-      if (!env.useMock) await api.logout(refreshToken ?? undefined);
+      if (!env.useMockAuth) await api.logout(refreshToken ?? undefined);
     } catch {
       /* Local credentials are cleared even if the server session already expired. */
     }

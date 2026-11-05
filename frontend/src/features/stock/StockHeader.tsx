@@ -1,22 +1,43 @@
 import React, { useState } from 'react';
 import { Pressable, TextInput, View, Platform } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Sparkline } from '@/components/charts/Sparkline';
 import { Button, Hoverable } from '@/components/ui/primitives';
 import { T } from '@/components/ui/Text';
-import { useAddStock, useQuote, useUpdateStock } from '@/hooks/queries';
+import { env } from '@/config/env';
+import { useAddStock, useQuote, useRemoveStock, useUpdateStock } from '@/hooks/queries';
 import { useBreakpoint, useMarketColors } from '@/hooks/useLayout';
 import { asOfLabel, num, signed, signedPct } from '@/lib/format';
+import { useUI } from '@/store/ui';
 import { colors, fonts } from '@/theme/tokens';
 import type { MyStock, StockMaster } from '@/types/models';
 
 /** 종목 헤더 — 이름 · 코드 · 보유/관심 배지 · 태그 / 현재가 · 등락 · 스파크라인 */
 export function StockHeader({ stock, mine, large }: { stock: StockMaster; mine: MyStock | undefined; large?: boolean }) {
+  const router = useRouter();
+  const toast = useUI((s) => s.showToast);
   const { data: quote } = useQuote(stock.code);
   const mc = useMarketColors();
   const { isMobile } = useBreakpoint();
   const update = useUpdateStock();
   const add = useAddStock();
+  const remove = useRemoveStock();
   const [tagDraft, setTagDraft] = useState<string | null>(null);
+  const [removeArmed, setRemoveArmed] = useState(false);
+
+  const showError = (error: unknown) =>
+    toast(error instanceof Error ? error.message : '요청을 처리하지 못했어요.');
+
+  const removeMine = () => {
+    if (!removeArmed) return setRemoveArmed(true);
+    remove.mutate(stock.code, {
+      onSuccess: () => {
+        toast(`${stock.name}을(를) 내 종목에서 삭제했어요.`);
+        router.replace('/');
+      },
+      onError: showError,
+    });
+  };
 
   const commitTag = () => {
     const t = tagDraft?.trim().replace(/^#/, '');
@@ -37,7 +58,12 @@ export function StockHeader({ stock, mine, large }: { stock: StockMaster; mine: 
           {mine ? (
             <Pressable
               accessibilityLabel="보유/관심 전환"
-              onPress={() => update.mutate({ code: stock.code, patch: { status: mine.status === 'holding' ? 'watching' : 'holding' } })}
+              onPress={() =>
+                update.mutate(
+                  { code: stock.code, patch: { status: mine.status === 'holding' ? 'watching' : 'holding' } },
+                  { onError: showError },
+                )
+              }
               style={{ backgroundColor: '#E8EDF5', borderRadius: 4, paddingHorizontal: 8, height: large ? 26 : 20, justifyContent: 'center' }}
             >
               <T size={large ? 13 : 12} weight="medium" color={colors.textBody} lh={1.1}>
@@ -45,7 +71,23 @@ export function StockHeader({ stock, mine, large }: { stock: StockMaster; mine: 
               </T>
             </Pressable>
           ) : (
-            <Button label="내 종목에 추가" size="sm" variant="outline" icon="plus" onPress={() => add.mutate({ code: stock.code, status: 'watching' })} loading={add.isPending} />
+            <Button
+              label="내 종목에 추가"
+              size="sm"
+              variant="outline"
+              icon="plus"
+              onPress={() => add.mutate({ code: stock.code, status: 'watching' }, { onError: showError })}
+              loading={add.isPending}
+            />
+          )}
+          {mine && (
+            <Button
+              label={removeArmed ? '삭제 확인' : '내 종목에서 삭제'}
+              size="sm"
+              variant="dangerOutline"
+              onPress={removeMine}
+              loading={remove.isPending}
+            />
           )}
           {mine?.tags.map((t) => (
             <View key={t} style={{ backgroundColor: '#F3F4F6', borderRadius: 4, paddingHorizontal: 8, height: 20, justifyContent: 'center' }}>
@@ -54,7 +96,7 @@ export function StockHeader({ stock, mine, large }: { stock: StockMaster; mine: 
               </T>
             </View>
           ))}
-          {mine && !large && (tagDraft === null ? (
+          {mine && !large && !env.useRealStocks && (tagDraft === null ? (
             <Hoverable onPress={() => setTagDraft('')} style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 4, paddingHorizontal: 8, height: 20, justifyContent: 'center' }} hoverStyle={{ backgroundColor: '#F7F8FA' }}>
               <T size={12} color={colors.textSub} lh={1.1}>
                 + 태그
