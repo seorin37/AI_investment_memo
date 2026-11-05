@@ -37,11 +37,11 @@ def _repair_prompt(prompt: str, raw: str, codes: list[str], cfg: dict) -> str:
             "같은 근거만 사용하고 새 사실이나 숫자는 넣지 말고, 규칙을 지켜 JSON 하나로 다시 작성하세요. 문장은 줄이거나 나눠서 쓰세요.")
 
 
-def _verify(card, evidence, call: Callable[[str], str]) -> list[str]:
+def _verify(card, evidence, call: Callable[[str], str], company: str = "") -> list[str]:
     """카드 문장이 근거로 뒷받침되는지 LLM에게 다시 묻는다. 빈 목록이면 통과.
     응답을 읽을 수 없으면 통과시키지 않는다 ("틀릴 바엔 말하지 않는다")."""
     try:
-        raw = call(build_verify_prompt(card, evidence))
+        raw = call(build_verify_prompt(card, evidence, company))
     except CreditsExhausted:
         raise
     except Exception as exc:
@@ -52,17 +52,25 @@ def _verify(card, evidence, call: Callable[[str], str]) -> list[str]:
     return [] if all(flags) else ["VERIFY_UNSUPPORTED"]
 
 
+def thresholds(cfg: dict) -> tuple[dict[str, float], dict[str, float]]:
+    """종류별 (최소 유사도, 강한 후보 기준). 키는 news | disclosure(정기보고서) | event(수시공시).
+    수시공시 값이 없으면 공시 값을 쓴다. 강한 후보 기준이 없으면 1.01(아무도 못 넘음): 멈추지 않고 검색된 기간 전체에서 고른다."""
+    base = cfg.get("min_similarity", 0.5)
+    floor = {k: cfg.get(f"min_similarity_{k}", base) for k in ("news", "disclosure")}
+    strong = {k: cfg.get(f"strong_similarity_{k}", 1.01) for k in ("news", "disclosure")}
+    floor["event"] = cfg.get("min_similarity_event", floor["disclosure"])
+    strong["event"] = cfg.get("strong_similarity_event", strong["disclosure"])
+    return floor, strong
+
+
 def check_topic(item: TrackingItem, candidates: list[Candidate], call: Callable[[str], str] | None,
                 banned: list[str], cfg: dict | None = None) -> TopicOutcome:
     cfg = cfg or {}
-    base = cfg.get("min_similarity", 0.5)
-    floor = {"news": cfg.get("min_similarity_news", base), "disclosure": cfg.get("min_similarity_disclosure", base)}
-    # 강한 후보 기준이 없으면 1.01(아무도 못 넘음): 멈추지 않고 검색된 기간 전체에서 고른다
-    strong = {k: cfg.get(f"strong_similarity_{k}", 1.01) for k in ("news", "disclosure")}
-    passed = pick_recent(candidates, floor, strong)
+    floor, strong = thresholds(cfg)
+    passed = pick_recent(candidates, floor, strong, cfg.get("stop_window_days", 0))
     evidence = build_evidence(passed, cfg.get("max_disclosure_evidence", 2), cfg.get("max_news_evidence", 3),
                               cfg.get("news_dup_similarity", 0.7), cfg.get("max_text_chars_news", 600),
-                              cfg.get("max_text_chars_disclosure", 800))
+                              cfg.get("max_text_chars_disclosure", 800), floor)
     if not evidence:
         return TopicOutcome("no_candidates")
     if item.already_shown_ids and all(e.candidate.ref in set(item.already_shown_ids) for e in evidence):
@@ -116,7 +124,7 @@ def check_topic(item: TrackingItem, candidates: list[Candidate], call: Callable[
     if codes:
         return replace(codes, card, retried=retried)
     if cfg.get("verify_call"):                                 # 코드 검사를 통과한 카드만 검수한다 (호출 +1)
-        vcodes = _verify(card, evidence, call)
+        vcodes = _verify(card, evidence, call, item.company_name or item.symbol)
         if vcodes:
             return replace(vcodes, card, retried=retried)
     by_id = {e.eid: e for e in evidence}

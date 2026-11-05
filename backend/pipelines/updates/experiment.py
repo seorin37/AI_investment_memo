@@ -26,7 +26,8 @@ from .models import TrackingItem
 from .preview import write_preview
 from .price import check_price
 from .results import new_run_dir, write_candidates_csv, write_results
-from .topic import check_topic
+from .evidence import threshold_key
+from .topic import check_topic, thresholds
 
 PILOT = ("005930", "000660", "035420", "105560")
 
@@ -111,8 +112,7 @@ def main(argv: list[str] | None = None) -> int:
     since = date.fromisoformat(args.since) if args.since else lookback
     d_since = date.fromisoformat(args.disclosure_since) if args.disclosure_since else lookback
     fetch_k = rcfg.get("fetch_k", 50)
-    base = tcfg.get("min_similarity", 0.5)
-    floor = {k: tcfg.get(f"min_similarity_{k}", base) for k in ("news", "disclosure")}
+    floor, strong = thresholds(tcfg)
 
     vectors = {}
     if topic_items:
@@ -128,7 +128,7 @@ def main(argv: list[str] | None = None) -> int:
 
     names: dict[str, str] = {}
     sims: list[float] = []
-    kind_sims: dict[str, list[float]] = {"news": [], "disclosure": []}
+    kind_sims: dict[str, list[float]] = {"news": [], "disclosure": [], "event": []}   # disclosure=정기보고서, event=수시공시
     cand_rows = []
     status_count: dict[str, int] = {}
     fail_count: dict[str, int] = {}
@@ -145,10 +145,11 @@ def main(argv: list[str] | None = None) -> int:
             if item.type == "topic":
                 vec = vectors[item.item_id]
                 cands = (recent_news_candidates(conn, item.symbol, vec, since, fetch_k, floor["news"], cfg["news"]["variant"])
-                         + recent_disclosure_candidates(conn, item.symbol, vec, d_since, fetch_k, floor["disclosure"]))
+                         + recent_disclosure_candidates(conn, item.symbol, vec, d_since, fetch_k, floor["disclosure"],
+                                                        floor["event"], rcfg.get("include_subsidiary", False)))
                 sims += [c.similarity for c in cands]
                 for c in cands:
-                    kind_sims[c.kind].append(c.similarity)
+                    kind_sims[threshold_key(c)].append(c.similarity)
                     cand_rows.append((item, c))
                 out = check_topic(item, cands, client, banned, tcfg)
                 status_count[out.kind] = status_count.get(out.kind, 0) + 1
@@ -193,11 +194,12 @@ def main(argv: list[str] | None = None) -> int:
                "llm": args.llm, "similarity": {"min": q(0), "p25": q(.25), "median": q(.5), "p75": q(.75), "max": q(1)},
                "similarity_by_kind": {k: dist(v) for k, v in kind_sims.items()},
                "outcomes": status_count, "llm_check_failures": fail_count, "cards": len(drafts)}
-    strong = {k: tcfg.get(f"strong_similarity_{k}") for k in ("news", "disclosure")}
     summary["search"] = {"mode": "recent_first", "news_since": str(since), "disclosure_since": str(d_since),
-                         "floor": floor, "strong": strong, "config": args.config}
+                         "floor": floor, "strong": strong, "stop_window_days": tcfg.get("stop_window_days", 0),
+                         "include_subsidiary": rcfg.get("include_subsidiary", False), "config": args.config}
     head = ["# AI 업데이트 후보 검색·카드 생성 실험", f"- 항목 {len(items)}개 (주제 {len(topic_items)}), 후보 {len(sims)}건, 뉴스 시작일 {since}, LLM {args.llm}",
-            f"- 검색: 최신순 하향식 (설정 {args.config}) · 공시 시작일 {d_since} · 최소 유사도 {floor} · 강한 후보(멈춤 기준) {strong}",
+            f"- 검색: 최신순 하향식 (설정 {args.config}) · 공시 시작일 {d_since} · 최소 유사도 {floor} · 강한 후보(멈춤 기준) {strong}"
+            f" · 멈춘 날부터 {tcfg.get('stop_window_days', 0)}일 전까지 포함 · 자회사 공시 {'포함' if rcfg.get('include_subsidiary') else '제외'}",
             f"- 유사도 분포: 최소 {q(0)} / 25% {q(.25)} / 중앙 {q(.5)} / 75% {q(.75)} / 최대 {q(1)}",
             *[f"  - {k}: {json.dumps(dist(v), ensure_ascii=False)}" for k, v in kind_sims.items()],
             f"- 처리 결과: {json.dumps(status_count, ensure_ascii=False)}",

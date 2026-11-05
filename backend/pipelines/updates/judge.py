@@ -67,6 +67,8 @@ VERIFY_INSTRUCTION = """당신은 memo's 업데이트 카드의 검수기입니�
 [검수할 문장]이 [근거]에 적힌 내용만으로 뒷받침되는지 문장마다 판단합니다.
 - supported=true: 문장의 모든 사실(주체, 숫자와 단위, 기간, 인용문)이 근거에 그대로 있거나 근거에서 바로 확인됩니다.
 - supported=false: 근거에 없는 내용, 근거보다 넓거나 단정적인 표현, 주체가 바뀐 표현, 단위나 기간이 빠진 숫자, 근거에 없는 인용문이 하나라도 있습니다.
+- 주체 확인: 근거의 숫자·사건이 [추적 종목] 자신의 것인지 봅니다. 협력사·경쟁사·고객사 등 다른 회사의 실적이나 사건을 추적 종목의 것처럼 쓴 문장은 supported=false입니다.
+- 조건 확인: 근거가 조건·가정("~할 경우", "~하면", "~라면")으로 쓴 내용을 확정된 사실이나 예정("~될 예정이에요", "~해요")으로 바꾼 문장은 supported=false입니다.
 - 새 사실을 덧붙이거나 문장을 고쳐 쓰지 않습니다. 판단과 짧은 이유만 씁니다.
 - 출력은 JSON 하나이고 results의 개수는 문장 수와 같아야 합니다.
 {"results": [{"index": 0, "supported": true, "reason": ""}]}"""
@@ -147,10 +149,11 @@ def build_prompt(item: TrackingItem, evidence: list[Evidence], guide: str | None
     return f"{fill_limits(guide or load_guide(), limits)}\n\n{body}"
 
 
-def build_verify_prompt(card: Card, evidence: list[Evidence]) -> str:
-    """카드 검수 호출 프롬프트: summary 문장마다 근거로 뒷받침되는지 묻는다."""
+def build_verify_prompt(card: Card, evidence: list[Evidence], company: str = "") -> str:
+    """카드 검수 호출 프롬프트: summary 문장마다 근거로 뒷받침되는지 묻는다. company는 주체 확인용 추적 종목명."""
     sentences = "\n".join(f"{i}. {s}" for i, s in enumerate(card.summary))
-    return f"{VERIFY_INSTRUCTION}\n\n[근거]\n{evidence_block(evidence)}\n\n[검수할 문장]\n{sentences}"
+    return (f"{VERIFY_INSTRUCTION}\n\n[추적 종목]\n{company or '없음'}\n\n[근거]\n{evidence_block(evidence)}"
+            f"\n\n[검수할 문장]\n{sentences}")
 
 
 def _json_object(raw: str) -> dict | None:

@@ -65,6 +65,23 @@ class NumberTest(unittest.TestCase):
     def test_single_digit_skipped(self):
         self.assertEqual(numbers("3분기"), set())
 
+    def test_split_korean_amount_is_one_value(self):               # 2026-11-05 SK하이닉스 배당총액 14,103,466,480,000원
+        self.assertEqual(numbers("배당금 총액은 14조 1034억 6648만원이에요"), {14103466480000.0})
+        self.assertEqual(numbers("이자이익은 5조7천921억원"), {5792100000000.0})
+        self.assertEqual(numbers("21만7천500원에 거래"), {217500.0})
+        self.assertIn(14103466480000.0, evidence_numbers("5. 배당금총액(원): 14,103,466,480,000"))
+        self.assertNotIn(14103466488000.0, evidence_numbers("5. 배당금총액(원): 14,103,466,480,000"))  # "6648만 8000원"은 틀린 값
+
+    def test_trailing_number_joins_only_before_won(self):         # "1,000억 2026년"의 2026은 금액에 붙이지 않는다
+        self.assertEqual(numbers("1,000억 2026년"), {1e11, 2026.0})
+
+    def test_split_amount_in_evidence_keeps_parts(self):            # 기사 "1조9075억원" → 답변 "9075억"도 인정
+        self.assertTrue({1907500000000.0, 907500000000.0} <= evidence_numbers("순이익 1조9075억원"))
+
+    def test_trillion_unit_header(self):                            # 잠정실적 "단위 : 조원, %" 표
+        self.assertIn(195250000000000.0, evidence_numbers("단위 : 조원, % 매출액 > 당기실적: 195.25"))
+        self.assertTrue(numbers("매출 195조 2500억원") <= evidence_numbers("단위 : 조원, % 매출액 > 당기실적: 195.25"))
+
 
 class EvidenceTest(unittest.TestCase):
     def test_newest_first_and_labels(self):
@@ -134,6 +151,110 @@ class PickRecentTest(unittest.TestCase):
         refs = [e.candidate.ref for e in out.evidence]
         self.assertIn("news:9", refs)
         self.assertEqual(refs[-1], "news:9")                                     # 표시는 날짜 최신순이라 가장 오래된 강한 기사가 마지막
+
+    def test_event_uses_own_thresholds(self):                   # 수시공시 0.60은 수시공시 기준(0.55) 통과, 정기보고서 0.60은 미달
+        event = replace(disc("disc:2#0"), doc="event")
+        cands = [on(event, "2026-11-03", 0.60), on(disc(), "2026-11-03", 0.60)]
+        floor, strong = {**FLOOR, "event": 0.55}, {**STRONG, "event": 0.65}
+        self.assertEqual([c.ref for c in pick_recent(cands, floor, strong)], ["disc:2#0"])
+
+    def test_event_without_config_falls_back_to_disclosure(self):
+        event = on(replace(disc("disc:2#0"), doc="event"), "2026-11-03", 0.60)
+        self.assertEqual(pick_recent([event], FLOOR, STRONG), [])                # event 키가 없으면 공시 기준 0.64
+        out = check_topic(ITEM, [event], None, BANNED, RECENT_CFG)               # 설정에 event 값이 없어도 동작
+        self.assertEqual(out.kind, "no_candidates")
+
+    def test_stop_window_keeps_disclosure_before_article(self):  # 10-29 배당결정 공시를 다룬 10-30 기사에서 멈춰도 공시를 함께 본다
+        event = replace(disc("disc:2#0"), doc="event")
+        cands = [on(news("news:1"), "2026-10-30", 0.679), on(event, "2026-10-29", 0.672),
+                 on(news("news:2"), "2026-10-20", 0.70)]
+        floor, strong = {**FLOOR, "event": 0.58}, {**STRONG, "event": 0.63}
+        self.assertEqual([c.ref for c in pick_recent(cands, floor, strong)], ["news:1"])
+        self.assertEqual([c.ref for c in pick_recent(cands, floor, strong, 3)], ["news:1", "disc:2#0"])   # 10-20은 3일 밖
+        out = check_topic(ITEM, cands, None, BANNED, {**RECENT_CFG, "stop_window_days": 3})
+        self.assertIn("disc:2#0", [e.candidate.ref for e in out.evidence])
+
+
+class DisclosureSlotTest(unittest.TestCase):
+    def test_slots_by_margin_over_own_floor(self):             # 정기보고서 0.650(+0.010)·0.648(+0.008) vs 잠정실적 0.592(+0.012)
+        periodic = [replace(disc(f"disc:{i}#0"), similarity=s, doc="periodic") for i, s in ((1, 0.650), (2, 0.648))]
+        event = replace(disc("disc:9#0"), similarity=0.592, doc="event")
+        floor = {**FLOOR, "event": 0.58}
+        refs = {e.candidate.ref for e in build_evidence(periodic + [event], floor=floor)}
+        self.assertEqual(refs, {"disc:9#0", "disc:1#0"})
+        refs = {e.candidate.ref for e in build_evidence(periodic + [event])}        # 기준 없이 유사도로만 고르면 정기보고서 둘
+        self.assertEqual(refs, {"disc:1#0", "disc:2#0"})
+
+
+class _Cursor:
+    def __init__(self, rows):
+        self.rows, self.params = rows, None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def execute(self, sql, params):
+        self.sql, self.params = sql, params
+
+    def fetchall(self):
+        return self.rows
+
+
+class _Conn:
+    def __init__(self, rows):
+        self.cur = _Cursor(rows)
+
+    def cursor(self):
+        return self.cur
+
+
+class DisclosureCandidatesTest(unittest.TestCase):
+    ROWS = [("R1", 0, None, "1주당 배당금: 361", "현금ㆍ현물배당결정", "2026-10-29", "u1", "other", None, 0.6),
+            ("R2", 3, "6. 배당에 관한 사항", "배당 내용", "반기보고서 (2026.06)", "2026-08-14", "u2", "half", "백만원", 0.7)]
+
+    def test_event_chunk_gets_unit_from_first_chunk(self):      # 잠정실적 #1에는 "단위 : 억원"이 없다 → 첫 청크의 단위를 붙인다
+        from pipelines.updates.candidates import UNIT, recent_disclosure_candidates
+        rows = [("R3", 1, None, "순이익 > 전기실적: 712,695", "영업(잠정)실적", "2026-10-29", "u3", "other", "억원", 0.6),
+                ("R3", 0, None, "단위 : 억원, % 매출액: 1,952,532", "영업(잠정)실적", "2026-10-29", "u3", "other", "억원", 0.6)]
+        out = recent_disclosure_candidates(_Conn(rows), "005930", [0.1], datetime(2026, 1, 1).date(), 50, 0.64)
+        self.assertEqual(out[0].text, "(단위: 억원) 순이익 > 전기실적: 712,695")
+        self.assertEqual(out[1].text, "단위 : 억원, % 매출액: 1,952,532")           # 이미 단위가 있으면 그대로
+        self.assertIn(71269500000000.0, evidence_numbers(out[0].text))
+        self.assertIn("c0.chunk_index = 0", UNIT)
+
+    def test_periodic_chunk_unchanged(self):                    # 정기보고서 청크에는 단위를 붙이지 않는다 (첫 청크 단위가 다른 표일 수 있다)
+        from pipelines.updates.candidates import recent_disclosure_candidates
+        out = recent_disclosure_candidates(_Conn(self.ROWS), "005930", [0.1], datetime(2026, 1, 1).date(), 50, 0.64)
+        self.assertEqual([c.text for c in out], ["1주당 배당금: 361", "배당 내용"])
+
+    def test_event_marked_and_titled(self):
+        from pipelines.updates.candidates import recent_disclosure_candidates
+        conn = _Conn(self.ROWS)
+        out = recent_disclosure_candidates(conn, "005930", [0.1], datetime(2026, 1, 1).date(), 50, 0.64, 0.55)
+        self.assertEqual([(c.doc, c.title) for c in out],
+                         [("event", "[수시공시] 현금ㆍ현물배당결정"), ("periodic", "반기보고서 (2026.06) · 6. 배당에 관한 사항")])
+        self.assertEqual((conn.cur.params["floor"], conn.cur.params["event_floor"]), (0.64, 0.55))
+
+    def test_event_floor_defaults_to_floor(self):
+        from pipelines.updates.candidates import recent_disclosure_candidates
+        conn = _Conn([])
+        recent_disclosure_candidates(conn, "005930", [0.1], datetime(2026, 1, 1).date(), 50, 0.64)
+        self.assertEqual(conn.cur.params["event_floor"], 0.64)
+        self.assertIs(conn.cur.params["subsidiary"], False)                     # 자회사 공시는 기본으로 뺀다
+
+    def test_subsidiary_filter_in_both_sql(self):
+        from pipelines.updates.candidates import DISCLOSURE_SQL, RECENT_DISCLOSURE_SQL
+        for sql in (DISCLOSURE_SQL, RECENT_DISCLOSURE_SQL):
+            self.assertIn("s.is_subsidiary", sql)
+
+    def test_corrected_originals_excluded(self):                # 정정공시가 가리키는 원본은 두 검색 모두에서 뺀다
+        from pipelines.updates.candidates import DISCLOSURE_SQL, RECENT_DISCLOSURE_SQL
+        for sql in (DISCLOSURE_SQL, RECENT_DISCLOSURE_SQL):
+            self.assertIn("e.corrects = d.rcept_no", sql)
+        self.assertIn("IN ('major', 'other')", RECENT_DISCLOSURE_SQL)
 
 
 class CheckTest(unittest.TestCase):
@@ -596,7 +717,7 @@ class GuideRulesTest(unittest.TestCase):
 
     def test_limits_reason_fact_evidence_count(self):
         self.assertIn("FORMAT_REASON", real_codes(reason="가" * 81))
-        self.assertIn("FORMAT_EVIDENCE", real_codes(evidence=[{"source_id": "E1", "fact": "HBM 매출 8.0% 증가했다" + "가" * 100}]))
+        self.assertIn("FORMAT_EVIDENCE", real_codes(evidence=[{"source_id": "E1", "fact": "HBM 매출 8.0% 증가했다" + "가" * 200}]))
 
     def test_no_update_state_must_be_empty(self):
         out = run({"status": "no_update", "title": "남은 제목", "summary": [], "reason": "", "evidence": [], "confidence": 0.9})
@@ -606,6 +727,35 @@ class GuideRulesTest(unittest.TestCase):
     def test_no_update_low_confidence_is_still_no_update(self):
         out = run({**json.loads(NO_UPDATE_JSON), "confidence": 0.3})
         self.assertEqual(out.kind, "no_update")
+
+    def test_fact_overlap_event_table_uses_own_limit(self):     # "항목: 값" 표를 문장으로 풀어 쓴 fact (겹침 약 0.54)
+        ev = Candidate("disc:9#0", "disclosure", "105560", "2026-10-29", "[수시공시] 현금ㆍ현물배당결정",
+                       "1. 배당구분: 분기배당 2. 배당종류: 현금배당 3. 1주당 배당금(원) > 보통주식: 1,167 6. 배당기준일: 2026-11-12",
+                       None, "DART", 0.7, doc="event")
+        card = parse_card(json.dumps({**GOOD, "title": "KB금융 분기배당 1,167원", "summary": ["1주당 배당금은 1,167원이에요. [E1]"],
+                                      "evidence": [{"source_id": "E1", "fact": "분기배당을 현금배당으로 결정했고 1주당 배당금은 1,167원이에요."}]}))
+        self.assertEqual(check_card(card, build_evidence([ev]), REAL_BANNED, REAL_TOPIC), [])
+        self.assertIn("FACT_OVERLAP", check_card(card, build_evidence([replace(ev, doc="periodic")]), REAL_BANNED, REAL_TOPIC))
+
+    def test_haeyo_ending_removed_before_overlap(self):
+        from pipelines.updates.checks import _ENDING
+        self.assertEqual(_ENDING.sub("", "현금배당을 결정했어요. 배당금은 1,167원이에요"), "현금배당을 결정. 배당금은 1,167원")
+
+
+class VerifyPromptTest(unittest.TestCase):
+    def test_verify_gets_company_and_subject_condition_rules(self):   # 2026-11-05 협력사 실적·"유지할 경우"를 사실로 쓴 카드가 검수를 통과
+        prompts = []
+        verdict = json.dumps({"results": [{"index": 0, "supported": True, "reason": ""}]})
+
+        def call(prompt):
+            prompts.append(prompt)
+            return json.dumps(GOOD, ensure_ascii=False) if len(prompts) == 1 else verdict
+
+        out = check_topic(replace(ITEM, company_name="SK하이닉스"), [disc()], call, BANNED, {"verify_call": True})
+        self.assertEqual(out.kind, "update")
+        self.assertIn("[추적 종목]\nSK하이닉스", prompts[1])
+        self.assertIn("다른 회사", prompts[1])
+        self.assertIn("~할 경우", prompts[1])
 
 
 class AlreadyShownTest(unittest.TestCase):

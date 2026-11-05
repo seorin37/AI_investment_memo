@@ -12,6 +12,7 @@ price:
 recent:
   lookback_days: 365         # 오늘부터 이 날수만큼 거슬러 간다. 그 안에 없으면 카드를 만들지 않는다
   fetch_k: 50                # 종류별로 DB에서 가져오는 최대 후보 수
+  include_subsidiary: false  # 자회사 공시("자회사의 주요경영사항")를 후보에 넣을지. 자회사 실적을 모회사 실적처럼 쓰지 않게 기본은 뺀다
 topic:
   min_similarity: 0.5        # 종류별 값이 없을 때 쓰는 기본 임계값
   # 2026-11-05 최신순 하향식 비교(updates_t1~t4) 중 조합 ③ 엄격을 채택. 형식적 공시 근거 0건, 붙은 근거의 관련성이 가장 높았다
@@ -19,6 +20,12 @@ topic:
   min_similarity_disclosure: 0.64
   strong_similarity_news: 0.63       # 날짜를 거슬러 가다 이 이상인 후보가 나오면 그 날짜에서 멈춘다
   strong_similarity_disclosure: 0.68 # 끝까지 없으면 lookback_days 전체에서 유사도 높은 순으로 고른다
+  # 수시공시(disclosures.kind major/other): "항목: 값" 표라 정기보고서와 유사도 분포가 다를 수 있어 따로 둔다.
+  # 2026-11-05 run_20261105_135524(페르소나 200개)에서 0.58 이상은 대부분 관련, 0.55~0.58은 섞여 있었다. 지우면 공시 값(0.64/0.68)을 쓴다
+  min_similarity_event: 0.58
+  strong_similarity_event: 0.63
+  # 강한 후보에서 멈출 때 그날부터 이 날수 전까지는 함께 본다. 공시(10-29)를 다룬 기사(10-30)에서 멈춰 원본 공시가 빠지던 문제
+  stop_window_days: 3
   max_disclosure_evidence: 2
   max_news_evidence: 3
   related_news_min_similarity: 0.6   # 공시 카드에 링크로 덧붙이는 관련 기사의 최소 유사도 (LLM이 문장으로 쓰지 않은 기사, 임시값)
@@ -34,8 +41,13 @@ topic:
   sentence_max_chars: 60
   min_confidence: 0.7
   min_fact_overlap: 0.6
+  # 수시공시("항목: 값" 표)는 fact를 문장으로 풀어 쓰면 겹치는 글자가 적다 (2026-11-05 KB·SK하이닉스 배당·잠정실적 카드가 걸림).
+  # 숫자 검사와 검수 호출이 따로 있어 낮춘다. 지우면 min_fact_overlap을 쓴다
+  min_fact_overlap_event: 0.4
   reason_max: 80
-  fact_max: 100
+  # 2026-11-05 100 → 200: 배당·실적 공시에서 숫자 여러 개를 한 fact에 적어 104~138자가 된 좋은 카드가 버려졌다.
+  # 근거 조각을 통째로 옮긴 답(318~581자)은 계속 걸리게 둔다. fact는 화면에 보이지 않는 칸 (검사·출처 quote용)
+  fact_max: 200
   max_evidence: 3
   # 시제 패턴: 예측·단정 표현. 회사 발언을 전한 문장("~라고 밝혔어요")에는 적용하지 않는다 (checks.ATTRIBUTION)
   banned_patterns:

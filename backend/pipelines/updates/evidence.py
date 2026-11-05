@@ -1,12 +1,17 @@
 """근거 준비 — 후보를 골라 E1, E2… 번호를 붙인다. 번호는 날짜 최신순(같은 날이면 유사도순)이다.
 
-1) pick_recent: 최신 날짜부터 하루씩 거슬러 올라가며(오늘 → 전날 → 전전날) 어디까지 볼지 정한다. 강한 후보가 나온 날에서 멈춘다.
+1) pick_recent: 최신 날짜부터 하루씩 거슬러 올라가며(오늘 → 전날 → 전전날) 어디까지 볼지 정한다. 강한 후보가 나온 날에서 멈추고,
+   그날부터 window_days일 전까지는 함께 본다 (공시가 나오고 하루이틀 뒤에 기사가 나오면 기사에서 멈춰 원본 공시가 빠지지 않게).
 2) build_evidence: 그 범위 안에서 종류별로 유사도가 높은 것을 개수 상한만큼 고르고, 날짜 최신순으로 번호를 붙인다.
    (최신순으로 자르면 더 최신인 약한 기사들에 밀려 강한 후보가 빠질 수 있어서, 고르기는 유사도로 한다)
+   공시 자리는 정기보고서와 수시공시가 나눠 쓰므로 유사도 대신 '자기 최소 기준보다 얼마나 높은가'로 비교한다
+   (정기보고서는 유사도가 원래 높게 나와서 그대로 비교하면 형식적인 정기보고서 문구가 수시공시를 밀어낸다).
 뉴스는 같은 사건 기사를 하나로 묶고(제목 유사도), 근거는 최대 max_news개. 뉴스 본문은 저장하지 않으므로 제목+제공 요약만 쓴다.
 """
 
 from __future__ import annotations
+
+from datetime import date, timedelta
 
 from .models import Candidate, Evidence
 
@@ -29,24 +34,38 @@ def _recent_first(c: Candidate) -> tuple[str, float]:
     return c.date, c.similarity
 
 
-def pick_recent(candidates: list[Candidate], floor: dict[str, float], strong: dict[str, float]) -> list[Candidate]:
+def threshold_key(c: Candidate) -> str:
+    """임계값을 고르는 기준: news | disclosure(정기보고서) | event(수시공시)."""
+    return "event" if c.doc == "event" else c.kind
+
+
+def _limit(table: dict[str, float], c: Candidate) -> float:
+    return table.get(threshold_key(c), table[c.kind])         # event 값이 없으면 공시 값을 쓴다
+
+
+def pick_recent(candidates: list[Candidate], floor: dict[str, float], strong: dict[str, float],
+                window_days: int = 0) -> list[Candidate]:
     """최신 날짜부터 하루씩 거슬러 올라가며 종류별 임계값(floor)을 넘은 후보를 모은다.
-    강한 후보(종류별 strong 이상)가 처음 나온 날에서 멈춘다. 그날까지 모은 더 최신의 약한 후보도 함께 돌려준다.
-    끝까지 강한 후보가 없으면 모은 것을 모두 돌려준다 (없으면 빈 목록)."""
-    passed = [c for c in candidates if c.similarity >= floor[c.kind]]
+    강한 후보(종류별 strong 이상)가 처음 나온 날에서 멈춘다. 그날까지 모은 더 최신의 약한 후보도 함께 돌려주고,
+    멈춘 날부터 window_days일 전까지의 후보도 더한다. 끝까지 강한 후보가 없으면 모은 것을 모두 돌려준다 (없으면 빈 목록)."""
+    passed = [c for c in candidates if c.similarity >= _limit(floor, c)]
     picked: list[Candidate] = []
     for day in sorted({c.date for c in passed}, reverse=True):
         picked += [c for c in passed if c.date == day]
-        if any(c.similarity >= strong[c.kind] for c in picked):
+        if any(c.similarity >= _limit(strong, c) for c in picked):
+            edge = (date.fromisoformat(day) - timedelta(days=window_days)).isoformat()
+            picked += [c for c in passed if edge <= c.date < day]
             break
     return picked
 
 
 def build_evidence(candidates: list[Candidate], max_disclosure: int = 2, max_news: int = 3,
                    news_dup_similarity: float = 0.7, max_chars_news: int = 600,
-                   max_chars_disclosure: int = 800) -> list[Evidence]:
+                   max_chars_disclosure: int = 800, floor: dict[str, float] | None = None) -> list[Evidence]:
+    """floor가 있으면 공시는 '유사도 - 자기 최소 기준'이 큰 순으로 고른다 (없으면 유사도순)."""
     ordered = sorted(candidates, key=lambda c: -c.similarity)
-    disclosures = [c for c in ordered if c.kind == "disclosure"][:max_disclosure]
+    margin = (lambda c: c.similarity - _limit(floor, c)) if floor else (lambda c: c.similarity)
+    disclosures = sorted((c for c in ordered if c.kind == "disclosure"), key=margin, reverse=True)[:max_disclosure]
     news: list[Candidate] = []
     for c in (c for c in ordered if c.kind == "news"):
         if any(title_similarity(c.title, n.title) >= news_dup_similarity for n in news):
