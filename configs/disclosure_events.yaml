@@ -19,7 +19,8 @@ list:
 
 # 자회사·종속회사 공시 "(자회사의주요경영사항)" 등도 받되 is_subsidiary로 표시한다.
 # 앞 꼬리표에 이 글자가 있으면 받지 않는다. [첨부정정]·[첨부추가]는 첨부서류만 바뀐 제출본이라
-# 본문(document.xml)이 없다(DART 014) — 항목값은 원본 그대로다.
+# 항목값은 원본 그대로다. [첨부정정]은 본문(document.xml)이 없는 경우가 많고(DART 014),
+# [첨부추가]는 본문이 받아져도 원본과 같은 내용이 중복된다. 자세한 이유: docs/disclosure-events.md 2-1
 skip_prefixes: ["첨부정정", "첨부추가"]
 include_subsidiary: true
 subsidiary_markers:
