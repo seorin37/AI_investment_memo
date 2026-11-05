@@ -162,15 +162,17 @@ class SelectEventsTest(unittest.TestCase):
         self.assertEqual(report.skipped_subsidiary, 1)
 
     def test_attachment_only_corrections_are_skipped(self):
-        # [첨부정정]은 본문이 없어 DART가 014를 준다 → 목록 단계에서 뺀다. [기재정정]은 받는다.
+        # [첨부정정]은 본문이 없어 DART가 014를 준다 → 목록 단계에서 뺀다.
+        # [첨부추가]는 본문이 있고 그 사건의 유일한 공시일 수 있어 받는다(정정본 아님). [기재정정]은 받는다.
         items = [
             item("[첨부정정]주요사항보고서(회사합병결정)", "1", ty="B"),
             item("[첨부추가]주요사항보고서(회사합병결정)", "2", ty="B"),
             item("[기재정정]주요사항보고서(회사합병결정)", "3", ty="B"),
         ]
         refs, report = select_events(items, RULES, KINDS)
-        self.assertEqual([r.rcept_no for r in refs], ["3"])
-        self.assertEqual(report.to_dict()["skipped_prefix"], {"[첨부정정]": 1, "[첨부추가]": 1})
+        self.assertEqual([r.rcept_no for r in refs], ["2", "3"])
+        self.assertEqual([r.is_correction for r in refs], [False, True])
+        self.assertEqual(report.to_dict()["skipped_prefix"], {"[첨부정정]": 1})
 
     def test_report_accumulates_across_days(self):
         _, report = select_events([item("주식소각결정", "1")], RULES, KINDS)
