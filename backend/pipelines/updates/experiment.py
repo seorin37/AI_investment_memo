@@ -3,6 +3,8 @@
 - DB 접속은 get_read_dsn()(READONLY_DATABASE_URL, 없으면 DATABASE_URL) + 세션 읽기 전용(read_only=True).
   SELECT만 쓰며 INSERT/UPDATE/DELETE, Alembic, SQL 파일은 건드리지 않는다.
 - 항목은 평가 메모(jsonl)의 정답 판정(gold)을 쓴다: 주제 항목은 후보 검색 → LLM 카드, 가격 항목은 종가 비교(코드).
+- 후보 검색은 최신순 하향식이다: recent.lookback_days 안에서 종류별 임계값을 넘은 후보를 날짜 최신순으로 가져오고,
+  topic.check_topic(pick_recent)이 오늘 → 전날 → 전전날 순으로 거슬러 가며 고른다.
 
     # 1) 검색만 (API 비용 없음): 유사도 분포와 후보 제목을 눈으로 확인
     PYTHONPATH=backend python -m pipelines.updates.experiment --llm none
@@ -19,7 +21,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from ..common.config import load_config, resolve_path
-from .candidates import disclosure_candidates, news_candidates
+from .candidates import recent_disclosure_candidates, recent_news_candidates
 from .models import TrackingItem
 from .preview import write_preview
 from .price import check_price
@@ -83,8 +85,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--gold", default="eval/memo_eval_v0/memo_eval_v0.jsonl")
     ap.add_argument("--config", default="configs/updates.yaml")
     ap.add_argument("--symbols", default=",".join(PILOT))
-    ap.add_argument("--since", help="뉴스 시작일 YYYY-MM-DD (기본: 설정의 lookback_days 전)")
-    ap.add_argument("--disclosure-since", default="2024-01-01")
+    ap.add_argument("--since", help="뉴스 시작일 YYYY-MM-DD (기본: 설정의 recent.lookback_days 전)")
+    ap.add_argument("--disclosure-since", help="공시 시작일 YYYY-MM-DD (기본: 설정의 recent.lookback_days 전)")
     ap.add_argument("--llm", choices=["none", "openai"], default="none")
     ap.add_argument("--limit", type=int, help="앞에서 N개 항목만")
     ap.add_argument("--out-dir", help="결과 폴더 (기본: results/updates)")
@@ -104,8 +106,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.limit:
         items = items[:args.limit]
     topic_items = [it for it in items if it.type == "topic"]
-    since = date.fromisoformat(args.since) if args.since else date.today() - timedelta(days=cfg["news"]["lookback_days"])
-    d_since = date.fromisoformat(args.disclosure_since)
+    rcfg = cfg.get("recent", {})
+    lookback = date.today() - timedelta(days=rcfg.get("lookback_days", 365))
+    since = date.fromisoformat(args.since) if args.since else lookback
+    d_since = date.fromisoformat(args.disclosure_since) if args.disclosure_since else lookback
+    fetch_k = rcfg.get("fetch_k", 50)
+    base = tcfg.get("min_similarity", 0.5)
+    floor = {k: tcfg.get(f"min_similarity_{k}", base) for k in ("news", "disclosure")}
 
     vectors = {}
     if topic_items:
@@ -137,8 +144,8 @@ def main(argv: list[str] | None = None) -> int:
         for item in items:
             if item.type == "topic":
                 vec = vectors[item.item_id]
-                cands = (news_candidates(conn, item.symbol, vec, since, cfg["news"]["top_k"], cfg["news"]["variant"])
-                         + disclosure_candidates(conn, item.symbol, vec, d_since, cfg["disclosure"]["top_k"]))
+                cands = (recent_news_candidates(conn, item.symbol, vec, since, fetch_k, floor["news"], cfg["news"]["variant"])
+                         + recent_disclosure_candidates(conn, item.symbol, vec, d_since, fetch_k, floor["disclosure"]))
                 sims += [c.similarity for c in cands]
                 for c in cands:
                     kind_sims[c.kind].append(c.similarity)
@@ -186,7 +193,11 @@ def main(argv: list[str] | None = None) -> int:
                "llm": args.llm, "similarity": {"min": q(0), "p25": q(.25), "median": q(.5), "p75": q(.75), "max": q(1)},
                "similarity_by_kind": {k: dist(v) for k, v in kind_sims.items()},
                "outcomes": status_count, "llm_check_failures": fail_count, "cards": len(drafts)}
+    strong = {k: tcfg.get(f"strong_similarity_{k}") for k in ("news", "disclosure")}
+    summary["search"] = {"mode": "recent_first", "news_since": str(since), "disclosure_since": str(d_since),
+                         "floor": floor, "strong": strong, "config": args.config}
     head = ["# AI 업데이트 후보 검색·카드 생성 실험", f"- 항목 {len(items)}개 (주제 {len(topic_items)}), 후보 {len(sims)}건, 뉴스 시작일 {since}, LLM {args.llm}",
+            f"- 검색: 최신순 하향식 (설정 {args.config}) · 공시 시작일 {d_since} · 최소 유사도 {floor} · 강한 후보(멈춤 기준) {strong}",
             f"- 유사도 분포: 최소 {q(0)} / 25% {q(.25)} / 중앙 {q(.5)} / 75% {q(.75)} / 최대 {q(1)}",
             *[f"  - {k}: {json.dumps(dist(v), ensure_ascii=False)}" for k, v in kind_sims.items()],
             f"- 처리 결과: {json.dumps(status_count, ensure_ascii=False)}",

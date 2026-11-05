@@ -19,7 +19,8 @@ DEFAULTS = {"title_max": 20, "max_sentences": 3, "sentence_max_chars": 60, "min_
             "reason_max": 80, "fact_max": 100, "max_evidence": 3, "banned_patterns": []}
 
 # 회사가 한 말을 전달하는 문장은 시제 패턴(예측 표현) 검사에서 뺀다 ("회사는 ~라고 밝혔어요", 지침서 [근거 우선순위])
-ATTRIBUTION = ("라고 밝혔", "고 밝혔", "고 발표", "고 전했", "고 설명", "예상한다고", "계획이라고")
+# "로 전망했"·"로 예상했": 증권사·언론이 주어인 전망 문장 ("KB증권은 매출이 상승할 것으로 전망했어요")
+ATTRIBUTION = ("라고 밝혔", "고 밝혔", "고 발표", "고 전했", "고 설명", "예상한다고", "계획이라고", "로 전망했", "로 예상했")
 
 
 def numbers(text: str) -> set[float]:

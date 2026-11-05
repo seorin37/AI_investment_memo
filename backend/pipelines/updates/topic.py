@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import Callable
 
 from .checks import check_card, check_no_update
-from .evidence import build_evidence, related_news
+from .evidence import build_evidence, pick_recent, related_news
 from .fixed import fixed_card
 from .judge import build_prompt, build_verify_prompt, parse_card, parse_verify
 from .models import Candidate, CreditsExhausted, TopicOutcome, TrackingItem, UpdateDraft
@@ -57,7 +57,9 @@ def check_topic(item: TrackingItem, candidates: list[Candidate], call: Callable[
     cfg = cfg or {}
     base = cfg.get("min_similarity", 0.5)
     floor = {"news": cfg.get("min_similarity_news", base), "disclosure": cfg.get("min_similarity_disclosure", base)}
-    passed = [c for c in candidates if c.similarity >= floor[c.kind]]
+    # 강한 후보 기준이 없으면 1.01(아무도 못 넘음): 멈추지 않고 검색된 기간 전체에서 고른다
+    strong = {k: cfg.get(f"strong_similarity_{k}", 1.01) for k in ("news", "disclosure")}
+    passed = pick_recent(candidates, floor, strong)
     evidence = build_evidence(passed, cfg.get("max_disclosure_evidence", 2), cfg.get("max_news_evidence", 3),
                               cfg.get("news_dup_similarity", 0.7), cfg.get("max_text_chars_news", 600),
                               cfg.get("max_text_chars_disclosure", 800))

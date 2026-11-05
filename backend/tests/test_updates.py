@@ -4,6 +4,7 @@ import json
 import re
 import tempfile
 import unittest
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
@@ -11,7 +12,7 @@ from pipelines.common.config import load_config
 from pipelines.updates import autolabel, calibrate, noise_floor
 from pipelines.updates.preview import build_preview, refs_from_candidates
 from pipelines.updates.checks import evidence_numbers, check_card, numbers
-from pipelines.updates.evidence import build_evidence, title_similarity
+from pipelines.updates.evidence import build_evidence, pick_recent, title_similarity
 from pipelines.updates.fixed import DECLINE_ADVICE, FIXED_BY_REASON, NO_DATA, fixed_card
 from pipelines.updates.instant import answer_fixed, answer_price_now, answer_question, classify
 from pipelines.updates.judge import build_prompt, load_guide, parse_card
@@ -30,7 +31,8 @@ def disc(ref="disc:1#0", sim=0.7, text="HBM 매출이 전 분기 대비 8.0% 증
 
 
 def news(ref="news:1", sim=0.7, title="SK하이닉스 HBM 출하 확대", text="HBM 출하량이 늘었다고 밝혔다.", src="한국경제"):
-    return Candidate(ref, "news", "000660", "2026-10-20", title, text, "http://x", src, sim)
+    # 근거 번호는 날짜 최신순이다. 기존 테스트가 E1=공시를 가정하므로 뉴스 기본 날짜를 공시(2026-08-14)보다 앞으로 둔다
+    return Candidate(ref, "news", "000660", "2026-08-01", title, text, "http://x", src, sim)
 
 
 NO_UPDATE_JSON = '{"status":"no_update","title":"","summary":[],"reason":"","evidence":[],"confidence":0.96}'
@@ -65,10 +67,15 @@ class NumberTest(unittest.TestCase):
 
 
 class EvidenceTest(unittest.TestCase):
-    def test_disclosure_first_and_labels(self):
-        ev = build_evidence([news(), disc()])
+    def test_newest_first_and_labels(self):
+        newer = replace(news(), date="2026-10-20")
+        ev = build_evidence([disc(), newer])
         self.assertEqual([e.eid for e in ev], ["E1", "E2"])
-        self.assertEqual(ev[0].candidate.kind, "disclosure")
+        self.assertEqual([e.candidate.kind for e in ev], ["news", "disclosure"])   # 공시보다 최신인 뉴스가 먼저
+
+    def test_same_day_by_similarity(self):
+        a, b = news("news:1", sim=0.6, title="첫 번째 기사"), news("news:2", sim=0.8, title="완전히 다른 두 번째")
+        self.assertEqual([e.candidate.ref for e in build_evidence([a, b])], ["news:2", "news:1"])
 
     def test_duplicate_news_grouped(self):
         a = news("news:1", title="SK하이닉스 HBM 출하 확대 소식")
@@ -82,6 +89,51 @@ class EvidenceTest(unittest.TestCase):
         ev = build_evidence(cands)
         self.assertEqual(sum(e.candidate.kind == "disclosure" for e in ev), 2)
         self.assertLessEqual(sum(e.candidate.kind == "news" for e in ev), 3)
+
+
+FLOOR = {"news": 0.58, "disclosure": 0.64}
+STRONG = {"news": 0.63, "disclosure": 0.68}
+RECENT_CFG = {"min_similarity_news": 0.58, "min_similarity_disclosure": 0.64,
+              "strong_similarity_news": 0.63, "strong_similarity_disclosure": 0.68}
+
+
+def on(c: Candidate, day: str, sim: float) -> Candidate:
+    return replace(c, date=day, similarity=sim)
+
+
+class PickRecentTest(unittest.TestCase):
+    def test_goes_back_until_strong(self):                     # 11-03·11-01은 약함 → 10-01 강한 뉴스에서 멈춤, 09-01은 안 봄
+        cands = [on(news("news:1"), "2026-11-03", 0.59), on(disc(), "2026-11-01", 0.65),
+                 on(news("news:2"), "2026-10-01", 0.64), on(news("news:3"), "2026-09-01", 0.70)]
+        self.assertEqual([c.ref for c in pick_recent(cands, FLOOR, STRONG)], ["news:1", "disc:1#0", "news:2"])
+
+    def test_strong_on_latest_day_stops_there(self):
+        cands = [on(news("news:1"), "2026-11-03", 0.65), on(news("news:2"), "2026-11-01", 0.66)]
+        self.assertEqual([c.ref for c in pick_recent(cands, FLOOR, STRONG)], ["news:1"])
+
+    def test_below_floor_is_skipped_per_kind(self):            # 공시 0.63은 공시 기준(0.64) 미달, 뉴스 0.63은 통과(강함)
+        cands = [on(disc(), "2026-11-04", 0.63), on(news("news:1"), "2026-11-02", 0.63), on(news("news:2"), "2026-10-01", 0.7)]
+        self.assertEqual([c.ref for c in pick_recent(cands, FLOOR, STRONG)], ["news:1"])
+
+    def test_no_strong_returns_all_passed(self):
+        cands = [on(news("news:1"), "2026-11-03", 0.59), on(news("news:2"), "2026-06-01", 0.60)]
+        self.assertEqual([c.ref for c in pick_recent(cands, FLOOR, STRONG)], ["news:1", "news:2"])
+
+    def test_nothing_passes(self):
+        self.assertEqual(pick_recent([on(news(), "2026-11-04", 0.5)], FLOOR, STRONG), [])
+
+    def test_check_topic_uses_recent_config(self):
+        cands = [on(disc(), "2025-03-11", 0.70), on(news("news:1"), "2026-11-02", 0.64)]
+        out = check_topic(ITEM, cands, None, BANNED, RECENT_CFG)
+        self.assertEqual([e.candidate.ref for e in out.evidence], ["news:1"])     # 최신 강한 뉴스에서 멈춤: 오래된 공시는 안 씀
+
+    def test_strong_survives_many_newer_weak_news(self):       # 더 최신인 약한 기사 4개에 밀려 강한 기사가 빠지면 안 된다
+        weak = [on(news(f"news:{i}", title=f"서로 다른 제목 {i}번 {chr(65 + i) * 4}"), f"2026-11-0{i + 1}", 0.59) for i in range(4)]
+        strong = on(news("news:9", title="HBM4 공급 계약 체결"), "2026-10-30", 0.68)
+        out = check_topic(ITEM, weak + [strong], None, BANNED, RECENT_CFG)
+        refs = [e.candidate.ref for e in out.evidence]
+        self.assertIn("news:9", refs)
+        self.assertEqual(refs[-1], "news:9")                                     # 표시는 날짜 최신순이라 가장 오래된 강한 기사가 마지막
 
 
 class CheckTest(unittest.TestCase):
@@ -512,6 +564,18 @@ class GuideRulesTest(unittest.TestCase):
         self.assertIn("BANNED", real_codes(summary=["앞으로 매출이 오를 거예요. [E1]"]))
         self.assertIn("BANNED", real_codes(summary=["하락할 가능성이 높아요. [E1]"]))
         self.assertIn("BANNED", real_codes(summary=["실적이 회복될 전망이에요. [E1]"]))
+
+    def test_unattributed_forecast_blocked(self):
+        # 주체 없는 전망·예상 (2026-11-05 run에서 통과했던 표현)
+        for s in ("3분기 매출은 8.0% 늘어날 것으로 전망돼요. [E1]", "영업이익은 8.0% 감소할 것으로 예상돼요. [E1]",
+                  "HBM 매출이 8.0% 늘어날 것으로 보여요. [E1]"):
+            self.assertIn("BANNED", real_codes(summary=[s]), s)
+
+    def test_forecast_with_source_as_subject_allowed(self):
+        d = disc(text="KB증권은 HBM 매출이 8.0% 상승할 것으로 전망했다.")
+        good = {**GOOD, "summary": ["KB증권은 HBM 매출이 8.0% 상승할 것으로 전망했어요. [E1]"],
+                "evidence": [{"source_id": "E1", "fact": "KB증권은 HBM 매출이 8.0% 상승할 것으로 전망했다"}]}
+        self.assertEqual(check_card(parse_card(json.dumps(good)), build_evidence([d]), REAL_BANNED, REAL_TOPIC), [])
 
     def test_past_facts_allowed(self):
         self.assertEqual(real_codes(summary=["HBM 매출이 8.0% 상승했어요. [E1]"],
