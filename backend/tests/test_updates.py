@@ -215,7 +215,7 @@ class DisclosureCandidatesTest(unittest.TestCase):
     ROWS = [("R1", 0, None, "1주당 배당금: 361", "현금ㆍ현물배당결정", "2026-10-29", "u1", "other", None, 0.6),
             ("R2", 3, "6. 배당에 관한 사항", "배당 내용", "반기보고서 (2026.06)", "2026-08-14", "u2", "half", "백만원", 0.7)]
 
-    def test_event_chunk_gets_unit_from_first_chunk(self):      # 잠정실적 #1에는 "단위 : 억원"이 없다 → 첫 청크의 단위를 붙인다
+    def test_event_chunk_gets_unit_from_first_chunk(self):      # 잠정실적 #1에는 "단위 : 억원"이 없다 → 단위가 적힌 가장 앞 청크의 단위를 붙인다
         from pipelines.updates.candidates import UNIT, recent_disclosure_candidates
         rows = [("R3", 1, None, "순이익 > 전기실적: 712,695", "영업(잠정)실적", "2026-10-29", "u3", "other", "억원", 0.6),
                 ("R3", 0, None, "단위 : 억원, % 매출액: 1,952,532", "영업(잠정)실적", "2026-10-29", "u3", "other", "억원", 0.6)]
@@ -223,7 +223,57 @@ class DisclosureCandidatesTest(unittest.TestCase):
         self.assertEqual(out[0].text, "(단위: 억원) 순이익 > 전기실적: 712,695")
         self.assertEqual(out[1].text, "단위 : 억원, % 매출액: 1,952,532")           # 이미 단위가 있으면 그대로
         self.assertIn(71269500000000.0, evidence_numbers(out[0].text))
-        self.assertIn("c0.chunk_index = 0", UNIT)
+        self.assertIn("ORDER BY c0.chunk_index LIMIT 1", UNIT)
+
+    def test_unit_reads_money_units_only(self):                 # 2026-11-06 NAVER 유상증자 금액 표에 "(단위: 주)"가 붙었다
+        import re
+        from pipelines.updates.candidates import _MONEY_UNIT
+        self.assertEqual(re.search(_MONEY_UNIT, "1. 연결실적내용: 단위 : 조원, % 구분").group(1), "조원")
+        self.assertEqual(re.search(_MONEY_UNIT, "(단위: 백만원) 매출액").group(1), "백만원")
+        self.assertIsNone(re.search(_MONEY_UNIT, "(단위 : 주) 보통주식"))
+        self.assertIsNone(re.search(_MONEY_UNIT, "(단위 : 원) 1주당 가액"))   # 원 단위 표는 곱할 값이 없어 붙이지 않는다
+
+    def test_other_company_news_dropped(self):                  # 2026-11-06 파트론 순이익을 삼성전자 것처럼 쓴 카드가 검수를 통과
+        from pipelines.updates.candidates import drop_other_company_news, lead_company
+        names = ["삼성전자", "삼성전자우", "파트론", "SK하이닉스", "대상"]
+        news = lambda t: Candidate(ref=f"news:{t}", kind="news", symbol="005930", date="2026-11-02", title=t, text="",
+                                   url="", source="", similarity=0.6)
+        cands = [news("“파트론, 내년 스마트폰 수요 부진에 실적 역성장 전망”…투자의견"),
+                 news("[단독] 파트론이 삼성전자 납품 확대"),                       # 추적 종목 이름이 있으면 남긴다
+                 news("SK하이닉스·삼성전자, HBM 경쟁"),
+                 news("“美 중간선거가 환율 가른다” 달러 약세냐"),                # 회사명 없는 업황 기사는 남긴다
+                 news("대상자 확대된 배당 정책"),                                 # "대상자"는 회사 "대상"이 아니다
+                 news("삼성전자, 3분기 실적 발표"), disc()]
+        kept, dropped = drop_other_company_news(cands, "삼성전자", names)
+        self.assertEqual([c.title for c in dropped], [cands[0].title])
+        self.assertEqual(len(kept), 6)
+        self.assertEqual(lead_company("삼성전자우, 거래량 급증", names), "삼성전자우")   # 긴 이름부터 본다
+        self.assertEqual(drop_other_company_news(cands, "", names)[1], [])            # 종목명을 모르면 빼지 않는다
+        self.assertEqual(lead_company("대상, 3분기 실적", names), "")                   # 3글자 미만 이름은 빼는 근거로 쓰지 않는다
+
+    def test_aliases_only_keep(self):                            # 2026-11-06 "카카오 노사협상안을 네이버 노조가…"를 NAVER 항목에서 뺐다
+        from pipelines.updates.candidates import drop_other_company_news
+        names = ["카카오", "삼성전기", "삼성전자", "NAVER"]
+        news = lambda t: Candidate(ref=f"news:{t}", kind="news", symbol="x", date="2026-11-02", title=t, text="",
+                                   url="", source="", similarity=0.6)
+        naver = [news("카카오 노사협상안을 네이버 노조가 이끄나"), news("카카오, 3분기 실적 발표")]
+        self.assertEqual([c.title for c in drop_other_company_news(naver, "NAVER", names, ["네이버"])[1]],
+                         ["카카오, 3분기 실적 발표"])
+        samsung = [news("삼성전기, MLCC 가격 인상"),                              # 맨 앞 이름 안의 "삼성"은 별칭으로 세지 않는다
+                   news("삼성전기, 삼성전자에 MLCC 공급 확대"), news("카카오, 삼전 지분 매입")]
+        self.assertEqual([c.title for c in drop_other_company_news(samsung, "삼성전자", names, ["삼성", "삼전"])[1]],
+                         ["삼성전기, MLCC 가격 인상"])
+
+    def test_listed_names_from_corp_code_file(self):             # 파트론(코스닥)은 stocks에 없어 corpCode.xml에서 이름을 읽는다
+        from pipelines.updates.candidates import listed_names
+        xml = ("<?xml version=\"1.0\" encoding=\"UTF-8\"?><result>"
+               "<list><corp_code>1</corp_code><corp_name>파트론</corp_name><stock_code>091700</stock_code></list>"
+               "<list><corp_code>2</corp_code><corp_name>비상장회사</corp_name><stock_code> </stock_code></list></result>")
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "corpCode.xml"
+            path.write_text(xml, encoding="utf-8")
+            self.assertEqual(listed_names(path), ["파트론"])
+            self.assertEqual(listed_names(Path(d) / "없음.xml"), [])            # 파일이 없으면 stocks 이름만 쓴다
 
     def test_periodic_chunk_unchanged(self):                    # 정기보고서 청크에는 단위를 붙이지 않는다 (첫 청크 단위가 다른 표일 수 있다)
         from pipelines.updates.candidates import recent_disclosure_candidates
@@ -689,8 +739,15 @@ class GuideRulesTest(unittest.TestCase):
     def test_unattributed_forecast_blocked(self):
         # 주체 없는 전망·예상 (2026-11-05 run에서 통과했던 표현)
         for s in ("3분기 매출은 8.0% 늘어날 것으로 전망돼요. [E1]", "영업이익은 8.0% 감소할 것으로 예상돼요. [E1]",
-                  "HBM 매출이 8.0% 늘어날 것으로 보여요. [E1]"):
+                  "HBM 매출이 8.0% 늘어날 것으로 보여요. [E1]",
+                  "HBM 매출이 8.0% 늘어 실적 개선 요인으로 기대돼요. [E1]",    # 2026-11-06 "기대돼요" 통과
+                  "HBM 매출 증가가 실적 개선 요인으로 기대되고 있어요. [E1]"):  # 2026-11-06 진행형 통과
             self.assertIn("BANNED", real_codes(summary=[s]), s)
+
+    def test_expectation_facts_and_company_remarks_allowed(self):
+        for s in ("HBM 매출이 시장 기대치를 웃돌았어요. [E1]",                     # "기대" 단독은 사실 문장이라 통과
+                  "회사는 HBM 수요가 늘어날 것으로 기대되고 있다고 밝혔어요. [E1]"):  # 회사 발언 전달 (ATTRIBUTION 예외)
+            self.assertNotIn("BANNED", real_codes(summary=[s]), s)
 
     def test_forecast_with_source_as_subject_allowed(self):
         d = disc(text="KB증권은 HBM 매출이 8.0% 상승할 것으로 전망했다.")
@@ -756,6 +813,19 @@ class VerifyPromptTest(unittest.TestCase):
         self.assertIn("[추적 종목]\nSK하이닉스", prompts[1])
         self.assertIn("다른 회사", prompts[1])
         self.assertIn("~할 경우", prompts[1])
+        self.assertIn("[추적 항목]\nHBM 실적", prompts[1])              # 2026-11-06 항목에 이름이 나온 자회사는 다른 회사로 보지 않게
+        self.assertIn("자회사", prompts[1])
+        self.assertIn("조건을 바꾼 것이 아닙니다", prompts[1])         # 2026-11-06 근거의 "양산 계획"을 "계획이에요"로 쓴 문장을 막았다
+
+    def test_rejected_sentence_and_reason_kept(self):                  # 2026-11-06 검수가 막은 이유가 보고서에 없어 원인을 알 수 없었다
+        from pipelines.updates.experiment import _fmt
+        verdict = json.dumps({"results": [{"index": 0, "supported": False, "reason": "8.0%가 근거에 없음"}]},
+                             ensure_ascii=False)
+        calls = iter([json.dumps(GOOD, ensure_ascii=False), verdict])
+        out = check_topic(ITEM, [disc()], lambda p: next(calls), BANNED, {"verify_call": True, "on_check_fail": "drop"})
+        self.assertEqual((out.kind, out.fail_codes), ("no_update", ["VERIFY_UNSUPPORTED"]))
+        self.assertEqual(out.verify_notes, ["HBM 매출이 전 분기보다 8.0% 늘었어요. [E1] → 8.0%가 근거에 없음"])
+        self.assertIn("- 검수가 막은 문장: HBM 매출이", "\n".join(_fmt(out)))
 
 
 class AlreadyShownTest(unittest.TestCase):
