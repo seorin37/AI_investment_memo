@@ -14,7 +14,7 @@ export default function LoginScreen() {
   const status = useAuth((s) => s.status);
   const acceptSession = useAuth((s) => s.acceptSession);
   const mockSignIn = useAuth((s) => s.mockSignIn);
-  const [busy, setBusy] = useState<AuthProvider | null>(null);
+  const [busy, setBusy] = useState<AuthProvider | 'mock' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   if (status === 'signedIn') return <Redirect href="/" />;
@@ -23,11 +23,23 @@ export default function LoginScreen() {
     setError(null);
     setBusy(provider);
     try {
-      if (env.useMock) return await mockSignIn();
+      if (env.useMockAuth) return await mockSignIn();
       const session = await startSocialLogin(provider);
       if (session) await acceptSession(session);
     } catch {
       setError('로그인하지 못했어요. 취소했거나 네트워크 연결을 확인해 주세요.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function enterMockExperience() {
+    setError(null);
+    setBusy('mock');
+    try {
+      await mockSignIn();
+    } catch {
+      setError('Mock 화면을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
       setBusy(null);
     }
@@ -43,10 +55,23 @@ export default function LoginScreen() {
           <SocialButton label="카카오로 로그인" bg="#FEE500" fg="#191919" logo={<KakaoLogo />} loading={busy === 'kakao'} onPress={() => social('kakao')} />
           <SocialButton label="네이버로 로그인" bg="#03A94D" fg="#FFFFFF" logo={<NaverLogo />} loading={busy === 'naver'} onPress={() => social('naver')} />
           <SocialButton label="구글로 로그인" bg="#FFFFFF" fg="#191919" border logo={<GoogleLogo />} loading={busy === 'google'} onPress={() => social('google')} />
+          {__DEV__ && env.useMockAuth && (
+            <Hoverable
+              accessibilityRole="button"
+              accessibilityLabel="Mock 화면 체험"
+              onPress={busy ? undefined : enterMockExperience}
+              style={{ height: 48, borderRadius: 10, backgroundColor: colors.text, alignItems: 'center', justifyContent: 'center', opacity: busy === 'mock' ? 0.7 : 1 }}
+              hoverStyle={{ opacity: 0.9 }}
+            >
+              <T size={15} weight="bold" color={colors.surface}>
+                {busy === 'mock' ? 'Mock 화면 준비 중…' : 'Mock 화면 체험'}
+              </T>
+            </Hoverable>
+          )}
         </View>
         {error && <T size={13} color={colors.danger} style={{ marginTop: 14 }} align="center">{error}</T>}
       </View>
-      {env.useMock && <T size={12} color={colors.textMuted} style={{ marginTop: 16 }}>목업 모드 — 소셜 버튼으로 예시 계정에 들어가요</T>}
+      {env.useMockAuth && <T size={12} color={colors.textMuted} style={{ marginTop: 16 }}>목업 모드 — 소셜 버튼으로 예시 계정에 들어가요</T>}
     </ScrollView>
   );
 }

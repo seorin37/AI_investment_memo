@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { Button, EmptyState, ErrorState, Loading } from '@/components/ui/primitives';
-import { useBoard, useSetAiLink, useUpdateBoardItem } from '@/hooks/queries';
+import { env } from '@/config/env';
+import { useBoard, useSetAiLink, useSetBoardChecklistItem } from '@/hooks/queries';
 import { useBreakpoint } from '@/hooks/useLayout';
 import { useUI } from '@/store/ui';
 import { layout } from '@/theme/tokens';
@@ -18,7 +19,8 @@ export function BoardScreen({ stockCode }: { stockCode: string }) {
   const { isMobile, isDesktop } = useBreakpoint();
   const openModal = useUI((s) => s.openModal);
   const setAi = useSetAiLink(stockCode);
-  const update = useUpdateBoardItem(stockCode);
+  const setChecklistItem = useSetBoardChecklistItem();
+  const toast = useUI((s) => s.showToast);
   const [boardW, setBoardW] = useState(0);
 
   const cols = Math.max(1, Math.min(4, Math.floor((boardW + GAP) / (COL_MIN + GAP))));
@@ -37,7 +39,12 @@ export function BoardScreen({ stockCode }: { stockCode: string }) {
           key={it.id}
           memo={it}
           onPress={() => openModal({ type: 'memoDetail', stockCode, memoId: it.id })}
-          onToggleAi={(v) => setAi.mutate({ memoId: it.id, enabled: v })}
+          onToggleAi={(v) =>
+            setAi.mutate(
+              { memoId: it.id, enabled: v },
+              { onError: (error) => toast(error.message || 'AI 연결 상태를 저장하지 못했어요') },
+            )
+          }
         />
       );
     if (it.kind === 'checklist')
@@ -46,7 +53,12 @@ export function BoardScreen({ stockCode }: { stockCode: string }) {
           key={it.id}
           item={it}
           onPress={() => openModal({ type: 'editBoardItem', stockCode, itemId: it.id })}
-          onToggle={(itemId, done) => update.mutate({ id: it.id, patch: { items: it.items.map((x) => (x.id === itemId ? { ...x, done } : x)) } })}
+          onToggle={(itemId, done) =>
+            setChecklistItem.mutate(
+              { checklistId: it.id, itemId, done, stockCode },
+              { onError: (error) => toast(error.message || '체크 상태를 저장하지 못했어요') },
+            )
+          }
         />
       );
     return <ReferenceCard key={it.id} item={it} onPress={() => openModal({ type: 'editBoardItem', stockCode, itemId: it.id })} />;
@@ -75,7 +87,14 @@ export function BoardScreen({ stockCode }: { stockCode: string }) {
         )}
       </View>
       <View style={{ width: isDesktop ? layout.aiPanelWidth : '100%', marginTop: isMobile ? 8 : 0 }}>
-        <AiUpdatePanel stockCode={stockCode} />
+        {env.useRealBoard ? (
+          <EmptyState
+            title="AI 업데이트 연동 준비 중"
+            desc="AI 연결 상태는 저장되지만 실제 추적 결과와 타임라인 API는 아직 연결되지 않았어요."
+          />
+        ) : (
+          <AiUpdatePanel stockCode={stockCode} />
+        )}
       </View>
     </View>
   );

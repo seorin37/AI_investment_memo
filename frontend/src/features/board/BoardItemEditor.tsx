@@ -6,7 +6,8 @@ import { Icon } from '@/components/icons/Icon';
 import { Sheet, SheetHeader } from '@/components/ui/Modal';
 import { Button, CircleCheck, Hoverable, IconButton, InfoNote, Loading, ProgressRing, Segmented, TextField } from '@/components/ui/primitives';
 import { T } from '@/components/ui/Text';
-import { useBoard, useCreateBoardItem, useDeleteBoardItem, useMyStocks, useSettings, useUpdateBoardItem } from '@/hooks/queries';
+import { env } from '@/config/env';
+import { useBoard, useBoardItem, useCreateBoardItem, useDeleteBoardItem, useMyStocks, useSettings, useUpdateBoardItem } from '@/hooks/queries';
 import { uid } from '@/lib/format';
 import { useUI } from '@/store/ui';
 import { colors, fonts } from '@/theme/tokens';
@@ -30,10 +31,11 @@ const REF_TYPES: { key: ReferenceType; label: string }[] = [
  */
 export function BoardItemEditor({ onClose, stockCode, initialKind = 'memo', itemId }: { onClose: () => void; stockCode: string; initialKind?: BoardItemKind; itemId?: string }) {
   const { data: board, isLoading } = useBoard(stockCode);
+  const { data: detail, isLoading: detailLoading } = useBoardItem(itemId ?? '', Boolean(itemId));
   const { data: settings, isLoading: settingsLoading } = useSettings();
-  const editing = useMemo(() => board?.find((b) => b.id === itemId), [board, itemId]);
+  const editing = useMemo(() => detail ?? board?.find((b) => b.id === itemId), [board, detail, itemId]);
   // 수정 대상/설정이 준비된 뒤에 편집기를 그려 초기값을 한 번에 채움
-  if ((itemId && isLoading) || settingsLoading)
+  if ((itemId && (isLoading || detailLoading)) || settingsLoading)
     return (
       <Sheet visible onClose={onClose} width={640}>
         <Loading height={300} />
@@ -110,6 +112,10 @@ function EditorBody({
   };
 
   const attachFile = async () => {
+    if (env.useRealBoard) {
+      setError('실제 메모 보드의 파일 업로드는 아직 지원하지 않아요. URL 링크를 추가해 주세요.');
+      return;
+    }
     const res = await DocumentPicker.getDocumentAsync({ multiple: false, copyToCacheDirectory: true });
     if (res.canceled || !res.assets?.[0]) return;
     const a = res.assets[0];
@@ -127,17 +133,18 @@ function EditorBody({
       toast(editing ? '저장했어요' : `${KIND_TITLE[kind]}를 보드에 추가했어요`);
       onClose();
     };
+    const failed = (cause: Error) => setError(cause.message || '저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
     if (kind === 'memo') {
       if (!title.trim()) return setError('제목을 입력해 주세요.');
-      if (editing) update.mutate({ id: editing.id, patch: { title: title.trim(), body, tags, color } }, { onSuccess: done });
-      else create.mutate({ kind: 'memo', input: { title: title.trim(), body, tags, color, ai_linked: ai } }, { onSuccess: done });
+      if (editing) update.mutate({ id: editing.id, patch: { title: title.trim(), body, tags, color } }, { onSuccess: done, onError: failed });
+      else create.mutate({ kind: 'memo', input: { title: title.trim(), body, tags, color, ai_linked: ai } }, { onSuccess: done, onError: failed });
     } else if (kind === 'checklist') {
       const all = newItem.trim() ? [...items, { id: uid('ci'), text: newItem.trim(), done: false }] : items;
-      if (editing) update.mutate({ id: editing.id, patch: { title: clTitle, items: all } }, { onSuccess: done });
-      else create.mutate({ kind: 'checklist', input: { title: clTitle, items: all } }, { onSuccess: done });
+      if (editing) update.mutate({ id: editing.id, patch: { title: clTitle, items: all } }, { onSuccess: done, onError: failed });
+      else create.mutate({ kind: 'checklist', input: { title: clTitle, items: all } }, { onSuccess: done, onError: failed });
     } else {
-      if (editing) update.mutate({ id: editing.id, patch: { title: refTitle, links } }, { onSuccess: done });
-      else create.mutate({ kind: 'reference', input: { title: refTitle, links } }, { onSuccess: done });
+      if (editing) update.mutate({ id: editing.id, patch: { title: refTitle, links } }, { onSuccess: done, onError: failed });
+      else create.mutate({ kind: 'reference', input: { title: refTitle, links } }, { onSuccess: done, onError: failed });
     }
   };
 
@@ -240,7 +247,14 @@ function EditorBody({
               style={{ flex: 1, height: 44, borderRadius: 12 }}
             />
             <Button label="추가" variant="secondary" size="sm" onPress={addLink} style={{ height: 44, paddingHorizontal: 18 }} />
-            <Button label="파일 첨부" variant="secondary" size="sm" onPress={attachFile} style={{ height: 44, paddingHorizontal: 18 }} />
+            <Button
+              label={env.useRealBoard ? '파일 첨부 준비 중' : '파일 첨부'}
+              variant="secondary"
+              size="sm"
+              onPress={attachFile}
+              disabled={env.useRealBoard}
+              style={{ height: 44, paddingHorizontal: 18 }}
+            />
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <T size={12} color={colors.textWarm} style={{ width: 60 }}>
@@ -309,6 +323,7 @@ function EditorBody({
                   toast('휴지통으로 옮겼어요');
                   onClose();
                 },
+                onError: (cause) => setError(cause.message || '삭제하지 못했어요.'),
               })
             }
             hitSlop={8}

@@ -3,7 +3,7 @@
 - 입력 csv의 사람 표시 열('관련(O/X)')은 건드리지 않고, 새 열 'LLM관련(O/X)'만 채운 csv를 따로 쓴다.
 - 항목당 1회 호출(그 항목의 후보 전부). 유사도는 LLM에 보여 주지 않는다 (유사도로 판단이 끌려가는 순환을 막는다).
 - 후보 순서는 항목별로 고정 시드로 섞어 위치 편향을 줄인다.
-- DB에 접속하지 않는다. 비용: 항목 수만큼의 Gemini 호출 (토큰은 실행 끝에 출력).
+- DB에 접속하지 않는다. 비용: 항목 수만큼의 OpenAI 호출 (토큰은 실행 끝에 출력).
 - 한계: LLM의 판단은 정답이 아니다. 사람이 일부(30~50건)를 표시해 calibrate의 '일치율'로 확인한다.
 
     PYTHONPATH=backend python -m pipelines.updates.autolabel --labels results/updates/run_*/candidates.csv
@@ -118,9 +118,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", help="결과 csv (기본: 같은 폴더의 candidates_auto.csv)")
     ap.add_argument("--limit-items", type=int, help="앞에서 N개 항목만 (시험용)")
     args = ap.parse_args(argv)
-    from ..tracking.gemini import GeminiClient
+    from ..tracking.openai_client import OpenAIClient
 
-    client = GeminiClient.from_env()
+    client = OpenAIClient.from_env()
     src = Path(args.labels)
     dst = Path(args.out) if args.out else src.with_name("candidates_auto.csv")
     stats = label_csv(src, dst, client, limit_items=args.limit_items)

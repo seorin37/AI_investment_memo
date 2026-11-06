@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Sheet } from '@/components/ui/Modal';
 import { Button, EmptyState, Hoverable, IconButton, Loading, Segmented } from '@/components/ui/primitives';
 import { T } from '@/components/ui/Text';
-import { useBoard, useDeleteBoardItem, useMemoTimeline, useSetAiLink, useUpdateBoardItem } from '@/hooks/queries';
+import { env } from '@/config/env';
+import { useBoardItem, useDeleteBoardItem, useMemoTimeline, useSetAiLink, useUpdateBoardItem } from '@/hooks/queries';
 import { dotDate } from '@/lib/format';
 import { useUI } from '@/store/ui';
 import { colors } from '@/theme/tokens';
@@ -13,9 +14,9 @@ import { AiLinkCard, ColorSwatches, MemoEditArea, TagRow } from './MemoParts';
 
 /** 메모 팝업 — [메모] 보기·수정 / [AI 업데이트] 타임라인 */
 export function MemoDetailModal({ onClose, stockCode, memoId, initialTab = 'memo' }: { onClose: () => void; stockCode: string; memoId: string; initialTab?: 'memo' | 'ai' }) {
-  const { data: board, isLoading } = useBoard(stockCode);
-  const memo = useMemo(() => board?.find((b): b is Memo => b.id === memoId && b.kind === 'memo'), [board, memoId]);
-  const [tab, setTab] = useState<'memo' | 'ai'>(initialTab);
+  const { data: item, isLoading } = useBoardItem(memoId);
+  const memo: Memo | undefined = item?.kind === 'memo' ? item : undefined;
+  const [tab, setTab] = useState<'memo' | 'ai'>(env.useRealBoard ? 'memo' : initialTab);
   const update = useUpdateBoardItem(stockCode);
   const setAi = useSetAiLink(stockCode);
   const remove = useDeleteBoardItem(stockCode);
@@ -51,7 +52,9 @@ export function MemoDetailModal({ onClose, stockCode, memoId, initialTab = 'memo
             <Segmented
               items={[
                 { key: 'memo', label: '메모' },
-                { key: 'ai', label: memo.unread_updates > 0 ? `AI 업데이트 · ${memo.unread_updates}` : 'AI 업데이트' },
+                ...(env.useRealBoard
+                  ? []
+                  : [{ key: 'ai' as const, label: memo.unread_updates > 0 ? `AI 업데이트 · ${memo.unread_updates}` : 'AI 업데이트' }]),
               ]}
               value={tab}
               onChange={setTab}
@@ -60,20 +63,39 @@ export function MemoDetailModal({ onClose, stockCode, memoId, initialTab = 'memo
           {tab === 'memo' ? (
             <MemoTab
               memo={memo}
-              onSave={(patch, cb) => update.mutate({ id: memo.id, patch }, { onSuccess: cb })}
+              onSave={(patch, cb) =>
+                update.mutate(
+                  { id: memo.id, patch },
+                  { onSuccess: cb, onError: (error) => toast(error.message || '메모를 저장하지 못했어요') },
+                )
+              }
               saving={update.isPending}
-              onToggleAi={(v) => setAi.mutate({ memoId: memo.id, enabled: v })}
+              onToggleAi={(v) =>
+                setAi.mutate(
+                  { memoId: memo.id, enabled: v },
+                  { onError: (error) => toast(error.message || 'AI 연결 상태를 저장하지 못했어요') },
+                )
+              }
               onDelete={() =>
                 remove.mutate(memo.id, {
                   onSuccess: () => {
                     toast('메모를 휴지통으로 옮겼어요');
                     onClose();
                   },
+                  onError: (error) => toast(error.message || '메모를 삭제하지 못했어요'),
                 })
               }
             />
           ) : (
-            <AiTab memo={memo} onToggleAi={(v) => setAi.mutate({ memoId: memo.id, enabled: v })} />
+            <AiTab
+              memo={memo}
+              onToggleAi={(v) =>
+                setAi.mutate(
+                  { memoId: memo.id, enabled: v },
+                  { onError: (error) => toast(error.message || 'AI 연결 상태를 저장하지 못했어요') },
+                )
+              }
+            />
           )}
         </>
       )}
