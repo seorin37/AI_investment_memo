@@ -102,6 +102,7 @@ class LeadConfig:
     min_chars: int = 40
     enqueue_days: int = 3
     contact: str = ""
+    min_body_chars: int = 0           # 본문(정제 후)이 이보다 짧으면 skipped (사진·단신 기사). 0이면 끔
 
     @property
     def user_agent(self) -> str:
@@ -110,6 +111,7 @@ class LeadConfig:
 
 def load_config(path: Path = CONFIG_PATH) -> LeadConfig:
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    common_titles = tuple(raw.get("common_skip_title_patterns") or ())   # 모든 매체에 붙는 제목 제외 규칙 ([포토] 등)
     sources = {}
     for code, s in (raw.get("sources") or {}).items():
         if s.get("method") not in METHODS:
@@ -127,7 +129,7 @@ def load_config(path: Path = CONFIG_PATH) -> LeadConfig:
             skip_paywalled=bool(s.get("skip_paywalled", False)),
             drop_text_patterns=tuple(s.get("drop_text_patterns") or ()),
             skip_section_patterns=tuple(s.get("skip_section_patterns") or ()),
-            skip_title_patterns=tuple(s.get("skip_title_patterns") or ()))
+            skip_title_patterns=tuple(dict.fromkeys([*common_titles, *(s.get("skip_title_patterns") or ())])))
         src = sources[code]
         for pattern in (*src.url_patterns, *src.drop_text_patterns, *src.skip_section_patterns, *src.skip_title_patterns,
                         *([src.paywall_text] if src.paywall_text else [])):
@@ -136,7 +138,9 @@ def load_config(path: Path = CONFIG_PATH) -> LeadConfig:
         sources=sources, interval=float(raw.get("request_interval_seconds", 4)),
         max_attempts=int(raw.get("max_attempts", 3)), max_chars=int(raw.get("lead_max_chars", 300)),
         min_chars=int(raw.get("lead_min_chars", 40)), enqueue_days=int(raw.get("enqueue_days", 3)),
-        contact=str(raw.get("contact") or ""))
+        contact=str(raw.get("contact") or ""), min_body_chars=int(raw.get("min_body_chars", 0)))
+    if config.min_body_chars < 0:
+        raise ValueError("min_body_chars는 0 이상이어야 합니다")
     if config.interval < 1 or config.max_attempts < 1 or not 0 < config.min_chars <= config.max_chars <= 300:
         raise ValueError("요청 간격은 1초 이상, 재시도 1회 이상, 리드 길이는 1~300자여야 합니다")
     return config
@@ -244,9 +248,13 @@ def page_title(html: str) -> str:
 
 
 def title_skip_reason(title: str, src: SourceConfig) -> str | None:
-    """제목이 skip_title_patterns와 맞으면 '모음 기사 (제목 …)'."""
-    if title and any(re.search(p, title) for p in src.skip_title_patterns):
-        return f"모음 기사 (제목 '{title[:40]}')"
+    """제목이 skip_title_patterns와 맞으면 '포토 기사 (제목 …)' 또는 '모음 기사 (제목 …)'."""
+    if not title:
+        return None
+    for pattern in src.skip_title_patterns:
+        if re.search(pattern, title):
+            kind = "포토 기사" if "포토" in pattern else "운세 기사" if "운세" in pattern else "모음 기사"
+            return f"{kind} (제목 '{title[:40]}')"
     return None
 
 
@@ -264,6 +272,17 @@ def page_skip_reason(html: str, src: SourceConfig) -> str | None:
         if section and any(re.search(p, section) for p in src.skip_section_patterns):
             return f"모음 기사 (섹션 '{section}')"
     return title_skip_reason(page_title(html), src) if src.skip_title_patterns else None
+
+
+def short_body_reason(html: str, src: SourceConfig, min_chars: int) -> str | None:
+    """정제한 본문이 min_chars자보다 짧으면 '본문 짧음 (N자)'. 본문 칸이 없으면 None (추출 실패는 따로 다룬다).
+    2026-11-06 기준 100자: 한경 [포토] 기사 81자는 걸리고, 연합 실적 단신 277자는 통과한다."""
+    if not min_chars or not src.selector:
+        return None
+    body = source_body_text(html, src)
+    if body is not None and len(body) < min_chars:
+        return f"본문 짧음 ({len(body)}자 < {min_chars}자)"
+    return None
 
 
 def source_body_text(html: str, src: SourceConfig, selector: str | None = None) -> str | None:
@@ -482,8 +501,8 @@ def _link_one(item, src, config, http_get, robots, throttle) -> LeadResult:
         return _retry_or_fail(item, "link", config, f"HTTP {code}", code)
     if code != 200:
         return LeadResult(item.news_id, "failed", "link", item.attempts + 1, http_status=code, error=f"HTTP {code}")
-    reason = page_skip_reason(resp.text, src)                # 유료 기사(걸린 칸·문구 앞 60자), 모음 기사
-    if reason:
+    reason = page_skip_reason(resp.text, src) or short_body_reason(resp.text, src, config.min_body_chars)
+    if reason:                                               # 유료(걸린 칸·문구 앞 60자)·모음·포토·짧은 본문
         log.info("%s 건너뜀(저장 안 함): %s %s", src.code, reason, item.url)
         return LeadResult(item.news_id, "skipped", "link", item.attempts + 1, http_status=code, error=reason)
     lead = extract_lead(resp.text, src.selector, src.drop_selectors, config.max_chars, config.min_chars,
@@ -580,8 +599,8 @@ def probe(urls: Iterable[str], src: SourceConfig, config: LeadConfig, http_get: 
             notes.append(f"HTTP {resp.status_code}: {url}")
             log_.append(ProbeFetch(url, "허용", resp.status_code))
             continue
-        reason = page_skip_reason(resp.text, src)            # 유료 기사(걸린 칸·문구 앞 60자), 모음 기사
-        if reason:
+        reason = page_skip_reason(resp.text, src) or short_body_reason(resp.text, src, config.min_body_chars)
+        if reason:                                           # 유료(걸린 칸·문구 앞 60자)·모음·포토·짧은 본문
             notes.append(f"건너뜀(저장 안 함) {reason}: {url}")
             log.info("%s 건너뜀(저장 안 함): %s %s", src.code, reason, url)
             log_.append(ProbeFetch(url, "허용", 200, error=f"{reason} (저장 안 함)", paywalled=reason.startswith("유료")))

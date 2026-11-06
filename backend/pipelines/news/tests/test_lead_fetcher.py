@@ -476,8 +476,47 @@ def test_real_config_mk_selector_and_yonhap_roundup_rules():
     config = load_config()
     mk, yh = config.sources["mk"], config.sources["yonhap"]
     assert mk.selector == "[itemprop='articleBody']" and "div.article-summary-box" in mk.drop_selectors
-    assert yh.skip_section_patterns == ("^뉴스편집$",) and yh.skip_title_patterns == (r"^\[전국 주요 신문",)
-    assert config.sources["sedaily"].selector is None                               # 서울경제는 아직 비워 둔다
+    assert yh.skip_section_patterns == ("^뉴스편집$",)
+    assert yh.skip_title_patterns == (r"^\[포토\]", r"^\[전국 주요 신문")             # 공통 [포토] + 연합 모음 기사
+    assert config.sources["sedaily"].selector == "#article-body"                    # 2026-11-06 probe 10/10 확인 후 채움
+    assert config.sources["sedaily"].active_method == "link"
+
+
+HK_VIDEO = """<html><body><div class="article-body" id="articletxt" itemprop="articleBody">
+<div class="article-video floatingVideo"><div class="floatingVideo-inner"><button class="btn-close-video">
+<span class="blind">영상 모듈 닫기</span></button></div></div>
+<h2 class="hk_sub_headline">1. 민주당, 중간선거 압승…상·하원 장악</h2><br>
+미국 민주당이 3일(현지시간) 치러진 중간선거에서 상원과 하원을 모두 장악했다. 시장은 정책 불확실성에 주목했다.
+</div></body></html>"""
+
+
+def test_real_config_hankyung_video_ui_and_horoscope():            # 2026-11-06 202611056800i, [오늘의 운세] 4/10건
+    hk = load_config().sources["hankyung"]
+    body = lf.source_body_text(HK_VIDEO, hk)
+    assert "영상 모듈" not in body and body.startswith("1. 민주당, 중간선거 압승")    # 소제목(h2)은 본문으로 남긴다
+    assert lf.title_skip_reason("[오늘의 운세] 11월 5일 띠별 운세", hk).startswith("운세 기사")
+    assert lf.title_skip_reason("[포토] 파랗게 질린 코스피", hk).startswith("포토 기사")   # 공통 규칙도 그대로
+    assert lf.title_skip_reason("美민주당압승에 월가 축포?", hk) is None
+
+
+def test_common_photo_title_rule_and_min_body_chars():               # 2026-11-06 한경 [포토] 81자, 연합 단신 277자
+    config = load_config()
+    assert config.min_body_chars == 100
+    for code, src in config.sources.items():
+        assert src.skip_title_patterns[0] == r"^\[포토\]", code                   # 공통 규칙이 매체 규칙 앞에 붙는다
+    assert lf.title_skip_reason("[포토] 파랗게 질린 코스피", config.sources["hankyung"]).startswith("포토 기사")
+    yh = config.sources["yonhap"]
+    assert r"^\[전국 주요 신문" in yh.skip_title_patterns                         # 매체 규칙도 남는다
+    src = replace(cfg().sources["hankyung"], selector="#b")
+    page = lambda n: f"<html><body><div id='b'>{'가' * n}</div></body></html>"
+    assert lf.short_body_reason(page(81), src, 100) == "본문 짧음 (81자 < 100자)"
+    assert lf.short_body_reason(page(277), src, 100) is None
+    assert lf.short_body_reason(page(81), src, 0) is None                          # 0이면 끔
+    assert lf.short_body_reason("<html></html>", src, 100) is None                 # 칸이 없으면 추출 실패 쪽에서 다룬다
+    short = replace(cfg(), min_body_chars=100)
+    results, _ = fetch_leads([PendingItem(1, "hankyung", "t", "https://www.hankyung.com/a/1")], replace(short, sources={"hankyung": src}),
+                             http({"https://www.hankyung.com/a/1": Resp(200, page(81))}), sleep=lambda s: None)
+    assert results[0].status == "skipped" and results[0].error.startswith("본문 짧음")
 
 
 def test_probe_cli_asks_before_sending(monkeypatch, capsys):

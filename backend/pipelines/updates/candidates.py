@@ -6,6 +6,7 @@
 - news_candidates / disclosure_candidates: 유사도 상위 k건 (noise_floor가 쓴다)
 - recent_news_candidates / recent_disclosure_candidates: 임계값(floor) 이상인 후보를 날짜 최신순으로 k건.
   날짜를 하루씩 거슬러 가며 고르는 건 evidence.pick_recent가 한다.
+- drop_other_company_news: 제목이 다른 상장사 이름으로 시작하고 추적 종목 이름이 없는 기사를 뺀다 (DB 조회 없음, 이름 목록은 호출자가 준다)
 
 공시는 정기보고서와 수시공시(disclosures.kind = major/other)가 같은 테이블에 있다. 수시공시는 doc="event"로 표시하고
 임계값을 따로 쓴다(event_floor). 정정공시가 고친 원본(disclosure_events.corrects가 가리키는 공시)은 후보에서 뺀다.
@@ -14,6 +15,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date
 
 from .models import Candidate
@@ -38,10 +40,13 @@ NOT_CORRECTED = "NOT EXISTS (SELECT 1 FROM disclosure_events e WHERE e.corrects 
 SUBSIDIARY = ("(%(subsidiary)s OR NOT EXISTS "
               "(SELECT 1 FROM disclosure_events s WHERE s.rcept_no = d.rcept_no AND s.is_subsidiary))")
 
-# 수시공시 표의 단위("단위 : 억원, %")는 첫 청크에만 있다. 뒤 청크 숫자의 단위를 알 수 있게 첫 청크에서 읽어 온다
+# 수시공시 표의 단위("단위 : 억원, %")는 한 청크에만 있다. 단위가 없는 청크에 붙일 수 있게 같은 공시에서 읽어 온다
 # (2026-11-05 삼성 잠정실적 #1의 순이익 712,695(억원)를 LLM이 백만원으로 읽었다). %%는 psycopg 자리표시자와 구분
-UNIT = (r"(SELECT substring(c0.chunk_text from '단위\s*:\s*([^\s,%%)]+)') FROM disclosure_chunks c0 "
-        r"WHERE c0.rcept_no = c.rcept_no AND c0.chunk_index = 0)")
+# 2026-11-06: 금액 단위만 읽는다 (NAVER 유상증자 금액 표에 첫 표의 "주"가 붙었다). 첫 청크로 고정하지 않고
+# 금액 단위가 적힌 가장 앞 청크에서 읽는다 (삼성 기재정정은 정정전·후 숫자가 #0, "단위 : 조원"이 #1에 있었다)
+_MONEY_UNIT = r"단위\s*:\s*(천원|백만원|억원|조원)"
+UNIT = (rf"(SELECT substring(c0.chunk_text from '{_MONEY_UNIT}') FROM disclosure_chunks c0 "
+        rf"WHERE c0.rcept_no = c.rcept_no AND c0.chunk_text ~ '{_MONEY_UNIT}' ORDER BY c0.chunk_index LIMIT 1)")
 
 DISCLOSURE_SQL = f"""
 SELECT c.rcept_no, c.chunk_index, c.section, c.chunk_text, d.title, d.rcept_dt, d.source_url, d.kind::text, {UNIT},
@@ -137,3 +142,58 @@ def recent_disclosure_candidates(conn, symbol: str, query_vec, since: date, k: i
     return _disclosure_rows(conn, RECENT_DISCLOSURE_SQL, {
         "q": vector_literal(query_vec), "symbol": symbol, "since": since, "k": k, "floor": floor,
         "event_floor": floor if event_floor is None else event_floor, "subsidiary": include_subsidiary}, symbol)
+
+
+# 제목 맨 앞의 [단독]·따옴표·괄호는 건너뛰고 회사 이름을 본다. 이름 뒤는 구분 기호나 조사+공백이어야 한다 ("대상자"를 "대상"으로 읽지 않게)
+_LEAD = re.compile(r"^(?:\s*\[[^\]]*\]|\s*【[^】]*】)*[\s“”\"'‘’「『(]*")
+_AFTER = re.compile(r"(?:[,·…:\s'\"’”]|(?:가|이|는|은|의|도|와|과|에)[\s,])")
+
+
+# 3글자 미만 이름("SK", "대상", "한화")은 시장 기사 제목과 잘못 겹칠 수 있어 빼는 근거로 쓰지 않는다
+MIN_NAME_CHARS = 3
+
+
+def lead_company(title: str, names: list[str], presorted: bool = False) -> str:
+    """제목이 회사 이름으로 시작하면 그 이름 ("파트론, 내년 …" → 파트론). names는 긴 이름부터 본다. 없으면 빈 문자열."""
+    head = title[_LEAD.match(title).end():]
+    for name in (names if presorted else sorted(names, key=len, reverse=True)):
+        if len(name) >= MIN_NAME_CHARS and head.startswith(name) and _AFTER.match(head, len(name)):
+            return name
+    return ""
+
+
+def drop_other_company_news(cands: list[Candidate], company: str, names: list[str],
+                            aliases: list[str] = ()) -> tuple[list[Candidate], list[Candidate]]:
+    """다른 상장사 이름으로 시작하고 추적 종목 이름이 제목에 없는 기사를 뺀다. (남긴 후보, 뺀 기사).
+    2026-11-06 "파트론, 내년 스마트폰 수요 부진에 실적 역성장 전망" 기사의 파트론 순이익(-44억9000만원)을 삼성전자 것처럼 쓴
+    카드가 검수 호출을 통과했다 (검수는 실행마다 결과가 달라 이 유형을 꾸준히 막지 못한다). 환율·업황 기사는 제목에 회사명이 없어 남는다.
+    aliases(네이버, 삼전 …)는 남기는 쪽으로만 쓴다: 제목에 있으면 추적 종목 기사로 본다. 맨 앞 회사 이름 안에 든 별칭은 세지 않는다
+    ("삼성전기, …"의 "삼성"은 삼성전자 기사라는 뜻이 아니다)."""
+    if not company:
+        return list(cands), []
+    own = [company, *aliases]
+    ordered = sorted({n for n in names if len(n) >= MIN_NAME_CHARS}, key=len, reverse=True)
+    kept, dropped = [], []
+    for c in cands:
+        lead = lead_company(c.title, ordered, presorted=True) if c.kind == "news" else ""
+        rest = c.title.replace(lead, " ") if lead else c.title
+        (dropped if lead and lead not in own and not any(n in rest for n in own) else kept).append(c)
+    return kept, dropped
+
+
+def listed_names(path) -> list[str]:
+    """DART corpCode.xml에서 종목코드가 있는 회사 이름 (코스피·코스닥·코넥스, 상장폐지 회사도 섞여 있다). 파일이 없으면 빈 목록.
+    disclosures.dart.load_corp_codes는 {종목코드: 고유번호}만 돌려줘 이름을 따로 읽는다."""
+    import xml.etree.ElementTree as ET
+    from pathlib import Path
+
+    path = Path(path)
+    if not path.is_file():
+        return []
+    names = []
+    for _, el in ET.iterparse(path):
+        if el.tag == "list":
+            if (el.findtext("stock_code") or "").strip() and (el.findtext("corp_name") or "").strip():
+                names.append(el.findtext("corp_name").strip())
+            el.clear()
+    return names

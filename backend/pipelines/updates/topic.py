@@ -37,19 +37,21 @@ def _repair_prompt(prompt: str, raw: str, codes: list[str], cfg: dict) -> str:
             "같은 근거만 사용하고 새 사실이나 숫자는 넣지 말고, 규칙을 지켜 JSON 하나로 다시 작성하세요. 문장은 줄이거나 나눠서 쓰세요.")
 
 
-def _verify(card, evidence, call: Callable[[str], str], company: str = "") -> list[str]:
-    """카드 문장이 근거로 뒷받침되는지 LLM에게 다시 묻는다. 빈 목록이면 통과.
+def _verify(card, evidence, call: Callable[[str], str], company: str = "",
+            item: str = "") -> tuple[list[str], list[str]]:
+    """카드 문장이 근거로 뒷받침되는지 LLM에게 다시 묻는다. (실패 코드, 막은 문장과 이유). 코드가 비면 통과.
     응답을 읽을 수 없으면 통과시키지 않는다 ("틀릴 바엔 말하지 않는다")."""
     try:
-        raw = call(build_verify_prompt(card, evidence, company))
+        raw = call(build_verify_prompt(card, evidence, company, item))
     except CreditsExhausted:
         raise
     except Exception as exc:
-        return [f"VERIFY_CALL_FAILED:{type(exc).__name__}"]
-    flags = parse_verify(raw, len(card.summary))
-    if flags is None:
-        return ["VERIFY_PARSE"]
-    return [] if all(flags) else ["VERIFY_UNSUPPORTED"]
+        return [f"VERIFY_CALL_FAILED:{type(exc).__name__}"], []
+    rows = parse_verify(raw, len(card.summary))
+    if rows is None:
+        return ["VERIFY_PARSE"], [raw[:300]]
+    notes = [f"{s} → {why or '(이유 없음)'}" for s, (ok, why) in zip(card.summary, rows) if not ok]
+    return (["VERIFY_UNSUPPORTED"] if notes else []), notes
 
 
 def thresholds(cfg: dict) -> tuple[dict[str, float], dict[str, float]]:
@@ -124,9 +126,11 @@ def check_topic(item: TrackingItem, candidates: list[Candidate], call: Callable[
     if codes:
         return replace(codes, card, retried=retried)
     if cfg.get("verify_call"):                                 # 코드 검사를 통과한 카드만 검수한다 (호출 +1)
-        vcodes = _verify(card, evidence, call, item.company_name or item.symbol)
+        vcodes, notes = _verify(card, evidence, call, item.company_name or item.symbol, item.description)
         if vcodes:
-            return replace(vcodes, card, retried=retried)
+            out = replace(vcodes, card, retried=retried)
+            out.verify_notes = notes
+            return out
     by_id = {e.eid: e for e in evidence}
     sources = [(by_id[sid].candidate.ref, fact) for sid, fact in card.evidence]
     kinds = {by_id[sid].candidate.kind for sid, _ in card.evidence}

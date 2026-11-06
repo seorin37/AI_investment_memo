@@ -96,3 +96,4 @@ class TopicOutcome:
     draft: UpdateDraft | None = None
     raw: str = ""                    # LLM 원문 (형식 오류 원인을 보려고 보고서에 남긴다)
     retried: bool = False            # 형식 오류로 한 번 다시 요청했는지
+    verify_notes: list[str] = field(default_factory=list)   # 검수 호출이 막은 문장과 이유 (보고서용)
