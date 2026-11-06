@@ -40,3 +40,5 @@ samples/
 
 # 금융사 비율 추출 결과 (run_financial_ratios)
 data/financials_ratios/
+data/periodic_updates/
+data/periodic_updates_test/
