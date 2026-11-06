@@ -6,7 +6,7 @@
   python -m backend.pipelines.news.cluster_eval add-colbert eval/news_dedup/boundary_pairs_v2.csv  # ColBERT 점수 칸 채우기
   python -m backend.pipelines.news.cluster_eval compare eval/news_dedup/boundary_pairs_v2.csv   # dense·sparse·ColBERT 비교
   python -m backend.pipelines.news.cluster_eval llm eval/news_dedup/boundary_pairs_v2.csv \
-      --out eval/news_dedup/llm_check.csv                                                       # Gemini 판정 정확도 (외부 API)
+      --out eval/news_dedup/llm_check.csv                                                       # OpenAI 판정 정확도 (외부 API)
 
 뽑는 방법: 기사마다 24시간 안에서 가장 가까운 기사 몇 건을 찾고, dense 유사도가 0.60~0.95인 쌍만 남겨
 유사도 구간(0.05 단위)마다 같은 수를 고른다. 기준이 '같은 사건(엄격)'이라 0.80 이상에도 다른 사건이
@@ -356,9 +356,9 @@ def main(argv=None) -> int:
     ac.add_argument("path", type=Path)
     cp = sub.add_parser("compare", help="dense·sparse·ColBERT 중 어느 점수가 같은/다른 사건을 잘 가르는지 비교 (DB 없음)")
     cp.add_argument("path", type=Path)
-    lm = sub.add_parser("llm", help="애매 구간 쌍을 Gemini에 물어 사람 정답과 비교 (외부 API, 환경변수 GEMINI_API_KEY)")
+    lm = sub.add_parser("llm", help="애매 구간 쌍을 OpenAI에 물어 사람 정답과 비교 (외부 API, 환경변수 OPENAI_API_KEY)")
     lm.add_argument("path", type=Path)
-    lm.add_argument("--out", type=Path, help="쌍별 Gemini 답·이유를 저장할 CSV")
+    lm.add_argument("--out", type=Path, help="쌍별 OpenAI 답·이유를 저장할 CSV")
     lm.add_argument("--low", type=float, default=LLM_BAND[0])
     lm.add_argument("--high", type=float, default=LLM_BAND[1])
     lm.add_argument("--max-calls", type=int, default=60, help="최대 호출 수 (기본 60)")
@@ -387,7 +387,7 @@ def main(argv=None) -> int:
             print("LLM에 물을 쌍이 없습니다 (체크된 쌍 중 유사도 구간·규칙 통과).")
             return 1
         calls = min(len(rows), args.max_calls)
-        print(f"유사도 {args.low:.2f}~{args.high:.2f}, 규칙 통과 쌍 {len(rows)}개 → Gemini {calls}회 호출 예정 (외부 API)")
+        print(f"유사도 {args.low:.2f}~{args.high:.2f}, 규칙 통과 쌍 {len(rows)}개 → OpenAI {calls}회 호출 예정 (외부 API)")
         if not args.yes and input("진행할까요? [y/N] ").strip().lower() != "y":
             print("취소했습니다.")
             return 1
@@ -404,11 +404,11 @@ def main(argv=None) -> int:
         s = summarize_llm(results, args.path, threshold=args.low, llm_below=args.high)
         t = s["table"]
         print(f"\n쌍 {s['pairs']}개 — 답 못 받음 {s['unavailable']}개")
-        print("              Gemini same  Gemini different  답 없음")
+        print("              OpenAI same  OpenAI different  답 없음")
         for h in ("same", "different"):
             print(f" 사람 {h:<9} {t[(h, 'same')]:>8}  {t[(h, 'different')]:>12}  {t[(h, 'none')]:>8}")
         acc = f"{s['accuracy']:.1%}" if s["accuracy"] is not None else "-"
-        print(f"Gemini가 사람과 같은 답: {acc}")
+        print(f"OpenAI가 사람과 같은 답: {acc}")
         print(f"\n0.70 + 규칙 + LLM 전체: 묶이는 쌍 {s['merged']}개, 잘못 묶음 {s['false_merge']:.1%}, "
               f"놓친 같은 사건 {s['missed']:.1%}")
         print("(쌍 단위 계산이라 실제 묶음 결과와는 조금 다를 수 있다)")

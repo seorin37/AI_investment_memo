@@ -3,7 +3,7 @@
   python -m backend.pipelines.news.cluster_assigner                 # 미배정 기사 전부 배정
   python -m backend.pipelines.news.cluster_assigner --limit 200     # 200건만
   python -m backend.pipelines.news.cluster_assigner --report 15     # 배정 후 큰 묶음 15개 출력
-  python -m backend.pipelines.news.cluster_assigner --llm           # 애매한 묶음은 Gemini에 묻는다 (외부 API)
+  python -m backend.pipelines.news.cluster_assigner --llm           # 애매한 묶음은 OpenAI에 묻는다 (외부 API)
 테스트 DB에서는 scripts/with_test_db.sh 를 앞에 붙여 실행한다.
 
 흐름 (기사 1건마다, 한 트랜잭션)
@@ -266,7 +266,7 @@ def main(argv=None) -> int:
     ap.add_argument("--threshold", type=float, default=ClusterParams.threshold)
     ap.add_argument("--window-hours", type=int, default=24)
     ap.add_argument("--llm", action="store_true",
-                    help="애매한 묶음(최소 유사도 0.85 미만)은 Gemini에 묻는다. 외부 API, 환경변수 GEMINI_API_KEY 필요")
+                    help="애매한 묶음(최소 유사도 0.85 미만)은 OpenAI에 묻는다. 외부 API, 환경변수 OPENAI_API_KEY 필요")
     ap.add_argument("--llm-max-calls", type=int, default=300, help="이번 실행에서 LLM을 부를 최대 횟수 (넘으면 합류 안 함)")
     ap.add_argument("--report", type=int, metavar="N", help="배정 후 큰 묶음 N개를 출력")
     args = ap.parse_args(argv)

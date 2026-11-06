@@ -41,6 +41,7 @@ class Candidate:
     url: str | None
     source: str                       # 매체명 또는 "DART"
     similarity: float
+    doc: str = ""                     # 공시만: periodic(정기보고서) | event(수시공시). 임계값을 따로 쓴다
 
 
 @dataclass(frozen=True)

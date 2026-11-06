@@ -1,8 +1,9 @@
-"""Gemini 호출기 (메모 생성용) + 맥북 점검용 목업.
+"""OpenAI 호출기 (메모 생성용) + 맥북 점검용 목업.
 
-backend/pipelines/tracking/gemini.py와 같은 방식(REST + x-goog-api-key 헤더)으로 부르되,
-메모 생성에 필요한 것만 더했다: JSON 스키마 강제, 429를 '분당 한도'와 '일일 한도'로 구분,
-usage_metadata의 thinking 토큰 기록. API 키는 헤더로만 보내고 화면·파일에 남기지 않는다.
+backend/pipelines/tracking/openai_client.py와 같은 방식(Chat Completions REST + Authorization 헤더)으로 부르되,
+메모 생성에 필요한 것만 더했다: JSON 스키마 강제(Structured Outputs), 429를 '분당 한도'와 '일일 한도'로 구분,
+크레딧 소진(insufficient_quota)은 다시 시도해도 소용없으므로 바로 멈춤, usage의 reasoning 토큰 기록.
+API 키는 헤더로만 보내고 화면·파일에 남기지 않는다.
 """
 
 from __future__ import annotations
@@ -12,24 +13,27 @@ import os
 import re
 from dataclasses import asdict, dataclass
 
-URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+URL = "https://api.openai.com/v1/chat/completions"
 
-# 응답 스키마 (Gemini responseSchema, OpenAPI 부분집합)
+# 응답 스키마 (OpenAI Structured Outputs, strict 모드: 모든 object에 additionalProperties=false, 속성은 전부 required)
 MEMO_SCHEMA = {
-    "type": "OBJECT",
+    "type": "object",
     "properties": {
         "memos": {
-            "type": "ARRAY",
+            "type": "array",
             "items": {
-                "type": "OBJECT",
-                "properties": {"slot": {"type": "INTEGER"}, "memo_text": {"type": "STRING"}},
+                "type": "object",
+                "properties": {"slot": {"type": "integer"}, "memo_text": {"type": "string"}},
                 "required": ["slot", "memo_text"],
+                "additionalProperties": False,
             },
         }
     },
     "required": ["memos"],
+    "additionalProperties": False,
 }
-PING_SCHEMA = {"type": "OBJECT", "properties": {"ok": {"type": "BOOLEAN"}}, "required": ["ok"]}
+PING_SCHEMA = {"type": "object", "properties": {"ok": {"type": "boolean"}}, "required": ["ok"],
+               "additionalProperties": False}
 
 
 class LLMError(RuntimeError):
@@ -70,9 +74,13 @@ class Usage:
 
     @classmethod
     def from_metadata(cls, meta: dict | None) -> "Usage":
+        """OpenAI usage → Usage. completion_tokens에는 reasoning 토큰이 들어 있어서 빼고 output으로 센다
+        (그래야 입력 + 출력 + thinking = 합계가 된다)."""
         meta = meta or {}
-        return cls(int(meta.get("promptTokenCount") or 0), int(meta.get("candidatesTokenCount") or 0),
-                   int(meta.get("thoughtsTokenCount") or 0), int(meta.get("totalTokenCount") or 0))
+        reasoning = int((meta.get("completion_tokens_details") or {}).get("reasoning_tokens") or 0)
+        completion = int(meta.get("completion_tokens") or 0)
+        return cls(int(meta.get("prompt_tokens") or 0), max(completion - reasoning, 0), reasoning,
+                   int(meta.get("total_tokens") or 0))
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -104,78 +112,108 @@ def parse_json(text: str, schema: dict) -> dict:
     return data
 
 
+def _error(body: dict) -> dict:
+    err = (body or {}).get("error")
+    return err if isinstance(err, dict) else {}
+
+
 def _is_daily(body: dict) -> bool:
-    for d in (body.get("error") or {}).get("details") or []:
-        for v in d.get("violations") or []:
-            if "perday" in str(v.get("quotaId", "")).lower():
-                return True
-    return "per day" in str((body.get("error") or {}).get("message", "")).lower()
+    """분당(RPM·TPM)이 아니라 일일(RPD) 한도에 닿았는지 — OpenAI는 메시지에 'per day'가 들어간다."""
+    return "per day" in str(_error(body).get("message", "")).lower()
 
 
-def _retry_after(body: dict) -> float | None:
-    for d in (body.get("error") or {}).get("details") or []:
-        m = re.fullmatch(r"([\d.]+)s", str(d.get("retryDelay", "")))
-        if m:
-            return float(m.group(1))
+def _is_out_of_credit(body: dict) -> bool:
+    return "insufficient_quota" in (str(_error(body).get("code") or ""), str(_error(body).get("type") or ""))
+
+
+def _retry_after(res, body: dict) -> float | None:
+    header = (getattr(res, "headers", None) or {}).get("retry-after")
+    try:
+        if header is not None:
+            return float(header)
+    except (TypeError, ValueError):
+        pass
+    m = re.search(r"try again in ([\d.]+)\s*(ms|s)\b", str(_error(body).get("message", "")))
+    if m:
+        return float(m.group(1)) / (1000 if m.group(2) == "ms" else 1)
     return None
 
 
-class GeminiClient:
+class OpenAIClient:
     def __init__(self, api_key: str, model: str, cfg: dict, session=None):
         self._key = api_key
         self.model = model
         self.cfg = cfg
         self.session = session
+        self._temperature_ok = True    # 추론 계열 모델은 temperature를 받지 않는다 → 400이 오면 빼고 다시 보낸다
 
-    def generate(self, prompt: str, schema: dict, max_output_tokens: int | None = None) -> LLMResult:
+    def _body(self, prompt: str, schema: dict, max_output_tokens: int | None) -> dict:
+        body = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_completion_tokens": max_output_tokens or self.cfg.get("max_output_tokens", 8192),
+            "response_format": {"type": "json_schema",
+                                "json_schema": {"name": "response", "strict": True, "schema": schema}},
+        }
+        if self._temperature_ok:
+            body["temperature"] = self.cfg.get("temperature", 0.9)
+        return body
+
+    def _post(self, body: dict):
         import requests
 
         http = self.session or requests
-        body = {
-            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-            "generationConfig": {
-                "temperature": self.cfg.get("temperature", 0.9),
-                "maxOutputTokens": max_output_tokens or self.cfg.get("max_output_tokens", 8192),
-                "responseMimeType": "application/json",
-                "responseSchema": schema,
-            },
-        }
         try:
-            res = http.post(URL.format(model=self.model), headers={"x-goog-api-key": self._key}, json=body,
-                            timeout=self.cfg.get("timeout_sec", 120))
+            return http.post(URL, headers={"Authorization": f"Bearer {self._key}"}, json=body,
+                             timeout=self.cfg.get("timeout_sec", 120))
         except requests.RequestException as exc:
             raise RateLimited(f"네트워크 오류: {type(exc).__name__}") from exc
+
+    def generate(self, prompt: str, schema: dict, max_output_tokens: int | None = None) -> LLMResult:
+        res = self._post(self._body(prompt, schema, max_output_tokens))
         try:
             payload = res.json()
         except ValueError:
             payload = {}
+        if res.status_code == 400 and self._temperature_ok and "temperature" in str(_error(payload).get("message", "")).lower():
+            self._temperature_ok = False
+            res = self._post(self._body(prompt, schema, max_output_tokens))
+            try:
+                payload = res.json()
+            except ValueError:
+                payload = {}
         if res.status_code == 429:
+            if _is_out_of_credit(payload):
+                raise APIError("OpenAI 크레딧(쿼터) 부족 (HTTP 429 insufficient_quota)",
+                               "OpenAI 대시보드의 결제·크레딧 잔액을 확인한 뒤 같은 명령을 다시 실행하세요. 완료한 사람은 건너뜁니다.")
             if _is_daily(payload):
-                raise DailyQuotaExceeded("Gemini 일일 요청 한도 초과 (HTTP 429)")
-            raise RateLimited("Gemini 분당 한도 초과 (HTTP 429)", _retry_after(payload))
+                raise DailyQuotaExceeded("OpenAI 일일 요청 한도 초과 (HTTP 429)")
+            raise RateLimited("OpenAI 분당 한도 초과 (HTTP 429)", _retry_after(res, payload))
         if res.status_code >= 500:
-            raise RateLimited(f"Gemini 서버 오류 (HTTP {res.status_code})")
+            raise RateLimited(f"OpenAI 서버 오류 (HTTP {res.status_code})")
         if res.status_code in (401, 403):
-            raise APIError(f"Gemini 인증 실패 (HTTP {res.status_code})",
-                           ".env의 LLM_API_KEY가 맞는지, 키에 Gemini API 권한이 있는지 확인하세요.")
+            raise APIError(f"OpenAI 인증 실패 (HTTP {res.status_code})",
+                           ".env의 LLM_API_KEY가 맞는지, 키가 만료·삭제되지 않았는지 확인하세요.")
         if res.status_code == 404:
-            raise APIError("Gemini 모델을 찾을 수 없음 (HTTP 404)",
-                           ".env의 LLM_MODEL 이름을 확인하세요 (예: gemini-2.5-flash). 오타·공백이 없어야 합니다.")
+            raise APIError("OpenAI 모델을 찾을 수 없음 (HTTP 404)",
+                           ".env의 LLM_MODEL 이름을 확인하세요 (예: gpt-4.1-mini). 오타·공백이 없어야 하고 이 키로 쓸 수 있는 모델이어야 합니다.")
         if res.status_code != 200:
-            msg = str((payload.get("error") or {}).get("message", ""))[:200]
-            raise APIError(f"Gemini 요청 오류 (HTTP {res.status_code}) {msg}",
-                           "LLM_MODEL이 JSON 스키마 응답을 지원하는 모델인지 확인하세요. 계속되면 상규에게 오류 문구를 보내 주세요.")
-        cands = payload.get("candidates") or []
-        if not cands:
-            raise BadResponse(f"응답 후보 없음 (차단 사유: {payload.get('promptFeedback', {}).get('blockReason')})")
-        cand = cands[0]
-        text = "".join(p.get("text", "") for p in (cand.get("content") or {}).get("parts") or [] if not p.get("thought"))
-        if cand.get("finishReason") not in (None, "STOP"):
-            raise BadResponse(f"응답이 중간에 끊김 (finishReason={cand.get('finishReason')})")
-        return LLMResult(text, Usage.from_metadata(payload.get("usageMetadata")), self.model)
+            msg = str(_error(payload).get("message", ""))[:200]
+            raise APIError(f"OpenAI 요청 오류 (HTTP {res.status_code}) {msg}",
+                           "LLM_MODEL이 JSON 스키마 응답(Structured Outputs)을 지원하는 모델인지 확인하세요. 계속되면 상규에게 오류 문구를 보내 주세요.")
+        choices = payload.get("choices") or []
+        if not choices:
+            raise BadResponse("응답 후보 없음")
+        choice = choices[0]
+        message = choice.get("message") or {}
+        if message.get("refusal"):
+            raise BadResponse("모델이 응답을 거부함 (refusal)")
+        if choice.get("finish_reason") not in (None, "stop"):
+            raise BadResponse(f"응답이 중간에 끊김 (finish_reason={choice.get('finish_reason')})")
+        return LLMResult(message.get("content") or "", Usage.from_metadata(payload.get("usage")), self.model)
 
 
-def make_client(cfg: dict) -> "GeminiClient | MockLLM":
+def make_client(cfg: dict) -> "OpenAIClient | MockLLM":
     from .common import env_value
 
     llm_cfg = cfg["llm"]
@@ -185,7 +223,7 @@ def make_client(cfg: dict) -> "GeminiClient | MockLLM":
     if not key or not model:
         raise APIError(".env에 LLM_API_KEY 또는 LLM_MODEL이 없습니다.",
                        "python -m eval.memo_personas.preflight 를 먼저 실행해 안내대로 고치세요.")
-    return GeminiClient(key, model, llm_cfg)
+    return OpenAIClient(key, model, llm_cfg)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -199,7 +237,7 @@ def make_client(cfg: dict) -> "GeminiClient | MockLLM":
 #   crash_after:N           N번 호출 뒤 강제 중단(KeyboardInterrupt)
 # ─────────────────────────────────────────────────────────────
 SLOTS_BEGIN, SLOTS_END = "<<<SLOTS_JSON", "SLOTS_JSON>>>"
-MOCK_MODEL = "mock-gemini"
+MOCK_MODEL = "mock-openai"
 
 
 class MockLLM:

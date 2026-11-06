@@ -47,12 +47,12 @@ RSS 4개 매체 (30분마다) ──┐
 - **중복 묶음** (`clustering.py`, `cluster_assigner.py`, `same_event_judge.py`): 새 기사를 24시간 안의 기존 묶음에 붙인다(48시간은 다른 날의 일까지 묶여 2026-10-28 줄임). 한 번 정한 소속은 바꾸지 않는다. 브리핑·[부고]·[인사]·운세 같은 고정 꼭지는 항상 혼자 둔다. 결과는 `news_clusters`, `news_cluster_members`(`decided_by`에 무엇이 정했는지). 판정은 세 단계다 (v4, 2026-10-28).
   1. **유사도**: 묶음의 **모든** 기사와 dense 유사도 0.70 이상 (실험값)
   2. **규칙** (외부 요청 없음): 묶음 기사 중 하나라도 ① 발행일(한국 시간)이 다르거나 ② 제목의 시·도가 겹치지 않거나 ③ 제목의 금액(억·조)이 겹치지 않으면 합류하지 않는다. 지역·금액은 양쪽 제목에 다 있을 때만 비교한다. 다른 날 후속 기사(부캉이 나감 ↔ 돌아옴), 지역별 특보(경기 ↔ 강원 한파주의보 해제), 다른 회사 유상증자(17억 ↔ 7억)를 여기서 막는다.
-  3. **LLM** (`--llm`을 붙였을 때만): 최소 유사도가 0.85 미만인 애매한 묶음은 Gemini에 "같은 사건인가"를 묻는다. 기사 1건당 최대 2개 묶음, 한 번 실행에 최대 300회(`--llm-max-calls`). '다르다'거나 답을 못 받으면(오류·한도) 합류하지 않는다. 같은 날 다른 기관의 반응(PHP 결함 ↔ 미국·일본 대응), 전망 ↔ 결정(한은 동결 유력 ↔ 동결)처럼 규칙으로 못 가르는 경우를 맡는다. `--llm`이 없으면 규칙까지만 보고 합류한다.
-- LLM 키는 **환경변수 `GEMINI_API_KEY`**에서만 읽는다(모델은 `GEMINI_MODEL`, 기본 gemini-3.1-flash-lite). 저장소 루트 `.env`에 한 줄 넣거나 수집기 컨테이너의 환경변수로 넘긴다. 다른 기능이 쓰는 `LLM_API_KEY`와는 따로 읽는다. 테스트 DB(2,226건) 기준 LLM 판정 대상은 하루 150~300건쯤이다.
+  3. **LLM** (`--llm`을 붙였을 때만): 최소 유사도가 0.85 미만인 애매한 묶음은 OpenAI에 "같은 사건인가"를 묻는다. 기사 1건당 최대 2개 묶음, 한 번 실행에 최대 300회(`--llm-max-calls`). '다르다'거나 답을 못 받으면(오류·한도) 합류하지 않는다. 같은 날 다른 기관의 반응(PHP 결함 ↔ 미국·일본 대응), 전망 ↔ 결정(한은 동결 유력 ↔ 동결)처럼 규칙으로 못 가르는 경우를 맡는다. `--llm`이 없으면 규칙까지만 보고 합류한다.
+- LLM 키는 **환경변수 `OPENAI_API_KEY`**에서만 읽는다(모델은 `OPENAI_MODEL`, 기본 gpt-4.1-mini). 저장소 루트 `.env`에 한 줄 넣거나 수집기 컨테이너의 환경변수로 넘긴다. 다른 기능이 쓰는 `LLM_API_KEY`와는 따로 읽는다. 테스트 DB(2,226건) 기준 LLM 판정 대상은 하루 150~300건쯤이다.
 - 테이블은 `alembic/versions/0008_news_article_leads.py`, `0009_news_clusters.py`. **공시 적재 코드는 DB와 코드의 마이그레이션 버전이 같아야 돌므로, 이 코드를 합칠 때 중앙 DB에도 0008·0009를 같이 적용한다.**
 
     python -m backend.pipelines.news.cluster_assigner --report 10        # 미배정 기사 배정 + 큰 묶음 10개 출력 (유사도+규칙)
-    python -m backend.pipelines.news.cluster_assigner --llm --report 10  # 애매한 묶음은 Gemini 판정 (외부 API)
+    python -m backend.pipelines.news.cluster_assigner --llm --report 10  # 애매한 묶음은 OpenAI 판정 (외부 API)
     python -m backend.pipelines.news.pipeline hourly --embed --cluster --cluster-llm --loop 1800   # 수집기에서 상시 실행
     python -m backend.pipelines.news.lead_fetcher --dry-run --days 7     # 매체별 보충 대상 건수 (요청·쓰기 없음)
     scripts/with_test_db.sh python -m backend.pipelines.news.pipeline hourly --skip-rss --embed --fill-lead --cluster
@@ -67,8 +67,8 @@ RSS 4개 매체 (30분마다) ──┐
     python -m backend.pipelines.news.cluster_eval score eval/news_dedup/boundary_pairs_v2.csv    # 기준값별 결과
     python -m backend.pipelines.news.cluster_eval score eval/news_dedup/boundary_pairs_v2.csv --rules   # 규칙까지 적용한 결과
     python -m backend.pipelines.news.cluster_eval llm eval/news_dedup/boundary_pairs_v2.csv --out eval/news_dedup/llm_check.csv
-        # 0.70~0.85·규칙 통과 쌍만 Gemini에 물어 사람 정답과 비교 (외부 API, 호출 전 확인, 기본 최대 60회)
-        # Gemini 정확도와 '0.70 + 규칙 + LLM' 전체의 잘못 묶음·놓침을 보여 주고, 쌍별 답·이유를 --out에 저장
+        # 0.70~0.85·규칙 통과 쌍만 OpenAI에 물어 사람 정답과 비교 (외부 API, 호출 전 확인, 기본 최대 60회)
+        # OpenAI 정확도와 '0.70 + 규칙 + LLM' 전체의 잘못 묶음·놓침을 보여 주고, 쌍별 답·이유를 --out에 저장
 
 - **같은 사건** = 같은 일(누가·무엇을·언제)을 다룬 기사. 같은 발표·사고·판결·거래를 여러 매체가 쓴 속보, 같은 매체의 속보와 종합(1보·2보)은 같은 사건이다.
 - **다른 사건** = 같은 날·같은 종목·같은 주제라도 일이 다르면 다른 사건이다.
@@ -112,9 +112,21 @@ BGE-M3 hybrid 임베딩은 기사 1건에서 두 가지를 함께 만들어 `new
 | ② `enabled: true` | `lead_sources.yaml` | 전부 `false`. 사람이 직접 바꾼다 |
 | ③ `selector` | `lead_sources.yaml` | link 방식(한경·매경·연합)은 전부 `null`. `enabled: true`여도 비어 있으면 요청하지 않는다 |
 
-- 서울경제는 약관상 크롤링 금지라 네이버 검색 API(naver 방식)로만 보충한다. selector가 필요 없어서 ①②와 `.env`의 네이버 API 키만 있으면 호출하므로 주의한다.
-- `enabled`를 따로 두는 이유: (1) 서울경제(naver)는 selector가 없어 `enabled`가 유일한 스위치다. (2) 매체에서 연락이 오거나 403이 계속되거나 "이 매체는 빼자"는 결정이 나면, 찾아 둔 selector를 지우지 않고 `false`만 바꿔 바로 끌 수 있다(다시 켤 때 `--probe`를 다시 할 필요가 없다). 약관 문제가 정리되고 안정되면 `method: off` 하나로 끄는 방식으로 단순화할 수 있다.
-- `--probe`는 selector를 **찾기 위한** 명령이라 `enabled`와 상관없이 돈다. 대신 매번 요청 전에 확인을 묻고, `lead_sources.yaml`은 **고치지 않는다**(추천만 출력). selector와 `enabled`는 결과를 보고 사람이 적는다.
+- (2026-10-27) 서울경제는 약관상 크롤링 금지라 네이버 검색 API(naver 방식)로만 보충한다. selector가 필요 없어서 ①②와 `.env`의 네이버 API 키만 있으면 호출하므로 주의한다.
+- **2026-11-06 팀 재결정 (서울경제 원문 수집)**: 서울경제 이용약관 제11조의 크롤링 금지 조항을 인지한 상태에서, 비상업적 교육 프로젝트 범위에 한해 원문 수집을 진행한다.
+  - 원문은 내부 검색·요약 근거로만 사용하고 사용자 화면에 원문을 노출하지 않는다.
+  - 외부 배포·상업적 이용 전에는 이용 허락을 받거나 수집을 중단하고 저장된 원문을 삭제한다.
+  - 그래서 서울경제는 `method: link` + `fallback: naver`다. 요청 규칙(robots.txt, 수집기 User-Agent, 4초 간격, 403·429 멈춤)은 다른 매체와 같다. `selector`를 `--probe`로 확정하기 전까지는 원문을 요청하지 않고 지금처럼 naver 요약으로 보충한다.
+- **2026-11-06 확인 (연합뉴스)**: 연합뉴스 기사 하단 저작권 문구에 'AI 학습 및 활용 금지'가 있음. 팀 결정: 서울경제와 같은 범위(비상업적 교육 프로젝트, 원문은 내부 검색·요약 근거로만 사용하고 화면에 노출하지 않음, 외부 배포·상업적 이용 전 이용 허락을 받거나 수집 중단·원문 삭제)로 4개 매체 모두 원문 수집·임베딩을 진행한다. 연합뉴스도 `fallback: naver`를 두어 `fulltext_enabled: false`로 끄면 naver 요약으로 돌아간다.
+- ④ `fulltext_enabled` (매체별, 기본 true): link 매체가 원문 페이지를 요청할지. `false`면 실제 수집과 `--probe` 모두 원문을 요청하지 않고, `fallback: naver`가 있으면 naver 요약으로 돌아간다(없으면 그 매체는 보충하지 않는다). **서울경제는 이 값 하나만 `false`로 바꾸면 원문 수집이 멈춘다.**
+- 원문 저장 테이블을 만들 때(아직 없음) 지킬 점 — 매체별로 골라 지울 수 있어야 한다:
+  - 원문 행마다 매체를 바로 알 수 있게 `source_code`(news_sources.code) 또는 `source_id`를 두고 인덱스를 건다. `news_articles`를 거쳐야만 매체를 알 수 있게 하지 않는다.
+  - 부제목은 본문과 따로 `subtitle` 필드에 저장한다 (매일경제 `div.mid_title`, `subtitle_selector`). 유료 기사 여부는 `is_paywalled`로 남긴다 (한국경제 `div.box-cont`·`blockquote` 중 "유료|프리미엄" 문구가 있는 칸, `paywall_selectors`·`paywall_text`. `div.box-cont`는 편집자주에도 쓰여 문구로 가린다). 2026-11-06 팀 결정으로 유료·프리미엄 기사는 빼고 무료 기사만 받는다(`skip_paywalled: true`). 유료인지는 페이지를 받아 봐야 알 수 있어 요청은 한 번 가지만 저장하지 않고 `skipped`로 끝낸다.
+  - 어떤 방식으로 얻었는지(`fetch_method`: link / naver)와 수집 시각을 같이 남긴다. naver 요약은 원문이 아니므로 지울 범위를 나눌 수 있다.
+  - 서울경제 원문만 지우는 예: `DELETE FROM <원문 테이블> WHERE source_code = 'sedaily' AND fetch_method = 'link';` (임베딩·요약 등 원문에서 만든 파생 데이터도 같은 키로 찾을 수 있게 한다)
+  - `--probe --save-fixtures`로 받은 샘플 HTML은 `samples/<매체>/<매체>_N.html`에 매체별로 저장되고 커밋하지 않는다(`.gitignore`). 지울 때는 `samples/sedaily/`를 지운다.
+- `enabled`를 따로 두는 이유: (1) (2026-10-27 기준) 서울경제(naver)는 selector가 없어 `enabled`가 유일한 스위치였다. 2026-11-06부터 원문만 끄는 스위치는 `fulltext_enabled`다. (2) 매체에서 연락이 오거나 403이 계속되거나 "이 매체는 빼자"는 결정이 나면, 찾아 둔 selector를 지우지 않고 `false`만 바꿔 바로 끌 수 있다(다시 켤 때 `--probe`를 다시 할 필요가 없다). 약관 문제가 정리되고 안정되면 `method: off` 하나로 끄는 방식으로 단순화할 수 있다.
+- `--probe`는 selector를 **찾기 위한** 명령이라 `enabled`와 상관없이 돈다(`fulltext_enabled: false`인 매체는 돌지 않는다). 대신 매번 요청 전에 확인을 묻고, `lead_sources.yaml`은 **고치지 않는다**(추천만 출력). selector와 `enabled`는 결과를 보고 사람이 적는다.
 
 1. 대표님께 뉴스 이용 근거를 확인한다. (확인 전에는 아래를 실행하지 않는다)
 2. 매체별 본문 칸(selector) 찾기 — 그 매체에 robots.txt 1건 + 기사 3건만, 4초 간격으로 요청한다. 실행 전에 확인을 묻는다.
@@ -123,6 +135,9 @@ BGE-M3 hybrid 임베딩은 기사 1건에서 두 가지를 함께 만들어 `new
         python -m backend.pipelines.news.lead_fetcher --probe mk
         python -m backend.pipelines.news.lead_fetcher --probe yonhap
         python -m backend.pipelines.news.lead_fetcher --probe hankyung --selector "#articletxt"   # 특정 칸만 다시 확인
+        # 매체별 10건, 네이버 검색 originallink에서 고르고 HTML 저장 + 기사×selector CSV (서울경제 포함)
+        python -m backend.pipelines.news.lead_fetcher --probe sedaily --limit 10 --from-naver 증시 \
+            --save-fixtures samples/sedaily --report samples/report.csv
 
 3. 출력의 **추천** selector와 샘플 문장(기사 첫 문장인지, 메뉴·광고가 섞이지 않았는지)을 눈으로 확인한 뒤 `lead_sources.yaml`의 `selector`에 적고 `enabled: true`로 바꾼다. 서울경제는 `enabled: true`만 바꾼다.
 4. `lead_fetcher --dry-run`으로 대상 건수를 보고, `lead_fetcher`를 한 번 실행해 `news_article_leads`의 매체별 `status`(ok / failed)를 확인한다. failed가 많으면 3번으로 돌아간다.
@@ -145,7 +160,7 @@ BGE-M3 hybrid 임베딩은 기사 1건에서 두 가지를 함께 만들어 `new
 | embedder.py | BGE-M3 임베딩 -> news_embedding_variants. hybrid는 dense와 sparse를 한 번에 저장. 한 기사가 오류를 내도 나머지는 계속 처리한다 |
 | lead_fetcher.py, lead_sources.yaml | 요약 없는 기사의 리드 보충 (link: 기사 첫 문단 / naver: 검색 API description). `--probe`로 본문 칸 찾기 |
 | clustering.py | 중복 묶음 판정 규칙 (DB 없음): complete-link 0.70, 24시간, 최대 30건, 같은 날·지역·금액 규칙, LLM 판정 자리, 대표 선정, 고정 꼭지 단독 처리 |
-| same_event_judge.py | 애매한 묶음의 같은 사건 여부를 Gemini에 묻는다 (`GEMINI_API_KEY`, 실행당 호출 한도, 답 못 받으면 합류 안 함) |
+| same_event_judge.py | 애매한 묶음의 같은 사건 여부를 OpenAI에 묻는다 (`OPENAI_API_KEY`, 실행당 호출 한도, 답 못 받으면 합류 안 함) |
 | cluster_assigner.py | 미배정 기사를 발행 순서대로 묶음에 배정해 저장 (pgvector 후보 검색, advisory lock) |
 | cluster_eval.py | 묶음 기준값 평가: 경계 구간 쌍 CSV 내보내기(`export`), 사람 체크 결과로 기준값별 계산(`score`) |
 | scoring.py | dense / sparse / hybrid 점수 식 (가중치는 인자로 받는다) |

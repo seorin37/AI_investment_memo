@@ -29,7 +29,7 @@
 - **주가는 근거로 쓰지 않는다.** 주가는 결과이므로 공시·뉴스 카드에 섞지 않고, 사용자가 정한 가격 조건이 있을 때만 별도 "가격 카드"로 낸다.
 
 ## 4. 예상 결과물
-`PYTHONPATH=backend python -m pipelines.updates.experiment --llm none|gemini` 를 실행하면 `results/updates/run_<시각>/` 에 다음이 생긴다.
+`PYTHONPATH=backend python -m pipelines.updates.experiment --llm none|openai` 를 실행하면 `results/updates/run_<시각>/` 에 다음이 생긴다.
 
 | 파일 | 내용 |
 |---|---|
@@ -54,13 +54,13 @@
 - `INSERT/UPDATE/DELETE`, `commit`, `get_dsn`/`get_engine`(쓰기용) 호출이 패키지에 없는지 테스트(`ReadOnlyGuardTest`)가 소스를 검사한다.
 - `alembic/`, `alembic/sql/`, `db/` 는 한 글자도 수정하지 않았다. 새 테이블·컬럼·마이그레이션도 만들지 않았다.
 - 결과 파일은 `results/` 아래에만 쓴다. (`.gitignore`에 `results/`를 추가할지는 팀 결정)
-- 외부로 나가는 건 `--llm gemini`일 때의 Gemini API 호출뿐이다 (토큰 비용 발생). `--llm none`은 비용이 없다.
+- 외부로 나가는 건 `--llm openai`일 때의 OpenAI API 호출뿐이다 (토큰 비용 발생). `--llm none`은 비용이 없다.
 
 ## 6. 아직 없는 것 / 확인되지 않은 것
 - 카드를 DB(`tracking_updates`, `update_sources`)에 쓰는 코드, 하루 한 번 도는 실행기, 크레딧 장부·차감
 - 재무 근거, "공시와 숫자가 다르면 공시 우선" 로직, 뉴스 묶음 기준의 정식 값(지금은 제목 글자 유사도 임시값)
 - 즉답 결과를 저장할 테이블 (팀 질문 Q3)
-- 실제 DB·Gemini에 대한 실행: 후보 검색 SQL, 가격 조회 SQL, `experiment` CLI는 이 환경에서 돌려 보지 못했다. 테스트는 가짜 LLM·가짜 후보로만 통과했다.
+- 실제 DB·OpenAI에 대한 실행: 후보 검색 SQL, 가격 조회 SQL, `experiment` CLI는 이 환경에서 돌려 보지 못했다. 테스트는 가짜 LLM·가짜 후보로만 통과했다.
 - 임계값(`min_similarity` 0.5, `related_news_min_similarity` 0.6, `near_pct` 3.0)은 모두 임시값이다. 첫 실험의 유사도 분포를 보고 정한다.
 
 ## 7. 임계값 정하는 순서 (사람 표시를 최소화하는 방법)
@@ -68,7 +68,7 @@
 ```bash
 # 1) 후보 전체를 뽑는다 (비용 없음). 표본은 후보 100건 이상(주제 항목 10개 이상)
 PYTHONPATH=backend python -m pipelines.updates.experiment --llm none --limit 30
-# 2) LLM이 후보마다 O/X를 자동 표시한다 (Gemini 호출: 항목 수만큼). 사람 표시 열은 그대로, 'LLM관련(O/X)' 열이 채워진 candidates_auto.csv가 생긴다
+# 2) LLM이 후보마다 O/X를 자동 표시한다 (OpenAI 호출: 항목 수만큼). 사람 표시 열은 그대로, 'LLM관련(O/X)' 열이 채워진 candidates_auto.csv가 생긴다
 PYTHONPATH=backend python -m pipelines.updates.autolabel --labels results/updates/run_*/candidates.csv
 # 3) (선택, 권장) 사람이 candidates_auto.csv의 '관련(O/X)' 열에 30~50건만 표시한다 → LLM 표시와의 일치율이 나온다
 # 4) 다른 종목 자료로 하한선을 구한다 (비용 없음, DB 읽기 전용)
@@ -85,7 +85,7 @@ PYTHONPATH=backend python -m pipelines.updates.calibrate --labels results/update
   - LLM 표시는 정답이 아니다. 같은 계열 모델이 서비스 단계에서도 판정하므로 편향이 겹칠 수 있다. 3)의 일치율로 확인한다.
   - noise floor는 같은 종목 안의 관련 없는 자료를 못 거르고, 재현율은 알 수 없다. 업종이 다른 종목만 쓰는 게 기본이다 (stocks.sector는 general/financial 두 가지뿐이라 거칠다).
   - 표시한 후보는 검색 상위 k건 안에서만 정해진다. 검색에서 빠진 자료는 알 수 없다.
-  - `autolabel`, `noise_floor`의 DB·Gemini 실행은 아직 실제 환경에서 돌려 보지 못했다 (테스트는 가짜 호출로만).
+  - `autolabel`, `noise_floor`의 DB·OpenAI 실행은 아직 실제 환경에서 돌려 보지 못했다 (테스트는 가짜 호출로만).
 
 ## 8. 팀 LLM 프롬프트 지침 v1.0 반영 내용 (2026-10-27)
 - `configs/update_judge_prompt.md`, `configs/update_instant_prompt.md`는 지침서의 시스템 프롬프트를 그대로 옮겼다. 지침이 바뀌면 이 파일만 교체한다.
@@ -94,5 +94,5 @@ PYTHONPATH=backend python -m pipelines.updates.calibrate --labels results/update
 - `no_update`는 6개 키가 모두 있고 title·reason이 비며 summary·evidence가 빈 배열이어야 한다. 아니면 형식 실패로 본다.
 - 금지 표현 사전은 지침 3-3 초기 사전 21개다. "매수"·"매도" 단독은 넣지 않았다 (자기주식 매수 같은 공시 사실을 막기 때문). 시제 패턴(`topic.banned_patterns`)은 예측·단정 표현을 막되, "~라고 밝혔어요"처럼 회사 발언을 전달하는 문장에는 적용하지 않는다.
 - 구현하지 않은 것: 검사 10(뉴스·공시 충돌 시 공시 사용 확인), 검사 11(연결·별도 섞임 확인), 재무 근거([재무]) 카드와 재무 고정 문구. 근거 DB에 연결/별도 구분이 없어 입력 템플릿에서도 그 줄을 뺐다.
-- Gemini `responseSchema`는 지침서 스키마에서 `additionalProperties`·`maxLength`를 뺀 형태로 만들었다 (API 수용 여부 미확인). 길이·형식은 코드가 검사한다. 기본은 꺼 둔다.
+- `--response-schema`는 OpenAI Structured Outputs(`json_schema`, strict)로 보낸다. `judge.py`의 스키마를 `openai_schema.to_json_schema`가 변환하며 `maxItems` 같은 길이 제한은 뺀다 (실제 API 수용 여부 미확인). 길이·형식은 코드가 검사한다. 기본은 꺼 둔다.
 - 지침 5장의 미정 값(near 비율, 조건가 도달 후 처리, 즉시 답변 저장 구조, 뉴스 묶음 기준, 계산 지표 포함 여부)은 여전히 임시값이다.

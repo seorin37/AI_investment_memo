@@ -39,7 +39,7 @@ def test_db_connection_failure_guidance(monkeypatch, capsys, tmp_path):
     monkeypatch.setenv("LLM_MODEL", "m")
     monkeypatch.setenv("READONLY_DATABASE_URL", "")
     monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://user:topsecretpw@127.0.0.1:1/x")
-    monkeypatch.setattr(preflight, "check_gemini", lambda r, cfg: r.ok("Gemini 테스트 호출", "건너뜀(테스트)"))
+    monkeypatch.setattr(preflight, "check_llm", lambda r, cfg: r.ok("OpenAI 테스트 호출", "건너뜀(테스트)"))
     assert preflight.main() == 1
     out = capsys.readouterr().out
     assert "❌ DB 연결" in out and "DB 상태" in out and "topsecretpw" not in out

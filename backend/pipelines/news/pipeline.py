@@ -8,7 +8,7 @@
   python -m backend.pipelines.news.pipeline hourly --embed --fill-lead --cluster --loop 1800
       # 수집 -> 리드 보충(요약 없는 기사) -> 태깅·임베딩 -> 중복 묶음 배정
   python -m backend.pipelines.news.pipeline hourly --embed --cluster --cluster-llm --loop 1800
-      # 묶음 배정 때 애매한 묶음은 Gemini에 묻는다 (외부 API, 환경변수 GEMINI_API_KEY)
+      # 묶음 배정 때 애매한 묶음은 OpenAI에 묻는다 (외부 API, 환경변수 OPENAI_API_KEY)
   python -m backend.pipelines.news.pipeline hourly --embed --fill-lead --cluster --cluster-llm --loop 1800 --naver-every 7200
       # 30분마다 RSS 수집, 2시간마다 네이버 종목 기사 보강(최근 3시간분)까지 한 프로세스가 같이 돈다
 설정은 .env(DATABASE_URL 또는 POSTGRES_*)에서 읽는다.
@@ -125,7 +125,7 @@ def collect_naver(hours: float) -> int:
 
 def assign_clusters(dsn: str, variant: str, llm: bool = False) -> dict | None:
     """임베딩이 끝난 기사를 중복 묶음에 배정. 실패해도 기사·임베딩에는 영향이 없다.
-    llm=True면 애매한 묶음은 Gemini에 묻는다 (환경변수 GEMINI_API_KEY)."""
+    llm=True면 애매한 묶음은 OpenAI에 묻는다 (환경변수 OPENAI_API_KEY)."""
     import psycopg
     from .cluster_assigner import assign_pending
     from .clustering import ClusterParams
@@ -271,7 +271,7 @@ def main(argv=None) -> int:
     ap.add_argument("--cluster", action="store_true",
                     help="임베딩 뒤 중복 묶음 배정 (daily는 종목 없는 기사도 임베딩)")
     ap.add_argument("--cluster-llm", action="store_true",
-                    help="--cluster의 애매한 묶음은 Gemini에 묻는다 (외부 API, 환경변수 GEMINI_API_KEY 필요)")
+                    help="--cluster의 애매한 묶음은 OpenAI에 묻는다 (외부 API, 환경변수 OPENAI_API_KEY 필요)")
     ap.add_argument("--skip-rss", action="store_true",
                     help="hourly: RSS 수집을 건너뜀 (테스트 DB에서 뒤 단계만 확인할 때)")
     ap.add_argument("--naver-every", type=int, default=0, metavar="SECONDS",
@@ -289,8 +289,8 @@ def main(argv=None) -> int:
     if args.cluster_llm and not args.cluster:
         log.error("--cluster-llm은 --cluster와 함께 써야 합니다.")
         return 1
-    if args.cluster_llm and not os.getenv("GEMINI_API_KEY"):
-        log.error("--cluster-llm에는 환경변수 GEMINI_API_KEY가 필요합니다.")
+    if args.cluster_llm and not os.getenv("OPENAI_API_KEY"):
+        log.error("--cluster-llm에는 환경변수 OPENAI_API_KEY가 필요합니다.")
         return 1
     if args.naver_every and not (args.job == "hourly" and args.loop):
         log.error("--naver-every는 hourly --loop와 함께 써야 합니다.")

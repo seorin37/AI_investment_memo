@@ -40,8 +40,8 @@
 
 ## B. 4단계 메모 생성 도구 (인계용)
 
-### B-1. Gemini는 레포 방식(REST + requests)으로, 새 패키지 없이
-- `backend/pipelines/tracking/gemini.py`와 같은 엔드포인트·헤더(`x-goog-api-key`)를 쓰는 작은 클라이언트를 `eval/memo_personas/llm.py`에 새로 만들었다.
+### B-1. OpenAI는 레포 방식(REST + requests)으로, 새 패키지 없이 (2026-10-29 Gemini에서 OpenAI로 교체)
+- `backend/pipelines/tracking/openai_client.py`와 같은 엔드포인트(Chat Completions)·헤더(`Authorization: Bearer`)를 쓰는 작은 클라이언트를 `eval/memo_personas/llm.py`에 새로 만들었다.
   기존 클래스를 그대로 쓰지 않은 이유: 429를 분당/일일로 나누지 않고, thinking 토큰을 기록하지 않으며, temperature 0·스키마 없음이 고정이라서다.
 - 실행에 필요한 패키지는 모두 environment.yml에 이미 있다(requirements.txt는 확인용 목록). 맥북 점검용 pgserver·pytest는 requirements-dev.txt로 분리했다.
   내 `.venv`에는 pgserver 0.1.4와 lint용 pyflakes를 추가 설치했다(레포 파일에는 영향 없음).
@@ -93,7 +93,7 @@
 
 ### B-8. 요청 한도 기본값
 - 분당 5회·하루 200회(무료 등급 가정, 100명+재생성 여유). 429(분당)는 서버가 준 retryDelay 또는 10·20·40·80·160초 대기 후 재시도,
-  그래도 안 되면 "10분 뒤 다시 실행" 안내 후 멈춘다. 일일 한도는 Gemini의 429(PerDay) 또는 로컬 횟수(PC 날짜 기준)로 판단한다.
+  그래도 안 되면 "10분 뒤 다시 실행" 안내 후 멈춘다. 일일 한도는 OpenAI의 429 중 메시지에 'per day'(RPD)가 든 경우 또는 로컬 횟수(PC 날짜 기준)로 판단한다. 크레딧 소진(`insufficient_quota`)은 기다려도 풀리지 않으므로 일일 한도와 구분해 바로 멈춘다.
 - `max_output_tokens`는 thinking 토큰 여유를 두고 16384로 했다. 모델마다 thinking 설정 이름이 달라 400 오류 위험이 있어 thinking 설정은 넣지 않았다.
 
 ### B-9. 파일럿 10명 선택
