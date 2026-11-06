@@ -16,6 +16,8 @@
 - 정정공시면 정정일자·정정사유·원래 공시 제출일을 correction에 따로 담는다.
 
 parse_status: ok (required 모두 있음) · partial (일부 없음 또는 형식 오류) · failed (원문 파싱 실패)
+  required가 비었어도 원문에 원래 값이 없는 공시는 ok이고 fields.note에 사유를 남긴다 (expected_missing_note):
+  monthly_operating(월간 판매 실적) · amount_withheld(금액 공시유보).
 """
 
 from __future__ import annotations
@@ -155,6 +157,8 @@ class ExtractResult:
     missing: list[str] = field(default_factory=list)  # required인데 못 찾았거나 값이 없는 필드
     errors: list[str] = field(default_factory=list)  # 형식 오류 (숫자·날짜로 못 바꿈)
     correction: dict = field(default_factory=dict)
+    note: str | None = None  # 원문에 원래 값이 없는 경우 (NOTES 키): monthly_operating · amount_withheld
+    explained: list[str] = field(default_factory=list)  # note 때문에 비어 있는 것이 정상인 required
 
 
 def _convert(rule: FieldRule, raw: str, values: dict):
@@ -240,5 +244,33 @@ def extract_fields(event_type: str, pairs: list[Pair], rules: EventFieldRules) -
         group for group in rules.required.get(event_type, [])
         if all(values.get(name) is None for name in group.split("|"))
     ]
+    note = expected_missing_note(event_type, values, pairs) if missing and not errors else None
+    if note:
+        # 원문에 원래 값이 없는 공시 — 실패(partial)가 아니라 ok + 사유 표시
+        values["note"] = note
+        return ExtractResult(values, "ok", [], [], extract_correction(pairs), note=note, explained=missing)
     status = "partial" if missing or errors else "ok"
     return ExtractResult(values, status, missing, errors, extract_correction(pairs))
+
+
+NOTES = {
+    "monthly_operating": "월간 판매·영업 실적 공시 — 매출액·영업이익 칸을 비우고 판매대수·판매량 등 회사 기준 실적을 적음",
+    "amount_withheld": "금액 공시유보 — 계약상 비밀유지 등으로 금액을 나중에 공개",
+}
+WITHHELD_RE = re.compile(r"공시유보관련내용>유보사유$")
+
+
+def expected_missing_note(event_type: str, values: dict, pairs: list[Pair]) -> str | None:
+    """required가 비었지만 원문에 원래 값이 없는 경우의 표시. 해당 없으면 None.
+
+    - amount_withheld: `공시유보 관련내용 > 유보사유`에 사유가 적혀 있음 (모든 종류)
+    - monthly_operating: 잠정실적인데 대상 기간이 한 달 이하 (월간 판매 실적 공시는 표준 표를 비워 둔다)
+    """
+    for pair in pairs:
+        if WITHHELD_RE.search(compact(pair.path)) and compact(pair.value) not in EMPTY_VALUES:
+            return "amount_withheld"
+    if event_type == "prelim_earnings" and values.get("period_start") and values.get("period_end"):
+        days = (date.fromisoformat(values["period_end"]) - date.fromisoformat(values["period_start"])).days
+        if 0 <= days <= 31:
+            return "monthly_operating"
+    return None
