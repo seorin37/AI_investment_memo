@@ -1,4 +1,5 @@
 """리드 보충 테스트. 네트워크 없이 가짜 응답·가짜 시계로 요청 규칙과 추출을 확인한다."""
+import csv
 from dataclasses import replace
 
 import pytest
@@ -234,6 +235,82 @@ def test_probe_with_given_selector_only():
     rows, fetched, _ = lf.probe(["https://www.hankyung.com/a/1"], cfg().sources["hankyung"], cfg(), get,
                                 selectors=["#articletxt"], sleep=lambda s: None)
     assert [r.selector for r in rows] == ["#articletxt"] and rows[0].hits == 1
+
+
+def test_probe_fetch_log_and_report(tmp_path):
+    get = http({"https://www.hankyung.com/a/1": Resp(200, MENU_HTML), "https://www.hankyung.com/a/2": Resp(429)})
+    fetches = []
+    lf.probe(["https://www.hankyung.com/a/1", "https://www.hankyung.com/a/2", "https://www.hankyung.com/a/3"],
+             cfg().sources["hankyung"], cfg(), get, sleep=lambda s: None, save_dir=tmp_path / "html", fetch_log=fetches)
+    assert [(f.robots, f.http_status, f.stopped) for f in fetches] == [("허용", 200, False), ("허용", 429, True)]
+    assert fetches[0].file.endswith("hankyung_1.html")
+    report = tmp_path / "report.csv"
+    n = lf.write_probe_report(report, cfg().sources["hankyung"], cfg(), fetches, ["#articletxt", "div.nope"])
+    assert n == 3                                                   # 받은 기사 1건 × selector 2 + 멈춘 기사 1줄
+    rows = list(csv.DictReader(report.open(encoding="utf-8-sig")))
+    assert [(r["selector"], r["성공"]) for r in rows[:2]] == [("#articletxt", "O"), ("div.nope", "X")]
+    assert int(rows[0]["원문_글자수"]) >= int(rows[0]["본문_글자수"]) > 40
+    assert rows[2]["멈춤_403_429"] == "예" and rows[2]["http_status"] == "429"
+    lf.write_probe_report(report, cfg().sources["hankyung"], cfg(), fetches[:1], ["#articletxt"])   # 덧붙일 때 머리줄 없음
+    assert report.read_text(encoding="utf-8-sig").count("매체,url") == 1
+
+
+def test_naver_probe_urls_keeps_media_domains_with_subdomains():
+    calls = []
+
+    def fetch(query, start):
+        calls.append(query)
+        return {"items": [{"originallink": "https://www.hankyung.com/a/1"}, {"originallink": "https://www.mk.co.kr/b"},
+                          {"originallink": "https://plus.hankyung.com/c"}, {"originallink": "https://www.hankyung.com/a/1"}]}
+    assert lf.naver_probe_urls(fetch, ["증시", "환율"], ("hankyung.com",), 10) == \
+        ["https://www.hankyung.com/a/1", "https://plus.hankyung.com/c"]
+    assert lf.naver_probe_urls(fetch, ["증시", "환율"], ("hankyung.com",), 1) == ["https://www.hankyung.com/a/1"]
+
+
+def test_body_text_keeps_whole_article_and_lead_unchanged():
+    html = "<div id='b'>첫 문장입니다. 둘째 문장입니다. 셋째 문장입니다. 넷째 문장입니다.<figure>사진 설명</figure></div>"
+    assert lf.body_text(html, "#b") == "첫 문장입니다. 둘째 문장입니다. 셋째 문장입니다. 넷째 문장입니다."
+    assert lf.extract_lead(html, "#b", min_chars=1) == "첫 문장입니다. 둘째 문장입니다. 셋째 문장입니다."
+    assert lf.raw_text_chars(html, "#b") > len(lf.body_text(html, "#b"))   # 사진 설명까지 센다
+    assert lf.body_text(html, "#none") is None
+
+
+SEDAILY_LINK = SourceConfig("sedaily", "link", True, ("sedaily.com",), "div.article_view", fallback="naver")
+
+
+def test_fulltext_disabled_sends_no_page_request_and_falls_back_to_naver():
+    item = PendingItem(1, "sedaily", "삼성전자 실적", "https://www.sedaily.com/a/1")
+    get = http({})
+    searched = []
+    naver = lambda q: searched.append(q) or [{"originallink": item.url, "description": "삼성전자가 3분기 실적을 발표했다. " * 3}]
+    on = cfg(sedaily=SEDAILY_LINK)
+    results, _ = fetch_leads([item], on, get, naver, sleep=lambda s: None)
+    assert results[0].source == "link" and get.calls and not searched     # 원문 허용 + selector 확정 → link
+    off = cfg(sedaily=replace(SEDAILY_LINK, fulltext_enabled=False))
+    get = http({})
+    results, _ = fetch_leads([item], off, get, naver, sleep=lambda s: None)
+    assert get.calls == [] and results[0].source == "naver" and searched  # 원문 요청 없이 naver 요약
+    no_fallback = cfg(sedaily=replace(SEDAILY_LINK, fulltext_enabled=False, fallback=None))
+    get = http({})
+    results, stats = fetch_leads([item], no_fallback, get, naver, sleep=lambda s: None)
+    assert get.calls == [] and results == [] and stats.not_ready_sources == ["sedaily"]
+    pending = cfg(sedaily=replace(SEDAILY_LINK, selector=None))                  # selector 확정 전 → naver
+    assert pending.sources["sedaily"].active_method == "naver" and pending.sources["sedaily"].can_probe
+
+
+def test_probe_cli_refuses_when_fulltext_disabled(monkeypatch):
+    monkeypatch.setattr(lf, "load_config", lambda: cfg(sedaily=replace(SEDAILY_LINK, fulltext_enabled=False)))
+    monkeypatch.setattr("backend.pipelines.common.db.load_env", lambda: None)
+    monkeypatch.setattr(lf, "_requests_get", lambda ua: pytest.fail("fulltext_enabled: false면 요청하면 안 됨"))
+    monkeypatch.setattr("builtins.input", lambda prompt: pytest.fail("묻기 전에 멈춰야 함"))
+    assert lf.main(["--probe", "sedaily", "--url", "https://www.sedaily.com/a/1"]) == 1
+
+
+def test_real_config_sedaily_link_with_naver_fallback():
+    src = load_config().sources["sedaily"]
+    assert (src.method, src.fallback, src.can_probe) == ("link", "naver", True)
+    assert src.active_method == ("link" if src.selector else "naver")             # selector 확정 전엔 naver 요약
+    assert src.probe_selectors and lf.probe_candidates(src)[:len(src.probe_selectors)] == list(src.probe_selectors)
 
 
 def test_probe_cli_asks_before_sending(monkeypatch, capsys):

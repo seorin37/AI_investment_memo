@@ -3,6 +3,8 @@
   python -m backend.pipelines.news.lead_fetcher --dry-run     # 보충 대상 건수만 확인 (요청·쓰기 없음)
   python -m backend.pipelines.news.lead_fetcher               # 보충 실행 (lead_sources.yaml에서 켠 매체만)
   python -m backend.pipelines.news.lead_fetcher --probe hankyung   # 본문 칸(selector) 찾기: 기사 3건만 요청
+  python -m backend.pipelines.news.lead_fetcher --probe mk --limit 10 --from-naver 증시 \
+      --save-fixtures samples/mk --report samples/report.csv       # 네이버 검색 원본 링크 10건, HTML 저장 + CSV
 설정은 lead_sources.yaml. 2026-10-27 현재 모든 매체가 꺼져 있어 실행해도 요청을 보내지 않는다.
 
 흐름
@@ -54,11 +56,28 @@ class SourceConfig:
     domains: tuple[str, ...] = ()
     selector: str | None = None
     drop_selectors: tuple[str, ...] = ()
+    fulltext_enabled: bool = True     # link 방식에서 원문 페이지를 요청할지. false면 원문을 요청하지 않는다
+    fallback: str | None = None       # 원문을 쓸 수 없을 때(fulltext_enabled false 또는 selector 미확정) 쓸 방식 (naver)
+    probe_selectors: tuple[str, ...] = ()   # --probe에서 기본 후보 앞에 더 볼 selector (확정 전 후보)
+
+    @property
+    def active_method(self) -> str | None:
+        """지금 실제로 쓰는 방식. link는 원문 허용 + selector 확정일 때만, 아니면 fallback, 둘 다 없으면 None."""
+        if self.method == "link" and self.fulltext_enabled and self.selector:
+            return "link"
+        if self.method == "naver" or self.fallback == "naver":
+            return "naver"
+        return None
 
     @property
     def ready(self) -> bool:
-        """켜져 있고, link라면 본문 선택자까지 확정된 상태."""
-        return self.enabled and (self.method == "naver" or bool(self.selector))
+        """켜져 있고 쓸 방식이 있는 상태 (link라면 원문 허용 + 본문 선택자 확정)."""
+        return self.enabled and self.active_method is not None
+
+    @property
+    def can_probe(self) -> bool:
+        """--probe로 원문을 요청해도 되는 매체 (link 방식이고 fulltext_enabled). selector 확정은 필요 없다."""
+        return self.method == "link" and self.fulltext_enabled
 
 
 @dataclass(frozen=True)
@@ -82,10 +101,14 @@ def load_config(path: Path = CONFIG_PATH) -> LeadConfig:
     for code, s in (raw.get("sources") or {}).items():
         if s.get("method") not in METHODS:
             raise ValueError(f"{code}: method는 {METHODS} 중 하나여야 합니다")
+        if s.get("fallback") not in (None, "naver"):
+            raise ValueError(f"{code}: fallback은 비우거나 naver여야 합니다")
         sources[code] = SourceConfig(
             code=code, method=s["method"], enabled=bool(s.get("enabled", False)),
             domains=tuple(s.get("domains") or ()), selector=s.get("selector") or None,
-            drop_selectors=tuple(s.get("drop_selectors") or ()))
+            drop_selectors=tuple(s.get("drop_selectors") or ()),
+            fulltext_enabled=bool(s.get("fulltext_enabled", True)), fallback=s.get("fallback") or None,
+            probe_selectors=tuple(s.get("probe_selectors") or ()))
     config = LeadConfig(
         sources=sources, interval=float(raw.get("request_interval_seconds", 4)),
         max_attempts=int(raw.get("max_attempts", 3)), max_chars=int(raw.get("lead_max_chars", 300)),
@@ -106,9 +129,8 @@ _SENTENCE_RE = re.compile(r"(?<=[.!?])\s+")
 _REMOVE_TAGS = "script, style, figure, figcaption, table, iframe, noscript"
 
 
-def extract_lead(html: str, selector: str, drop_selectors: Iterable[str] = (),
-                 max_chars: int = 300, min_chars: int = 40) -> str | None:
-    """본문 칸(selector)에서 첫 2~3문장을 max_chars자 안으로 뽑는다. 못 찾거나 너무 짧으면 None."""
+def body_text(html: str, selector: str, drop_selectors: Iterable[str] = ()) -> str | None:
+    """본문 칸(selector)의 글 전체 (사진·표·스크립트, 이메일·저작권 줄, 머리말 제거). 칸이 없으면 None."""
     from bs4 import BeautifulSoup   # 리드 보충을 쓸 때만 필요하다
 
     soup = BeautifulSoup(html, "lxml")
@@ -122,7 +144,23 @@ def extract_lead(html: str, selector: str, drop_selectors: Iterable[str] = (),
         line = clean_text(raw)
         if line and not _EMAIL_RE.search(line) and not _NOISE_RE.search(line):
             lines.append(line)
-    text = _BYLINE_RE.sub("", " ".join(lines).lstrip(" ·•|"), count=1).strip()
+    return _BYLINE_RE.sub("", " ".join(lines).lstrip(" ·•|"), count=1).strip()
+
+
+def raw_text_chars(html: str, selector: str) -> int | None:
+    """본문 칸을 아무것도 지우지 않고 읽었을 때의 글자 수 (body_text와의 차이 = 지운 잡음의 양). 칸이 없으면 None."""
+    from bs4 import BeautifulSoup
+
+    node = BeautifulSoup(html, "lxml").select_one(selector)
+    return None if node is None else len(clean_text(node.get_text(" ")) or "")
+
+
+def extract_lead(html: str, selector: str, drop_selectors: Iterable[str] = (),
+                 max_chars: int = 300, min_chars: int = 40) -> str | None:
+    """본문 칸(selector)에서 첫 2~3문장을 max_chars자 안으로 뽑는다. 못 찾거나 너무 짧으면 None."""
+    text = body_text(html, selector, drop_selectors)
+    if text is None:
+        return None
     lead = ""
     for sentence in _SENTENCE_RE.split(text)[:3]:
         candidate = f"{lead} {sentence}".strip()
@@ -263,12 +301,13 @@ def fetch_leads(items: Iterable[PendingItem], config: LeadConfig, http_get: Http
     stats = FetchStats()
     for code, group in by_source.items():
         src = config.sources.get(code)
-        if src is None or not src.ready or (src.method == "link" and http_get is None) \
-                or (src.method == "naver" and naver_search is None):
+        method = src.active_method if src is not None and src.ready else None
+        if method is None or (method == "link" and http_get is None) \
+                or (method == "naver" and naver_search is None):
             stats.not_ready_sources.append(code)
             continue
         for item in group:
-            result = (_naver_one(item, src, config, naver_search, throttle) if src.method == "naver"
+            result = (_naver_one(item, src, config, naver_search, throttle) if method == "naver"
                       else _link_one(item, src, config, http_get, robots, throttle))
             results.append(result)
             stats.add(result)
@@ -328,6 +367,16 @@ CANDIDATE_SELECTORS = (
 )
 
 
+def probe_candidates(src: SourceConfig, selectors: Iterable[str] | None = None) -> list[str]:
+    """--selector를 주면 그것만, 아니면 매체 후보(probe_selectors) + 공통 후보 (중복 없이, 매체 후보 먼저)."""
+    if selectors:
+        return list(selectors)
+    return list(dict.fromkeys([*src.probe_selectors, *CANDIDATE_SELECTORS]))
+
+
+PROBE_MAX = 10  # --probe 한 번에 받는 기사 수 상한 (2026-11-06 5 → 10: 매체별 10건으로 선택자 확정)
+
+
 @dataclass
 class ProbeRow:
     selector: str
@@ -335,44 +384,69 @@ class ProbeRow:
     samples: list[str] = field(default_factory=list)
 
 
+@dataclass
+class ProbeFetch:
+    """--probe가 기사 하나에 대해 한 일 (--report용)."""
+    url: str
+    robots: str                     # 허용 / 불허 / 확인 실패 / 도메인 다름
+    http_status: int | None = None
+    stopped: bool = False           # 403·429를 받아 이 매체 요청을 멈췄는지
+    html: str | None = None
+    file: str = ""
+    error: str = ""
+
+
 def probe(urls: Iterable[str], src: SourceConfig, config: LeadConfig, http_get: HttpGet,
           selectors: Iterable[str] | None = None, sleep=time.sleep, clock=time.monotonic,
-          save_dir: Path | None = None) -> tuple[list[ProbeRow], int, list[str]]:
+          save_dir: Path | None = None, fetch_log: list[ProbeFetch] | None = None
+          ) -> tuple[list[ProbeRow], int, list[str]]:
     """기사 몇 건을 받아 후보 selector마다 리드가 뽑히는지 본다. (결과, 받은 기사 수, 메모)
 
     요청 규칙은 실제 수집과 같다 (UA, robots.txt, 간격, 403·429 중단). 설정 파일은 바꾸지 않는다.
+    fetch_log를 주면 기사마다 robots.txt 결과·HTTP 상태·저장 파일을 담는다.
     """
     throttle = Throttle(config.interval, sleep, clock)
     robots = RobotsCache(http_get, config.user_agent, throttle)
     pages: list[str] = []
     notes: list[str] = []
+    log_ = fetch_log if fetch_log is not None else []
     for url in urls:
         if not _host_matches(url, src.domains):
             notes.append(f"건너뜀(도메인 다름): {url}")
+            log_.append(ProbeFetch(url, "도메인 다름"))
             continue
         allowed = robots.allowed(url)
         if not allowed:
-            notes.append(f"건너뜀(robots.txt {'확인 실패' if allowed is None else '불허'}): {url}")
+            state = "확인 실패" if allowed is None else "불허"
+            notes.append(f"건너뜀(robots.txt {state}): {url}")
+            log_.append(ProbeFetch(url, state))
             continue
         throttle.wait(urlsplit(url).netloc.lower())
         try:
             resp = http_get(url)
         except Exception as exc:
             notes.append(f"요청 실패({type(exc).__name__}): {url}")
+            log_.append(ProbeFetch(url, "허용", error=type(exc).__name__))
             continue
         if resp.status_code in STOP_STATUSES:
             notes.append(f"HTTP {resp.status_code} — 더 요청하지 않고 멈춤: {url}")
+            log_.append(ProbeFetch(url, "허용", resp.status_code, stopped=True))
             break
         if resp.status_code != 200:
             notes.append(f"HTTP {resp.status_code}: {url}")
+            log_.append(ProbeFetch(url, "허용", resp.status_code))
             continue
         pages.append(resp.text)
+        fetch = ProbeFetch(url, "허용", 200, html=resp.text)
         if save_dir is not None:
             save_dir.mkdir(parents=True, exist_ok=True)
-            (save_dir / f"{src.code}_{len(pages)}.html").write_text(resp.text, encoding="utf-8")
+            path = save_dir / f"{src.code}_{len(pages)}.html"
+            path.write_text(resp.text, encoding="utf-8")
+            fetch.file = str(path)
+        log_.append(fetch)
     rows = []
-    for selector in selectors or CANDIDATE_SELECTORS:
-        leads = [extract_lead(html, selector, src.drop_selectors, config.max_chars, config.min_chars)
+    for selector in probe_candidates(src, selectors):
+        leads =[extract_lead(html, selector, src.drop_selectors, config.max_chars, config.min_chars)
                  for html in pages]
         found = [lead for lead in leads if lead]
         rows.append(ProbeRow(selector, len(found), found))
@@ -395,6 +469,53 @@ def probe_urls(conn, code: str, limit: int = 3) -> list[str]:
                      a.published_at DESC
             LIMIT %s""", (code, limit))
         return [r[0] for r in cur.fetchall()]
+
+
+def naver_probe_urls(fetch, queries: Iterable[str], domains: Iterable[str], limit: int) -> list[str]:
+    """네이버 뉴스 검색 결과의 originallink(언론사 원본 링크) 중 그 매체 도메인(서브도메인 포함)인 것 limit건.
+    fetch는 naver.make_fetcher가 만든 함수 (검색어, start) -> 응답 JSON. 검색어 하나당 1회(최대 100건) 호출한다."""
+    urls: list[str] = []
+    for query in queries:
+        for item in (fetch(query, 1) or {}).get("items") or []:
+            link = (item.get("originallink") or "").strip()
+            if link and _host_matches(link, domains) and link not in urls:
+                urls.append(link)
+                if len(urls) >= limit:
+                    return urls
+    return urls
+
+
+REPORT_FIELDS = ("매체", "url", "host", "robots", "http_status", "멈춤_403_429", "html_file", "error",
+                 "selector", "본문_글자수", "원문_글자수", "성공")
+
+
+def write_probe_report(path: Path, src: SourceConfig, config: LeadConfig, fetches: list[ProbeFetch],
+                       selectors: Iterable[str] | None = None) -> int:
+    """기사 × 후보 selector마다 한 줄씩 CSV에 덧붙인다 (매체별로 여러 번 실행해 한 파일에 모은다). 쓴 줄 수.
+    본문_글자수는 잡음을 지운 뒤(body_text), 원문_글자수는 칸 안 글자 전부. 성공은 본문이 lead_min_chars 이상."""
+    import csv
+
+    new = not path.exists()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    n = 0
+    with path.open("a", newline="", encoding="utf-8-sig" if new else "utf-8") as handle:
+        writer = csv.writer(handle)
+        if new:
+            writer.writerow(REPORT_FIELDS)
+        for f in fetches:
+            base = [src.code, f.url, urlsplit(f.url).netloc.lower(), f.robots, f.http_status or "",
+                    "예" if f.stopped else "", f.file, f.error]
+            if f.html is None:
+                writer.writerow([*base, "", "", "", ""])
+                n += 1
+                continue
+            for selector in probe_candidates(src, selectors):
+                text = body_text(f.html, selector, src.drop_selectors)
+                raw = raw_text_chars(f.html, selector)
+                writer.writerow([*base, selector, "" if text is None else len(text), "" if raw is None else raw,
+                                 "O" if text and len(text) >= config.min_chars else "X"])
+                n += 1
+    return n
 
 
 def _print_probe(code: str, rows: list[ProbeRow], fetched: int, notes: list[str]) -> None:
@@ -430,7 +551,7 @@ def enqueue(conn, config: LeadConfig, days: int | None = None) -> int:
                   AND a.published_at >= now() - make_interval(days => %(days)s)
                   AND (a.summary IS NULL OR char_length(btrim(a.summary)) < {SUMMARY_MIN_CHARS})
                 ON CONFLICT (news_id) DO NOTHING""",
-                        {"method": src.method, "code": src.code, "days": days or config.enqueue_days})
+                        {"method": src.active_method, "code": src.code, "days": days or config.enqueue_days})
             added += cur.rowcount
     return added
 
@@ -496,9 +617,9 @@ def run(conn, config: LeadConfig | None = None, http_get: HttpGet | None = None,
     try:
         enqueued = enqueue(conn, config, days)
         items = load_pending(conn, [s.code for s in ready])
-        if http_get is None and any(s.method == "link" for s in ready):
+        if http_get is None and any(s.active_method == "link" for s in ready):
             http_get = _requests_get(config.user_agent)
-        if naver_search is None and any(s.method == "naver" for s in ready):
+        if naver_search is None and any(s.active_method == "naver" for s in ready):
             naver_search = _naver_search_from_env()
         results, stats = fetch_leads(items, config, http_get, naver_search)
         save_results(conn, results)
@@ -523,8 +644,8 @@ def dry_run(conn, config: LeadConfig, days: int) -> list[tuple]:
     for code, n in counts:
         src = config.sources.get(code)
         state = "설정 없음" if src is None else ("준비됨" if src.ready else
-                 ("꺼짐" if not src.enabled else "선택자 미확정"))
-        out.append((code, n, src.method if src else "-", state))
+                 ("꺼짐" if not src.enabled else ("원문 꺼짐" if not src.fulltext_enabled else "선택자 미확정")))
+        out.append((code, n, (src.active_method or src.method) if src else "-", state))
     return out
 
 
@@ -538,26 +659,41 @@ def main(argv=None) -> int:
     ap.add_argument("--probe", metavar="MEDIA", help="이 매체(link 방식)의 본문 칸 찾기. enabled와 상관없이 기사 몇 건만 요청")
     ap.add_argument("--selector", action="append", help="--probe: 이 selector만 확인 (여러 번 지정 가능)")
     ap.add_argument("--url", action="append", help="--probe: 확인할 기사 URL (기본: DB에서 최근 기사)")
-    ap.add_argument("--limit", type=int, default=3, help="--probe: 받을 기사 수 (기본 3, 최대 5)")
-    ap.add_argument("--save-fixtures", type=Path, metavar="DIR", help="--probe: 받은 HTML을 테스트용으로 저장")
+    ap.add_argument("--limit", type=int, default=3, help=f"--probe: 받을 기사 수 (기본 3, 최대 {PROBE_MAX})")
+    ap.add_argument("--save-fixtures", type=Path, metavar="DIR", help="--probe: 받은 HTML을 저장할 폴더")
+    ap.add_argument("--from-naver", action="append", metavar="QUERY",
+                    help="--probe: 기사 URL을 DB 대신 네이버 뉴스 검색 originallink에서 고른다 (검색어, 여러 번 지정 가능)")
+    ap.add_argument("--report", type=Path, metavar="CSV", help="--probe: 기사×selector 결과를 이 CSV에 덧붙임")
     ap.add_argument("--yes", action="store_true", help="--probe: 요청 전 확인 질문을 건너뜀")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     load_env()
-    dsn = get_dsn()
-    if not dsn:
-        log.error("DB 접속 정보가 없습니다. .env의 DATABASE_URL 또는 POSTGRES_*를 확인하세요.")
-        return 1
     config = load_config()
     if args.probe:
         src = config.sources.get(args.probe)
-        if src is None or src.method != "link":
+        if src is not None and src.method == "link" and not src.fulltext_enabled:
+            log.error("%s: lead_sources.yaml에서 fulltext_enabled: false라 원문을 요청하지 않습니다.", args.probe)
+            return 1
+        if src is None or not src.can_probe:
             log.error("%s: lead_sources.yaml에 link 방식으로 설정된 매체가 아닙니다.", args.probe)
             return 1
-        limit = max(1, min(args.limit, 5))
+        limit = max(1, min(args.limit, PROBE_MAX))
         if args.url:
             urls = args.url[:limit]
+        elif args.from_naver:
+            import os
+            from .naver import DEFAULT_BASE_URL, make_fetcher
+            cid, secret = os.environ.get("NAVER_CLIENT_ID"), os.environ.get("NAVER_CLIENT_SECRET")
+            if not cid or not secret:
+                log.error("--from-naver에는 NAVER_CLIENT_ID / NAVER_CLIENT_SECRET 환경변수가 필요합니다.")
+                return 1
+            fetch = make_fetcher(cid, secret, os.environ.get("NAVER_API_BASE_URL", DEFAULT_BASE_URL))
+            urls = naver_probe_urls(fetch, args.from_naver, src.domains, limit)
         else:
+            dsn = get_dsn()
+            if not dsn:
+                log.error("DB 접속 정보가 없습니다. .env의 DATABASE_URL 또는 POSTGRES_*를 확인하세요.")
+                return 1
             with psycopg.connect(dsn, autocommit=True) as conn:
                 urls = probe_urls(conn, args.probe, limit)
         if not urls:
@@ -568,10 +704,18 @@ def main(argv=None) -> int:
         if not args.yes and input("계속할까요? [y/N] ").strip().lower() != "y":
             print("취소했습니다.")
             return 1
+        fetches: list[ProbeFetch] = []
         rows, fetched, notes = probe(urls, src, config, _requests_get(config.user_agent),
-                                     args.selector, save_dir=args.save_fixtures)
+                                     args.selector, save_dir=args.save_fixtures, fetch_log=fetches)
         _print_probe(args.probe, rows, fetched, notes)
+        if args.report:
+            n = write_probe_report(args.report, src, config, fetches, args.selector)
+            print(f"\n{args.report} 에 {n}줄 덧붙였습니다.")
         return 0
+    dsn = get_dsn()
+    if not dsn:
+        log.error("DB 접속 정보가 없습니다. .env의 DATABASE_URL 또는 POSTGRES_*를 확인하세요.")
+        return 1
     with psycopg.connect(dsn, autocommit=True) as conn:
         if args.dry_run:
             print("매체  보충대상  방식  상태")

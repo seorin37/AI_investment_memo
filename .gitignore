@@ -34,3 +34,6 @@ results/memo_personas/personas_100_mock/
 data/run_all/
 data/run_financials/
 data/events/
+
+# 뉴스 원문 샘플 HTML (lead_fetcher --probe --save-fixtures, 원문은 커밋하지 않는다)
+samples/
