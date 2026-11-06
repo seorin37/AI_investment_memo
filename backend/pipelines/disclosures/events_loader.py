@@ -170,7 +170,7 @@ def upsert_event(
         pairs = [pair.to_dict() for pair in parsed.pairs]
         issues = [f"missing: {name}" for name in result.missing] + list(result.errors) + list(parsed.warnings)
         if result.note:
-            issues.append(f"{result.note}: {', '.join(result.explained)} 원문에 없음")
+            issues.append(f"{result.note}: 빈 값은 원문에 없음 (검토 불필요)")
     conn.execute(
         text(
             "INSERT INTO disclosure_events (rcept_no, event_type, topic, base_title, is_correction, is_subsidiary,"

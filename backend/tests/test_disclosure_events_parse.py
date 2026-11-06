@@ -168,26 +168,40 @@ class RulesTest(unittest.TestCase):
         whole = extract_fields("t", [Pair("배당", "1,165")], rules).fields["dps"]
         self.assertEqual((whole, type(whole)), (1165, int))
 
-    def test_monthly_operating_report_is_ok_with_note(self):
+    def test_monthly_operating_report_is_partial_with_note(self):
         # 현대차·기아 월간 판매 공시: 잠정실적 양식이지만 매출·영업이익 칸은 비우고 판매대수를 적는다
-        def pairs(start, end):
+        def pairs(start, end, revenue="-"):
             return [Pair("1. 실적내용", "단위 : 백만원, %"), Pair("당기실적", start), Pair("당기실적#2", end),
-                    Pair("매출액 > 당해실적 > 당기실적", "-"), Pair("영업이익 > 당해실적 > 당기실적", "")]
+                    Pair("매출액 > 당해실적 > 당기실적", revenue), Pair("영업이익 > 당해실적 > 당기실적", "")]
         monthly = extract_fields("prelim_earnings", pairs("2026-10-01", "2026-10-31"), RULES)
-        self.assertEqual((monthly.parse_status, monthly.note, monthly.missing), ("ok", "monthly_operating", []))
-        self.assertEqual(monthly.fields["note"], "monthly_operating")
-        self.assertEqual(monthly.explained, ["revenue|op_income"])
-        # 분기 잠정실적에서 빠지면 그대로 partial
+        # 상태는 사실대로 partial, 사유만 붙는다 (ok는 늘 "필수 값이 다 있음")
+        self.assertEqual((monthly.parse_status, monthly.note, monthly.missing), ("partial", "monthly_operating", ["revenue|op_income"]))
+        self.assertEqual((monthly.fields["note"], monthly.fields["period_kind"]), ("monthly_operating", "month"))
+        # 매출을 적은 월간 공시도 period_kind로 분기 실적과 구분된다
+        monthly_with_revenue = extract_fields("prelim_earnings", pairs("2026-10-01", "2026-10-31", "1,000"), RULES)
+        self.assertEqual((monthly_with_revenue.parse_status, monthly_with_revenue.fields["period_kind"]), ("ok", "month"))
+        self.assertNotIn("note", monthly_with_revenue.fields)
+        # 분기 잠정실적에서 빠지면 사유 없이 partial (검토 대상)
         quarterly = extract_fields("prelim_earnings", pairs("2026-07-01", "2026-09-30"), RULES)
-        self.assertEqual((quarterly.parse_status, quarterly.note), ("partial", None))
+        self.assertEqual((quarterly.parse_status, quarterly.note, quarterly.fields["period_kind"]), ("partial", None, "quarter"))
 
-    def test_withheld_amount_is_ok_with_note(self):
+    def test_period_kind(self):
+        from pipelines.disclosures.events_fields import period_kind
+        self.assertEqual(period_kind("2026-01-01", "2026-06-30"), "half")
+        self.assertEqual(period_kind("2026-01-01", "2026-12-31"), "year")
+        self.assertEqual(period_kind("2026-01-01", "2026-10-31"), "other")
+        self.assertIsNone(period_kind(None, "2026-10-31"))
+
+    def test_withheld_amount_is_partial_with_note(self):
         # 아시아나항공 신규시설투자: 투자금액 공시유보
         base = [Pair("1. 투자구분", "신규시설투자"), Pair("2. 투자내역 > 자기자본(원)", "1,029,953,555,000")]
         withheld = extract_fields("facility_investment", base + [Pair("6. 공시유보 관련내용 > 유보사유", "경영상 비밀유지")], RULES)
-        self.assertEqual((withheld.parse_status, withheld.note), ("ok", "amount_withheld"))
-        missing = extract_fields("facility_investment", base + [Pair("6. 공시유보 관련내용 > 유보사유", "-")], RULES)
-        self.assertEqual((missing.parse_status, missing.missing), ("partial", ["amount_krw"]))
+        self.assertEqual((withheld.parse_status, withheld.note), ("partial", "amount_withheld"))
+        not_withheld = extract_fields("facility_investment", base + [Pair("6. 공시유보 관련내용 > 유보사유", "-")], RULES)
+        self.assertEqual((not_withheld.parse_status, not_withheld.note), ("partial", None))
+        # 유보 대상이 정해진 종류에만 쓴다 — 다른 종류에서 빠진 값은 유보 사유가 있어도 사유를 붙이지 않는다
+        other = extract_fields("dividend", [Pair("6. 공시유보 관련내용 > 유보사유", "경영상 비밀유지")], RULES)
+        self.assertEqual((other.parse_status, other.note), ("partial", None))
 
     def test_type_without_rules_is_ok(self):
         result = extract_fields("value_up", [Pair("x", "y")], RULES)
