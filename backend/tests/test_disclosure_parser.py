@@ -129,6 +129,32 @@ class SanitizeTest(unittest.TestCase):
         self.assertEqual(doc.quality["broken_attrs"], 2)
         self.assertEqual(doc.blocks[0].rows, ["회사: 스노우 | 충당부채: 10"])
 
+    def test_even_number_of_inner_quotes_is_repaired(self):
+        # 하나금융지주·유안타증권 2025~ 보고서: 따옴표 수가 짝수라 예전 검사(홀수·`""`)를 지나쳐 파싱이 실패했다
+        xml = doc_xml(
+            '<SECTION-1><TITLE>I. 개요</TITLE><TABLE><TBODY>'
+            '<TR><TH ENG="Name">구분</TH><TH ENG="Expected probability of default applied with CVA ("PD")" WIDTH="351">손실율</TH></TR>'
+            '<TR><TE>A</TE><TE>0.5</TE></TR>'
+            "</TBODY></TABLE></SECTION-1>"
+        )
+        doc = parser.parse_xml(xml, "R", EXCLUDE_PATTERNS)
+        self.assertEqual(doc.quality["broken_attrs"], 1)
+        self.assertEqual(doc.quality["recover_errors"], 0)
+        self.assertEqual(doc.blocks[0].rows, ["구분: A | 손실율: 0.5"])
+
+    def test_bare_link_tag_is_text(self):
+        # SP삼화 제품 코드: 속성 없는 `<A>`는 링크가 아니라 글자 (DART 링크는 늘 REFNO 등 속성이 있다)
+        xml = doc_xml(
+            '<SECTION-1><TITLE>I. 개요</TITLE><TABLE><TBODY>'
+            "<TR><TH>과제</TH><TH>제품</TH></TR>"
+            "<TR><TD>도료 개발</TD><TD>TP FLEX BLACK<A>#(KJ)SH22-3436K<A>#(BC1)</TD></TR>"
+            '</TBODY></TABLE><P><A REFNO="XII">상세표 참조</A></P></SECTION-1>'
+        )
+        doc = parser.parse_xml(xml, "R", EXCLUDE_PATTERNS)
+        self.assertEqual(doc.quality["recover_errors"], 0)
+        self.assertEqual(doc.blocks[0].rows, ["과제: 도료 개발 | 제품: TP FLEX BLACK<A>#(KJ)SH22-3436K<A>#(BC1)"])
+        self.assertEqual(doc.blocks[1].text, "상세표 참조")
+
     def test_uppercase_text_that_looks_like_a_tag_is_escaped_and_counted(self):
         xml = doc_xml("<SECTION-1><TITLE>I. 개요</TITLE><P>- 제11회 <ACI 세미나></P><P>뒤 문단</P></SECTION-1>")
         doc = parser.parse_xml(xml, "R", EXCLUDE_PATTERNS)
