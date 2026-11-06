@@ -21,7 +21,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from ..common.config import load_config, resolve_path
-from .candidates import recent_disclosure_candidates, recent_news_candidates
+from .candidates import drop_other_company_news, listed_names, recent_disclosure_candidates, recent_news_candidates
 from .models import TrackingItem
 from .preview import write_preview
 from .price import check_price
@@ -72,6 +72,8 @@ def _fmt(out) -> list[str]:
         rows.append("```")
         rows.append(out.raw[:700])
         rows.append("```")
+    for note in out.verify_notes:
+        rows.append(f"- 검수가 막은 문장: {note}")
     if out.card and out.card.status == "update":
         rows.append(f"- LLM 카드: {out.card.title} / {' '.join(out.card.summary)} / {out.card.reason} (확신 {out.card.confidence})")
     if out.draft:
@@ -130,6 +132,7 @@ def main(argv: list[str] | None = None) -> int:
     sims: list[float] = []
     kind_sims: dict[str, list[float]] = {"news": [], "disclosure": [], "event": []}   # disclosure=정기보고서, event=수시공시
     cand_rows = []
+    other_news = []                                             # 다른 회사 이름으로 시작해 뺀 기사 (항목, 후보)
     status_count: dict[str, int] = {}
     fail_count: dict[str, int] = {}
     drafts = []
@@ -140,6 +143,13 @@ def main(argv: list[str] | None = None) -> int:
         with conn.cursor() as cur:
             cur.execute("SELECT symbol, name FROM stocks WHERE symbol = ANY(%(s)s)", {"s": sorted({i.symbol for i in items})})
             names = {sym.strip(): name for sym, name in cur.fetchall()}
+            cur.execute("SELECT name FROM stocks")
+            stock_names = [n for (n,) in cur.fetchall() if n]     # 다른 회사 기사 제목을 알아보는 데 쓴다
+        # 코스닥 회사(파트론 등)는 stocks에 없어 DART 회사 목록 파일에서 이름을 더한다. 파일이 없으면 stocks 이름만 쓴다
+        file_names = (listed_names(resolve_path(rcfg["company_names_file"]))
+                      if rcfg.get("drop_other_company_news", True) and rcfg.get("company_names_file") else [])
+        all_names = sorted(set(stock_names) | set(file_names))
+        aliases = rcfg.get("company_aliases") or {}
         items = [replace(i, company_name=names.get(i.symbol, "")) for i in items]
         for item in items:
             if item.type == "topic":
@@ -147,6 +157,10 @@ def main(argv: list[str] | None = None) -> int:
                 cands = (recent_news_candidates(conn, item.symbol, vec, since, fetch_k, floor["news"], cfg["news"]["variant"])
                          + recent_disclosure_candidates(conn, item.symbol, vec, d_since, fetch_k, floor["disclosure"],
                                                         floor["event"], rcfg.get("include_subsidiary", False)))
+                if rcfg.get("drop_other_company_news", True):
+                    cands, dropped = drop_other_company_news(cands, item.company_name, all_names,
+                                                             aliases.get(item.company_name, []))
+                    other_news += [(item, c) for c in dropped]
                 sims += [c.similarity for c in cands]
                 for c in cands:
                     kind_sims[threshold_key(c)].append(c.similarity)
@@ -203,7 +217,15 @@ def main(argv: list[str] | None = None) -> int:
             f"- 유사도 분포: 최소 {q(0)} / 25% {q(.25)} / 중앙 {q(.5)} / 75% {q(.75)} / 최대 {q(1)}",
             *[f"  - {k}: {json.dumps(dist(v), ensure_ascii=False)}" for k, v in kind_sims.items()],
             f"- 처리 결과: {json.dumps(status_count, ensure_ascii=False)}",
-            f"- 코드 검사 실패 코드(LLM 원본 기준): {json.dumps(fail_count, ensure_ascii=False)}"]
+            f"- 코드 검사 실패 코드(LLM 원본 기준): {json.dumps(fail_count, ensure_ascii=False)}",
+            f"- 다른 회사 이름으로 시작해 뺀 기사: {len(other_news)}건 (항목·기사 쌍, 목록은 보고서 맨 끝)"
+            + (f" · 회사 이름 {len(all_names)}개 (stocks {len(stock_names)}, 파일 {len(file_names)})"
+               if rcfg.get("drop_other_company_news", True) else " · 꺼짐")]
+    summary["other_company_news"] = len(other_news)
+    titles: dict[str, list[str]] = {}
+    for item, c in other_news:
+        titles.setdefault(f"{c.date} {c.title}", []).append(item.item_id)
+    sections += ["## 다른 회사 이름으로 시작해 뺀 기사", *[f"- {t} ← {', '.join(ids)}" for t, ids in titles.items()], ""]
     if client and client.calls:
         pt = sum(c.prompt_tokens or 0 for c in client.calls)
         ot = sum(c.output_tokens or 0 for c in client.calls)
