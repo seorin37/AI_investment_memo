@@ -4,6 +4,8 @@
   python -m backend.pipelines.news.fulltext_load --date 2026-11-05
   # 실제 적재: --load와 함께 접속 대상(host:port)을 --target으로 적어야 한다. 다르면 쓰지 않고 멈춘다
   python -m backend.pipelines.news.fulltext_load --date 2026-11-05 --limit 50 --load --target 192.168.0.105:15432
+  # 날짜 대신 최근 N시간 발행분 (그 발행일 파일만 읽고, 아직 DB에 없는 ok 기사만 넣는다)
+  python -m backend.pipelines.news.fulltext_load --recent-hours 6 --load --target 192.168.0.105:15432
 
 - news_id는 jsonl 값(= news_articles.id)을 쓴다. DB에 그 id가 없거나 URL이 다르면(다른 DB) 건너뛰고 센다.
 - 여러 번 돌려도 안전하다: news_article_bodies에 이미 있는 news_id는 건너뛴다. 기사 묶음마다 본문과 그 청크를
@@ -29,7 +31,7 @@ from pathlib import Path
 from typing import Callable, Iterable, Protocol
 from urllib.parse import urlsplit
 
-from .fulltext import OUT_DIR
+from .fulltext import OUT_DIR, recent_window, window_days
 from .fulltext_bench import CHUNKER_VERSION, Article, Chunk, chunk_article, gpu_free_gb, gpu_processes
 
 log = logging.getLogger(__name__)
@@ -89,6 +91,13 @@ def read_ok_records(paths: Iterable[Path]) -> list[Record]:
                 row.get("title") or "", row.get("published_at") or "", row.get("subtitle"), row["body"],
                 row["body_hash"], row["extractor_version"], row["fetched_at"])
     return sorted(latest.values(), key=lambda r: r.news_id)
+
+
+def recent_records(raw_dir: Path, start: datetime, end: datetime) -> list[Record]:
+    """[start, end) 발행분의 ok 행. 그 기간의 발행일 파일만 읽는다."""
+    paths = [raw_dir / f"{d.isoformat()}.jsonl" for d in window_days(start, end)]
+    records = read_ok_records(p for p in paths if p.is_file())
+    return [r for r in records if r.published_at and start <= datetime.fromisoformat(r.published_at) < end]
 
 
 class Store(Protocol):
@@ -239,12 +248,60 @@ def dsn_target(dsn: str) -> str:
     return f"{d.get('host', 'localhost')}:{d.get('port', 5432)}/{d.get('dbname', '')}"
 
 
-def main(argv=None) -> int:
+def model_config(device: str, batch_size: int) -> dict:
     from ..common.config import load_config as load_common
+
+    cfg = dict(load_common("configs/common.yaml")["model"])
+    cfg.update(batch_size=batch_size, max_length=MAX_TOKENS, devices=["cuda:0"] if device == "cuda" else ["cpu"])
+    return cfg
+
+
+def embed_and_load(todo: list[Record], store: Store, model_cfg: dict, ident: Identity, *, device: str = "cuda",
+                   batch_size: int = 4, group_size: int = 32, gpu_cap_gb: float = 2.5, min_free_gb: float = 2.8,
+                   out: Callable[[str], None] = print) -> dict:
+    """GPU 여유 확인 → 모델 → 청크 → 임베딩 → 적재. 결과 요약을 돌려준다 (status: loaded / gpu_busy)."""
+    if device == "cpu":
+        os.environ["CUDA_VISIBLE_DEVICES"] = ""
+    else:
+        free_gb = gpu_free_gb()
+        out(f"GPU 사용 현황: {gpu_processes()} / 남은 메모리 {free_gb:.2f}GB (필요 {min_free_gb}GB)")
+        if free_gb < min_free_gb:
+            out("남은 GPU 메모리가 부족해 시작하지 않습니다.")
+            return {"status": "gpu_busy", "gpu_free_gb": round(free_gb, 2), "articles": 0, "chunks": 0, "bad": []}
+        import torch
+        total_gb = torch.cuda.get_device_properties(0).total_memory / 2**30
+        torch.cuda.set_per_process_memory_fraction(min(1.0, gpu_cap_gb / total_gb), 0)
+
+    from ..disclosures.chunker import HFTokenCounter
+    from ..disclosures.embedder import BatchRunner, load_encoder
+
+    encoder, info = load_encoder(model_cfg, offline=True, allow_cpu=device == "cpu")
+    tokens = HFTokenCounter(encoder.tokenizer)
+    items, bad = chunk_records(todo, tokens)
+    if bad:
+        out(f"청크 규칙 위반 기사 {len(bad)}건은 넣지 않습니다: {bad[:10]}")
+    runner = BatchRunner(lambda batch: encoder._forward(batch, encoder.max_length, sparse=True), batch_size)
+    report = load(items, lambda texts: runner.run(texts, encoder.token_lengths(texts)), store, ident, group_size)
+    report.oom_events, report.batch_size = runner.oom_events, runner.batch_size
+    peak = 0
+    if encoder.device.startswith("cuda"):
+        import torch
+        peak = round(torch.cuda.max_memory_allocated(encoder.device) / 2**20)
+    out(f"적재: 기사 {report.articles}, 청크 {report.chunks}, {report.seconds / 60:.1f}분, "
+        f"{info['device']} {info['dtype']}, 배치 {batch_size}→{report.batch_size}, OOM {report.oom_events}, "
+        f"최대 GPU {peak}MB")
+    return {"status": "loaded", "articles": report.articles, "chunks": report.chunks, "bad": bad,
+            "seconds": round(report.seconds, 1), "oom": report.oom_events, "gpu_peak_mb": peak,
+            "news_ids": [r.news_id for r, _ in items]}
+
+
+def main(argv=None) -> int:
     from ..common.db import get_dsn, load_env
 
     ap = argparse.ArgumentParser(description="뉴스 원문 jsonl → news_article_bodies·news_chunks (기본 dry-run)")
-    ap.add_argument("--date", required=True, help="data/news_raw/<날짜>.jsonl 의 날짜 YYYY-MM-DD")
+    when = ap.add_mutually_exclusive_group(required=True)
+    when.add_argument("--date", help="data/news_raw/<날짜>.jsonl 의 날짜 YYYY-MM-DD")
+    when.add_argument("--recent-hours", type=float, help="날짜 대신 최근 N시간 발행분 (그 발행일 파일들에서)")
     ap.add_argument("--raw-dir", type=Path, default=OUT_DIR)
     ap.add_argument("--limit", type=int, help="이번에 넣을 최대 기사 수 (시험용)")
     ap.add_argument("--load", action="store_true", help="실제로 DB에 쓴다 (없으면 dry-run)")
@@ -267,22 +324,23 @@ def main(argv=None) -> int:
     if args.load and (not args.target or not target.startswith(args.target + "/")):
         print(f"--target({args.target})이 실제 접속 대상({target})과 달라 쓰지 않고 멈춥니다.")
         return 3
-    path = args.raw_dir / f"{args.date}.jsonl"
-    if not path.is_file():
-        print(f"{path}가 없습니다.")
-        return 1
+    if args.recent_hours:
+        start, end = recent_window(args.recent_hours)
+        source = f"{args.raw_dir}/{{{','.join(d.isoformat() for d in window_days(start, end))}}}.jsonl " \
+                 f"(최근 {args.recent_hours:g}시간)"
+        records = recent_records(args.raw_dir, start, end)
+    else:
+        path = args.raw_dir / f"{args.date}.jsonl"
+        if not path.is_file():
+            print(f"{path}가 없습니다.")
+            return 1
+        source, records = str(path), read_ok_records([path])
 
-    if args.device == "cpu":
-        os.environ["CUDA_VISIBLE_DEVICES"] = ""
-    model_cfg = dict(load_common("configs/common.yaml")["model"])
-    model_cfg.update(batch_size=args.batch_size, max_length=MAX_TOKENS,
-                     devices=["cuda:0"] if args.device == "cuda" else ["cpu"])
+    model_cfg = model_config(args.device, args.batch_size)
     ident = embedding_identity(model_cfg)
-
-    records = read_ok_records([path])
     store = PgStore(dsn, read_only=not args.load)
     p = plan(records, store, args.limit)
-    print(f"{path}: ok {len(records)}건 → 이미 적재 {p.already}, news_articles에 없음 {len(p.missing)}, "
+    print(f"{source}: ok {len(records)}건 → 이미 적재 {p.already}, news_articles에 없음 {len(p.missing)}, "
           f"URL 불일치 {len(p.url_mismatch)}, 이번 대상 {len(p.todo)}" + (f" (--limit {args.limit})" if args.limit else ""))
     if p.missing:
         print(f"  없는 id 예: {p.missing[:10]}")
@@ -296,10 +354,10 @@ def main(argv=None) -> int:
         print("넣을 기사가 없습니다.")
         return 0
 
-    from ..disclosures.chunker import HFTokenCounter
-    from ..disclosures.embedder import load_tokenizer, resolve_model_path, set_offline
-
     if not args.load:
+        from ..disclosures.chunker import HFTokenCounter
+        from ..disclosures.embedder import load_tokenizer, resolve_model_path, set_offline
+
         set_offline(True)
         tokens = HFTokenCounter(load_tokenizer(resolve_model_path(model_cfg["name"], model_cfg["revision"], True)))
         items, bad = chunk_records(p.todo, tokens)
@@ -308,34 +366,11 @@ def main(argv=None) -> int:
         print("dry-run이라 DB에 쓰지 않았습니다. 적재하려면 --load --target host:port 를 붙이세요.")
         return 0
 
-    if args.device == "cuda":
-        free_gb = gpu_free_gb()
-        print(f"GPU 사용 현황: {gpu_processes()} / 남은 메모리 {free_gb:.2f}GB (필요 {args.min_free_gb}GB)")
-        if free_gb < args.min_free_gb:
-            print("남은 GPU 메모리가 부족해 시작하지 않습니다.")
-            return 2
-        import torch
-        total_gb = torch.cuda.get_device_properties(0).total_memory / 2**30
-        torch.cuda.set_per_process_memory_fraction(min(1.0, args.gpu_cap_gb / total_gb), 0)
-
-    from ..disclosures.embedder import BatchRunner, load_encoder
-
-    encoder, info = load_encoder(model_cfg, offline=True, allow_cpu=args.device == "cpu")
-    tokens = HFTokenCounter(encoder.tokenizer)
-    items, bad = chunk_records(p.todo, tokens)
-    if bad:
-        print(f"청크 규칙 위반 기사 {len(bad)}건은 넣지 않습니다: {bad[:10]}")
-    runner = BatchRunner(lambda batch: encoder._forward(batch, encoder.max_length, sparse=True), args.batch_size)
-    report = load(items, lambda texts: runner.run(texts, encoder.token_lengths(texts)), store, ident, args.group_size)
-    report.oom_events, report.batch_size = runner.oom_events, runner.batch_size
-    peak = 0
-    if encoder.device.startswith("cuda"):
-        import torch
-        peak = round(torch.cuda.max_memory_allocated(encoder.device) / 2**20)
-    print(f"적재: 기사 {report.articles}, 청크 {report.chunks}, {report.seconds / 60:.1f}분, "
-          f"{info['device']} {info['dtype']}, 배치 {args.batch_size}→{report.batch_size}, OOM {report.oom_events}, "
-          f"최대 GPU {peak}MB")
-    print(f"DB 확인 ({target}): {store.counts([r.news_id for r, _ in items])}")
+    result = embed_and_load(p.todo, store, model_cfg, ident, device=args.device, batch_size=args.batch_size,
+                            group_size=args.group_size, gpu_cap_gb=args.gpu_cap_gb, min_free_gb=args.min_free_gb)
+    if result["status"] == "gpu_busy":
+        return 2
+    print(f"DB 확인 ({target}): {store.counts(result['news_ids'])}")
     return 0
 
 

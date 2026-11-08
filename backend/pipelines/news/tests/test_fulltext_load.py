@@ -71,6 +71,27 @@ def test_read_ok_records_keeps_last_ok_per_id(tmp_path):
     assert [r.news_id for r in recs] == [1, 3]
 
 
+def test_recent_records_reads_window_day_files(tmp_path):
+    from zoneinfo import ZoneInfo
+    kst = ZoneInfo("Asia/Seoul")
+
+    def at(i, when):
+        return {**raw(i), "published_at": when}
+    (tmp_path / "2026-11-07.jsonl").write_text("\n".join(json.dumps(at(i, w)) for i, w in [
+        (1, "2026-11-07T20:00:00+09:00"), (2, "2026-11-07T23:30:00+09:00")]), encoding="utf-8")
+    (tmp_path / "2026-11-08.jsonl").write_text(json.dumps(at(3, "2026-11-08T01:00:00+09:00")), encoding="utf-8")
+    (tmp_path / "2026-11-06.jsonl").write_text(json.dumps(at(4, "2026-11-07T22:00:00+09:00")), encoding="utf-8")
+    start, end = datetime(2026, 11, 7, 22, tzinfo=kst), datetime(2026, 11, 8, 4, tzinfo=kst)
+    assert [r.news_id for r in fl.recent_records(tmp_path, start, end)] == [2, 3]    # 1은 기간 밖, 4는 다른 날 파일
+
+
+def test_date_and_recent_hours_are_exclusive():
+    import pytest
+    for argv in (["--date", "2026-11-05", "--recent-hours", "6"], []):
+        with pytest.raises(SystemExit):
+            fl.main(argv)
+
+
 def test_plan_skips_loaded_missing_and_url_mismatch(tmp_path):
     recs = fl.read_ok_records([write_jsonl(tmp_path, [raw(1), raw(2), raw(3), raw(4), raw(5)])])
     store = FakeStore({1: recs[0].url, 2: recs[1].url, 3: "https://other/3", 5: recs[4].url}, loaded={2})
