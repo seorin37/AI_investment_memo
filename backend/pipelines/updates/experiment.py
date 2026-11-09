@@ -122,6 +122,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--evidence-mode", choices=["legacy", "all"], help="근거 고르기 (기본: 설정 topic.evidence_mode)")
     ap.add_argument("--uncalibrated-chunks", action="store_true",
                     help="min_similarity_news_chunks가 없어도 chunks로 돈다 (기존 뉴스 임계값을 임시로 씀, 시험 비교용)")
+    ap.add_argument("--used-refs", help="이미 카드에 쓴 근거 기록 파일 (used_refs.FileUsedRefStore). 주면 그 근거를 후보에서 빼고, "
+                                        "이번 카드가 쓴 근거를 더해 적는다. 기본: 쓰지 않음")
+    ap.add_argument("--used-refs-match", choices=["ref", "doc"], default="ref",
+                    help="ref: 같은 ref만 뺀다 (기본) · doc: 같은 공시의 다른 청크도 뺀다")
     args = ap.parse_args(argv)
 
     import psycopg
@@ -152,6 +156,11 @@ def main(argv: list[str] | None = None) -> int:
     news_lead = news_company_lead(filters)
     symbol_aliases = load_symbol_aliases() if news_lead is not None else {}
     floor, strong = thresholds(tcfg)
+    used_store = None
+    if args.used_refs:
+        from .used_refs import FileUsedRefStore
+        used_store = FileUsedRefStore(resolve_path(args.used_refs))
+    used_skipped = 0                                            # 이미 카드에 쓴 근거라 뺀 후보 수 (항목·후보 쌍)
 
     vectors = {}
     if topic_items:
@@ -221,11 +230,18 @@ def main(argv: list[str] | None = None) -> int:
                 for c in cands:
                     kind_sims[threshold_key(c)].append(c.similarity)
                     cand_rows.append((item, c))
+                if used_store is not None:                      # candidates.csv(보정용)에는 남기고 카드 근거에서만 뺀다
+                    from .used_refs import drop_used
+                    cands, skipped = drop_used(cands, used_store.used(item.item_id), args.used_refs_match)
+                    used_skipped += len(skipped)
                 links = {}
                 if same_event_on:
                     from .same_event import link_same_event
                     links = {ref: link.rcept_no for ref, link in link_same_event(conn, cands, scfg).items()}
                 out = check_topic(item, cands, client, banned, tcfg, links)
+                if used_store is not None:
+                    from .used_refs import card_refs
+                    used_store.record(item.item_id, card_refs(out.draft))
                 outcomes.append(_outcome(item, out))
                 status_count[out.kind] = status_count.get(out.kind, 0) + 1
                 for code in out.fail_codes:                     # 원본 LLM 출력이 어떤 검사에 걸렸는지 (평가 지표)
@@ -298,6 +314,10 @@ def main(argv: list[str] | None = None) -> int:
     summary["other_company_news"] = len(other_news)
     summary["search_filters"] = filters
     summary["no_company_news"] = len(no_company_news)
+    summary["used_refs"] = None if used_store is None else {"file": str(used_store.path), "match": args.used_refs_match,
+                                                            "skipped": used_skipped}
+    if used_store is not None:
+        head.append(f"- 이미 카드에 쓴 근거 빼기: {used_skipped}건 (파일 {used_store.path}, 기준 {args.used_refs_match})")
     head.append(f"- 후보 거르기(recent.filters): {json.dumps(filters, ensure_ascii=False)}"
                 f" · 종목명 없어 뺀 기사 {len(no_company_news)}건 (항목·기사 쌍)")
     titles: dict[str, list[str]] = {}

@@ -1790,5 +1790,85 @@ class SearchFilterTest(unittest.TestCase):
                          ("period_end", True, False, False))                         # 2026-11-09 결정
 
 
+
+class UsedRefsTest(unittest.TestCase):
+    """이미 카드에 쓴 근거 건너뛰기 (used_refs, 2026-11-09)."""
+
+    def test_memory_store_keeps_first_time(self):
+        from pipelines.updates.used_refs import MemoryUsedRefStore
+        st = MemoryUsedRefStore()
+        st.record("A", ["news:1", "disc:9#0"], at="2026-11-09T10:00:00+09:00")
+        st.record("A", ["news:1"], at="2026-11-10T10:00:00+09:00")
+        self.assertEqual(st.used("A"), {"news:1", "disc:9#0"})
+        self.assertEqual(st.data["A"]["news:1"], "2026-11-09T10:00:00+09:00")   # 처음 쓴 시각을 지킨다
+        self.assertEqual(st.used("B"), set())                                    # 항목별로 따로
+
+    def test_file_store_round_trip(self):
+        from pipelines.updates.used_refs import FileUsedRefStore
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "sub" / "used_refs.json"
+            st = FileUsedRefStore(path)
+            self.assertEqual(st.used("A"), set())                                # 파일이 없으면 빈 기록
+            st.record("A", [])                                                   # 빈 목록이면 파일을 만들지 않는다
+            self.assertFalse(path.exists())
+            st.record("A", ["news:1"])
+            self.assertEqual(FileUsedRefStore(path).used("A"), {"news:1"})      # 다시 열어도 남아 있다
+            self.assertFalse(path.with_name(path.name + ".tmp").exists())
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["version"], 1)
+            path.write_text(json.dumps({"version": 99, "items": {}}), encoding="utf-8")
+            with self.assertRaises(ValueError):
+                FileUsedRefStore(path)
+
+    def test_drop_used_ref_and_doc(self):
+        from pipelines.updates.used_refs import drop_used
+        cands = [disc("disc:1#0"), disc("disc:1#3"), disc("disc:2#0"), news("news:1"), news("news:2")]
+        kept, dropped = drop_used(cands, {"disc:1#0", "news:1"})
+        self.assertEqual([c.ref for c in kept], ["disc:1#3", "disc:2#0", "news:2"])
+        self.assertEqual([c.ref for c in dropped], ["disc:1#0", "news:1"])
+        kept, _ = drop_used(cands, {"disc:1#0"}, match="doc")                    # 같은 공시의 다른 청크도 뺀다
+        self.assertEqual([c.ref for c in kept], ["disc:2#0", "news:1", "news:2"])
+        self.assertEqual(len(drop_used(cands, set())[0]), 5)
+        with self.assertRaises(ValueError):
+            drop_used(cands, {"news:1"}, match="x")
+
+    def test_card_refs(self):
+        from pipelines.updates.models import UpdateDraft
+        from pipelines.updates.used_refs import card_refs
+        d = UpdateDraft(ITEM, "disclosure", "t", "s", "r", sources=[("disc:1#0", "q"), ("news:3", None), ("disc:1#0", "q2")],
+                        related_news=[("news:7", "관련")], supporting_news=[{"ref": "news:8"}])
+        self.assertEqual(card_refs(d), ["disc:1#0", "news:3"])                   # 문장에 쓴 근거만, 중복 없이
+        self.assertEqual(card_refs(None), [])
+        price = check_price(TrackingItem("P:0:0", "000660", "price_below", "가격", price_threshold=100), 99.0, 101.0, "2026-11-09")
+        self.assertEqual(card_refs(price), [])
+
+    def test_next_run_skips_used_evidence(self):
+        """1회차 카드가 쓴 공시는 2회차 후보에서 빠지고, 남은 뉴스로 카드를 만든다."""
+        from pipelines.updates.used_refs import MemoryUsedRefStore, card_refs, drop_used
+        st = MemoryUsedRefStore()
+        cands = [disc("disc:1#0", 0.72), news("news:5", 0.7)]
+        first = check_topic(ITEM, cands, reply(GOOD), BANNED)
+        self.assertEqual(first.kind, "update")
+        st.record(ITEM.item_id, card_refs(first.draft))
+        self.assertEqual(st.used(ITEM.item_id), {"disc:1#0"})
+
+        seen = []
+        news_card = {"status": "update", "title": "HBM 출하 확대", "summary": ["HBM 출하량이 늘었다고 밝혔어요. [E1]"],
+                     "reason": "메모에 쓰신 'HBM 실적'과 관련된 기사예요",
+                     "evidence": [{"source_id": "E1", "fact": "HBM 출하량이 늘었다고 밝혔다"}], "confidence": 0.9}
+
+        def call(prompt):
+            seen.append(prompt)
+            return json.dumps(news_card, ensure_ascii=False)
+        kept, dropped = drop_used(cands, st.used(ITEM.item_id))
+        second = check_topic(ITEM, kept, call, BANNED)
+        self.assertEqual([c.ref for c in dropped], ["disc:1#0"])
+        self.assertEqual([e.candidate.ref for e in second.evidence], ["news:5"])
+        self.assertNotIn("분기보고서", seen[0])                                  # LLM이 쓴 공시를 다시 보지 않는다
+        self.assertEqual(card_refs(second.draft), ["news:5"])
+
+        kept, _ = drop_used(kept, {"news:5"} | st.used(ITEM.item_id))
+        self.assertEqual(check_topic(ITEM, kept, call, BANNED).kind, "no_candidates")   # 다 썼으면 후보 없음
+
+
 if __name__ == "__main__":
     unittest.main()
