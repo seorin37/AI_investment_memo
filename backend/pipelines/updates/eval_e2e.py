@@ -5,6 +5,9 @@
 
 ① 메모 분석: tracking 로직 판정 + 메모당 1회 LLM 판정 → 추적 항목. 문장 라벨(intended_type, expected_decision)과 비교해 정확도.
    memos_kospi 문장에는 위치(span)가 없어 문장 글을 메모에서 찾아 가장 많이 겹치는 판정 문장과 맞춘다.
+   정답 문장은 오타를 고친 memo_body_clean 기준이라, clean에서 찾은 위치를 오타가 든 memo_body 위치로 옮겨 맞춘다.
+메모 파일: --memos에 파일·폴더·glob을 줄 수 있다. 폴더면 batch_*.jsonl만 읽는다 (memos.jsonl은 같은 내용의 모음이라 뺀다).
+   symbol이 없는 세트(memos_long)는 company_primary를 stocks 이름으로 찾아 채운다 (못 찾으면 표본에서 빠진다).
 ② 후보 검색 ③ 근거·LLM 카드 ④ 코드 검사를 조건별로 돌린다. 메모 분석 결과(추적 항목)는 조건끼리 같다.
    - baseline: 제목+요약 뉴스 검색, 근거 legacy(공시 2·뉴스 3), 같은 사건 묶기 꺼짐, 추가 규칙·예측 검사 없음
    - new: 원문 청크 뉴스 검색(보정 전 임시 임계값), 같은 사건 묶기, 근거 all(공시 5건·청크 2개, 전체 15), 추가 규칙, 예측 검사
@@ -16,6 +19,8 @@
 from __future__ import annotations
 
 import argparse
+import difflib
+import glob
 import json
 import random
 import time
@@ -38,8 +43,42 @@ def bucket(decision: str) -> str:
 
 # ---------------------------------------------------------------- 표본
 
+def memo_files(path: str = MEMOS_PATH) -> list[Path]:
+    """파일 하나 / 폴더(batch_*.jsonl) / glob 패턴."""
+    if any(ch in path for ch in "*?["):
+        files = [Path(p) for p in sorted(glob.glob(str(resolve_path(path))))]
+    else:
+        p = resolve_path(path)
+        files = sorted(p.glob("batch_*.jsonl")) if p.is_dir() else [p]
+    files = [f for f in files if f.name != "memos.jsonl" or len(files) == 1]
+    if not files:
+        raise FileNotFoundError(f"메모 파일이 없습니다: {path}")
+    return files
+
+
 def load_memos(path: str = MEMOS_PATH) -> list[dict]:
-    return [json.loads(line) for line in resolve_path(path).read_text(encoding="utf-8").splitlines() if line.strip()]
+    memos = [json.loads(line) for f in memo_files(path) for line in f.read_text(encoding="utf-8").splitlines() if line.strip()]
+    ids = Counter(m["memo_id"] for m in memos)
+    dup = [i for i, n in ids.items() if n > 1]
+    if dup:
+        raise ValueError(f"memo_id가 겹칩니다 (파일을 두 번 읽었는지 확인): {dup[:5]}")
+    return memos
+
+
+def fill_symbols(memos: list[dict], names: dict[str, str]) -> int:
+    """symbol이 없는 메모에 company_primary → 종목코드를 채운다. 반환: 못 찾은 메모 수."""
+    missing = 0
+    for m in memos:
+        if not m.get("symbol"):
+            m["symbol"] = names.get((m.get("company_primary") or "").strip())
+            missing += not m["symbol"]
+    return missing
+
+
+def stock_names(conn) -> dict[str, str]:
+    with conn.cursor() as cur:
+        cur.execute("SELECT name, symbol FROM stocks")
+        return {name.strip(): symbol.strip() for name, symbol in cur.fetchall()}
 
 
 def sample_memos(memos: list[dict], news_counts: dict[str, int], n: int = 100, rich_min: int = 5,
@@ -88,18 +127,37 @@ def news_counts(conn, since: datetime, until: datetime) -> dict[str, int]:
 
 # ---------------------------------------------------------------- ① 메모 분석
 
-def align(memo_text: str, gold: list[dict], pred: list) -> list[tuple[dict, object | None]]:
-    """정답 문장 → 가장 많이 겹치는 판정 문장 (못 찾으면 None)."""
+def span_mapper(clean: str, raw: str):
+    """clean 글의 위치 → raw 글의 위치 (오타로 글자가 바뀌거나 늘고 준 메모)."""
+    if clean == raw:
+        return lambda pos: pos
+    ops = difflib.SequenceMatcher(None, clean, raw, autojunk=False).get_opcodes()
+
+    def conv(pos: int) -> int:
+        for tag, i1, i2, j1, j2 in ops:
+            if i1 <= pos <= i2:
+                if tag == "equal":
+                    return j1 + (pos - i1)
+                return j1 if pos == i1 else j2
+        return len(raw)
+    return conv
+
+
+def align(memo_text: str, gold: list[dict], pred: list, clean_text: str | None = None) -> list[tuple[dict, object | None]]:
+    """정답 문장 → 가장 많이 겹치는 판정 문장 (못 찾으면 None).
+    clean_text(오타 고친 글)를 주면 정답 문장을 거기서 찾고 위치를 memo_text(판정한 원문) 위치로 옮긴다."""
+    base = clean_text if clean_text is not None else memo_text
+    conv = span_mapper(base, memo_text)
     out, cursor = [], 0
     for g in gold:
-        start = memo_text.find(g["text"], cursor)
+        start = base.find(g["text"], cursor)
         if start < 0:
-            start = memo_text.find(g["text"])
+            start = base.find(g["text"])
         if start < 0:
             out.append((g, None))
             continue
-        end = start + len(g["text"])
-        cursor = end
+        cursor = start + len(g["text"])
+        start, end = conv(start), conv(cursor)
         best, overlap = None, 0
         for p in pred:
             o = min(end, p.span[1]) - max(start, p.span[0])
@@ -152,7 +210,7 @@ def items_from(memo: dict, judgments: list, company: str) -> list[TrackingItem]:
                 item_id=f"{memo['memo_id']}:{j.sentence_index}:{i}", symbol=memo["symbol"], type=it["type"],
                 description=it["description"], keywords=tuple(it.get("keywords") or ()),
                 price_threshold=it.get("price_threshold"), category=j.category or "", memo_text=j.cleaned_text,
-                company_name=company))
+                company_name=company, time_hint=it.get("time_hint") or ""))
     return out
 
 
@@ -184,7 +242,8 @@ def outcome_row(item: TrackingItem, out, calls_before: int, client, seconds: flo
                                             "sources": [r for r, _ in d.sources], "supporting_news": d.supporting_news,
                                             "related_news": [r for r, _ in d.related_news]},
             "llm_calls": len(calls), "prompt_tokens": sum(r.prompt_tokens or 0 for r in calls),
-            "output_tokens": sum(r.output_tokens or 0 for r in calls), "seconds": round(seconds, 2)}
+            "output_tokens": sum(r.output_tokens or 0 for r in calls),
+            "reasoning_tokens": sum(r.reasoning_tokens or 0 for r in calls), "seconds": round(seconds, 2)}
 
 
 def summarize_condition(rows: list[dict]) -> dict:
@@ -198,7 +257,9 @@ def summarize_condition(rows: list[dict]) -> dict:
                                   "zero": sum(1 for x in ev if x == 0)},
             "grouped_news": sum(len(r["grouped"]) for r in rows),
             "llm_calls": sum(r["llm_calls"] for r in rows), "prompt_tokens": sum(r["prompt_tokens"] for r in rows),
-            "output_tokens": sum(r["output_tokens"] for r in rows), "seconds": round(sum(r["seconds"] for r in rows), 1),
+            "output_tokens": sum(r["output_tokens"] for r in rows),
+            "reasoning_tokens": sum(r.get("reasoning_tokens", 0) for r in rows),
+            "seconds": round(sum(r["seconds"] for r in rows), 1),
             "prediction_blocked": sum(1 for r in rows if "PREDICTION" in r["fail_codes"])}
 
 
@@ -232,6 +293,9 @@ def main(argv: list[str] | None = None) -> int:
     memos = load_memos(args.memos)
     with psycopg.connect(get_read_dsn()) as conn:
         conn.read_only = True
+        if any(not m.get("symbol") for m in memos):
+            no_symbol = fill_symbols(memos, stock_names(conn))
+            print(f"symbol 채움: 메모 {len(memos)}개 중 종목을 못 찾은 메모 {no_symbol}개 (표본에서 빠짐)")
         counts = news_counts(conn, since_ts, until_ts)
     sample = sample_memos(memos, counts, args.sample, args.rich_min, args.rich_share, args.seed)
     rich_symbols = {s for s, n in counts.items() if n >= args.rich_min}
@@ -239,7 +303,7 @@ def main(argv: list[str] | None = None) -> int:
         for m in sample:
             f.write(json.dumps({"memo_id": m["memo_id"], "symbol": m["symbol"], "company": m["company_primary"],
                                 "news_count": counts.get(m["symbol"], 0), "news_rich": m["symbol"] in rich_symbols,
-                                "kind": m["kind"], "primary_type": m["primary_type"]}, ensure_ascii=False) + "\n")
+                                "kind": m.get("kind"), "primary_type": m.get("primary_type")}, ensure_ascii=False) + "\n")
     print(f"표본 {len(sample)}개 (종목 {len({m['symbol'] for m in sample})}개, 기사 충분 {sum(m['symbol'] in rich_symbols for m in sample)}개)"
           f" → {run_dir / 'sample.jsonl'}")
     if args.dry_sample:
@@ -256,7 +320,8 @@ def run(args, sample, counts, rich_symbols, run_dir: Path, since_d: date, until_
     from ..tracking.lexicon import load_lexicon
     from ..tracking.llm import judge_with_llm
     from ..tracking.openai_client import OpenAIClient
-    from .candidates import recent_disclosure_candidates, recent_news_candidates
+    from .candidates import (company_terms, drop_news_without_company, news_company_lead, load_symbol_aliases,
+                             recent_disclosure_candidates, recent_news_candidates, search_filters)
     from .experiment import PRICE_SQL
     from .models import TopicOutcome
     from .news_search import NewsChunkSearch, load_query_encoder, release_gpu
@@ -279,7 +344,7 @@ def run(args, sample, counts, rich_symbols, run_dir: Path, since_d: date, until_
         judged = judge_memo(text, m["symbol"], lex)
         judge_with_llm(judged, m["symbol"], m["company_primary"], analyst)
         calls = analyst.calls[before:]
-        pairs = align(text, m["sentences"], judged)
+        pairs = align(text, m["sentences"], judged, m.get("memo_body_clean"))
         for g, p in pairs:
             analysis_rows.append({"gold": g, "pred": None if p is None else p.to_dict()})
         its = items_from(m, judged, m["company_primary"])
@@ -292,12 +357,14 @@ def run(args, sample, counts, rich_symbols, run_dir: Path, since_d: date, until_
                                         for g, p in pairs],
                           "items": [it.item_id for it in its],
                           "llm_calls": len(calls), "prompt_tokens": sum(r.prompt_tokens or 0 for r in calls),
-                          "output_tokens": sum(r.output_tokens or 0 for r in calls)})
+                          "output_tokens": sum(r.output_tokens or 0 for r in calls),
+                          "reasoning_tokens": sum(r.reasoning_tokens or 0 for r in calls)})
     analysis = score_analysis(analysis_rows)
     analysis["seconds"] = round(time.perf_counter() - t0, 1)
     analysis["llm_calls"] = len(analyst.calls)
     analysis["prompt_tokens"] = sum(r.prompt_tokens or 0 for r in analyst.calls)
     analysis["output_tokens"] = sum(r.output_tokens or 0 for r in analyst.calls)
+    analysis["reasoning_tokens"] = sum(r.reasoning_tokens or 0 for r in analyst.calls)
     with (run_dir / "memos.jsonl").open("w", encoding="utf-8") as f:
         for r in memo_rows:
             f.write(json.dumps(r, ensure_ascii=False, default=str) + "\n")
@@ -318,6 +385,9 @@ def run(args, sample, counts, rich_symbols, run_dir: Path, since_d: date, until_
         chunk_encoder = load_query_encoder()
     rcfg = cfg.get("recent", {})
     fetch_k = rcfg.get("fetch_k", 50)
+    filters = search_filters(rcfg)
+    news_lead = news_company_lead(filters)
+    symbol_aliases = load_symbol_aliases() if news_lead is not None else {}
     card_client = OpenAIClient.from_env()
     results = {}
     with psycopg.connect(get_read_dsn()) as conn:
@@ -349,8 +419,12 @@ def run(args, sample, counts, rich_symbols, run_dir: Path, since_d: date, until_
                 else:
                     news = recent_news_candidates(conn, item.symbol, vec, since_d, fetch_k, floor["news"],
                                                   cfg["news"]["variant"])
+                if news_lead is not None:
+                    news, _ = drop_news_without_company(
+                        news, company_terms(item.company_name, item.symbol, rcfg, symbol_aliases),
+                        news_lead)
                 discs = recent_disclosure_candidates(conn, item.symbol, vec, since_d, fetch_k, floor["disclosure"],
-                                                     floor["event"], rcfg.get("include_subsidiary", False))
+                                                     floor["event"], rcfg.get("include_subsidiary", False), filters)
                 cands = within(news + discs, until_d)
                 links = {}
                 if spec["same_event"]:

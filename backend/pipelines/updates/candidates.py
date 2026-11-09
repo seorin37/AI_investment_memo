@@ -11,6 +11,19 @@
 공시는 정기보고서와 수시공시(disclosures.kind = major/other)가 같은 테이블에 있다. 수시공시는 doc="event"로 표시하고
 임계값을 따로 쓴다(event_floor). 정정공시가 고친 원본(disclosure_events.corrects가 가리키는 공시)은 후보에서 뺀다.
 자회사 공시("자회사의 주요경영사항", disclosure_events.is_subsidiary)는 기본으로 뺀다: 자회사 실적을 모회사 실적처럼 쓰지 않게.
+
+2026-11-09 검수(run_20261109_133043 review_findings.md)로 넣은 후보 거르기 (configs/updates.yaml recent.filters.
+코드 기본값은 모두 꺼짐 = 예전과 같음, 설정 파일은 periodic_date: period_end · latest_version_only: true):
+- periodic_date: period_end — 정기보고서의 최신순 기준(정렬·후보 날짜)을 접수일 대신 보고 기간 끝으로 (없으면 접수일).
+  [기재정정] 옛 보고서가 정정 접수일(2026-03-24) 때문에 최신 자료로 뽑혔다. 수시공시는 period_end가 없어 접수일 그대로.
+  기간 시작(since) 비교는 접수일 그대로.
+- latest_version_only: 같은 보고서의 원본·정정본이 같이 있으면 가장 늦게 접수한 것만. disclosure_events.corrects가 정기보고서에는
+  없고 일부 수시공시 정정에도 비어 있어서, 회사·종류·제목(앞의 [기재정정] 같은 표시를 뗀 것)·기간으로 묶는다.
+  수시공시는 기간이 없어 정정 표시가 있는 더 늦은 공시가 30일 안에 있을 때만 이전 것을 뺀다.
+- dedupe_same_text: 가져온 공시 후보 중 본문(맨 앞 "[회사 연도 | 절]" 머리말을 뗀 것)이 같은 청크는 가장 최근 보고서
+  (후보 날짜 → 접수번호 순, 같은 보고서 안에서는 유사도 높은 것) 하나만 남긴다. 반기·사업보고서에 되풀이되는 각주 (R17~19).
+  처음엔 '여러 보고서에 나오면 제외'(boilerplate_min_docs)로 했다가 최신 배당 절까지 빠져서 중복 제거로 바꿨다.
+- news_require_company: false | true(제목 + 앞부분 news_company_lead_chars자) | title(제목만) — 종목명·별칭이 없는 뉴스를 뺀다.
 """
 
 from __future__ import annotations
@@ -86,6 +99,93 @@ ORDER BY d.rcept_dt DESC, c.dense_embedding <=> %(q)s::vector
 LIMIT %(k)s
 """
 
+FILTER_DEFAULTS = {"periodic_date": "rcept_dt", "latest_version_only": False, "dedupe_same_text": False,
+                   "news_require_company": False, "news_company_lead_chars": 150}
+NEWS_COMPANY_MODES = (False, True, "title")
+CORRECTION_DAYS = 30
+# 제목 앞의 [기재정정]·[첨부정정]·[첨부추가] 같은 표시를 뗀 제목
+BASE_TITLE = r"regexp_replace({t}.title, '^(\[[^]]*\]\s*)+', '')"
+# 정기보고서: 기간 끝(없으면 접수일). 수시공시: 접수일
+PERIOD_DATE = f"(CASE WHEN d.kind::text IN {EVENT_KINDS} THEN d.rcept_dt ELSE COALESCE(d.period_end, d.rcept_dt) END)"
+# 더 늦게 접수한 같은 보고서가 있으면 뺀다
+NEWER_VERSION = rf"""NOT EXISTS (SELECT 1 FROM disclosures d2
+    WHERE d2.symbol = d.symbol AND d2.kind = d.kind AND d2.rcept_no <> d.rcept_no
+      AND {BASE_TITLE.format(t="d2")} = {BASE_TITLE.format(t="d")}
+      AND (d2.rcept_dt, d2.rcept_no) > (d.rcept_dt, d.rcept_no)
+      AND CASE WHEN d.kind::text IN {EVENT_KINDS}
+               THEN d2.title ~ '^\[[^]]*정정' AND d2.rcept_dt <= d.rcept_dt + {CORRECTION_DAYS}
+               ELSE d2.period_end IS NOT DISTINCT FROM d.period_end END)"""
+# 청크 텍스트 맨 앞의 머리말 "[KB금융 2025 반기 | I. 회사의 개요 > 4. 주식의 총수 등] "은 보고서·절마다 달라 떼고 비교한다
+CHUNK_BODY = r"regexp_replace({t}.chunk_text, '^\[[^]]*\]\s*', '')"
+_CHUNK_HEAD = re.compile(r"^\[[^\]]*\]\s*")
+_UNIT_HEAD = re.compile(r"^\(단위: [^)]*\) ")
+
+
+def chunk_body_hash(text: str) -> str:
+    """청크 본문 식별값: 수시공시에 붙인 "(단위: …) "와 맨 앞 머리말 하나를 떼고 UTF-8 md5."""
+    import hashlib
+
+    body = _CHUNK_HEAD.sub("", _UNIT_HEAD.sub("", text or "", count=1), count=1)
+    return hashlib.md5(body.encode("utf-8")).hexdigest()
+
+
+def dedupe_same_text(cands: list[Candidate]) -> tuple[list[Candidate], list[Candidate]]:
+    """본문이 같은 공시 청크는 가장 최근 보고서(후보 날짜, 접수번호 순)의 것 하나만 남긴다. 같은 보고서 안에서는 유사도 높은 것.
+    (남긴 후보, 뺀 후보). 순서는 원래 순서를 지킨다. 뉴스는 그대로."""
+    best: dict[str, Candidate] = {}
+    rank = lambda c: (c.date, c.ref.split(":", 1)[1].split("#", 1)[0], c.similarity)
+    for c in cands:
+        if c.kind != "disclosure":
+            continue
+        h = chunk_body_hash(c.text)
+        if h not in best or rank(c) > rank(best[h]):
+            best[h] = c
+    keep = {id(c) for c in best.values()}
+    kept = [c for c in cands if c.kind != "disclosure" or id(c) in keep]
+    dropped = [c for c in cands if c.kind == "disclosure" and id(c) not in keep]
+    return kept, dropped
+
+
+def recent_disclosure_sql(periodic_date: str = "rcept_dt", latest_version_only: bool = False) -> str:
+    """recent.filters에 맞춘 공시 후보 SQL. 모두 기본값이면 RECENT_DISCLOSURE_SQL과 같다.
+    periodic_date=period_end는 정렬과 후보 날짜(pick_recent의 최신순)에만 쓴다. 기간 시작(since) 비교는 접수일 그대로
+    (2026-11-09: 기간 시작에도 쓰면 2025-11-14 접수 2025.09 분기보고서가 빠졌다)."""
+    if periodic_date not in ("rcept_dt", "period_end"):
+        raise ValueError(f"periodic_date는 rcept_dt 또는 period_end: {periodic_date}")
+    day = PERIOD_DATE if periodic_date == "period_end" else "d.rcept_dt"
+    extra = f"\n  AND {NEWER_VERSION}" if latest_version_only else ""
+    return f"""
+SELECT c.rcept_no, c.chunk_index, c.section, c.chunk_text, d.title, {day}, d.source_url, d.kind::text, {UNIT},
+       1 - (c.dense_embedding <=> %(q)s::vector) AS sim
+FROM disclosure_chunks c
+JOIN disclosures d ON d.rcept_no = c.rcept_no
+WHERE d.symbol = %(symbol)s AND c.dense_embedding IS NOT NULL AND d.rcept_dt >= %(since)s
+  AND {NOT_CORRECTED} AND {SUBSIDIARY}
+  AND 1 - (c.dense_embedding <=> %(q)s::vector) >=
+      CASE WHEN d.kind::text IN {EVENT_KINDS} THEN %(event_floor)s ELSE %(floor)s END{extra}
+ORDER BY {day} DESC, c.dense_embedding <=> %(q)s::vector
+LIMIT %(k)s
+"""
+
+
+def search_filters(rcfg: dict | None) -> dict:
+    """configs/updates.yaml recent.filters (없는 키는 기본값 = 꺼짐)."""
+    unknown = set((rcfg or {}).get("filters") or {}) - set(FILTER_DEFAULTS)
+    if unknown:
+        raise ValueError(f"recent.filters에 모르는 키: {sorted(unknown)}")
+    f = {**FILTER_DEFAULTS, **((rcfg or {}).get("filters") or {})}
+    if f["news_require_company"] not in NEWS_COMPANY_MODES:
+        raise ValueError(f"news_require_company는 false·true·title 중 하나: {f['news_require_company']!r}")
+    return f
+
+
+def news_company_lead(filters: dict) -> int | None:
+    """뉴스 종목명 필터가 보는 앞부분 길이. 꺼짐이면 None, title이면 0(제목만)."""
+    mode = filters.get("news_require_company", False)
+    if not mode:
+        return None
+    return 0 if mode == "title" else int(filters.get("news_company_lead_chars", 150))
+
 
 def vector_literal(vec) -> str:
     return "[" + ",".join(f"{float(x):.8g}" for x in vec) + "]"
@@ -137,11 +237,51 @@ def recent_news_candidates(conn, symbol: str, query_vec, since: date, k: int, fl
 
 
 def recent_disclosure_candidates(conn, symbol: str, query_vec, since: date, k: int, floor: float,
-                                 event_floor: float | None = None, include_subsidiary: bool = False) -> list[Candidate]:
-    """floor는 정기보고서, event_floor는 수시공시 임계값 (없으면 floor를 같이 쓴다)."""
-    return _disclosure_rows(conn, RECENT_DISCLOSURE_SQL, {
+                                 event_floor: float | None = None, include_subsidiary: bool = False,
+                                 filters: dict | None = None) -> list[Candidate]:
+    """floor는 정기보고서, event_floor는 수시공시 임계값 (없으면 floor를 같이 쓴다). filters: search_filters() 결과.
+    periodic_date=period_end이면 정기보고서 후보의 date가 보고 기간 끝이다."""
+    f = {**FILTER_DEFAULTS, **(filters or {})}
+    sql = recent_disclosure_sql(f["periodic_date"], f["latest_version_only"])
+    out = _disclosure_rows(conn, sql, {
         "q": vector_literal(query_vec), "symbol": symbol, "since": since, "k": k, "floor": floor,
         "event_floor": floor if event_floor is None else event_floor, "subsidiary": include_subsidiary}, symbol)
+    return dedupe_same_text(out)[0] if f["dedupe_same_text"] else out
+
+
+def company_terms(company: str, symbol: str, rcfg: dict | None = None, symbol_aliases: dict | None = None) -> list[str]:
+    """뉴스 종목명 필터에 쓰는 이름: stocks 이름 + recent.company_aliases[이름] + configs/stock_aliases.yaml aliases[종목코드]."""
+    terms = [company, *((rcfg or {}).get("company_aliases") or {}).get(company, []),
+             *((symbol_aliases or {}).get(symbol) or [])]
+    return list(dict.fromkeys(t for t in terms if t))
+
+
+def load_symbol_aliases(path: str = "configs/stock_aliases.yaml") -> dict[str, list[str]]:
+    import yaml
+
+    from ..common.config import resolve_path
+
+    p = resolve_path(path)
+    if not p.is_file():
+        return {}
+    return {str(k): list(v) for k, v in ((yaml.safe_load(p.read_text(encoding="utf-8")) or {}).get("aliases") or {}).items()}
+
+
+def drop_news_without_company(cands: list[Candidate], names: list[str],
+                              lead_chars: int = 150) -> tuple[list[Candidate], list[Candidate]]:
+    """뉴스 제목이나 내용 앞 lead_chars자에 종목명·별칭(names)이 하나도 없으면 뺀다 (lead_chars=0이면 제목만).
+    (남긴 후보, 뺀 기사). 공시는 그대로. 대소문자는 가리지 않는다 ("naver", "kb")."""
+    keys = [n.lower() for n in names if n]
+    if not keys:
+        return list(cands), []
+    kept, dropped = [], []
+    for c in cands:
+        if c.kind != "news":
+            kept.append(c)
+            continue
+        head = f"{c.title} {(c.text or '')[:lead_chars]}".lower()
+        (kept if any(k in head for k in keys) else dropped).append(c)
+    return kept, dropped
 
 
 # 제목 맨 앞의 [단독]·따옴표·괄호는 건너뛰고 회사 이름을 본다. 이름 뒤는 구분 기호나 조사+공백이어야 한다 ("대상자"를 "대상"으로 읽지 않게)

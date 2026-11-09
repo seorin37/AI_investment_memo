@@ -51,6 +51,10 @@ def write_results(run_dir: Path, drafts: list[UpdateDraft], report: str, summary
 CANDIDATE_COLUMNS = ["item_id", "symbol", "category", "항목", "메모 문장", "종류", "ref", "날짜", "제목", "내용(앞부분)", "유사도", "관련(O/X)"]
 
 
+CANDIDATE_TEXT = 500      # 공시·제목+요약 뉴스의 내용 칸 길이
+NEWS_CHUNK_TEXT = 800     # 2026-11-09: 뉴스 원문 청크는 전문(최대 773자)을 적는다 (autolabel.MAX_TEXT와 같게)
+
+
 def write_candidates_csv(run_dir: Path, rows: list[tuple[TrackingItem, Candidate]]) -> Path:
     """항목×후보 한 줄씩. 엑셀에서 바로 열리도록 utf-8-sig로 쓴다. 마지막 열 '관련(O/X)'을 사람이 채운다."""
     path = run_dir / "candidates.csv"
@@ -59,6 +63,7 @@ def write_candidates_csv(run_dir: Path, rows: list[tuple[TrackingItem, Candidate
         w.writerow(CANDIDATE_COLUMNS)
         for item, c in rows:
             kind = "news_chunks" if c.doc == "chunk" else c.kind     # 원문 청크 후보는 calibrate가 따로 센다
+            limit = NEWS_CHUNK_TEXT if c.doc == "chunk" else CANDIDATE_TEXT
             w.writerow([item.item_id, item.symbol, item.category, item.description, item.memo_text, kind, c.ref,
-                        c.date, c.title, (c.text or "").replace("\n", " ")[:500], f"{c.similarity:.4f}", ""])
+                        c.date, c.title, (c.text or "").replace("\n", " ")[:limit], f"{c.similarity:.4f}", ""])
     return path

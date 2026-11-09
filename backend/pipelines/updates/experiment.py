@@ -25,7 +25,8 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from ..common.config import load_config, resolve_path
-from .candidates import drop_other_company_news, listed_names, recent_disclosure_candidates, recent_news_candidates
+from .candidates import (company_terms, drop_news_without_company, news_company_lead, drop_other_company_news, listed_names,
+                         load_symbol_aliases, recent_disclosure_candidates, recent_news_candidates, search_filters)
 from .models import TrackingItem
 from .preview import write_preview
 from .price import check_price
@@ -56,7 +57,7 @@ def load_items(gold_path: Path, symbols: tuple[str, ...] = PILOT) -> list[Tracki
                     description=it["description"], keywords=tuple(it.get("keywords") or ()),
                     price_threshold=it.get("price_threshold"),
                     category=str(sent.get("category") or it.get("category") or ""),
-                    memo_text=sent.get("cleaned_text") or sent["text"]))
+                    memo_text=sent.get("cleaned_text") or sent["text"], time_hint=it.get("time_hint") or ""))
     return items
 
 
@@ -147,6 +148,9 @@ def main(argv: list[str] | None = None) -> int:
     since = date.fromisoformat(args.since) if args.since else lookback
     d_since = date.fromisoformat(args.disclosure_since) if args.disclosure_since else lookback
     fetch_k = rcfg.get("fetch_k", 50)
+    filters = search_filters(rcfg)
+    news_lead = news_company_lead(filters)
+    symbol_aliases = load_symbol_aliases() if news_lead is not None else {}
     floor, strong = thresholds(tcfg)
 
     vectors = {}
@@ -172,6 +176,7 @@ def main(argv: list[str] | None = None) -> int:
     kind_sims: dict[str, list[float]] = {"news": [], "news_chunks": [], "disclosure": [], "event": []}   # disclosure=정기보고서, event=수시공시
     cand_rows = []
     other_news = []                                             # 다른 회사 이름으로 시작해 뺀 기사 (항목, 후보)
+    no_company_news = []                                        # 제목·앞부분에 종목명이 없어 뺀 기사 (recent.filters.news_require_company)
     status_count: dict[str, int] = {}
     fail_count: dict[str, int] = {}
     drafts = []
@@ -201,8 +206,13 @@ def main(argv: list[str] | None = None) -> int:
                 news = (searcher.recent(item.symbol, item.query_text, since, fetch_k, floor["news_chunks"], headline_vec=vec,
                                         headline_floor=floor["news"], variant=cfg["news"]["variant"]) if searcher else
                         recent_news_candidates(conn, item.symbol, vec, since, fetch_k, floor["news"], cfg["news"]["variant"]))
+                if news_lead is not None:
+                    news, dropped = drop_news_without_company(
+                        news, company_terms(item.company_name, item.symbol, rcfg, symbol_aliases),
+                        news_lead)
+                    no_company_news += [(item, c) for c in dropped]
                 cands = (news + recent_disclosure_candidates(conn, item.symbol, vec, d_since, fetch_k, floor["disclosure"],
-                                                        floor["event"], rcfg.get("include_subsidiary", False)))
+                                                        floor["event"], rcfg.get("include_subsidiary", False), filters))
                 if rcfg.get("drop_other_company_news", True):
                     cands, dropped = drop_other_company_news(cands, item.company_name, all_names,
                                                              aliases.get(item.company_name, []))
@@ -286,15 +296,23 @@ def main(argv: list[str] | None = None) -> int:
             + (f" · 회사 이름 {len(all_names)}개 (stocks {len(stock_names)}, 파일 {len(file_names)})"
                if rcfg.get("drop_other_company_news", True) else " · 꺼짐")]
     summary["other_company_news"] = len(other_news)
+    summary["search_filters"] = filters
+    summary["no_company_news"] = len(no_company_news)
+    head.append(f"- 후보 거르기(recent.filters): {json.dumps(filters, ensure_ascii=False)}"
+                f" · 종목명 없어 뺀 기사 {len(no_company_news)}건 (항목·기사 쌍)")
     titles: dict[str, list[str]] = {}
     for item, c in other_news:
         titles.setdefault(f"{c.date} {c.title}", []).append(item.item_id)
     sections += ["## 다른 회사 이름으로 시작해 뺀 기사", *[f"- {t} ← {', '.join(ids)}" for t, ids in titles.items()], ""]
     if client and client.calls:
-        pt = sum(c.prompt_tokens or 0 for c in client.calls)
-        ot = sum(c.output_tokens or 0 for c in client.calls)
-        head.append(f"- LLM 호출 {len(client.calls)}회, 입력 토큰 {pt}, 출력 토큰 {ot}")
-        summary["llm_calls"], summary["prompt_tokens"], summary["output_tokens"] = len(client.calls), pt, ot
+        from ..tracking.openai_client import usage_totals
+
+        u = usage_totals(client.calls)
+        head.append(f"- LLM 호출 {u['llm_calls']}회, 입력 토큰 {u['prompt_tokens']}, 출력 토큰 {u['output_tokens']}"
+                    f" (그중 추론 {u['reasoning_tokens']}) · 모델 {client.model}"
+                    + (f" · 추론 강도 {client.reasoning_effort}" if client.reasoning_effort else ""))
+        summary.update(u)
+        summary["model"], summary["reasoning_effort"] = client.model, client.reasoning_effort
     run_dir = new_run_dir(args.out_dir)
     write_results(run_dir, drafts, "\n".join(head + [""] + sections) + "\n", summary)
     csv_path = write_candidates_csv(run_dir, cand_rows)

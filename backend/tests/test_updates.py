@@ -1,5 +1,6 @@
 """AI 업데이트 파이프라인 테스트 — DB·GPU·외부 API 없음 (가짜 LLM, 가짜 후보). 예시는 LLM 답변 지침서의 좋은/나쁜 예를 따른다."""
 
+import csv
 import json
 import re
 import tempfile
@@ -971,6 +972,41 @@ class AutoLabelTest(unittest.TestCase):
             stats = autolabel.label_csv(src, dst, flaky)
             self.assertEqual((stats["labeled"], stats["failed_items"]), (1, 1))
 
+    def test_prompt_file_and_codes(self):
+        body = autolabel.load_prompt("configs/candidate_relevance_prompt_draft.md")
+        self.assertTrue(body.startswith("당신은"))                                  # 사람용 설명(주석)은 빠진다
+        self.assertNotIn("<!--", body)
+        self.assertIn("ON_TOPIC_EVENT", body)
+        raw = '{"labels":[{"id":"C1","relevant":true,"code":"ON_TOPIC_EVENT"},{"id":"C2","relevant":false}]}'
+        self.assertEqual(autolabel.parse_codes(raw), {"C1": "ON_TOPIC_EVENT"})
+        self.assertEqual(autolabel.parse_codes("깨짐"), {})
+        p = autolabel.build_prompt({"symbol": "1", "description": "d", "memo": "m"}, [], prompt="새 지시문")
+        self.assertTrue(p.startswith("새 지시문"))
+        chunk = "가" * 773                                                          # 뉴스 원문 청크 최대 길이
+        p = autolabel.build_prompt({"symbol": "1", "description": "d", "memo": "m"},
+                                   [{"cid": "C1", "kind": "news_chunks", "date": "d", "title": "t", "text": chunk}])
+        self.assertIn(chunk, p)                                                     # 청크 전문이 들어간다
+        self.assertNotIn("가" * 501, autolabel.build_prompt({"symbol": "1", "description": "d", "memo": "m"},
+                         [{"cid": "C1", "kind": "news", "date": "d", "title": "t", "text": chunk}], max_text=500))
+        self.assertEqual(autolabel.default_out(Path("r/c.csv"), "gpt-6.1-sol", "configs/candidate_relevance_prompt_draft.md").name,
+                         "candidates_auto_gpt-6.1-sol_candidate_relevance_prompt_draft.csv")
+        with tempfile.TemporaryDirectory() as tmp:
+            src, dst = Path(tmp) / "c.csv", Path(tmp) / "auto.csv"
+            write_csv(src, [cand_row("i1", "news", "news:1", "기사 A", 0.5, "O")])
+            fake = lambda prompt: json.dumps({"labels": [{"id": "C1", "relevant": False, "code": "MARKET_SUMMARY"}]})
+            autolabel.label_csv(src, dst, fake, prompt="새 지시문", with_codes=True)
+            rows = list(csv.DictReader(dst.open(encoding="utf-8-sig")))
+            self.assertEqual((rows[0]["관련(O/X)"], rows[0][autolabel.LLM_COL], rows[0][autolabel.CODE_COL]), ("O", "X", "MARKET_SUMMARY"))
+
+    def test_labeler_model_and_output_name(self):
+        self.assertEqual(autolabel.labeler_model("cli-m", {"LABELER_MODEL": "env-m"}), "cli-m")
+        self.assertEqual(autolabel.labeler_model(None, {"LABELER_MODEL": "gpt-6.1-terra"}), "gpt-6.1-terra")
+        self.assertIsNone(autolabel.labeler_model(None, {"LLM_MODEL": "x"}))      # 없으면 OpenAIClient가 LLM_MODEL
+        src = Path("r/candidates.csv")
+        self.assertEqual(autolabel.default_out(src, "gpt-6.1-terra").name, "candidates_auto_gpt-6.1-terra.csv")
+        self.assertNotEqual(autolabel.default_out(src, "gpt-6.1-sol"), autolabel.default_out(src, "gpt-6.1-terra"))
+        self.assertEqual(autolabel.default_out(src, "org/m:1").name, "candidates_auto_org-m-1.csv")
+
 
 class SourceAndAgreementTest(unittest.TestCase):
     def make(self, tmp):
@@ -1489,6 +1525,48 @@ class EvalE2ETest(unittest.TestCase):
         self.assertEqual((s["tracking_agreement"], s["decision_accuracy"], s["category_accuracy"]), (0.5, 0.5, 0.5))
         self.assertEqual(s["confusion"], {"normal→normal": 1, "partial→full_fallback": 1})
 
+    def test_align_with_typo_memo(self):
+        """정답 문장은 오타 고친 글 기준, 판정은 오타가 든 원문 기준 — 위치를 옮겨 맞춘다."""
+        from pipelines.tracking.judge import Judgment
+        from pipelines.updates.eval_e2e import align
+        raw = "광고 수입이 어떻게 바바뀌는지 봐야겠어요.\n조급해하지 말자."
+        clean = "광고 수입이 어떻게 바뀌는지 봐야겠어요.\n조급해하지 말자."
+        cut = raw.index("\n")
+        pred = [Judgment(0, raw[:cut], (0, cut), raw[:cut], [], "normal", "A1"),
+                Judgment(1, raw[cut + 1:], (cut + 1, len(raw)), raw[cut + 1:], [], "full_fallback", "B3")]
+        gold = [{"text": "광고 수입이 어떻게 바뀌는지 봐야겠어요.", "intended_type": "A1", "expected_decision": "추적"},
+                {"text": "조급해하지 말자.", "intended_type": "B3", "expected_decision": "추적 안 함"}]
+        self.assertEqual([p for _, p in align(raw, gold, pred)][0], None)                    # 예전: 오타 문장은 못 찾음
+        self.assertEqual([p.sentence_index for _, p in align(raw, gold, pred, clean)], [0, 1])
+
+    def test_memo_files_symbols_and_duplicates(self):
+        from pipelines.updates.eval_e2e import fill_symbols, load_memos, memo_files
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            a = {"memo_id": "L1", "company_primary": "삼성전자", "memo_body": "x", "sentences": []}
+            b = {"memo_id": "L2", "company_primary": "없는회사", "memo_body": "y", "sentences": []}
+            (d / "batch_01.jsonl").write_text(json.dumps(a, ensure_ascii=False) + "\n", encoding="utf-8")
+            (d / "batch_02.jsonl").write_text(json.dumps(b, ensure_ascii=False) + "\n", encoding="utf-8")
+            (d / "memos.jsonl").write_text("\n".join(json.dumps(m, ensure_ascii=False) for m in (a, b)), encoding="utf-8")
+            self.assertEqual([f.name for f in memo_files(str(d))], ["batch_01.jsonl", "batch_02.jsonl"])  # memos.jsonl 제외
+            self.assertEqual([f.name for f in memo_files(str(d / "memos.jsonl"))], ["memos.jsonl"])       # 직접 주면 읽는다
+            memos = load_memos(str(d))
+            self.assertEqual([m["memo_id"] for m in memos], ["L1", "L2"])
+            self.assertEqual(len(load_memos(str(d / "batch_*.jsonl"))), 2)
+            self.assertEqual(len(load_memos(str(d / "*.jsonl"))), 2)                                # glob도 memos.jsonl 제외
+            self.assertEqual(fill_symbols(memos, {"삼성전자": "005930"}), 1)
+            self.assertEqual([m["symbol"] for m in memos], ["005930", None])
+            (d / "batch_03.jsonl").write_text(json.dumps(a, ensure_ascii=False) + "\n", encoding="utf-8")
+            with self.assertRaises(ValueError):                                                     # 같은 메모를 두 번
+                load_memos(str(d))
+
+    def test_items_from_tracked_sentences_only_keeps_time_hint(self):
+        from pipelines.tracking.judge import Judgment
+        from pipelines.updates.eval_e2e import items_from
+        topic = {"type": "topic", "description": "NAVER 분기 실적 발표", "keywords": ["실적발표"], "time_hint": "다음 주"}
+        js = [Judgment(0, "a", (0, 1), "a", [], "partial", "C1", items=[topic])]
+        self.assertEqual(items_from({"memo_id": "K1", "symbol": "035420"}, js, "NAVER")[0].time_hint, "다음 주")
+
     def test_items_from_tracked_sentences_only(self):
         from pipelines.tracking.judge import Judgment
         from pipelines.updates.eval_e2e import items_from
@@ -1508,6 +1586,208 @@ class EvalE2ETest(unittest.TestCase):
                          ("article", False, "legacy", [], []))
         self.assertEqual((c["new"]["news"], c["new"]["same_event"], c["new"]["topic"]["evidence_mode"],
                           c["new"]["topic"]["prediction_terms"]), ("chunks", True, "all", ["전망"]))
+
+
+class RelevanceCompareTest(unittest.TestCase):
+    """사람 검수 40건 비교 스크립트(relevance_compare)의 계산 부분. DB·LLM 없음."""
+
+    def rows(self):
+        mk = lambda rid, sym, title, human, item="M1:0:0": {
+            "review_id": rid, "item_id": item, "symbol": sym, "항목": "주가 부진 원인", "메모 문장": "왜 안 오르냐",
+            "종류": "news", "ref": f"news:{rid}", "날짜": "2026-11-03", "제목": title, "내용(앞부분)": "본문", "관련(O/X)": human}
+        return [mk("N01", "005930", "삼전·하닉 동반 급락", "O"), mk("N02", "000660", "SK하닉 담고 삼전 판다", "X"),
+                mk("N03", "005930", "코스피 2주 연속 하락", "X"), mk("N04", "5930", "삼성전자, 실적 발표", "O", "M2:0:0")]
+
+    def test_human_labels_and_metrics(self):
+        from pipelines.updates import relevance_compare as rc
+        rows = self.rows()
+        human = rc.human_labels(rows)
+        self.assertEqual(human, {"N01": True, "N02": False, "N03": False, "N04": True})
+        m = rc.metrics({"N01": True, "N02": True, "N03": False, "N04": False}, human)
+        self.assertEqual((m["shown"], m["tp"], m["fp"], m["fn"], m["tn"]), (2, 1, 1, 1, 1))
+        self.assertEqual((m["precision"], m["recall"], m["agreement"]), (0.5, 0.5, 0.5))
+        rows[2]["관련(O/X)"] = " "
+        with self.assertRaises(ValueError):                                         # 검수 전이면 멈춘다
+            rc.human_labels(rows)
+
+    def test_title_mode_uses_new_aliases(self):
+        from pipelines.updates import relevance_compare as rc
+        from pipelines.updates.candidates import load_symbol_aliases
+        rcfg = load_config("configs/updates.yaml")["recent"]
+        kept = rc.title_mode(self.rows(), {"005930": "삼성전자", "000660": "SK하이닉스"}, rcfg, load_symbol_aliases())
+        self.assertEqual(kept, {"N01": True, "N02": True, "N03": False, "N04": True})      # 하닉·SK하닉, 앞자리 0 보정
+
+    def test_prompt_examples_do_not_overlap_review_sets(self):
+        from pipelines.common.config import resolve_path
+        from pipelines.updates import relevance_compare as rc
+        prompt = autolabel.load_prompt(rc.PROMPT_PATH)
+        self.assertGreater(len(rc.prompt_examples(prompt)), 5)
+        self.assertEqual(rc.example_overlaps("예시: \"삼전·하닉 동반 급락\"", self.rows()),
+                         [("삼전·하닉 동반 급락", "N01")] * 2)                       # 예시로 한 번, 제목이 프롬프트에 있어 한 번
+        self.assertEqual(rc.example_overlaps("예시: \"전혀 다른 문장입니다\"", self.rows()), [])
+        for path in (rc.OLD_REVIEW, "results/updates/run_20261109_170506/review_human_news2.csv"):
+            p = resolve_path(path)
+            if p.is_file():                                                         # 결과 폴더는 git 밖이라 없을 수 있다
+                self.assertEqual(rc.example_overlaps(prompt, rc.read_csv(p)), [], path)
+
+    def test_estimate(self):
+        from pipelines.updates import relevance_compare as rc
+        est = rc.estimate(self.rows(), "지시문", ["gpt-6.1-sol", "gpt-6.1-terra", "unknown"])
+        self.assertEqual(est["gpt-6.1-sol"]["calls"], 2)                              # 항목당 1회
+        self.assertAlmostEqual(est["gpt-6.1-terra"]["usd"] * 2, est["gpt-6.1-sol"]["usd"], places=4)
+        self.assertIsNone(est["unknown"]["usd"])
+
+
+class ReviewSampleTest(unittest.TestCase):
+    """chunks 모드 검수 표본 (review_sample). DB 없음."""
+
+    def test_pool_balanced_and_full_chunk(self):
+        from pipelines.updates import review_sample as rs
+        rows = ([{"item_id": "A", "ref": f"news:{i}", "종류": "news_chunks"} for i in range(10)]
+                + [{"item_id": "B", "ref": "news:100", "종류": "news_chunks"}, {"item_id": "B", "ref": "news:0", "종류": "news_chunks"},
+                   {"item_id": "C", "ref": "news:200", "종류": "news"}, {"item_id": "D", "ref": "disc:1#0", "종류": "disclosure"}])
+        pool = rs.candidate_pool(rows, {"news:9"}, include_headline=False)
+        self.assertEqual({r["종류"] for r in pool}, {"news_chunks"})                  # 보충 기사·공시 빠짐
+        self.assertNotIn("news:9", {r["ref"] for r in pool})                        # 이미 본 기사 빠짐
+        self.assertIn("news:200", {r["ref"] for r in rs.candidate_pool(rows, set(), include_headline=True)})
+        self.assertEqual({r["종류"] for r in rs.candidate_pool([rows[-2]], set(), False)}, {"news"})   # article 폴더
+        picked = rs.balanced_sample(pool, 4, seed=1)
+        self.assertEqual(len(picked), 4)
+        self.assertEqual(len({r["ref"] for r in picked}), 4)                         # 같은 기사는 한 번만
+        self.assertIn("B", {r["item_id"] for r in picked})                           # 한 항목에 몰리지 않는다
+        self.assertEqual(rs.balanced_sample(pool, 4, seed=1), picked)                # 시드 고정
+        chunks = [(0, "첫 문단\n이어서"), (1, "둘째 청크 본문이 길게 이어진다 " * 30)]
+        idx, text = rs.full_chunk(chunks, ("둘째 청크 본문이 길게 이어진다 " * 30)[:500])
+        self.assertEqual((idx, len(text)), (1, len(chunks[1][1])))
+        self.assertEqual(rs.full_chunk(chunks, "첫 문단 이어서"), (0, "첫 문단\n이어서"))   # 줄바꿈을 공백으로 바꾼 csv 내용
+        self.assertEqual(rs.full_chunk(chunks, "없는 내용"), (None, "없는 내용"))
+
+
+class TimeHintTest(unittest.TestCase):
+    def test_load_items_keeps_time_hint_out_of_query(self):
+        from pipelines.common.config import resolve_path
+        from pipelines.updates.experiment import load_items
+        items = {i.item_id: i for i in load_items(resolve_path("eval/memo_eval_v0/memo_eval_v0.jsonl"))}
+        m05 = items["M05:1:0"]
+        self.assertEqual((m05.description, m05.time_hint), ("분기 실적 발표", "다음 주"))
+        self.assertNotIn("다음 주", m05.query_text)                               # 검색어는 그대로
+        self.assertTrue(all(isinstance(i.time_hint, str) for i in items.values()))
+
+
+class SearchFilterTest(unittest.TestCase):
+    """2026-11-09 검수로 넣은 후보 거르기 (recent.filters). DB 없이 SQL 조합·뉴스 필터·설정만 본다."""
+
+    def test_defaults_keep_old_sql(self):
+        from pipelines.updates import candidates as cd
+        self.assertEqual(cd.recent_disclosure_sql(), cd.RECENT_DISCLOSURE_SQL)
+        self.assertEqual(cd.search_filters({}), cd.FILTER_DEFAULTS)
+        with self.assertRaises(ValueError):
+            cd.search_filters({"filters": {"periodic": "period_end"}})          # 오타 키는 조용히 넘기지 않는다
+        with self.assertRaises(ValueError):
+            cd.recent_disclosure_sql("published_at")
+
+    def test_each_filter_adds_its_clause(self):
+        from pipelines.updates import candidates as cd
+        p = cd.recent_disclosure_sql("period_end")
+        self.assertIn("COALESCE(d.period_end, d.rcept_dt)", p)
+        self.assertIn(f"ORDER BY {cd.PERIOD_DATE} DESC", p)
+        self.assertIn("d.rcept_dt >= %(since)s", p)                              # 기간 시작 비교는 접수일 그대로
+        self.assertNotIn("d2.", p)
+        v = cd.recent_disclosure_sql(latest_version_only=True)
+        self.assertIn("d2.period_end IS NOT DISTINCT FROM d.period_end", v)
+        self.assertIn("정정", v)
+        self.assertNotIn("%(boiler)s", v)
+        self.assertEqual(cd.recent_disclosure_sql("period_end", True).count("NOT EXISTS (SELECT 1 FROM disclosures d2"), 1)
+        # 같은 본문: 머리말·수시공시 단위 표시를 뗀 md5
+        a = "[KB금융 2025 반기 | I. 회사의 개요 > 4. 주식의 총수 등] 주) 자기주식의 소각은 …"
+        b = "[KB금융 2025 사업보고서 | (본문)] 주) 자기주식의 소각은 …"
+        self.assertEqual(cd.chunk_body_hash(a), cd.chunk_body_hash(b))
+        self.assertEqual(cd.chunk_body_hash("(단위: 억원) " + a), cd.chunk_body_hash(a))
+        self.assertNotEqual(cd.chunk_body_hash(a), cd.chunk_body_hash("주) 다른 문장"))
+
+    def test_recent_disclosure_passes_filters(self):
+        from datetime import date
+
+        from pipelines.updates import candidates as cd
+
+        rows = [("20260324000827", 86, "주식의 총수", "[KB금융 2025 반기 | 주식의 총수] 주) 같은 각주", "[기재정정]반기보고서 (2025.06)",
+                 date(2025, 6, 30), "u", "half", None, 0.66),
+                ("20260324000827", 12, "(본문)", "[KB금융 2025 반기 | (본문)] 주) 같은 각주", "[기재정정]반기보고서 (2025.06)",
+                 date(2025, 6, 30), "u", "half", None, 0.675),
+                ("20260324000835", 120, "주식의 총수", "[KB금융 2025 사업보고서 | 주식의 총수] 주) 같은 각주",
+                 "[기재정정]사업보고서 (2025.12)", date(2025, 12, 31), "u", "annual", None, 0.665),
+                ("20260324000827", 90, "배당", "[KB금융 2025 반기 | 배당] 중간배당 912원", "[기재정정]반기보고서 (2025.06)",
+                 date(2025, 6, 30), "u", "half", None, 0.67)]
+
+        class Cur:
+            def __init__(self, log): self.log = log
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def execute(self, sql, params): self.log.append((sql, params))
+            def fetchall(self):
+                return rows
+
+        class Conn:
+            def __init__(self): self.log = []
+            def cursor(self): return Cur(self.log)
+
+        conn = Conn()
+        out = cd.recent_disclosure_candidates(conn, "105560", [0.1], date(2025, 11, 9), 50, 0.64, 0.58,
+                                              filters={"periodic_date": "period_end", "dedupe_same_text": True})
+        self.assertIn("COALESCE(d.period_end", conn.log[0][0])
+        # 같은 각주 3개 중 가장 최근 보고서(사업보고서 2025.12)의 것만, 배당 절은 그대로
+        self.assertEqual([(c.ref, c.date) for c in out], [("disc:20260324000835#120", "2025-12-31"),
+                                                           ("disc:20260324000827#90", "2025-06-30")])
+        plain = cd.recent_disclosure_candidates(conn, "105560", [0.1], date(2025, 11, 9), 50, 0.64, 0.58)
+        self.assertEqual(len(plain), 4)                                             # 꺼짐이면 그대로
+
+    def test_dedupe_same_report_keeps_most_similar(self):
+        from pipelines.updates.candidates import dedupe_same_text
+        from pipelines.updates.models import Candidate
+        mk = lambda ref, sim, day="2025-06-30", text="[A | x] 같은 각주", kind="disclosure": Candidate(
+            ref=ref, kind=kind, symbol="105560", date=day, title="t", text=text, url="", source="", similarity=sim)
+        kept, dropped = dedupe_same_text([mk("disc:1#86", 0.66), mk("disc:1#12", 0.675), mk("news:5", 0.6, text="[A | x] 같은 각주", kind="news")])
+        self.assertEqual([c.ref for c in kept], ["disc:1#12", "news:5"])
+        self.assertEqual([c.ref for c in dropped], ["disc:1#86"])
+
+    def test_news_company_title_mode(self):
+        from pipelines.updates.candidates import drop_news_without_company, news_company_lead, search_filters
+        from pipelines.updates.models import Candidate
+        self.assertIsNone(news_company_lead(search_filters({})))
+        self.assertEqual(news_company_lead(search_filters({"filters": {"news_require_company": True}})), 150)
+        self.assertEqual(news_company_lead(search_filters({"filters": {"news_require_company": "title"}})), 0)
+        with self.assertRaises(ValueError):
+            search_filters({"filters": {"news_require_company": "lead"}})
+        c = Candidate(ref="news:1", kind="news", symbol="005930", date="2026-11-04", title="코스피 극과 극 전망",
+                      text="삼성전자의 내년도 예상 실적 PER은", url="", source="", similarity=0.6)
+        self.assertEqual(len(drop_news_without_company([c], ["삼성전자"], 150)[0]), 1)       # 앞부분에 있으면 남김
+        self.assertEqual(len(drop_news_without_company([c], ["삼성전자"], 0)[0]), 0)         # 제목만 보면 뺌
+
+    def test_drop_news_without_company(self):
+        from pipelines.updates.candidates import company_terms, drop_news_without_company
+        from pipelines.updates.models import Candidate
+        mk = lambda ref, title, text, kind="news": Candidate(ref=ref, kind=kind, symbol="005930", date="2026-11-03", url="", source="",
+                                                              title=title, text=text, similarity=0.6)
+        cands = [mk("news:1", "HBM4 원가의 15% … 파운드리 승부처로", "고대역폭메모리(HBM)는 여러 개 D램을"),
+                 mk("news:2", "반도체주 급락", "한국거래소에 따르면 삼전은 3% 내렸다"),
+                 mk("news:3", "시황", "x" * 200 + "삼성전자"),                    # 앞부분 밖
+                 mk("news:4", "\"Naver\" 웹툰", ""),
+                 mk("disc:1#0", "분기보고서", "회사 이름 없음", kind="disclosure")]
+        terms = company_terms("삼성전자", "005930", {"company_aliases": {"삼성전자": ["삼전"]}}, {"005930": ["삼성"]})
+        self.assertEqual(terms, ["삼성전자", "삼전", "삼성"])
+        kept, dropped = drop_news_without_company(cands, terms, 150)
+        self.assertEqual([c.ref for c in kept], ["news:2", "disc:1#0"])
+        self.assertEqual([c.ref for c in dropped], ["news:1", "news:3", "news:4"])
+        kept, _ = drop_news_without_company(cands, ["NAVER"], 150)
+        self.assertIn("news:4", [c.ref for c in kept])                            # 대소문자 무시
+        self.assertEqual(len(drop_news_without_company(cands, [], 150)[0]), 5)     # 이름이 없으면 거르지 않는다
+
+    def test_project_config_filters(self):
+        from pipelines.common.config import load_config
+        from pipelines.updates.candidates import search_filters
+        f = search_filters(load_config("configs/updates.yaml")["recent"])
+        self.assertEqual((f["periodic_date"], f["latest_version_only"], f["dedupe_same_text"], f["news_require_company"]),
+                         ("period_end", True, False, False))                         # 2026-11-09 결정
 
 
 if __name__ == "__main__":

@@ -68,13 +68,13 @@
 ```bash
 # 1) 후보 전체를 뽑는다 (비용 없음). 표본은 후보 100건 이상(주제 항목 10개 이상)
 PYTHONPATH=backend python -m pipelines.updates.experiment --llm none --limit 30
-# 2) LLM이 후보마다 O/X를 자동 표시한다 (OpenAI 호출: 항목 수만큼). 사람 표시 열은 그대로, 'LLM관련(O/X)' 열이 채워진 candidates_auto.csv가 생긴다
+# 2) LLM이 후보마다 O/X를 자동 표시한다 (OpenAI 호출: 항목 수만큼). 사람 표시 열은 그대로, 'LLM관련(O/X)' 열이 채워진 candidates_auto_<모델>.csv가 생긴다 (모델: LABELER_MODEL, 없으면 LLM_MODEL)
 PYTHONPATH=backend python -m pipelines.updates.autolabel --labels results/updates/run_*/candidates.csv
-# 3) (선택, 권장) 사람이 candidates_auto.csv의 '관련(O/X)' 열에 30~50건만 표시한다 → LLM 표시와의 일치율이 나온다
+# 3) (선택, 권장) 사람이 candidates_auto_<모델>.csv의 '관련(O/X)' 열에 30~50건만 표시한다 → LLM 표시와의 일치율이 나온다
 # 4) 다른 종목 자료로 하한선을 구한다 (비용 없음, DB 읽기 전용)
 PYTHONPATH=backend python -m pipelines.updates.noise_floor --limit 30
 # 5) 합쳐서 계산한다
-PYTHONPATH=backend python -m pipelines.updates.calibrate --labels results/updates/run_*/candidates_auto.csv \
+PYTHONPATH=backend python -m pipelines.updates.calibrate --labels results/updates/run_*/candidates_auto_<모델>.csv \
     --noise-floor results/updates/run_*/noise_floor.json --min-precision 0.8
 ```
 - 표시 우선순위(`--source merged`, 기본): 사람 표시가 있으면 사람, 없으면 LLM. `human`/`llm`으로 하나만 쓸 수도 있다.

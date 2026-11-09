@@ -115,7 +115,7 @@ def main(argv: list[str] | None = None) -> int:
     for kind, s in summary.items():
         lines.append(f"- {kind}: 표본 {s['n']}건, " + ", ".join(f"p{p} {s[f'p{p}']}" for p in PERCENTILES))
     lines += ["", "p95는 '관련 없는 자료의 95%가 이 점수 이하'라는 뜻입니다. 임계값을 이보다 낮게 두면 엉뚱한 자료가 5% 넘게 통과합니다.",
-              f"`python -m pipelines.updates.calibrate --labels <candidates_auto.csv> --noise-floor {out / 'noise_floor.json'}` 로 정밀도 기준 추천과 합칩니다."]
+              f"`python -m pipelines.updates.calibrate --labels <candidates_auto_<모델>.csv> --noise-floor {out / 'noise_floor.json'}` 로 정밀도 기준 추천과 합칩니다."]
     (out / "noise_floor.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines))
     print(f"결과 폴더: {out} — DB에는 아무것도 쓰지 않았습니다.")

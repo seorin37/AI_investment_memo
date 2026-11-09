@@ -24,6 +24,8 @@ class TrackingItem:
     already_shown_ids: tuple[str, ...] = ()   # 이미 사용자에게 보여 준 출처 ref (news:123, disc:…)
     previous_summary: str = ""        # 직전 카드 요약
     fingerprint: str = ""             # 직전 카드 식별값
+    time_hint: str = ""               # 메모 분석이 뽑은 시점·기한 원문 ("다음 주", "이번 분기 실적 발표"). 2026-11-09 전달만
+                                      # (DB 열 없음, 기한 날짜 계산·카드 반영은 아직 안 함. 검색어 query_text에도 넣지 않는다)
 
     @property
     def query_text(self) -> str:
