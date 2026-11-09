@@ -140,7 +140,8 @@ def fill_limits(guide: str, limits: dict | None = None) -> str:
 
 
 def build_prompt(item: TrackingItem, evidence: list[Evidence], guide: str | None = None,
-                 limits: dict | None = None) -> str:
+                 limits: dict | None = None, rules: list[str] | None = None) -> str:
+    """rules(topic.extra_rules): 지침서 프롬프트 파일은 그대로 두고 입력 끝에 붙이는 추가 규칙 (2026-11-09 공시 숫자 우선, 예측 기사)."""
     body = INPUT_TEMPLATE.format(
         tracking_item_id=item.item_id, company_name=item.company_name or item.symbol, stock_code=item.symbol,
         tracking_item_title=item.description, tracking_keywords=", ".join(item.keywords) or "없음",
@@ -148,6 +149,8 @@ def build_prompt(item: TrackingItem, evidence: list[Evidence], guide: str | None
         already_shown_source_ids=", ".join(item.already_shown_ids) or "없음",
         previous_update_summary=_dash(item.previous_summary), last_update_fingerprint=_dash(item.fingerprint),
         memo_sentence=item.memo_text or "없음", evidence_block=evidence_block(evidence))
+    if rules:
+        body += "\n\n# 추가 규칙\n" + "\n".join(f"- {r}" for r in rules)
     return f"{fill_limits(guide or load_guide(), limits)}\n\n{body}"
 
 

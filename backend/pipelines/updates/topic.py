@@ -15,7 +15,7 @@ from __future__ import annotations
 from typing import Callable
 
 from .checks import check_card, check_no_update
-from .evidence import build_evidence, pick_recent, rcept_of, related_news, split_same_event
+from .evidence import build_evidence, evidence_options, pick_recent, rcept_of, related_news, split_same_event
 from .fixed import fixed_card
 from .judge import build_prompt, build_verify_prompt, parse_card, parse_verify
 from .models import Candidate, CreditsExhausted, TopicOutcome, TrackingItem, UpdateDraft
@@ -76,11 +76,12 @@ def check_topic(item: TrackingItem, candidates: list[Candidate], call: Callable[
     floor, strong = thresholds(cfg)
     passed = pick_recent(candidates, floor, strong, cfg.get("stop_window_days", 0))
     grouped: list[tuple[Candidate, str]] = []
+    options = evidence_options(cfg)
     if same_event:
-        passed, grouped = split_same_event(passed, same_event, cfg.get("max_disclosure_evidence", 2), floor)
+        passed, grouped = split_same_event(passed, same_event, cfg.get("max_disclosure_evidence", 2), floor, **options)
     evidence = build_evidence(passed, cfg.get("max_disclosure_evidence", 2), cfg.get("max_news_evidence", 3),
                               cfg.get("news_dup_similarity", 0.7), cfg.get("max_text_chars_news", 600),
-                              cfg.get("max_text_chars_disclosure", 800), floor)
+                              cfg.get("max_text_chars_disclosure", 800), floor, **options)
     out = _judge(item, evidence, call, banned, cfg)
     out.grouped = grouped
     if grouped and out.draft is not None and out.draft.type == "disclosure":
@@ -109,7 +110,7 @@ def _judge(item: TrackingItem, evidence, call: Callable[[str], str] | None, bann
             draft.related_news = related_news(evidence, set(), cfg.get("related_news_min_similarity", 0.6))
         return TopicOutcome("fixed_card", evidence, card, codes, draft, raw, retried)
 
-    prompt = build_prompt(item, evidence, limits=_limits(cfg))   # 설정 파일이 없으면 여기서 바로 실패시킨다 (호출 실패로 숨기지 않는다)
+    prompt = build_prompt(item, evidence, limits=_limits(cfg), rules=cfg.get("extra_rules"))   # 설정 파일이 없으면 여기서 바로 실패시킨다 (호출 실패로 숨기지 않는다)
     try:
         raw = call(prompt)
     except CreditsExhausted:

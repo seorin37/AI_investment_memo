@@ -750,10 +750,13 @@ class GuideRulesTest(unittest.TestCase):
             self.assertNotIn("BANNED", real_codes(summary=[s]), s)
 
     def test_forecast_with_source_as_subject_allowed(self):
+        # 시제 패턴(BANNED)은 주체를 쓴 전망을 통과시키지만, 2026-11-09 결정으로 남의 전망은 사실 근거가 아니다 (PREDICTION)
         d = disc(text="KB증권은 HBM 매출이 8.0% 상승할 것으로 전망했다.")
         good = {**GOOD, "summary": ["KB증권은 HBM 매출이 8.0% 상승할 것으로 전망했어요. [E1]"],
                 "evidence": [{"source_id": "E1", "fact": "KB증권은 HBM 매출이 8.0% 상승할 것으로 전망했다"}]}
-        self.assertEqual(check_card(parse_card(json.dumps(good)), build_evidence([d]), REAL_BANNED, REAL_TOPIC), [])
+        self.assertEqual(check_card(parse_card(json.dumps(good)), build_evidence([d]), REAL_BANNED, REAL_TOPIC), ["PREDICTION"])
+        self.assertEqual(check_card(parse_card(json.dumps(good)), build_evidence([d]), REAL_BANNED,
+                                    {**REAL_TOPIC, "prediction_terms": []}), [])
 
     def test_past_facts_allowed(self):
         self.assertEqual(real_codes(summary=["HBM 매출이 8.0% 상승했어요. [E1]"],
@@ -1367,6 +1370,90 @@ class SameEventLinkTest(unittest.TestCase):
         self.assertTrue(shares_number(keys, "엔비디아는 1조3412억원을 납입했다"))       # 기사의 반올림(0.5% 안)은 같은 값
         self.assertFalse(shares_number(keys, "엔비디아는 1.3조원을 납입했다"))          # 3% 차이는 다른 값
         self.assertFalse(shares_number(keys, "11월 3일 발표"))
+
+
+class EvidenceAllModeTest(unittest.TestCase):
+    """근거 고르기 all: 공시는 접수번호 단위(공시당 청크 2개·최대 5건), 뉴스는 전부, 합 15를 넘으면 뉴스부터 자른다."""
+    OPTS = {"mode": "all", "max_disclosure_docs": 5, "max_chunks_per_disclosure": 2, "max_total": 15}
+
+    def discs(self, docs=6, chunks=3):
+        return [replace(disc(f"disc:R{d}#{i}", sim=0.80 - d * 0.01 - i * 0.001), doc="event")
+                for d in range(docs) for i in range(chunks)]
+
+    def news_list(self, n):
+        return [news(f"news:{i}", sim=0.70 - i * 0.001, title=f"서로 다른 기사 제목 {chr(0xAC00 + i * 37)}{i}") for i in range(n)]
+
+    def test_disclosures_per_document_and_news_cut_first(self):
+        ev = build_evidence(self.discs() + self.news_list(14), **self.OPTS)
+        d = [e.candidate.ref for e in ev if e.candidate.kind == "disclosure"]
+        n = [e.candidate for e in ev if e.candidate.kind == "news"]
+        self.assertEqual(sorted(d), sorted(f"disc:R{x}#{i}" for x in range(5) for i in range(2)))   # 공시 5건 × 최고 청크 2개
+        self.assertEqual(len(ev), 15)
+        self.assertEqual(len(n), 5)                                                       # 15 - 공시 10 → 뉴스 5
+        self.assertEqual(min(c.similarity for c in n), 0.70 - 4 * 0.001)                  # 유사도 낮은 뉴스부터 잘렸다
+
+    def test_under_cap_takes_everything(self):
+        ev = build_evidence(self.discs(docs=2, chunks=1) + self.news_list(6), **self.OPTS)
+        self.assertEqual((len(ev), sum(e.candidate.kind == "news" for e in ev)), (8, 6))   # 예전 방식이면 뉴스 3
+
+    def test_legacy_mode_is_default(self):
+        ev = build_evidence(self.discs(docs=2, chunks=2) + self.news_list(6))
+        self.assertEqual(sum(e.candidate.kind == "disclosure" for e in ev), 2)
+        self.assertEqual(sum(e.candidate.kind == "news" for e in ev), 3)
+        cfg = load_config("configs/updates.yaml")["topic"]
+        self.assertEqual((cfg["evidence_mode"], cfg["max_total"], cfg["max_disclosure_docs"], cfg["max_chunks_per_disclosure"]),
+                         ("legacy", 15, 5, 2))
+        with self.assertRaises(ValueError):
+            build_evidence(self.discs(), mode="everything")
+
+    def test_check_topic_reads_mode_and_same_event_uses_document_rule(self):
+        cands = self.discs(docs=6, chunks=1) + [replace(news("news:x", sim=0.7), date="2026-08-14")]
+        cfg = {"min_similarity": 0.5, "evidence_mode": "all"}
+        out = check_topic(ITEM, cands, None, BANNED, cfg, {"news:x": "R4"})             # R4는 5건 안 → 기사는 묶인다
+        self.assertEqual([c.ref for c, _ in out.grouped], ["news:x"])
+        out = check_topic(ITEM, cands, None, BANNED, cfg, {"news:x": "R5"})             # R5는 6번째 → 근거가 아니라 묶지 않는다
+        self.assertEqual(out.grouped, [])
+        self.assertEqual(len(out.evidence), 6)
+
+
+class ExtraRulesAndPredictionTest(unittest.TestCase):
+    TOPIC = load_config("configs/updates.yaml")["topic"]
+    NAVER_EV = ("네이버의 3분기 매출은 3조5천143억원으로 시장 전망치가 나왔다. 증권가는 커머스 성장을 근거로 들었다.")
+    NAVER_CARD = {"status": "update", "title": "네이버 3분기 매출 3조5천143억원 전망",
+                  "summary": ["네이버 3분기 매출이 3조5천143억원으로 전망돼요. [E1]"],
+                  "reason": "메모에 쓰신 '분기 실적 발표'와 관련된 기사예요",
+                  "evidence": [{"source_id": "E1", "fact": "네이버의 3분기 매출은 3조5천143억원으로 시장 전망치가 나왔다"}],
+                  "confidence": 0.9}
+
+    def test_prompt_gets_extra_rules(self):
+        prompts = []
+        check_topic(ITEM, [disc()], lambda p: prompts.append(p) or NO_UPDATE_JSON, BANNED,
+                    {"extra_rules": self.TOPIC["extra_rules"]})
+        self.assertIn("# 추가 규칙\n- 같은 내용이 공시와 뉴스에 있으면 공시 숫자를 쓴다.", prompts[0])
+        self.assertIn("- 전망·예상·추정을 다룬 기사는 사실 근거로 쓰지 않는다.", prompts[0])
+
+    def test_naver_forecast_card_is_blocked(self):                    # 2026-11-09 비교 실행에서 나온 카드
+        from pipelines.updates.models import Card
+        item = TrackingItem("M05:1:0", "035420", "topic", "분기 실적 발표", (), memo_text="분기 실적 발표 보기")
+        ev_news = news("news:7", sim=0.62, title="네이버, 6분기 연속 매출 신기록 쓸까", text=self.NAVER_EV)
+        evidence = build_evidence([ev_news])
+        card = Card("update", self.NAVER_CARD["title"], self.NAVER_CARD["summary"], self.NAVER_CARD["reason"],
+                    [("E1", self.NAVER_CARD["evidence"][0]["fact"])], 0.9)
+        self.assertIn("PREDICTION", check_card(card, evidence, BANNED, self.TOPIC))
+        out = check_topic(item, [ev_news], reply(self.NAVER_CARD), BANNED, {**self.TOPIC, "verify_call": False})
+        self.assertIsNone(out.draft)                                                   # on_check_fail: drop
+        self.assertIn("PREDICTION", out.fail_codes)
+
+    def test_prediction_rule_details(self):
+        from pipelines.updates.checks import prediction_text
+        cfg = {**self.TOPIC}
+        self.assertIsNotNone(prediction_text(["KB증권은 매출이 늘 것으로 전망했어요"], cfg))   # 주체를 써도 예측은 예측
+        self.assertIsNotNone(prediction_text(["흑자 전환 가능성이 거론돼요"], cfg))
+        self.assertIsNone(prediction_text(["영업이익이 시장 예상치를 웃돌았어요"], cfg))     # 실제 실적 vs 예상치
+        self.assertIsNone(prediction_text(["매출이 예상보다 8% 많았어요"], cfg))
+        self.assertIsNone(prediction_text(["HBM 매출이 전 분기보다 8.0% 늘었어요"], cfg))
+        self.assertEqual(check_card(parse_card(json.dumps(GOOD, ensure_ascii=False)), build_evidence([disc()]), BANNED,
+                                    {"prediction_terms": []}), [])                    # 목록을 비우면 검사하지 않는다
 
 
 if __name__ == "__main__":

@@ -118,6 +118,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--news-search", choices=["article", "chunks"], help="뉴스 검색 방식 (기본: 설정 news.search, 없으면 article)")
     ap.add_argument("--same-event", action=argparse.BooleanOptionalAction, default=None,
                     help="같은 사건 묶기를 켜거나(--same-event) 끈다(--no-same-event). 기본: 설정 same_event.enabled (없으면 꺼짐)")
+    ap.add_argument("--evidence-mode", choices=["legacy", "all"], help="근거 고르기 (기본: 설정 topic.evidence_mode)")
     ap.add_argument("--uncalibrated-chunks", action="store_true",
                     help="min_similarity_news_chunks가 없어도 chunks로 돈다 (기존 뉴스 임계값을 임시로 씀, 시험 비교용)")
     args = ap.parse_args(argv)
@@ -130,6 +131,8 @@ def main(argv: list[str] | None = None) -> int:
 
     cfg = load_config(args.config)
     tcfg = cfg["topic"]
+    if args.evidence_mode:
+        tcfg = {**tcfg, "evidence_mode": args.evidence_mode}
     news_mode = args.news_search or cfg["news"].get("search", "article")
     check_mode(news_mode, tcfg, args.uncalibrated_chunks)
     scfg = cfg.get("same_event") or {}
@@ -270,6 +273,10 @@ def main(argv: list[str] | None = None) -> int:
             f" · 멈춘 날부터 {tcfg.get('stop_window_days', 0)}일 전까지 포함 · 자회사 공시 {'포함' if rcfg.get('include_subsidiary') else '제외'}",
             f"- 뉴스 검색: {json.dumps(news_search, ensure_ascii=False)}"
             + (" · **원문 청크 임계값 보정 전 (min_similarity_news 값을 임시로 씀)**" if news_search.get("uncalibrated") else ""),
+            f"- 근거 고르기: {tcfg.get('evidence_mode', 'legacy')}"
+            + (f" (공시 {tcfg.get('max_disclosure_docs', 5)}건·공시당 청크 {tcfg.get('max_chunks_per_disclosure', 2)}개, 전체 {tcfg.get('max_total', 15)})"
+               if tcfg.get("evidence_mode") == "all" else "")
+            + f" · 예측 검사 {'켬' if tcfg.get('prediction_terms') else '꺼짐'} · 추가 규칙 {len(tcfg.get('extra_rules') or [])}줄",
             f"- 같은 사건 묶기: {'켬 ' + json.dumps({**scfg, 'enabled': True}, ensure_ascii=False) if same_event_on else '꺼짐'}",
             f"- 유사도 분포: 최소 {q(0)} / 25% {q(.25)} / 중앙 {q(.5)} / 75% {q(.75)} / 최대 {q(1)}",
             *[f"  - {k}: {json.dumps(dist(v), ensure_ascii=False)}" for k, v in kind_sims.items()],

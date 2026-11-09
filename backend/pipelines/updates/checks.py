@@ -21,7 +21,8 @@ _RUN = re.compile(rf"(?:{_NUMK}\s*(?:조|억|만)\s*)+(?:{_NUMK}(?=\s*원))?")
 _PART = re.compile(rf"({_NUMK})\s*(조|억|만)?")
 
 DEFAULTS = {"title_max": 20, "max_sentences": 3, "sentence_max_chars": 60, "min_confidence": 0.7, "min_fact_overlap": 0.6,
-            "reason_max": 80, "fact_max": 100, "max_evidence": 3, "banned_patterns": []}
+            "reason_max": 80, "fact_max": 100, "max_evidence": 3, "banned_patterns": [],
+            "prediction_terms": [], "prediction_exempt": []}
 
 # 회사가 한 말을 전달하는 문장은 시제 패턴(예측 표현) 검사에서 뺀다 ("회사는 ~라고 밝혔어요", 지침서 [근거 우선순위])
 # "로 전망했"·"로 예상했": 증권사·언론이 주어인 전망 문장 ("KB증권은 매출이 상승할 것으로 전망했어요")
@@ -163,6 +164,27 @@ def _check_body(lines: list[str], ev_pairs: list[tuple[str, str]], extra: list[s
     return codes
 
 
+# 회사가 스스로 밝힌 계획·발언을 전하는 문장 (공시·발표 내용 자체가 사실이다). ATTRIBUTION과 달리 "로 전망했"·"로 예상했"
+# (증권사·언론이 주어인 전망)는 넣지 않는다: 2026-11-09 결정으로 남의 전망은 주체를 써도 사실 근거로 쓰지 않는다
+COMPANY_STATEMENT = ("라고 밝혔", "고 밝혔", "고 발표", "고 설명", "계획이라고")
+
+
+def prediction_text(texts: list[str], cfg: dict) -> str | None:
+    """예측(전망·예상·추정·관측·가능성 …)을 핵심 사실로 쓴 글. 시제 패턴과 달리 "증권사는 ~로 전망했어요"처럼 주체를 쓴 문장도
+    잡는다 (2026-11-09 "네이버 3분기 매출 3조5천143억원 전망" 카드). 실제 실적을 예상치와 견준 표현(prediction_exempt)과
+    회사가 스스로 밝힌 계획·발언(COMPANY_STATEMENT)은 뺀다."""
+    exempt = [re.compile(p) for p in cfg["prediction_exempt"]]
+    for t in texts:
+        if any(a in t for a in COMPANY_STATEMENT):
+            continue
+        rest = t
+        for p in exempt:
+            rest = p.sub(" ", rest)
+        if any(term in rest for term in cfg["prediction_terms"]):
+            return t
+    return None
+
+
 def check_card(card: Card, evidence: list[Evidence], banned: list[str], cfg: dict | None = None) -> list[str]:
     """status가 update인 카드 검사. 걸린 이유 코드 목록 (비어 있으면 통과)."""
     cfg = {**DEFAULTS, **(cfg or {})}
@@ -172,6 +194,10 @@ def check_card(card: Card, evidence: list[Evidence], banned: list[str], cfg: dic
     if not card.reason.strip() or len(card.reason) > cfg["reason_max"]:
         codes.append("FORMAT_REASON")
     codes += _check_body(card.summary, card.evidence, [card.title, card.reason], card.confidence, evidence, banned, cfg)
+    # 핵심 사실(제목·요약·근거 fact)이 예측이면 실패. 이유(reason)는 메모와의 연결 설명이라 보지 않는다
+    if cfg["prediction_terms"] and prediction_text([card.title, *(_TAG.sub("", s) for s in card.summary),
+                                                    *(f for _, f in card.evidence)], cfg):
+        codes.append("PREDICTION")
     return list(dict.fromkeys(codes))
 
 
