@@ -158,8 +158,13 @@ def set_ratio(conn: Connection, symbol: str, period_end: str, ptype: str, column
 
 
 def update_stock_sector(conn: Connection, symbol: str, fin_type: str | None) -> None:
-    """금융 판별 결과를 stocks.sector·fin_type에 반영한다."""
+    """금융 판별 결과를 stocks.sector·fin_type에 반영한다.
+
+    일반 기업으로 판별되면 financials_fin 행을 지운다. 예전에 금융(other 등)으로 잘못 판별돼 생긴 행이 남지 않게.
+    """
     conn.execute(
         text("UPDATE stocks SET sector = CAST(:sector AS sector_type), fin_type = :ft WHERE symbol = :s"),
         {"sector": "financial" if fin_type else "general", "ft": fin_type, "s": symbol},
     )
+    if fin_type is None:
+        conn.execute(text("DELETE FROM financials_fin WHERE symbol = :s"), {"s": symbol})

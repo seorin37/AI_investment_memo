@@ -165,7 +165,7 @@ def process_company(ctx: Context, symbol: str, corp_code: str) -> tuple[dict, li
         return row, []
     annual = [p for p in sorted(statements) if financials.period_type(p, fy) == "annual"]
     basis_period = (annual or sorted(statements))[-1]
-    cls = classify(info.get("induty_code", ""), statements[basis_period].get("list", []))
+    cls = classify(info.get("induty_code", ""), statements[basis_period].get("list", []), symbol)
     row.update({"fin_type": cls.fin_type, "basis": f"{cls.basis} ({basis_period} 기준)", "classification_review": cls.review})
 
     mapped: list[financials.MappedPeriod] = []

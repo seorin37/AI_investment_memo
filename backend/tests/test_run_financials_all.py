@@ -76,6 +76,14 @@ class ClassifyTest(unittest.TestCase):
         self.assertIsNone(classify("64992", [{"account_id": "ifrs-full_Revenue"}]).fin_type)  # LG·SK
         self.assertEqual(classify("64992", self.DEPOSITS).fin_type, "holding")  # KB금융
         self.assertEqual(classify("64992", self.INSURANCE).fin_type, "holding")  # 보험 지주
+        self.assertIsNone(classify("649", [{"account_id": "ifrs-full_Revenue"}]).fin_type)  # 효성·HDC (3자리 코드)
+        self.assertEqual(classify("649", self.DEPOSITS).fin_type, "holding")
+
+    def test_symbol_overrides(self):
+        self.assertEqual(classify("661", [], "030210").fin_type, "securities")  # 다올투자증권
+        self.assertEqual(classify("661", []).fin_type, "other")  # 고정 없으면 코드 규칙 그대로
+        self.assertIsNone(classify("64999", [], "487570").fin_type)  # HS효성
+        self.assertIn("종목 고정", classify("64999", [], "487570").basis)
 
     def test_industry_codes(self):
         self.assertEqual(classify("64121", self.DEPOSITS), classify("64121", self.DEPOSITS))
