@@ -22,6 +22,11 @@ fi
 target="${FULLTEXT_TARGET:-}"
 recent_hours="${FULLTEXT_RECENT_HOURS:-6}"
 unit_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+# systemd 서비스의 PATH에는 WSL GPU 도구 경로가 없어 nvidia-smi를 못 찾는다 (GPU 여유 확인 실패). 있으면 앞에 붙인다
+service_path="/usr/local/bin:/usr/bin:/bin"
+if [[ -d /usr/lib/wsl/lib ]]; then
+  service_path="/usr/lib/wsl/lib:$service_path"
+fi
 service="$unit_dir/memos-news-fulltext.service"
 timer="$unit_dir/memos-news-fulltext.timer"
 
@@ -46,6 +51,7 @@ Wants=network-online.target
 Type=oneshot
 WorkingDirectory=$repo_root
 Environment=PYTHONPATH=$repo_root
+Environment=PATH=$service_path
 ExecStart=$python_bin -m backend.pipelines.news.fulltext_hourly --recent-hours $recent_hours --target $target
 TimeoutStartSec=50min
 EOF
@@ -66,6 +72,7 @@ EOF
 
 systemctl --user daemon-reload
 echo "유닛 파일을 썼습니다: $service, $timer"
+echo "  PATH: $service_path"
 echo "  ExecStart: $python_bin -m backend.pipelines.news.fulltext_hourly --recent-hours $recent_hours --target $target"
 
 if [[ "${1:-}" == "--enable" ]]; then

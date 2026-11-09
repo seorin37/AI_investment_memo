@@ -7,11 +7,13 @@
 - 회차가 겹치지 않게 data/news_raw/.fulltext_hourly.lock을 잡는다. 이전 회차가 아직 돌고 있으면 기록만 남기고 0으로 끝난다.
 - 수집은 fulltext.collect 그대로다 (DB 읽기만, 요청 규칙·403/429 멈춤·failed 재시도는 fulltext_max_runs회까지).
 - 적재는 이번 기간 발행일 파일의 ok 기사 중 아직 DB에 없는 것만 넣는다. 지난 회차에 적재가 빠진 기사도 여기서 채워진다.
-  남은 GPU 메모리가 --min-free-gb보다 적으면 이번 회차는 수집만 하고 적재는 다음 회차로 미룬다.
+  남은 GPU 메모리가 --min-free-gb보다 적으면 이번 회차는 수집만 하고 적재는 다음 회차로 미룬다 (정상, 0).
+  GPU 확인 자체가 실패하면(nvidia-smi 없음 등) 적재를 건너뛰고 오류로 끝낸다 (5). 미뤄 둔 기사는 다음 회차가 채운다.
 - --target(host:port)이 실제 접속 대상과 다르면 수집도 하지 않고 멈춘다 (종료 코드 3).
 - 회차마다 logs/fulltext_hourly.log에 요약 한 줄(JSON)을 남긴다: 기간, 수집 건수(성공·제외·실패·포기), 403/429 매체,
   적재 건수(본문·청크), 소요 시간, GPU 최대.
-- 종료 코드: 0 정상(잠금 때문에 건너뛴 회차, GPU 부족으로 적재를 미룬 회차 포함), 1 오류, 3 접속 대상 불일치, 4 403/429를 받은 매체 있음.
+- 종료 코드: 0 정상(잠금 때문에 건너뛴 회차, GPU 부족으로 적재를 미룬 회차 포함), 1 오류, 3 접속 대상 불일치,
+  4 403/429를 받은 매체 있음, 5 GPU 확인 실패로 적재 못 함.
 """
 from __future__ import annotations
 
@@ -81,6 +83,16 @@ def run_once(hours: float, *, read_rows, http_get, config: lf.LeadConfig, store,
     return summary
 
 
+def exit_code(summary: dict) -> int:
+    if summary["load"].get("status") == "gpu_check_failed":
+        log.error("GPU 확인 실패로 적재하지 못했습니다: %s", summary["load"].get("error"))
+        return 5
+    if summary["collect"]["blocked"]:
+        log.warning("403/429를 받은 매체: %s — 그 매체는 이번 회차에서 멈췄습니다.", summary["collect"]["blocked"])
+        return 4
+    return 0
+
+
 def main(argv=None) -> int:
     from ..common.db import get_dsn, get_read_dsn, load_env
 
@@ -137,10 +149,7 @@ def main(argv=None) -> int:
         return 1
     finally:
         lock.release()
-    if summary["collect"]["blocked"]:
-        log.warning("403/429를 받은 매체: %s — 그 매체는 이번 회차에서 멈췄습니다.", summary["collect"]["blocked"])
-        return 4
-    return 0
+    return exit_code(summary)
 
 
 if __name__ == "__main__":

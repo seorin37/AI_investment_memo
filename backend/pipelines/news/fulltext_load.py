@@ -32,7 +32,7 @@ from typing import Callable, Iterable, Protocol
 from urllib.parse import urlsplit
 
 from .fulltext import OUT_DIR, recent_window, window_days
-from .fulltext_bench import CHUNKER_VERSION, Article, Chunk, chunk_article, gpu_free_gb, gpu_processes
+from .fulltext_bench import CHUNKER_VERSION, Article, Chunk, chunk_article, gpu_free_check, gpu_processes
 
 log = logging.getLogger(__name__)
 
@@ -259,11 +259,15 @@ def model_config(device: str, batch_size: int) -> dict:
 def embed_and_load(todo: list[Record], store: Store, model_cfg: dict, ident: Identity, *, device: str = "cuda",
                    batch_size: int = 4, group_size: int = 32, gpu_cap_gb: float = 2.5, min_free_gb: float = 2.8,
                    out: Callable[[str], None] = print) -> dict:
-    """GPU 여유 확인 → 모델 → 청크 → 임베딩 → 적재. 결과 요약을 돌려준다 (status: loaded / gpu_busy)."""
+    """GPU 여유 확인 → 모델 → 청크 → 임베딩 → 적재. 결과 요약을 돌려준다.
+    status: loaded / gpu_busy(남은 메모리 부족) / gpu_check_failed(확인 자체가 실패, error에 이유)."""
     if device == "cpu":
         os.environ["CUDA_VISIBLE_DEVICES"] = ""
     else:
-        free_gb = gpu_free_gb()
+        free_gb, error = gpu_free_check()
+        if free_gb is None:
+            out(f"GPU 확인 실패: {error} — 메모리 부족이 아니라 확인 오류라 적재하지 않습니다.")
+            return {"status": "gpu_check_failed", "error": error, "articles": 0, "chunks": 0, "bad": []}
         out(f"GPU 사용 현황: {gpu_processes()} / 남은 메모리 {free_gb:.2f}GB (필요 {min_free_gb}GB)")
         if free_gb < min_free_gb:
             out("남은 GPU 메모리가 부족해 시작하지 않습니다.")
@@ -370,6 +374,8 @@ def main(argv=None) -> int:
                             group_size=args.group_size, gpu_cap_gb=args.gpu_cap_gb, min_free_gb=args.min_free_gb)
     if result["status"] == "gpu_busy":
         return 2
+    if result["status"] == "gpu_check_failed":
+        return 5
     print(f"DB 확인 ({target}): {store.counts(result['news_ids'])}")
     return 0
 

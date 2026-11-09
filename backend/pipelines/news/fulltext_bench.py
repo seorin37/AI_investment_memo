@@ -124,13 +124,24 @@ def gpu_processes() -> str:
         return "nvidia-smi 없음"
 
 
-def gpu_free_gb() -> float:
+def gpu_free_check() -> tuple[float | None, str]:
+    """(남은 GPU 메모리 GB, 오류). 확인 자체가 실패하면 (None, 이유) — 메모리 부족(0GB)과 구분한다.
+    systemd 서비스처럼 PATH에 /usr/lib/wsl/lib가 없으면 WSL에서 nvidia-smi를 못 찾는다 (2026-11-08 timer 첫 회차)."""
     try:
         out = subprocess.run(["nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits"],
                              capture_output=True, text=True, timeout=10)
-        return float(out.stdout.split()[0]) / 1024
-    except (OSError, subprocess.SubprocessError, ValueError, IndexError):
-        return 0.0
+    except (OSError, subprocess.SubprocessError) as exc:
+        return None, f"nvidia-smi 실행 실패: {type(exc).__name__}: {exc}"
+    try:
+        return float(out.stdout.split()[0]) / 1024, ""
+    except (ValueError, IndexError):
+        return None, f"nvidia-smi 출력을 읽지 못함 (exit {out.returncode}): {(out.stderr or out.stdout).strip()[:200]}"
+
+
+def gpu_free_gb() -> float:
+    """확인에 실패하면 0 (시작하지 않는 쪽). 실패를 따로 알아야 하면 gpu_free_check를 쓴다."""
+    free, _ = gpu_free_check()
+    return 0.0 if free is None else free
 
 
 def main(argv=None) -> int:

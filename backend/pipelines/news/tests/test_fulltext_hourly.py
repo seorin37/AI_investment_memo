@@ -105,3 +105,30 @@ def test_main_stops_on_target_mismatch_and_skips_when_locked(tmp_path, monkeypat
         lock.release()
     line = json.loads(log_file.read_text(encoding="utf-8").splitlines()[-1])
     assert line["skipped"].startswith("이전 회차")
+
+
+def test_gpu_check_error_is_not_memory_shortage(tmp_path, monkeypatch):
+    from backend.pipelines.news import fulltext_load as fl
+    monkeypatch.setattr(fl, "gpu_free_check", lambda: (None, "nvidia-smi 실행 실패: FileNotFoundError"))
+    lines = []
+    result = fl.embed_and_load([], FakeStore({}), {}, None, out=lines.append)          # 모델을 올리기 전에 멈춘다
+    assert result["status"] == "gpu_check_failed" and "FileNotFoundError" in result["error"]
+    assert "확인 오류" in lines[0]
+    run = Run(tmp_path, [art(1, 9)], {})
+    summary = fh.run_once(6, read_rows=lambda s, e, c: run.rows, http_get=http({}), config=cfg(), store=run.store,
+                          load_fn=lambda todo, store: result, raw_dir=tmp_path, codes=["hankyung"],
+                          sleep=lambda s: None, now=NOW)
+    assert summary["load"]["status"] == "gpu_check_failed" and "FileNotFoundError" in summary["load"]["error"]
+    assert fh.exit_code(summary) == 5                                                  # 오류로 끝낸다 (gpu_busy는 0)
+    busy = {**summary, "load": {**summary["load"], "status": "gpu_busy"}}
+    assert fh.exit_code(busy) == 0
+
+
+def test_gpu_free_check_reports_missing_nvidia_smi(monkeypatch):
+    from backend.pipelines.news import fulltext_bench as fb
+
+    def missing(*a, **k):
+        raise FileNotFoundError("nvidia-smi")
+    monkeypatch.setattr(fb.subprocess, "run", missing)
+    free, error = fb.gpu_free_check()
+    assert free is None and "FileNotFoundError" in error and fb.gpu_free_gb() == 0.0
