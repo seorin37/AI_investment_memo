@@ -87,6 +87,17 @@ def test_load_retries_articles_left_unloaded(tmp_path):                         
     assert summary["collect"]["already"] == 1 and summary["load"]["articles"] == 1 and run.loaded_batches == [[1]]
 
 
+def test_tag_fn_runs_after_load_only_when_given(tmp_path):
+    run = Run(tmp_path, [art(1, 9)], {})
+    summary, _ = run.once()
+    assert "tag" not in summary                                                     # 기본은 태그하지 않는다
+    calls = []
+    summary = fh.run_once(6, read_rows=lambda s, e, c: run.rows, http_get=http({}), config=cfg(), store=run.store,
+                          load_fn=run.load_fn, raw_dir=tmp_path, codes=["hankyung"], sleep=lambda s: None, now=NOW,
+                          tag_fn=lambda s, e: calls.append((s, e)) or {"new_links": 2})
+    assert summary["tag"] == {"new_links": 2} and calls[0][1].isoformat().startswith("2026-11-08T01:00")
+
+
 def test_blocked_source_is_reported(tmp_path):
     run = Run(tmp_path, [art(1, 9), art(2, 9)], {"https://www.hankyung.com/article/1": Resp(429)})
     summary, _ = run.once()

@@ -10,6 +10,8 @@
   남은 GPU 메모리가 --min-free-gb보다 적으면 이번 회차는 수집만 하고 적재는 다음 회차로 미룬다 (정상, 0).
   GPU 확인 자체가 실패하면(nvidia-smi 없음 등) 적재를 건너뛰고 오류로 끝낸다 (5). 미뤄 둔 기사는 다음 회차가 채운다.
 - --target(host:port)이 실제 접속 대상과 다르면 수집도 하지 않고 멈춘다 (종료 코드 3).
+- --tag-stocks(기본 꺼짐)면 적재 뒤 같은 기간 기사에 종목 태그를 더한다 (stock_tagger, configs/stock_aliases.yaml).
+  공용 DB(news_stocks)에 쓰므로 승인 후 timer에 켠다 (FULLTEXT_TAG_STOCKS=1로 설치 스크립트를 다시 실행).
 - 회차마다 logs/fulltext_hourly.log에 요약 한 줄(JSON)을 남긴다: 기간, 수집 건수(성공·제외·실패·포기), 403/429 매체,
   적재 건수(본문·청크), 소요 시간, GPU 최대.
 - 종료 코드: 0 정상(잠금 때문에 건너뛴 회차, GPU 부족으로 적재를 미룬 회차 포함), 1 오류, 3 접속 대상 불일치,
@@ -56,8 +58,9 @@ def write_summary(summary: dict, path: Path = LOG_PATH) -> None:
 
 
 def run_once(hours: float, *, read_rows, http_get, config: lf.LeadConfig, store, load_fn, raw_dir: Path,
-             codes: list[str], sleep=time.sleep, clock=time.monotonic, now=None) -> dict:
-    """한 회차 (잠금 밖의 순수 처리). load_fn(todo, store) → embed_and_load 결과 dict."""
+             codes: list[str], sleep=time.sleep, clock=time.monotonic, now=None, tag_fn=None) -> dict:
+    """한 회차 (잠금 밖의 순수 처리). load_fn(todo, store) → embed_and_load 결과 dict.
+    tag_fn(start, end) → 종목 태그 결과 dict (없으면 태그하지 않는다)."""
     started = clock()
     start, end = ft.recent_window(hours, now)
     summary: dict = {"started_at": datetime.now().astimezone().isoformat(timespec="seconds"), "hours": hours,
@@ -79,6 +82,10 @@ def run_once(hours: float, *, read_rows, http_get, config: lf.LeadConfig, store,
     else:
         summary["load"].update(status="nothing", articles=0, chunks=0)
     summary["load_seconds"] = round(clock() - load_started, 1)
+    if tag_fn is not None:
+        tag_started = clock()
+        summary["tag"] = tag_fn(start, end)
+        summary["tag_seconds"] = round(clock() - tag_started, 1)
     summary["total_seconds"] = round(clock() - started, 1)
     return summary
 
@@ -107,6 +114,7 @@ def main(argv=None) -> int:
     ap.add_argument("--group-size", type=int, default=32)
     ap.add_argument("--gpu-cap-gb", type=float, default=2.5)
     ap.add_argument("--min-free-gb", type=float, default=2.8)
+    ap.add_argument("--tag-stocks", action="store_true", help="적재 뒤 같은 기간 기사에 종목 태그를 더한다 (news_stocks에 씀)")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -131,6 +139,16 @@ def main(argv=None) -> int:
         model_cfg = fl.model_config(args.device, args.batch_size)
         ident = fl.embedding_identity(model_cfg)
         store = fl.PgStore(dsn, read_only=False)
+        tag_fn = None
+        if args.tag_stocks:
+            from .stock_tagger import load_rules, tag_window
+            rules = load_rules(store.conn)
+
+            def tag_fn(start, end):
+                stats = tag_window(store.conn, rules, start, end, write=True)
+                stats.pop("_new")
+                store.conn.commit()
+                return stats
         summary = run_once(
             args.recent_hours,
             read_rows=lambda start, end, codes: ft.read_rows(read_dsn, start, end, codes, None),
@@ -139,7 +157,7 @@ def main(argv=None) -> int:
                 todo, st, model_cfg, ident, device=args.device, batch_size=args.batch_size,
                 group_size=args.group_size, gpu_cap_gb=args.gpu_cap_gb, min_free_gb=args.min_free_gb,
                 out=log.info),
-            raw_dir=args.raw_dir, codes=[c.strip() for c in args.sources.split(",") if c.strip()])
+            raw_dir=args.raw_dir, codes=[c.strip() for c in args.sources.split(",") if c.strip()], tag_fn=tag_fn)
         summary["target"] = target
         write_summary(summary, args.log_file)
     except Exception as exc:

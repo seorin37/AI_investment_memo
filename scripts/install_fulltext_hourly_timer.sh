@@ -21,6 +21,11 @@ else
 fi
 target="${FULLTEXT_TARGET:-}"
 recent_hours="${FULLTEXT_RECENT_HOURS:-6}"
+# FULLTEXT_TAG_STOCKS=1이면 적재 뒤 종목 태그도 더한다 (news_stocks에 씀, 승인 후에만)
+tag_flag=""
+if [[ "${FULLTEXT_TAG_STOCKS:-0}" == "1" ]]; then
+  tag_flag=" --tag-stocks"
+fi
 unit_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 # systemd 서비스의 PATH에는 WSL GPU 도구 경로가 없어 nvidia-smi를 못 찾는다 (GPU 여유 확인 실패). 있으면 앞에 붙인다
 service_path="/usr/local/bin:/usr/bin:/bin"
@@ -52,7 +57,7 @@ Type=oneshot
 WorkingDirectory=$repo_root
 Environment=PYTHONPATH=$repo_root
 Environment=PATH=$service_path
-ExecStart=$python_bin -m backend.pipelines.news.fulltext_hourly --recent-hours $recent_hours --target $target
+ExecStart=$python_bin -m backend.pipelines.news.fulltext_hourly --recent-hours $recent_hours --target $target$tag_flag
 TimeoutStartSec=50min
 EOF
 
@@ -73,7 +78,7 @@ EOF
 systemctl --user daemon-reload
 echo "유닛 파일을 썼습니다: $service, $timer"
 echo "  PATH: $service_path"
-echo "  ExecStart: $python_bin -m backend.pipelines.news.fulltext_hourly --recent-hours $recent_hours --target $target"
+echo "  ExecStart: $python_bin -m backend.pipelines.news.fulltext_hourly --recent-hours $recent_hours --target $target$tag_flag"
 
 if [[ "${1:-}" == "--enable" ]]; then
   systemctl --user enable --now memos-news-fulltext.timer
