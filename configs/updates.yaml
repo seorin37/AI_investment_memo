@@ -3,6 +3,18 @@ news:
   variant: hybrid            # news_embedding_variants.variant (dense | hybrid). 둘 다 dense 벡터로 검색한다
   lookback_days: 30
   top_k: 8
+  # 2026-11-09 뉴스 후보 검색 방식. article: 제목+요약 벡터(news_embedding_variants, 기존) | chunks: 원문 청크(news_chunks,
+  # dense+sparse → colbert 재정렬 → 기사 단위 최고 청크 → body_hash 중복 제거, 원문 없는 기사는 article 방식으로 보충).
+  # chunks는 topic.min_similarity_news_chunks를 calibrate·noise_floor(--news-search chunks)로 정해 적은 뒤에 켠다
+  search: article
+  chunks:
+    dense_k: 100
+    sparse_k: 100
+    rerank_k: 30             # colbert를 계산할 상위 청크 수 (질의 때 인코딩)
+    colbert: true
+    weights: {dense: 0.4, sparse: 0.2, colbert: 0.4}
+    dedup_body_hash: true    # 본문이 같은 기사(같은 매체 재전송)는 가장 먼저 발행된 하나만
+    fallback_headline: true  # 원문이 아직 없는 기사는 제목+요약 벡터로 찾는다 (min_similarity_news)
 disclosure:
   top_k: 4
 price:

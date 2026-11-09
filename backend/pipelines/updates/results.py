@@ -57,6 +57,7 @@ def write_candidates_csv(run_dir: Path, rows: list[tuple[TrackingItem, Candidate
         w = csv.writer(f)
         w.writerow(CANDIDATE_COLUMNS)
         for item, c in rows:
-            w.writerow([item.item_id, item.symbol, item.category, item.description, item.memo_text, c.kind, c.ref,
+            kind = "news_chunks" if c.doc == "chunk" else c.kind     # 원문 청크 후보는 calibrate가 따로 센다
+            w.writerow([item.item_id, item.symbol, item.category, item.description, item.memo_text, kind, c.ref,
                         c.date, c.title, (c.text or "").replace("\n", " ")[:500], f"{c.similarity:.4f}", ""])
     return path

@@ -1075,5 +1075,159 @@ class PreviewTest(unittest.TestCase):
         self.assertNotIn("javascript:", build_preview([card], refs, [], "t"))
 
 
+class _Encoded:
+    def __init__(self, dense, sparse=None, colbert=None):
+        self.dense, self.sparse, self.colbert = dense, sparse, colbert
+
+
+class _FakeChunkEncoder:
+    """질의는 sparse 토큰 "7" 하나, colbert는 HBM이 든 글만 질의와 같은 방향."""
+    cache_namespace = "fake@1"
+
+    def __init__(self):
+        self.encoded_docs = []
+
+    def encode_query(self, query, sparse, colbert=False):
+        import numpy as np
+        return _Encoded([0.5, 0.5, 0.5, 0.5], {"7": 1.0} if sparse else None,
+                        np.array([[1.0, 0.0]], dtype=np.float32) if colbert else None)
+
+    def encode_colbert_documents(self, texts):
+        import numpy as np
+        self.encoded_docs += list(texts)
+        return [np.array([[1.0, 0.0]] if "HBM" in t else [[0.0, 1.0]], dtype=np.float32) for t in texts]
+
+
+class _ChunkCursor:
+    def __init__(self, conn):
+        self.conn, self.rows = conn, []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def execute(self, sql, params=None):
+        from pipelines.updates import news_search as ns
+        c, p = self.conn, params or {}
+        self.conn.sqls.append(sql)
+        keys = list(zip(p.get("ids", []), p.get("ix", [])))
+        if sql == ns.DENSE_SQL:
+            ranked = sorted(c.dense.items(), key=lambda kv: -kv[1])[:p["k"]]
+            self.rows = [(n, i, s) for (n, i), s in ranked]
+        elif sql == ns.SPARSE_SQL:
+            self.rows = [(n, i, sp) for (n, i), sp in sorted(c.sparse.items())]
+        elif sql == ns.DENSE_FOR_SQL:
+            self.rows = [(n, i, c.all_dense[(n, i)]) for n, i in keys]
+        elif sql == ns.META_SQL:
+            self.rows = [c.meta[k] for k in keys]
+        elif sql == ns.HEADLINE_SQL:
+            self.rows = list(c.headline)
+        else:
+            self.rows = []
+
+    def fetchall(self):
+        return self.rows
+
+
+class _ChunkConn:
+    def __init__(self, dense, all_dense, sparse, meta, headline=()):
+        self.dense, self.all_dense, self.sparse, self.meta, self.headline = dense, all_dense, sparse, meta, headline
+        self.sqls = []
+
+    def cursor(self):
+        return _ChunkCursor(self)
+
+
+def _meta(n, i, text, body_hash, hour, title=None):
+    return (n, i, text, f"[한국경제 2026-10-30 | 제목 {n}]\n{text}", title or f"제목 {n}", f"http://n/{n}", "2026-10-30",
+            "한국경제", body_hash, datetime(2026, 10, 30, hour))
+
+
+class NewsChunkSearchTest(unittest.TestCase):
+    # 기사 1: 청크 0(시황, dense 최고)·청크 1(HBM, sparse·colbert 최고) / 기사 2·3: 본문이 같다(3이 늦게 발행) / 기사 4: sparse에만
+    ALL_DENSE = {(1, 0): 0.70, (1, 1): 0.66, (2, 0): 0.62, (3, 0): 0.64, (4, 0): 0.40}
+    SPARSE = {(1, 0): {}, (1, 1): {"7": 1.0}, (2, 0): {"7": 0.5}, (3, 0): {"7": 0.5}, (4, 0): {"7": 0.2}}
+    META = {(1, 0): _meta(1, 0, "코스피 시황 정리", "h1", 9), (1, 1): _meta(1, 1, "HBM 공급 계약을 맺었다", "h1", 9),
+            (2, 0): _meta(2, 0, "HBM 출하 확대", "h2", 9), (3, 0): _meta(3, 0, "HBM 출하 확대", "h2", 10),
+            (4, 0): _meta(4, 0, "삼성 소식", "h4", 8)}
+
+    def conn(self, headline=()):
+        dense_top = {k: v for k, v in self.ALL_DENSE.items() if k in {(1, 0), (1, 1), (3, 0)}}   # dense 상위 3 (dense_k=3)
+        return _ChunkConn(dense_top, self.ALL_DENSE, self.SPARSE, self.META, headline)
+
+    def search(self, conn, **cfg):
+        from pipelines.updates.news_search import NewsChunkSearch
+        return NewsChunkSearch(conn, _FakeChunkEncoder(), {"dense_k": 3, "sparse_k": 10, "rerank_k": 10, **cfg})
+
+    def test_union_rerank_best_chunk_and_body_hash_dedup(self):
+        conn = self.conn()
+        s = self.search(conn)
+        out = s.articles("000660", "HBM 실적", datetime(2026, 10, 1).date())
+        self.assertEqual([c.ref for c in out], ["news:1", "news:2", "news:4"])      # 3은 2와 본문이 같고 늦게 발행 → 뺀다
+        first = out[0]
+        self.assertEqual((first.text, first.similarity, first.doc), ("HBM 공급 계약을 맺었다", 0.66, "chunk"))   # 재정렬 1위 청크
+        self.assertEqual(out[2].similarity, 0.40)                                  # sparse에만 있던 기사도 dense를 실제로 계산
+        self.assertTrue(all(t.startswith("[한국경제") for t in s.encoder.encoded_docs))   # colbert는 적재 때와 같은 embed_text로
+        s.articles("000660", "HBM 실적", datetime(2026, 10, 1).date())
+        from pipelines.updates.news_search import SPARSE_SQL
+        self.assertEqual(conn.sqls.count(SPARSE_SQL), 1)                          # sparse 색인은 종목·기간마다 한 번
+        self.assertEqual(len(s.encoder.encoded_docs), 5)                          # 같은 청크 colbert는 캐시에서
+        self.assertIn("SET LOCAL enable_indexscan = off", conn.sqls)
+        self.assertEqual(conn.sqls[-1], "SET LOCAL enable_indexscan TO DEFAULT")   # 공시 검색에 영향을 남기지 않는다
+
+    def test_without_colbert_keeps_dense_sparse_order(self):
+        out = self.search(self.conn(), colbert=False, weights={"dense": 1.0}).articles("000660", "q", datetime(2026, 10, 1).date())
+        self.assertEqual(out[0].text, "코스피 시황 정리")                            # dense만이면 dense 최고 청크
+
+    def test_recent_floor_and_headline_fallback(self):
+        head = [(9, "원문 없는 속보", "요약", "http://n/9", "2026-10-31", "연합뉴스", 0.59)]
+        out = self.search(self.conn(head)).recent("000660", "HBM 실적", datetime(2026, 10, 1).date(), 50, 0.6,
+                                                  headline_vec=[0.1], headline_floor=0.58)
+        self.assertEqual([(c.ref, c.doc) for c in out], [("news:1", "chunk"), ("news:2", "chunk"), ("news:9", "")])
+        from pipelines.updates.evidence import threshold_key
+        self.assertEqual(threshold_key(out[0]), "news_chunks")
+        self.assertEqual(threshold_key(out[2]), "news")                          # 원문 없는 기사는 기존 뉴스 기준으로 거른다
+        no_fallback = self.search(self.conn(head), fallback_headline=False).recent(
+            "000660", "HBM 실적", datetime(2026, 10, 1).date(), 50, 0.6, headline_vec=[0.1])
+        self.assertNotIn("news:9", [c.ref for c in no_fallback])
+
+    def test_chunks_mode_needs_calibrated_threshold(self):
+        from pipelines.updates.news_search import check_mode
+        check_mode("article", {})
+        with self.assertRaises(ValueError):
+            check_mode("chunks", {"min_similarity_news": 0.58})                   # 보정 전에는 켜지 않는다
+        check_mode("chunks", {"min_similarity_news_chunks": 0.62})
+        check_mode("chunks", {}, uncalibrated=True)                              # 시험 비교만
+        with self.assertRaises(ValueError):
+            check_mode("chunk", {})
+
+    def test_chunk_threshold_falls_back_to_news(self):
+        from pipelines.updates.topic import thresholds
+        floor, strong = thresholds({"min_similarity_news": 0.58, "strong_similarity_news": 0.63})
+        self.assertEqual((floor["news_chunks"], strong["news_chunks"]), (0.58, 0.63))
+        floor, _ = thresholds({"min_similarity_news": 0.58, "min_similarity_news_chunks": 0.66})
+        self.assertEqual(floor["news_chunks"], 0.66)
+        chunk = replace(news(sim=0.62), doc="chunk")
+        self.assertEqual(pick_recent([chunk], floor, {"news": 1.01, "news_chunks": 1.01, "disclosure": 1.01}), [])
+
+    def test_default_config_keeps_article_search(self):
+        cfg = load_config("configs/updates.yaml")
+        self.assertEqual(cfg["news"]["search"], "article")                        # 팀 결과가 바뀌지 않게 기본은 기존 방식
+        self.assertNotIn("min_similarity_news_chunks", cfg["topic"])
+
+    def test_candidates_csv_and_calibrate_count_chunks_separately(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = write_candidates_csv(Path(d), [(ITEM, replace(news(), doc="chunk")), (ITEM, news("news:2"))])
+            text = path.read_text(encoding="utf-8-sig")
+        self.assertIn(",news_chunks,news:1,", text)
+        self.assertIn(",news,news:2,", text)
+        rows = [lab("news_chunks", 0.50 + i * 0.01, i >= 15) for i in range(30)]
+        report = calibrate.build_report(rows)
+        self.assertIn("### news_chunks", report)
+        self.assertIn("min_similarity_news_chunks:", report)
+
+
 if __name__ == "__main__":
     unittest.main()

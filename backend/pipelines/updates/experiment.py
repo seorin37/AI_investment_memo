@@ -10,6 +10,8 @@
     PYTHONPATH=backend python -m pipelines.updates.experiment --llm none
     # 2) LLM 카드 + 코드 검사까지 (OpenAI 호출, .env의 LLM_API_KEY 필요)
     PYTHONPATH=backend python -m pipelines.updates.experiment --llm openai --limit 10
+    # 3) 뉴스를 원문 청크로 검색 (news_search). min_similarity_news_chunks 보정 전에는 --uncalibrated-chunks로만 (시험 비교)
+    PYTHONPATH=backend python -m pipelines.updates.experiment --llm none --news-search chunks --uncalibrated-chunks
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ from .preview import write_preview
 from .price import check_price
 from .results import new_run_dir, write_candidates_csv, write_results
 from .evidence import threshold_key
+from .news_search import check_mode, release_gpu
 from .topic import check_topic, thresholds
 
 PILOT = ("005930", "000660", "035420", "105560")
@@ -94,6 +97,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--limit", type=int, help="앞에서 N개 항목만")
     ap.add_argument("--out-dir", help="결과 폴더 (기본: results/updates)")
     ap.add_argument("--response-schema", action="store_true", help="OpenAI Structured Outputs(json_schema) 사용 (미검증, 기본 꺼짐)")
+    ap.add_argument("--news-search", choices=["article", "chunks"], help="뉴스 검색 방식 (기본: 설정 news.search, 없으면 article)")
+    ap.add_argument("--uncalibrated-chunks", action="store_true",
+                    help="min_similarity_news_chunks가 없어도 chunks로 돈다 (기존 뉴스 임계값을 임시로 씀, 시험 비교용)")
     args = ap.parse_args(argv)
 
     import psycopg
@@ -104,6 +110,8 @@ def main(argv: list[str] | None = None) -> int:
 
     cfg = load_config(args.config)
     tcfg = cfg["topic"]
+    news_mode = args.news_search or cfg["news"].get("search", "article")
+    check_mode(news_mode, tcfg, args.uncalibrated_chunks)
     banned = list(cfg["banned"])
     items = load_items(resolve_path(args.gold), tuple(args.symbols.split(",")))
     if args.limit:
@@ -120,6 +128,12 @@ def main(argv: list[str] | None = None) -> int:
     if topic_items:
         encode = make_bge_m3_encoder("dense")
         vectors = {it.item_id: d for it, (d, _) in zip(topic_items, encode([it.query_text for it in topic_items]))}
+        del encode
+    chunk_encoder = None
+    if news_mode == "chunks" and topic_items:
+        from .news_search import load_query_encoder
+        release_gpu()                                            # 제목+요약 인코더를 내린 뒤 원문 청크용 인코더를 올린다 (GPU 메모리)
+        chunk_encoder = load_query_encoder()
     client = None
     if args.llm == "openai":
         if args.response_schema:
@@ -130,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
 
     names: dict[str, str] = {}
     sims: list[float] = []
-    kind_sims: dict[str, list[float]] = {"news": [], "disclosure": [], "event": []}   # disclosure=정기보고서, event=수시공시
+    kind_sims: dict[str, list[float]] = {"news": [], "news_chunks": [], "disclosure": [], "event": []}   # disclosure=정기보고서, event=수시공시
     cand_rows = []
     other_news = []                                             # 다른 회사 이름으로 시작해 뺀 기사 (항목, 후보)
     status_count: dict[str, int] = {}
@@ -151,11 +165,17 @@ def main(argv: list[str] | None = None) -> int:
         all_names = sorted(set(stock_names) | set(file_names))
         aliases = rcfg.get("company_aliases") or {}
         items = [replace(i, company_name=names.get(i.symbol, "")) for i in items]
+        searcher = None
+        if chunk_encoder is not None:
+            from .news_search import NewsChunkSearch
+            searcher = NewsChunkSearch(conn, chunk_encoder, cfg["news"].get("chunks"))
         for item in items:
             if item.type == "topic":
                 vec = vectors[item.item_id]
-                cands = (recent_news_candidates(conn, item.symbol, vec, since, fetch_k, floor["news"], cfg["news"]["variant"])
-                         + recent_disclosure_candidates(conn, item.symbol, vec, d_since, fetch_k, floor["disclosure"],
+                news = (searcher.recent(item.symbol, item.query_text, since, fetch_k, floor["news_chunks"], headline_vec=vec,
+                                        headline_floor=floor["news"], variant=cfg["news"]["variant"]) if searcher else
+                        recent_news_candidates(conn, item.symbol, vec, since, fetch_k, floor["news"], cfg["news"]["variant"]))
+                cands = (news + recent_disclosure_candidates(conn, item.symbol, vec, d_since, fetch_k, floor["disclosure"],
                                                         floor["event"], rcfg.get("include_subsidiary", False)))
                 if rcfg.get("drop_other_company_news", True):
                     cands, dropped = drop_other_company_news(cands, item.company_name, all_names,
@@ -208,12 +228,19 @@ def main(argv: list[str] | None = None) -> int:
                "llm": args.llm, "similarity": {"min": q(0), "p25": q(.25), "median": q(.5), "p75": q(.75), "max": q(1)},
                "similarity_by_kind": {k: dist(v) for k, v in kind_sims.items()},
                "outcomes": status_count, "llm_check_failures": fail_count, "cards": len(drafts)}
-    summary["search"] = {"mode": "recent_first", "news_since": str(since), "disclosure_since": str(d_since),
+    news_search = {"mode": news_mode}
+    if news_mode == "chunks":
+        ms = searcher.timings_ms if searcher else []
+        news_search.update(uncalibrated="min_similarity_news_chunks" not in tcfg, chunks=cfg["news"].get("chunks"),
+                           ms_per_item=round(sum(ms) / len(ms)) if ms else None, ms_max=round(max(ms)) if ms else None)
+    summary["search"] = {"mode": "recent_first", "news_search": news_search, "news_since": str(since), "disclosure_since": str(d_since),
                          "floor": floor, "strong": strong, "stop_window_days": tcfg.get("stop_window_days", 0),
                          "include_subsidiary": rcfg.get("include_subsidiary", False), "config": args.config}
     head = ["# AI 업데이트 후보 검색·카드 생성 실험", f"- 항목 {len(items)}개 (주제 {len(topic_items)}), 후보 {len(sims)}건, 뉴스 시작일 {since}, LLM {args.llm}",
             f"- 검색: 최신순 하향식 (설정 {args.config}) · 공시 시작일 {d_since} · 최소 유사도 {floor} · 강한 후보(멈춤 기준) {strong}"
             f" · 멈춘 날부터 {tcfg.get('stop_window_days', 0)}일 전까지 포함 · 자회사 공시 {'포함' if rcfg.get('include_subsidiary') else '제외'}",
+            f"- 뉴스 검색: {json.dumps(news_search, ensure_ascii=False)}"
+            + (" · **원문 청크 임계값 보정 전 (min_similarity_news 값을 임시로 씀)**" if news_search.get("uncalibrated") else ""),
             f"- 유사도 분포: 최소 {q(0)} / 25% {q(.25)} / 중앙 {q(.5)} / 75% {q(.75)} / 최대 {q(1)}",
             *[f"  - {k}: {json.dumps(dist(v), ensure_ascii=False)}" for k, v in kind_sims.items()],
             f"- 처리 결과: {json.dumps(status_count, ensure_ascii=False)}",

@@ -35,12 +35,12 @@ def _recent_first(c: Candidate) -> tuple[str, float]:
 
 
 def threshold_key(c: Candidate) -> str:
-    """임계값을 고르는 기준: news | disclosure(정기보고서) | event(수시공시)."""
-    return "event" if c.doc == "event" else c.kind
+    """임계값을 고르는 기준: news(제목+요약) | news_chunks(원문 청크) | disclosure(정기보고서) | event(수시공시)."""
+    return {"event": "event", "chunk": "news_chunks"}.get(c.doc, c.kind)
 
 
 def _limit(table: dict[str, float], c: Candidate) -> float:
-    return table.get(threshold_key(c), table[c.kind])         # event 값이 없으면 공시 값을 쓴다
+    return table.get(threshold_key(c), table[c.kind])         # event·news_chunks 값이 없으면 공시·뉴스 값을 쓴다
 
 
 def pick_recent(candidates: list[Candidate], floor: dict[str, float], strong: dict[str, float],

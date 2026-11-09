@@ -55,13 +55,16 @@ def _verify(card, evidence, call: Callable[[str], str], company: str = "",
 
 
 def thresholds(cfg: dict) -> tuple[dict[str, float], dict[str, float]]:
-    """종류별 (최소 유사도, 강한 후보 기준). 키는 news | disclosure(정기보고서) | event(수시공시).
-    수시공시 값이 없으면 공시 값을 쓴다. 강한 후보 기준이 없으면 1.01(아무도 못 넘음): 멈추지 않고 검색된 기간 전체에서 고른다."""
+    """종류별 (최소 유사도, 강한 후보 기준). 키는 news | news_chunks(원문 청크) | disclosure(정기보고서) | event(수시공시).
+    수시공시 값이 없으면 공시 값을, 원문 청크 값이 없으면 뉴스 값을 쓴다 (news.search: chunks는 보정 전에 켜지 않는다,
+    news_search.check_mode). 강한 후보 기준이 없으면 1.01(아무도 못 넘음): 멈추지 않고 검색된 기간 전체에서 고른다."""
     base = cfg.get("min_similarity", 0.5)
     floor = {k: cfg.get(f"min_similarity_{k}", base) for k in ("news", "disclosure")}
     strong = {k: cfg.get(f"strong_similarity_{k}", 1.01) for k in ("news", "disclosure")}
     floor["event"] = cfg.get("min_similarity_event", floor["disclosure"])
     strong["event"] = cfg.get("strong_similarity_event", strong["disclosure"])
+    floor["news_chunks"] = cfg.get("min_similarity_news_chunks", floor["news"])
+    strong["news_chunks"] = cfg.get("strong_similarity_news_chunks", strong["news"])
     return floor, strong
 
 
