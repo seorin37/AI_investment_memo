@@ -17,6 +17,15 @@ news:
     fallback_headline: true  # 원문이 아직 없는 기사는 제목+요약 벡터로 찾는다 (min_similarity_news)
 disclosure:
   top_k: 4
+# 2026-11-09 같은 사건 묶기: 근거 공시와 같은 사건 기사를 LLM 근거에서 빼고 공시 카드의 보조 기사(제목·매체·날짜·링크)로 붙인다.
+# 기준은 공시-기사 30쌍 O/X 판정으로 정함 (same_event.py). 원문 청크가 없는 기사는 묶지 않는다
+same_event:
+  enabled: false
+  min_similarity: 0.70       # 공시 청크 × 기사 원문 청크 dense 최댓값이 이 이상이면 묶는다
+  number_similarity: 0.62    # 이 이상 min_similarity 미만이면 공시 핵심 숫자(금액·주식 수)가 기사에도 있을 때만
+  days_before: 1             # 기사 발행일이 공시일 이 날수 전 ~
+  days_after: 3              # ~ 이 날수 뒤
+  event_only: true           # 수시공시만
 price:
   near_pct: 3.0              # 조건가까지 남은 거리가 조건가의 이 % 이내면 '가까워짐'
 # 최신순 하향식 검색 (experiment): 이 기간 안에서 임계값을 넘은 후보를 날짜 최신순으로 fetch_k건 가져온다.

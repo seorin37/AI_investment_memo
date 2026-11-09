@@ -85,6 +85,8 @@ class UpdateDraft:
     observed_trade_date: str | None = None
     origin: str = "llm"               # llm | fixed
     related_news: list[tuple[str, str]] = field(default_factory=list)   # (ref, 기사 제목): 공시 카드에 덧붙는 관련 기사 (링크만, LLM 문장 없음)
+    # 같은 사건 기사 (same_event): 공시와 같은 사건으로 묶여 근거에서 뺀 기사. {ref, title, source, date, url}만, 기사 문장은 쓰지 않는다
+    supporting_news: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -97,3 +99,4 @@ class TopicOutcome:
     raw: str = ""                    # LLM 원문 (형식 오류 원인을 보려고 보고서에 남긴다)
     retried: bool = False            # 형식 오류로 한 번 다시 요청했는지
     verify_notes: list[str] = field(default_factory=list)   # 검수 호출이 막은 문장과 이유 (보고서용)
+    grouped: list = field(default_factory=list)              # (기사 Candidate, 공시 접수번호): 같은 사건으로 묶여 근거에서 뺀 기사

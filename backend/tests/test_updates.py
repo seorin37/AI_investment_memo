@@ -1229,5 +1229,145 @@ class NewsChunkSearchTest(unittest.TestCase):
         self.assertIn("min_similarity_news_chunks:", report)
 
 
+NAVER = TrackingItem("M09:1:0", "035420", "topic", "엔비디아 투자", ("엔비디아",), category="A1", memo_text="엔비디아 투자 보기")
+EVENT_TEXT = "엔비디아 대상 제3자배정 유상증자. 발행 주식 3,900,000주, 조달 금액 1,341,226,000,000원"
+EVENT_CARD = {"status": "update", "title": "엔비디아 대상 유상증자",
+              "summary": ["엔비디아를 대상으로 제3자배정 유상증자를 결정했어요. [E1]"],
+              "reason": "메모에 쓰신 '엔비디아 투자'와 관련된 공시예요",
+              "evidence": [{"source_id": "E1", "fact": "엔비디아 대상 제3자배정 유상증자"}], "confidence": 0.9}
+
+
+def ev_disc(ref="disc:R1#0", sim=0.62, day="2026-11-03"):
+    return Candidate(ref, "disclosure", "035420", day, "[수시공시] 유상증자결정", EVENT_TEXT, "http://dart/R1", "DART", sim,
+                     doc="event")
+
+
+def ev_news(ref, sim, day, title, src="연합뉴스"):
+    return Candidate(ref, "news", "035420", day, title, "기사 본문 일부", f"http://n/{ref}", src, sim, doc="chunk")
+
+
+class SameEventTopicTest(unittest.TestCase):
+    """같은 사건 묶기 ①②: 공시 카드 1장 + 보조 기사, 다른 사건 기사는 근거로, 같은 공시의 다른 청크도 같은 공시."""
+
+    def cands(self):
+        return [ev_disc(), ev_news("news:1", 0.66, "2026-11-03", "엔비디아, 네이버 투자금 1조3천412억원 확정"),
+                ev_news("news:2", 0.61, "2026-11-02", "티맵 독주…네이버지도 2위", "서울경제")]
+
+    def run_card(self, cands, links):
+        prompts = []
+
+        def call(prompt):
+            prompts.append(prompt)
+            return json.dumps(EVENT_CARD, ensure_ascii=False)
+        return check_topic(NAVER, cands, call, BANNED, {"min_similarity": 0.5}, links), prompts
+
+    def test_same_day_disclosure_and_news_make_one_disclosure_card_with_supporting_news(self):
+        out, prompts = self.run_card(self.cands(), {"news:1": "R1"})
+        self.assertEqual(out.kind, "update")
+        self.assertEqual(out.draft.type, "disclosure")
+        self.assertEqual([e.candidate.ref for e in out.evidence], ["disc:R1#0", "news:2"])   # 묶인 기사는 근거에서 빠진다
+        self.assertEqual(out.draft.supporting_news, [{"ref": "news:1", "title": "엔비디아, 네이버 투자금 1조3천412억원 확정",
+                                                      "source": "연합뉴스", "date": "2026-11-03", "url": "http://n/news:1"}])
+        self.assertNotIn("1조3천412억원 확정", prompts[0])                                   # LLM은 묶인 기사를 보지 않는다
+        self.assertIn("티맵 독주", prompts[0])                                              # 다른 사건 기사는 근거로 남는다
+        self.assertNotIn("news:1", [r for r, _ in out.draft.related_news])
+        self.assertEqual([(c.ref, r) for c, r in out.grouped], [("news:1", "R1")])
+
+    def test_without_links_nothing_changes(self):                     # 기본(꺼짐)은 지금과 같다
+        out, _ = self.run_card(self.cands(), {})
+        self.assertEqual({e.candidate.ref for e in out.evidence}, {"disc:R1#0", "news:1", "news:2"})   # 묶지 않으면 셋 다 근거
+        self.assertEqual((out.grouped, out.draft.supporting_news), ([], []))
+
+    def test_news_stays_when_its_disclosure_is_not_evidence(self):     # 공시가 임계값에 못 들면 기사를 빼지 않는다
+        cands = [replace(ev_disc(), similarity=0.3)] + self.cands()[1:]
+        out = check_topic(NAVER, cands, None, BANNED, {"min_similarity": 0.5}, {"news:1": "R1"})
+        self.assertIn("news:1", [e.candidate.ref for e in out.evidence])
+        self.assertEqual(out.grouped, [])
+
+    def test_other_chunk_of_same_disclosure_is_same_disclosure(self):  # 기사는 R1#3과 맞았지만 근거는 R1#2
+        cands = [ev_disc("disc:R1#2")] + self.cands()[1:]
+        out, _ = self.run_card(cands, {"news:1": "R1"})
+        self.assertEqual([c.ref for c, _ in out.grouped], ["news:1"])
+        self.assertEqual([s["ref"] for s in out.draft.supporting_news], ["news:1"])
+
+    def test_supporting_news_only_for_cited_disclosure(self):         # 카드가 쓰지 않은 공시의 기사는 붙이지 않는다
+        cands = self.cands() + [replace(ev_disc("disc:R2#0"), title="[수시공시] 기타", similarity=0.6, date="2026-10-30")]
+        out, _ = self.run_card(cands, {"news:1": "R2"})
+        self.assertEqual([c.ref for c, _ in out.grouped], ["news:1"])
+        self.assertEqual(out.draft.supporting_news, [])
+
+    def test_default_config_keeps_same_event_off(self):
+        cfg = load_config("configs/updates.yaml")
+        self.assertFalse(cfg["same_event"]["enabled"])
+        self.assertEqual((cfg["same_event"]["min_similarity"], cfg["same_event"]["number_similarity"]), (0.70, 0.62))
+
+
+class _SECursor:
+    def __init__(self, conn):
+        self.conn, self.rows = conn, []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def execute(self, sql, params=None):
+        from pipelines.updates import same_event as se
+        self.conn.calls.append((sql, params))
+        self.rows = {se.PAIR_SQL: self.conn.pairs, se.DISCLOSURE_TEXT_SQL: self.conn.texts,
+                     se.BODY_SQL: self.conn.bodies}[sql]
+
+    def fetchall(self):
+        return self.rows
+
+
+class _SEConn:
+    def __init__(self, pairs, texts, bodies):
+        self.pairs, self.texts, self.bodies, self.calls = pairs, texts, bodies, []
+
+    def cursor(self):
+        return _SECursor(self)
+
+
+class SameEventLinkTest(unittest.TestCase):
+    def test_two_stage_rule_window_and_same_disclosure_chunks(self):
+        from pipelines.updates.same_event import link_same_event
+        cands = [ev_disc("disc:R1#0"), ev_disc("disc:R1#2"),                     # 같은 공시의 두 청크 → 공시 하나
+                 ev_news("news:1", 0.6, "2026-11-03", "엔비디아 투자 확정"),
+                 ev_news("news:2", 0.6, "2026-11-06", "엔비디아, 1조3412억 납입"),
+                 ev_news("news:3", 0.6, "2026-11-04", "네이버지도 2위"),
+                 ev_news("news:4", 0.6, "2026-11-04", "네이버 AI 행사"),
+                 ev_news("news:5", 0.6, "2026-11-07", "엔비디아 지분 4%"),             # +4일: 기간 밖
+                 replace(ev_news("news:6", 0.6, "2026-11-03", "원문 없는 속보"), doc="")]  # 원문 청크 없음 → PAIR_SQL에 없다
+        conn = _SEConn([(1, "R1", 0.72), (2, "R1", 0.66), (3, "R1", 0.66), (4, "R1", 0.60), (5, "R1", 0.80)],
+                       [("R1", EVENT_TEXT)],
+                       [(2, "엔비디아가 1조3412억원을 납입했다"), (3, "네이버지도 이용자 1,200만명")])
+        links = link_same_event(conn, cands, {})
+        self.assertEqual({r: (l.rcept_no, l.rule) for r, l in links.items()},
+                         {"news:1": ("R1", "similarity"), "news:2": ("R1", "numbers")})   # 0.66 숫자 없음·0.60·기간 밖·원문 없음 제외
+        pair_params = conn.calls[0][1]
+        self.assertEqual(pair_params["r"], ["R1"])
+        self.assertEqual(sorted(conn.calls[2][1]["n"]), [2, 3])                    # 본문은 0.62~0.70 기사만 읽는다
+
+    def test_periodic_reports_are_not_grouped_by_default(self):
+        from pipelines.updates.same_event import link_same_event
+        periodic = replace(ev_disc(), doc="periodic")
+        conn = _SEConn([(1, "R1", 0.9)], [], [])
+        self.assertEqual(link_same_event(conn, [periodic, ev_news("news:1", 0.6, "2026-11-03", "t")], {}), {})
+        self.assertEqual(conn.calls, [])
+        self.assertIn("news:1", link_same_event(conn, [periodic, ev_news("news:1", 0.6, "2026-11-03", "t")],
+                                                {"event_only": False}))
+
+    def test_key_numbers_are_amounts_and_shares(self):
+        from pipelines.updates.same_event import key_numbers, shares_number
+        keys = key_numbers("2026년 11월 3일 접수 20261103. 발행 3,900,000주, 금액 1조 3412억 2600만원, 1주당 343,904원")
+        self.assertTrue({3900000.0, 1341226000000.0, 343904.0} <= keys)
+        self.assertNotIn(20261103.0, keys)                                          # 날짜는 핵심 숫자가 아니다
+        self.assertTrue(shares_number(keys, "엔비디아는 1조3412억원을 납입했다"))       # 기사의 반올림(0.5% 안)은 같은 값
+        self.assertFalse(shares_number(keys, "엔비디아는 1.3조원을 납입했다"))          # 3% 차이는 다른 값
+        self.assertFalse(shares_number(keys, "11월 3일 발표"))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -108,6 +108,8 @@ def _card_html(c: dict, refs: dict[str, dict]) -> str:
     related = "".join(_source_line(r["ref"], None, {**refs, r["ref"]: {**refs.get(r["ref"], {}), "title": r.get("title") or ""}})
                       for r in c.get("related_news", []))
     related_html = f'<div class="label">관련 기사</div>{related}' if related else ""
+    same = "".join(_source_line(r["ref"], None, {r["ref"]: {"kind": "news", **r}}) for r in c.get("supporting_news") or [])
+    related_html = (f'<div class="label">같은 사건 기사</div>{same}' if same else "") + related_html
     reason = f'<div class="note">{escape(c["reason"])}</div>' if c.get("reason") and utype != "price_condition" else ""
     return (
         f'<details class="card" data-type="{escape(utype)}"><summary>'

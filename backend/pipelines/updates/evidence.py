@@ -7,6 +7,8 @@
    공시 자리는 정기보고서와 수시공시가 나눠 쓰므로 유사도 대신 '자기 최소 기준보다 얼마나 높은가'로 비교한다
    (정기보고서는 유사도가 원래 높게 나와서 그대로 비교하면 형식적인 정기보고서 문구가 수시공시를 밀어낸다).
 뉴스는 같은 사건 기사를 하나로 묶고(제목 유사도), 근거는 최대 max_news개. 뉴스 본문은 저장하지 않으므로 제목+제공 요약만 쓴다.
+3) split_same_event(설정 same_event, 기본 꺼짐): 근거로 뽑힐 공시와 같은 사건으로 묶인 기사(same_event.link_same_event)는
+   근거에서 빼서 그 공시 카드의 보조 기사로 넘긴다. 남는 뉴스 자리에는 묶이지 않은 다른 사건 기사가 들어간다.
 """
 
 from __future__ import annotations
@@ -59,13 +61,40 @@ def pick_recent(candidates: list[Candidate], floor: dict[str, float], strong: di
     return picked
 
 
+def rcept_of(ref: str) -> str:
+    """disc:<접수번호>#<청크> → 접수번호 (같은 공시의 다른 청크는 같은 공시)."""
+    return ref.split(":", 1)[1].split("#", 1)[0]
+
+
+def pick_disclosures(candidates: list[Candidate], max_disclosure: int = 2,
+                     floor: dict[str, float] | None = None) -> list[Candidate]:
+    """근거로 쓸 공시. floor가 있으면 '유사도 - 자기 최소 기준'이 큰 순으로 고른다 (없으면 유사도순)."""
+    ordered = sorted(candidates, key=lambda c: -c.similarity)
+    margin = (lambda c: c.similarity - _limit(floor, c)) if floor else (lambda c: c.similarity)
+    return sorted((c for c in ordered if c.kind == "disclosure"), key=margin, reverse=True)[:max_disclosure]
+
+
+def split_same_event(candidates: list[Candidate], links: dict[str, str], max_disclosure: int = 2,
+                     floor: dict[str, float] | None = None) -> tuple[list[Candidate], list[tuple[Candidate, str]]]:
+    """(남길 후보, [(같은 사건으로 묶여 근거에서 뺀 기사, 공시 접수번호)]). links: 기사 ref → 공시 접수번호.
+    그 공시가 근거로 뽑힐 때만 뺀다 (공시가 근거에 못 들면 기사는 그대로 근거 후보로 남는다)."""
+    chosen = {rcept_of(c.ref) for c in pick_disclosures(candidates, max_disclosure, floor)}
+    keep, grouped = [], []
+    for c in candidates:
+        rcept = links.get(c.ref) if c.kind == "news" else None
+        if rcept is not None and rcept in chosen:
+            grouped.append((c, rcept))
+        else:
+            keep.append(c)
+    return keep, grouped
+
+
 def build_evidence(candidates: list[Candidate], max_disclosure: int = 2, max_news: int = 3,
                    news_dup_similarity: float = 0.7, max_chars_news: int = 600,
                    max_chars_disclosure: int = 800, floor: dict[str, float] | None = None) -> list[Evidence]:
     """floor가 있으면 공시는 '유사도 - 자기 최소 기준'이 큰 순으로 고른다 (없으면 유사도순)."""
     ordered = sorted(candidates, key=lambda c: -c.similarity)
-    margin = (lambda c: c.similarity - _limit(floor, c)) if floor else (lambda c: c.similarity)
-    disclosures = sorted((c for c in ordered if c.kind == "disclosure"), key=margin, reverse=True)[:max_disclosure]
+    disclosures = pick_disclosures(candidates, max_disclosure, floor)
     news: list[Candidate] = []
     for c in (c for c in ordered if c.kind == "news"):
         if any(title_similarity(c.title, n.title) >= news_dup_similarity for n in news):

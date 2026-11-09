@@ -6,6 +6,8 @@
 - LLM 호출이 실패해도 고정 문구로 대체하지만, CreditsExhausted는 대체하지 않고 그대로 올린다 (AI 업데이트 일시 중지).
 - 크레딧 확인은 호출자가 call 함수 안에서 한다. call이 None이면 근거 준비까지만 한다.
 - 옵션 verify_call: 코드 검사를 통과한 카드를 LLM이 한 번 더 문장별로 근거와 대조한다 (항목당 호출 +1). 하나라도 근거에 없다고 하면 검사 실패로 본다.
+- 옵션 same_event(기사 ref → 공시 접수번호, same_event.link_same_event): 근거로 뽑힐 공시와 같은 사건 기사는 근거에서 빼고(LLM이 보지 않는다)
+  그 공시를 쓴 공시 카드에 supporting_news(제목·매체·날짜·링크)로 붙인다. 기사 문장은 쓰지 않는다.
 """
 
 from __future__ import annotations
@@ -13,7 +15,7 @@ from __future__ import annotations
 from typing import Callable
 
 from .checks import check_card, check_no_update
-from .evidence import build_evidence, pick_recent, related_news
+from .evidence import build_evidence, pick_recent, rcept_of, related_news, split_same_event
 from .fixed import fixed_card
 from .judge import build_prompt, build_verify_prompt, parse_card, parse_verify
 from .models import Candidate, CreditsExhausted, TopicOutcome, TrackingItem, UpdateDraft
@@ -69,13 +71,27 @@ def thresholds(cfg: dict) -> tuple[dict[str, float], dict[str, float]]:
 
 
 def check_topic(item: TrackingItem, candidates: list[Candidate], call: Callable[[str], str] | None,
-                banned: list[str], cfg: dict | None = None) -> TopicOutcome:
+                banned: list[str], cfg: dict | None = None, same_event: dict[str, str] | None = None) -> TopicOutcome:
     cfg = cfg or {}
     floor, strong = thresholds(cfg)
     passed = pick_recent(candidates, floor, strong, cfg.get("stop_window_days", 0))
+    grouped: list[tuple[Candidate, str]] = []
+    if same_event:
+        passed, grouped = split_same_event(passed, same_event, cfg.get("max_disclosure_evidence", 2), floor)
     evidence = build_evidence(passed, cfg.get("max_disclosure_evidence", 2), cfg.get("max_news_evidence", 3),
                               cfg.get("news_dup_similarity", 0.7), cfg.get("max_text_chars_news", 600),
                               cfg.get("max_text_chars_disclosure", 800), floor)
+    out = _judge(item, evidence, call, banned, cfg)
+    out.grouped = grouped
+    if grouped and out.draft is not None and out.draft.type == "disclosure":
+        cited = {rcept_of(ref) for ref, _ in out.draft.sources if ref.startswith("disc:")}
+        out.draft.supporting_news = [{"ref": c.ref, "title": c.title, "source": c.source, "date": c.date, "url": c.url}
+                                     for c, rcept in grouped if rcept in cited]   # 카드가 쓴 공시의 기사만
+    return out
+
+
+def _judge(item: TrackingItem, evidence, call: Callable[[str], str] | None, banned: list[str], cfg: dict) -> TopicOutcome:
+    """근거 → LLM 카드 → 코드 검사 → 카드 또는 고정 문구."""
     if not evidence:
         return TopicOutcome("no_candidates")
     if item.already_shown_ids and all(e.candidate.ref in set(item.already_shown_ids) for e in evidence):

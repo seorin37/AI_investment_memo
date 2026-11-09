@@ -34,6 +34,7 @@ def draft_to_dict(d: UpdateDraft) -> dict:
         "update_type": d.type, "title": d.title, "summary": d.summary, "reason": d.reason,
         "sources": [{"ref": r, "quote": q} for r, q in d.sources],
         "related_news": [{"ref": r, "title": t} for r, t in d.related_news],
+        "supporting_news": d.supporting_news,
         "price_state": d.price_state, "details": d.details, "observed_trade_date": d.observed_trade_date,
         "origin": d.origin,
     }
