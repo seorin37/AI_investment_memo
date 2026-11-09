@@ -92,6 +92,18 @@ def _fmt(out) -> list[str]:
     return rows
 
 
+def _outcome(item, out) -> dict:
+    ev = [{"eid": e.eid, "ref": e.candidate.ref, "kind": e.candidate.kind, "doc": e.candidate.doc, "date": e.candidate.date,
+           "similarity": round(e.candidate.similarity, 4), "title": e.candidate.title} for e in out.evidence]
+    d = out.draft
+    return {"item_id": item.item_id, "symbol": item.symbol, "description": item.description, "kind": out.kind,
+            "fail_codes": out.fail_codes, "evidence": ev,
+            "grouped": [{"ref": c.ref, "rcept_no": r, "title": c.title} for c, r in out.grouped],
+            "card": None if d is None else {"type": d.type, "origin": d.origin, "title": d.title, "summary": d.summary,
+                                            "sources": [r for r, _ in d.sources], "supporting_news": d.supporting_news,
+                                            "related_news": [r for r, _ in d.related_news]}}
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="후보 검색·카드 생성 실험 (DB 읽기 전용, 결과는 파일로만 저장)")
     ap.add_argument("--gold", default="eval/memo_eval_v0/memo_eval_v0.jsonl")
@@ -160,6 +172,7 @@ def main(argv: list[str] | None = None) -> int:
     status_count: dict[str, int] = {}
     fail_count: dict[str, int] = {}
     drafts = []
+    outcomes = []                                               # 항목별 근거·결과 (outcomes.jsonl, 방식끼리 나란히 비교할 때)
     empties = []                                                # 카드가 없는 항목 (미리보기의 '근거 없음' 목록)
     sections = []
     with psycopg.connect(get_read_dsn()) as conn:
@@ -200,6 +213,7 @@ def main(argv: list[str] | None = None) -> int:
                     from .same_event import link_same_event
                     links = {ref: link.rcept_no for ref, link in link_same_event(conn, cands, scfg).items()}
                 out = check_topic(item, cands, client, banned, tcfg, links)
+                outcomes.append(_outcome(item, out))
                 status_count[out.kind] = status_count.get(out.kind, 0) + 1
                 for code in out.fail_codes:                     # 원본 LLM 출력이 어떤 검사에 걸렸는지 (평가 지표)
                     key = code.split(":")[0]
@@ -277,9 +291,12 @@ def main(argv: list[str] | None = None) -> int:
     run_dir = new_run_dir(args.out_dir)
     write_results(run_dir, drafts, "\n".join(head + [""] + sections) + "\n", summary)
     csv_path = write_candidates_csv(run_dir, cand_rows)
+    with (run_dir / "outcomes.jsonl").open("w", encoding="utf-8") as f:
+        for o in outcomes:
+            f.write(json.dumps(o, ensure_ascii=False, default=str) + "\n")
     preview_path = write_preview(run_dir, drafts, cand_rows, empties, f"{run_dir.name} · LLM {args.llm}")
     print("\n".join(head))
-    print(f"결과 폴더: {run_dir}  (cards.jsonl, report.md, summary.json, candidates.csv) — DB에는 아무것도 쓰지 않았습니다.")
+    print(f"결과 폴더: {run_dir}  (cards.jsonl, report.md, summary.json, candidates.csv, outcomes.jsonl) — DB에는 아무것도 쓰지 않았습니다.")
     print(f"미리보기(사용자 화면처럼): {preview_path}")
     print(f"임계값 정하기: {csv_path} 의 마지막 열 '관련(O/X)'을 채운 뒤 python -m pipelines.updates.calibrate --labels {csv_path}")
     return 0
