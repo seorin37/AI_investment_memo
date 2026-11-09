@@ -1456,5 +1456,59 @@ class ExtraRulesAndPredictionTest(unittest.TestCase):
                                     {"prediction_terms": []}), [])                    # 목록을 비우면 검사하지 않는다
 
 
+class EvalE2ETest(unittest.TestCase):
+    """메모 분석 → 카드 평가 실행기 (eval_e2e): 표본, 문장 맞추기, 정확도, 항목 만들기, 조건."""
+
+    def test_sample_prefers_news_rich_and_diverse_symbols(self):
+        from pipelines.updates.eval_e2e import sample_memos
+        memos = ([{"memo_id": f"R{i}", "symbol": f"R{i % 5}"} for i in range(20)]
+                 + [{"memo_id": f"P{i}", "symbol": f"P{i}"} for i in range(10)] + [{"memo_id": "N", "symbol": None}])
+        counts = {f"R{i}": 9 for i in range(5)}
+        out = sample_memos(memos, counts, n=10, rich_min=5, rich_share=0.7)
+        self.assertEqual(len(out), 10)
+        rich = [m for m in out if m["symbol"].startswith("R")]
+        self.assertEqual(len(rich), 7)
+        self.assertEqual(len({m["symbol"] for m in rich}), 5)                       # 종목당 1개씩 먼저
+        self.assertNotIn("N", [m["memo_id"] for m in out])                          # 종목 없는 메모는 뺀다
+        self.assertEqual(out, sample_memos(memos, counts, n=10))                    # 같은 seed면 같은 표본
+
+    def test_align_and_score(self):
+        from pipelines.tracking.judge import Judgment
+        from pipelines.updates.eval_e2e import align, score_analysis
+        text = "만도 주가가 많이 내려왔네.\n3만4천원 깨지면 알려줘."
+        pred = [Judgment(0, "만도 주가가 많이 내려왔네.", (0, 15), "만도 주가가 많이 내려왔네.", [], "full_fallback", "B1"),
+                Judgment(1, "3만4천원 깨지면 알려줘.", (16, 30), "3만4천원 깨지면 알려줘.", [], "normal", "A2",
+                         items=[{"type": "price_below", "description": "34,000원 아래로", "price_threshold": 34000}])]
+        gold = [{"text": "만도 주가가 많이 내려왔네.", "intended_type": "C2", "expected_decision": "일부 추적"},
+                {"text": "3만4천원 깨지면 알려줘.", "intended_type": "A2", "expected_decision": "추적"},
+                {"text": "메모에 없는 문장", "intended_type": "B1", "expected_decision": "추적 안 함"}]
+        pairs = align(text, gold, pred)
+        self.assertEqual([p.sentence_index if p else None for _, p in pairs], [0, 1, None])
+        s = score_analysis([{"gold": g, "pred": p.to_dict() if p else None} for g, p in pairs])
+        self.assertEqual((s["sentences"], s["aligned"], s["missed_tracking"], s["items"]), (3, 2, 1, 1))
+        self.assertEqual((s["tracking_agreement"], s["decision_accuracy"], s["category_accuracy"]), (0.5, 0.5, 0.5))
+        self.assertEqual(s["confusion"], {"normal→normal": 1, "partial→full_fallback": 1})
+
+    def test_items_from_tracked_sentences_only(self):
+        from pipelines.tracking.judge import Judgment
+        from pipelines.updates.eval_e2e import items_from
+        topic = {"type": "topic", "description": "수주 소식", "keywords": ["수주"]}
+        js = [Judgment(0, "a", (0, 1), "a", [], "normal", "A1", items=[topic]),
+              Judgment(1, "b", (2, 3), "b", [], "full_fallback", "B1", items=[topic]),
+              Judgment(2, "c", (4, 5), "c", [], "partial", "C2", items=[topic], merge_into={"sentence_index": 0})]
+        out = items_from({"memo_id": "K1", "symbol": "204320"}, js, "HL만도")
+        self.assertEqual([(i.item_id, i.description, i.keywords, i.company_name) for i in out],
+                         [("K1:0:0", "수주 소식", ("수주",), "HL만도")])
+
+    def test_conditions(self):
+        from pipelines.updates.eval_e2e import conditions
+        c = conditions({"evidence_mode": "all", "extra_rules": ["x"], "prediction_terms": ["전망"]}, {"min_similarity": 0.7})
+        self.assertEqual((c["baseline"]["news"], c["baseline"]["same_event"], c["baseline"]["topic"]["evidence_mode"],
+                          c["baseline"]["topic"]["extra_rules"], c["baseline"]["topic"]["prediction_terms"]),
+                         ("article", False, "legacy", [], []))
+        self.assertEqual((c["new"]["news"], c["new"]["same_event"], c["new"]["topic"]["evidence_mode"],
+                          c["new"]["topic"]["prediction_terms"]), ("chunks", True, "all", ["전망"]))
+
+
 if __name__ == "__main__":
     unittest.main()
