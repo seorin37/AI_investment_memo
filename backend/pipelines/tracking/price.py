@@ -40,20 +40,24 @@ _AMOUNT_PATTERNS = [
     (re.compile(r"([일이삼사오육칠팔구])십?만"), lambda m: _KO_DIGIT[m.group(1)] * (100000 if "십" in m.group(0) else 10000)),
 ]
 # 지원하지 않는 조건. 뒤에 조건 표지(면·시·때)가 있어야 조건으로 본다 ("PER 5배는 싸다"는 감상이지 조건이 아니다).
-_COND_MARK = r"[^.?!]*?(?:면|시(?=\s|$)|때)"
+# 조건 표지 '시'는 낱말 끝의 '시'가 아닐 때만 ("다시·역시·혹시·당시·동시"의 '시'는 조건이 아니다, 2026-11-09 "지금보다 15%는 다시 갈 거요")
+_SI = r"(?<!다)(?<!역)(?<!혹)(?<!당)(?<!동)시(?=\s|$)"
+_COND_MARK = rf"[^.?!]*?(?:면|{_SI}|때)"
 _UNSUPPORTED = [
     re.compile(r"52\s*주\s*(신)?(저가|고가|최저|최고)" + _COND_MARK),
     re.compile(r"(PBR|PER|PSR|EV/EBITDA)\s*\d" + _COND_MARK, re.IGNORECASE),
     re.compile(r"거래량.{0,6}(터지|급증|폭증|늘)" + _COND_MARK),
-    re.compile(r"(지금|현재|평단|매수가|고점|저점)\w*\s*(보다|대비|에서)?\s*\d+(\.\d+)?\s*%" + _COND_MARK),
+    # 기준점 대비 % ("고점에서 30% 빠지면", "여기서 10% 더 빠지면", "최근 바닥에서 10% 넘게 오르면")
+    re.compile(r"(지금|현재|평단|매수가|고점|저점|여기|바닥)\w*\s*(보다|대비|에서)?\s*\d+(\.\d+)?\s*%" + _COND_MARK),
     # 거래량 배수·평소 대비 ("거래량 평소 두 배 넘으면")
     re.compile(r"거래량.{0,10}(\d+(\.\d+)?\s*배|[두세네]\s*배|평소|평균|전일|전날)" + _COND_MARK),
     # 52주 표시가 없는 신저가·신고가, 직전 저점·고점, 이동평균선 ("전저점 깨지면", "60일선 넘으면")
-    re.compile(r"(신저가|신고가|전저점|전고점|역사적\s*(저점|고점)|\d+\s*일\s*(이동평균)?\s*선|이평선|이동평균선)" + _COND_MARK),
+    re.compile(r"(신저가|신고가|전저점|전고점|역사적\s*(저점|고점)|최근\s*(저점|고점|바닥)|\d+\s*일\s*(이동평균)?\s*선|이평선|이동평균선)"
+               + _COND_MARK),
 ]
 # 기준어 없는 상대 % 조건 ("10% 오르면 체크"). 실적·배당 같은 사업 수치의 변화("영업이익 10% 늘면")와 구분하려고
-# % 앞 12자 안에 사업 수치 단어가 있으면 가격 조건으로 보지 않는다.
-_RELATIVE_PCT = re.compile(r"\d+(\.\d+)?\s*%\s*(오르|올라|내리|내려|빠지|떨어지|하락|상승|급락|급등)" + _COND_MARK)
+# % 앞 12자 안에 사업 수치 단어가 있으면 가격 조건으로 보지 않는다. %와 동사 사이 '더·넘게·이상'은 허용 ("10% 더 빠지면")
+_RELATIVE_PCT = re.compile(r"\d+(\.\d+)?\s*%\s*(?:(?:더|넘게|이상)\s*)*(오르|올라|내리|내려|빠지|떨어지|하락|상승|급락|급등)" + _COND_MARK)
 _NOT_PRICE_SUBJECT = re.compile(r"(이익|매출|실적|배당|수익|금리|환율|이자|점유율|마진|성장|증가|비중|비용|부채)")
 
 
@@ -86,7 +90,7 @@ def _condition_after(text: str, pos: int, words: tuple[str, ...]) -> tuple[int, 
         after = pos + idx + len(word)
         if word.endswith("면"):
             return pos + idx, after
-        tail = re.match(r"\s*(?:원\s*)?(?:으로\s*)?(?:가|내려가|올라가|떨어지|오|되|하)?\s*(?:면|시(?=\s|$)|때|언제)", text[after:])
+        tail = re.match(rf"\s*(?:원\s*)?(?:으로\s*)?(?:가|내려가|올라가|떨어지|오|되|하)?\s*(?:면|{_SI}|때|언제)", text[after:])
         if tail:
             return pos + idx, after + tail.end()
     return None
@@ -119,12 +123,12 @@ def parse_conditions(text: str, lex: Lexicon) -> list[PriceResult]:
 
 
 def _rest_after_condition(text: str) -> str:
-    match = re.search(r"(?:면|시|때)\s+(.+)$", text)
+    match = re.search(rf"(?:면|{_SI}|때)\s+(.+)$", text)
     return match.group(1).strip() if match else ""
 
 
 REST_MAX_WORDS = 5
-_MORE_CONDITION = re.compile(r"(?:면|시|때)(?=\s|$|[,.])")
+_MORE_CONDITION = re.compile(r"(?:면|(?<!다)(?<!역)(?<!혹)(?<!당)(?<!동)시|때)(?=\s|$|[,.])")
 
 
 def classify_rest(rest: str, lex: Lexicon) -> str:

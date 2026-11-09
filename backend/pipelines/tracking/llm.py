@@ -110,9 +110,18 @@ def parse_response(raw: str) -> list[dict]:
     return valid
 
 
+def _missing_threshold(item: dict) -> bool:
+    """가격 항목인데 조건가가 없거나 양수가 아니다 (상대 가격 조건 "고점 대비 30%"를 LLM이 가격 항목으로 낸 경우)."""
+    if not str(item.get("type", "")).startswith("price_"):
+        return False
+    value = item.get("price_threshold")
+    return isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0
+
+
 def apply_llm(judgments: list[Judgment], rows: list[dict], min_confidence: float = 0.7) -> list[Judgment]:
     """검증된 응답을 대기 문장에 반영한다. 응답이 없거나 확신이 낮은 대기 문장은 확인 필요.
-    로직이 미리 넣어 둔 가격 항목(분리가 덜 된 문장)은 지우지 않는다."""
+    로직이 미리 넣어 둔 가격 항목(분리가 덜 된 문장)은 지우지 않는다.
+    조건가가 빈 가격 항목이 있으면 그 문장은 카드 단계로 넘기지 않고 확인 필요(PRICE_THRESHOLD_MISSING)."""
     by_index = {r["sentence_index"]: r for r in rows}
     for j in judgments:
         if j.decision != PENDING:
@@ -127,6 +136,8 @@ def apply_llm(judgments: list[Judgment], rows: list[dict], min_confidence: float
         kept = {(it["type"], it.get("price_threshold")) for it in j.items}
         extra = [it for it in row.get("items") or [] if (it["type"], it.get("price_threshold")) not in kept]
         j.items = j.items + extra
+        if any(_missing_threshold(it) for it in j.items):
+            j.decision, j.reason_code = "needs_confirmation", "PRICE_THRESHOLD_MISSING"
         j.context_note, j.judged_by = row.get("context_note") or j.context_note, "llm"
         j.resolved_reference, j.confidence = row.get("resolved_reference"), float(row.get("confidence", 0))
         merge = row.get("merge_into")
