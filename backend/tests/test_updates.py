@@ -1396,13 +1396,13 @@ class EvidenceAllModeTest(unittest.TestCase):
         ev = build_evidence(self.discs(docs=2, chunks=1) + self.news_list(6), **self.OPTS)
         self.assertEqual((len(ev), sum(e.candidate.kind == "news" for e in ev)), (8, 6))   # 예전 방식이면 뉴스 3
 
-    def test_legacy_mode_is_default(self):
+    def test_legacy_mode_still_runs(self):                   # 함수 기본값은 legacy (평가 비교용)
         ev = build_evidence(self.discs(docs=2, chunks=2) + self.news_list(6))
         self.assertEqual(sum(e.candidate.kind == "disclosure" for e in ev), 2)
         self.assertEqual(sum(e.candidate.kind == "news" for e in ev), 3)
         cfg = load_config("configs/updates.yaml")["topic"]
         self.assertEqual((cfg["evidence_mode"], cfg["max_total"], cfg["max_disclosure_docs"], cfg["max_chunks_per_disclosure"]),
-                         ("legacy", 15, 5, 2))
+                         ("all", 15, 5, 2))                                           # 2026-11-09 설정 기본값 all
         with self.assertRaises(ValueError):
             build_evidence(self.discs(), mode="everything")
 
