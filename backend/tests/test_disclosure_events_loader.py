@@ -134,6 +134,37 @@ class EventsLoaderDbTest(unittest.TestCase):
         with ENGINE.connect() as conn:
             self.assertEqual(events_loader.done_rcept_nos(conn, ["E9000000000040"]), set())  # 실패는 다시 시도 대상
 
+    def test_non_date_original_date_is_not_guessed(self):
+        event, result = parsed("033920_20261022800228", "dividend")
+        with ENGINE.begin() as conn:
+            events_loader.upsert_event(conn, ref("E9000000000035", rcept_dt="2001-10-20"), event, result)
+            fix = ref("E9000000000036", title="[기재정정]현금ㆍ현물배당결정", correction=True)
+            self.assertIsNone(events_loader.find_original(conn, fix, "타법인 주식 처분결정"))
+
+    def test_collect_events_continues_after_store_error(self):
+        fixture = FIXTURES / "051600_20261021800137.zip"
+        refs = [ref(f"E900000000008{i}", "단일판매ㆍ공급계약체결", "supply_contract", "business") for i in range(3)]
+        original = events_loader.upsert_event
+
+        def flaky_upsert(conn, r, *args, **kwargs):
+            if r.rcept_no == "E9000000000081":
+                raise ValueError("깨진 값")
+            return original(conn, r, *args, **kwargs)
+
+        from pipelines.disclosures import run_events
+
+        run_events.upsert_event = flaky_upsert
+        try:
+            summary = collect_events(ENGINE, refs, "key", Path("."), RULES, download=lambda *a: fixture)
+        finally:
+            run_events.upsert_event = original
+        self.assertEqual(summary.loaded, ["E9000000000080", "E9000000000082"])
+        self.assertEqual([f["rcept_no"] for f in summary.failures], ["E9000000000081"])
+        self.assertIn("저장 실패 ValueError", summary.failures[0]["error"])
+        self.assertFalse(summary.stopped_on_errors)
+        # 실패한 건은 아무것도 남지 않는다(그 건의 트랜잭션만 되돌림)
+        self.assertEqual(self.one("SELECT count(*) FROM disclosures WHERE rcept_no = 'E9000000000081'")[0], 0)
+
     def test_topic_check_constraint(self):
         from sqlalchemy.exc import IntegrityError
 

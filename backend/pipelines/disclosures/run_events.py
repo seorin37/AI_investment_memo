@@ -44,6 +44,7 @@ log = get_logger("disclosures.run_events")
 
 EXIT_RATE_LIMITED = 3
 EXIT_USAGE = 2
+MAX_CONSECUTIVE_STORE_ERRORS = 5
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -137,6 +138,7 @@ class CollectSummary:
     corrects_linked: int = 0
     failures: list[dict] = field(default_factory=list)
     rate_limited: bool = False
+    stopped_on_errors: bool = False  # 저장 실패가 연이어 나서 멈춤
 
     def to_dict(self) -> dict:
         return {
@@ -147,6 +149,7 @@ class CollectSummary:
             "corrects_linked": self.corrects_linked,
             "failures": self.failures,
             "rate_limited": self.rate_limited,
+            "stopped_on_errors": self.stopped_on_errors,
         }
 
 
@@ -169,6 +172,7 @@ def collect_events(
     - DART 한도(020)면 거기서 멈추고 rate_limited=True.
     """
     summary = CollectSummary()
+    store_errors = 0
     ordered = sorted(refs, key=lambda ref: ref.rcept_no)  # 원본이 정정본보다 먼저 저장되게
     with engine.connect() as conn:
         known = known_symbols(conn, [ref.symbol for ref in ordered])
@@ -194,8 +198,20 @@ def collect_events(
             error = REDACTOR.redact(f"{type(exc).__name__}: {exc}")[:500]
             summary.failures.append({"rcept_no": ref.rcept_no, "symbol": ref.symbol, "title": ref.title, "error": error})
             log.warning("원문 처리 실패: %s %s — %s", ref.rcept_no, ref.title, error)
-        with engine.begin() as conn:
-            outcome = upsert_event(conn, ref, parsed, result, parse_error=error)
+        try:
+            with engine.begin() as conn:  # 1건 = 1트랜잭션: 실패하면 이 건만 되돌린다
+                outcome = upsert_event(conn, ref, parsed, result, parse_error=error)
+        except Exception as exc:  # 한 건 때문에 전체 실행이 멈추지 않게. 연속으로 실패하면 멈춘다(DB 장애 등)
+            store_errors += 1
+            message = REDACTOR.redact(f"저장 실패 {type(exc).__name__}: {exc}")[:500]
+            summary.failures.append({"rcept_no": ref.rcept_no, "symbol": ref.symbol, "title": ref.title, "error": message})
+            log.exception("저장 실패: %s %s", ref.rcept_no, ref.title)
+            if store_errors >= MAX_CONSECUTIVE_STORE_ERRORS:
+                log.error("저장 실패가 %d건 연속 — 멈춥니다.", store_errors)
+                summary.stopped_on_errors = True
+                break
+            continue
+        store_errors = 0
         summary.loaded.append(ref.rcept_no)
         summary.status["failed" if parsed is None else result.parse_status] += 1
         summary.corrects_linked += int(outcome["corrects"] is not None)
@@ -263,7 +279,7 @@ def main(argv: list[str] | None = None) -> int:
     summary = collect_events(engine, refs, api_key, raw_dir / "docs", field_rules, session=session, reparse=args.reparse)
 
     embed_result = None
-    if summary.loaded and not args.no_embed:
+    if refs and not args.no_embed:  # 새로 저장한 게 없어도 빠진 임베딩은 채운다
         if args.offline:
             from .embedder import set_offline
 
@@ -272,7 +288,9 @@ def main(argv: list[str] | None = None) -> int:
 
         encoder, _ = load_encoder(common["model"], args.offline, args.allow_cpu)
         model_name, revision, config_hash = embedding_identity(common["model"])
-        report_embed = embed_pending(engine.begin, encoder, summary.loaded, model_name=model_name,
+        # 이번에 저장한 것만이 아니라 기간 안 전부: 앞 실행이 임베딩 전에 멈췄거나 --no-embed였던 청크도 채운다.
+        # embed_pending은 임베딩이 없거나 모델 설정이 다른 청크만 고르므로, 이미 된 것은 다시 하지 않는다.
+        report_embed = embed_pending(engine.begin, encoder, [ref.rcept_no for ref in refs], model_name=model_name,
                                      model_revision=revision, config_hash=config_hash)
         embed_result = {"pending": report_embed.pending, "embedded": report_embed.embedded, "failed": report_embed.failed}
 
@@ -287,11 +305,11 @@ def main(argv: list[str] | None = None) -> int:
     if embed_result:
         print(f"임베딩: {embed_result}")
     if summary.failures:
-        print(f"원문 처리 실패 {len(summary.failures)}건 (다음 실행에서 다시 시도)")
+        print(f"처리 실패 {len(summary.failures)}건 (다음 실행에서 다시 시도) — failures 참고")
     print(f"자세한 내용: {out_path}")
     if summary.rate_limited:
         return EXIT_RATE_LIMITED
-    if embed_result and embed_result["failed"]:
+    if summary.stopped_on_errors or (embed_result and embed_result["failed"]):
         return EXIT_FAILURES
     return EXIT_OK
 

@@ -16,6 +16,9 @@
 - 정정공시면 정정일자·정정사유·원래 공시 제출일을 correction에 따로 담는다.
 
 parse_status: ok (required 모두 있음) · partial (일부 없음 또는 형식 오류) · failed (원문 파싱 실패)
+  ok는 늘 "required가 다 있음"이다. 빈 값이 원문에 원래 없는 경우는 partial 그대로 두고 fields.note에 사유를 붙인다
+  (expected_missing_note): monthly_operating(월간 판매 실적) · amount_withheld(시설투자 금액 공시유보).
+  잠정실적은 값과 상관없이 fields.period_kind(month·quarter·half·year·other)를 넣는다.
 """
 
 from __future__ import annotations
@@ -155,6 +158,7 @@ class ExtractResult:
     missing: list[str] = field(default_factory=list)  # required인데 못 찾았거나 값이 없는 필드
     errors: list[str] = field(default_factory=list)  # 형식 오류 (숫자·날짜로 못 바꿈)
     correction: dict = field(default_factory=dict)
+    note: str | None = None  # partial이지만 원문에 원래 값이 없는 경우 (NOTES 키): monthly_operating · amount_withheld
 
 
 def _convert(rule: FieldRule, raw: str, values: dict):
@@ -200,7 +204,27 @@ def extract_correction(pairs: list[Pair]) -> dict:
                         pass
                 result[key] = value
                 break
+    # 제출 회사가 1·2번 칸을 바꿔 적은 경우(예: 서류명 칸에 날짜): 날짜인 쪽을 제출일로 쓴다
+    if result.get("original_date") and not _is_iso_date(result["original_date"]) \
+            and _is_iso_date(_try_date(result.get("original_title"))):
+        result["original_title"], result["original_date"] = result["original_date"], _try_date(result["original_title"])
+    # 그래도 날짜가 아니면 원본 연결에 쓰지 않는다(추측 금지) — 원래 글자는 따로 남긴다
+    if result.get("original_date") and not _is_iso_date(result["original_date"]):
+        result["original_date_raw"] = result.pop("original_date")
     return result
+
+
+def _try_date(value: str | None) -> str | None:
+    if not value:
+        return None
+    try:
+        return parse_date(value)
+    except ValueError:
+        return None
+
+
+def _is_iso_date(value: str | None) -> bool:
+    return bool(value) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", value) is not None
 
 
 def extract_fields(event_type: str, pairs: list[Pair], rules: EventFieldRules) -> ExtractResult:
@@ -220,5 +244,57 @@ def extract_fields(event_type: str, pairs: list[Pair], rules: EventFieldRules) -
         group for group in rules.required.get(event_type, [])
         if all(values.get(name) is None for name in group.split("|"))
     ]
+    if event_type == "prelim_earnings":
+        kind = period_kind(values.get("period_start"), values.get("period_end"))
+        if kind:
+            values["period_kind"] = kind
     status = "partial" if missing or errors else "ok"
-    return ExtractResult(values, status, missing, errors, extract_correction(pairs))
+    # 상태는 사실대로(빈 값이 있으면 partial) 두고, 원문에 원래 값이 없는 경우만 사유를 붙인다
+    note = expected_missing_note(event_type, values, pairs, missing) if missing and not errors else None
+    if note:
+        values["note"] = note
+    return ExtractResult(values, status, missing, errors, extract_correction(pairs), note=note)
+
+
+NOTES = {
+    "monthly_operating": "월간 판매·영업 실적 공시 — 매출액·영업이익 칸을 비우고 판매대수·판매량 등 회사 기준 실적을 적음",
+    "amount_withheld": "금액 공시유보 — 계약상 비밀유지 등으로 금액을 나중에 공개",
+}
+WITHHELD_RE = re.compile(r"공시유보관련내용>유보사유$")
+# 공시유보로 비어도 되는 required (종류별). 공급계약은 config의 withheld_reason으로 이미 처리한다
+WITHHOLDABLE = {"facility_investment": {"amount_krw"}}
+
+
+def period_kind(start: str | None, end: str | None) -> str | None:
+    """잠정실적 대상 기간의 길이: month · quarter · half · year · other (날짜가 없으면 None)."""
+    if not start or not end:
+        return None
+    try:
+        days = (date.fromisoformat(end) - date.fromisoformat(start)).days + 1
+    except ValueError:
+        return None
+    if 1 <= days <= 31:
+        return "month"
+    if 85 <= days <= 95:
+        return "quarter"
+    if 175 <= days <= 190:
+        return "half"
+    if 360 <= days <= 370:
+        return "year"
+    return "other"
+
+
+def expected_missing_note(event_type: str, values: dict, pairs: list[Pair], missing: list[str]) -> str | None:
+    """required가 비었지만 원문에 원래 값이 없는 경우의 사유. 해당 없으면 None (parse_status는 partial 그대로).
+
+    - monthly_operating: 잠정실적인데 대상 기간이 한 달 (월간 판매 실적 공시는 표준 표를 비워 둔다)
+    - amount_withheld: WITHHOLDABLE에 있는 값만 비었고 `공시유보 관련내용 > 유보사유`에 사유가 적혀 있음
+    """
+    if event_type == "prelim_earnings" and values.get("period_kind") == "month":
+        return "monthly_operating"
+    allowed = WITHHOLDABLE.get(event_type, set())
+    if allowed and all(set(group.split("|")) <= allowed for group in missing):
+        for pair in pairs:
+            if WITHHELD_RE.search(compact(pair.path)) and compact(pair.value) not in EMPTY_VALUES:
+                return "amount_withheld"
+    return None

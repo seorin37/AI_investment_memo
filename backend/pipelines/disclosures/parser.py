@@ -47,12 +47,15 @@ DART_TAGS = frozenset(
 _TAG_ALT = b"|".join(re.escape(name.encode()) for name in sorted(DART_TAGS, key=len, reverse=True))
 # 태그로 인정하는 `<`: DART 태그 이름 뒤에 `>`·`/>` 또는 속성(`이름=`)이 오는 경우만. `<A 등급>`·`<P 1>` 같은 본문은 글자로 본다.
 _ATTR_START = rb"\s+[A-Za-z_][\w.:-]*\s*="
-_STRAY_LT_RE = re.compile(rb"<(?!(?:" + _TAG_ALT + rb")(?=\s*/?>|" + _ATTR_START + rb")|/(?:" + _TAG_ALT + rb")\s*>|[!?])")
+# 속성 없는 `<A>`도 글자로 본다. DART 링크는 늘 속성(REFNO·HREF)이 있고, 맨 `<A>`는 본문 글자다
+# (SP삼화 제품 코드 `TP FLEX BLACK<A>#(KJ)…` — 닫히지 않은 링크로 읽으면 표 구조가 깨진다)
+_STRAY_LT_RE = re.compile(rb"<(?=A\s*>)|<(?!(?:" + _TAG_ALT + rb")(?=\s*/?>|" + _ATTR_START + rb")|/(?:" + _TAG_ALT + rb")\s*>|[!?])")
 _TAG_NAME_AT_RE = re.compile(rb"(/?)([A-Za-z][\w.:-]*)")
 _CDATA_RE = re.compile(rb"(<!\[CDATA\[.*?\]\]>)", re.S)
 _NAMED_ENTITY_RE = re.compile(rb"&([A-Za-z][A-Za-z0-9]*);")
 _BARE_AMP_RE = re.compile(rb"&(?!#[0-9]+;|#x[0-9A-Fa-f]+;|(?:amp|lt|gt|quot|apos);)")
 _START_TAG_RE = re.compile(rb"<(" + _TAG_ALT + rb")(\s[^<>]*?)(/?)>")
+_WELL_FORMED_ATTRS_RE = re.compile(rb'(?:\s+[A-Za-z_][\w.:-]*\s*=\s*"[^"]*")*\s*')
 _ATTR_RE = re.compile(rb'\s*([A-Za-z_][\w.:-]*)\s*=\s*"(.*?)"(?=\s+[A-Za-z_][\w.:-]*\s*=|\s*$)', re.S)
 _XML_ENTITIES = {b"amp", b"lt", b"gt", b"quot", b"apos"}
 
@@ -364,8 +367,8 @@ def _sanitize_text_segment(segment: bytes, stats: dict, escaped_open: set, escap
 
     def repair_tag(match: re.Match) -> bytes:
         attrs = match.group(2)
-        if b'""' not in attrs and attrs.count(b'"') % 2 == 0:
-            return match.group(0)
+        if _WELL_FORMED_ATTRS_RE.fullmatch(attrs):
+            return match.group(0)  # 따옴표 짝 수만 보면 `ENG="… CVA ("PD")"`처럼 짝수로 깨진 값을 놓친다
         body = attrs.rstrip()
         parts = list(_ATTR_RE.finditer(body))
         if not parts or b"".join(m.group(0) for m in parts) != body:
