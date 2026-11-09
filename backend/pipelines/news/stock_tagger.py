@@ -10,6 +10,9 @@
   영문 이름은 앞뒤가 영문자·숫자가 아닐 때만 ("ELS"의 "LS", "KTX"의 "KT"를 빼려고).
 - 흔한 단어·지명(require_context, short_ok에 없는 2글자 한글 이름)은 앞뒤 context_window자 안에 주식 관련 말이 있을 때만.
 - 그룹 이름과 같은 지주사(group_names)는 제목·리드에서만, 뒤에 "그룹·家·회장…"이 오면 붙이지 않는다.
+- 2026-11-09 표본 O/X로 더한 규칙: 스포츠 구단과 같은 이름(sports_names)은 근처에 경기 말이 있으면 빼고, 짧은 이름·그룹 이름
+  바로 뒤에 조사가 아닌 한글이 붙으면(비상장 계열사 "LS오토", "두산인베스트먼트", "기아대책") 빼고, 이름에 "증권"이 든 종목은
+  제목에서만(기사 출처 "~증권에 따르면"), 2글자 영문 이름 바로 앞이 한글이면("울산TP") 뺀다.
 - 붙이는 기준: 제목(score 1.0) / 본문 리드 lead_chars자 안 1번(0.8) / 본문 2번 이상(0.6). 본문 규칙 종목은 기사당 max_body_tags개.
   원문이 없는 기사는 제목만 본다.
 - 공용 DB 쓰기는 --write --target host:port일 때만 (실제 대상과 다르면 멈춘다). 기본은 읽기 전용 dry-run.
@@ -36,6 +39,9 @@ CORP_CODE_PATH = Path("data/raw/dart/corpCode.xml")
 SCORES = {"title": 1.0, "lead": 0.8, "body": 0.6}
 _PREFERRED = re.compile(r"(\d?우[A-Z]?|우선주)$")
 _LATIN = re.compile(r"[A-Za-z0-9]")
+_HANGUL = re.compile(r"[가-힣]")
+# 짧은 이름 바로 뒤에 붙어도 되는 글자 (조사·어미의 첫 글자). 이 밖의 한글이 붙으면 다른 회사 이름의 앞부분으로 본다
+_PARTICLE_START = set("은는이가을를의에와과도로만랑께서며고및측")
 
 ARTICLES_SQL = """SELECT a.id, a.title, b.body FROM news_articles a
 LEFT JOIN news_article_bodies b ON b.news_id = a.id
@@ -55,6 +61,10 @@ class Rules:
     context_window: int = 30
     max_body_tags: int = 5
     lead_chars: int = 200
+    sports_names: set[str] = field(default_factory=set)
+    sports_words: tuple[str, ...] = ()
+    prefix_check: set[str] = field(default_factory=set)     # 바로 뒤 글자를 보는 이름 (짧은 이름·그룹 이름)
+    title_only: set[str] = field(default_factory=set)       # 제목에서만 붙이는 이름 ("증권"이 든 종목)
 
 
 @dataclass(frozen=True)
@@ -100,16 +110,23 @@ def build_rules(stocks: dict[str, str], cfg: dict, dart_names: set[str] = frozen
     # 막는 이름: 우리 이름을 품은 더 긴 이름만 (전부 넣으면 느리다). 우선주 이름은 막지 않는다 ("삼성전자우" → 삼성전자)
     longer = {d for d in dart_names | extra if d not in names and any(n in d for n in names if n != d)}
     short = {n for n in names if len(n) <= 2 and not _LATIN.search(n)}
+    groups = set(cfg.get("group_names") or [])
     return Rules(names=names, blockers=sorted(set(names) | longer, key=len, reverse=True),
                  group_names=set(cfg.get("group_names") or []), group_suffixes=tuple(cfg.get("group_suffixes") or ()),
                  require_context=(set(cfg.get("require_context") or []) | (short - set(cfg.get("short_ok") or []))) & set(names),
                  context_words=tuple(cfg.get("context_words") or ()), context_window=int(cfg.get("context_window", 30)),
-                 max_body_tags=int(cfg.get("max_body_tags", 5)), lead_chars=int(cfg.get("lead_chars", 200)))
+                 max_body_tags=int(cfg.get("max_body_tags", 5)), lead_chars=int(cfg.get("lead_chars", 200)),
+                 sports_names=set(cfg.get("sports_names") or []) & set(names),
+                 sports_words=tuple(cfg.get("sports_words") or ()),
+                 prefix_check={n for n in names if len(n) <= int(cfg.get("prefix_check_max_len", 3)) or n in groups},
+                 title_only={n for n in names if any(w in n for w in (cfg.get("title_only_words") or []))})
 
 
 def _latin_ok(text: str, a: int, b: int, name: str) -> bool:
     if _LATIN.match(name[0]) and a > 0 and _LATIN.match(text[a - 1]):
         return False
+    if len(name) <= 2 and _LATIN.match(name[0]) and a > 0 and _HANGUL.match(text[a - 1]):
+        return False                                         # "울산TP": 2글자 영문 이름 바로 앞이 한글
     if _LATIN.match(name[-1]) and b < len(text) and re.match(r"[A-Za-z]", text[b]):
         return False
     return True
@@ -133,6 +150,15 @@ def find(text: str, rules: Rules) -> list[tuple[int, int, str]]:
 
 
 def _valid(text: str, a: int, b: int, name: str, rules: Rules) -> bool:
+    if name in rules.prefix_check and b < len(text) and _HANGUL.match(text[b]) and text[b] not in _PARTICLE_START:
+        return False                                         # "LS오토", "두산인베스트먼트", "기아대책": 다른 이름의 앞부분
+    if name in rules.prefix_check and _HANGUL.match(name[0]) and a > 0 and _HANGUL.match(text[a - 1]):
+        return False                                         # "경영인대상", "평생학습대상": 다른 낱말의 뒷부분
+    if name in rules.sports_names:
+        w = rules.context_window
+        around = text[max(0, a - w):a] + " " + text[b:b + w]
+        if any(word in around for word in rules.sports_words):
+            return False                                     # 프로야구·농구 구단
     if name in rules.group_names:
         after = text[b:b + 6].lstrip()
         if any(after.startswith(s) for s in rules.group_suffixes):
@@ -160,7 +186,7 @@ def match_article(title: str, body: str | None, rules: Rules) -> list[Hit]:
         counts: Counter = Counter()
         first: dict[str, tuple[int, int, str]] = {}
         for a, b, name in find(body, rules):
-            if not _valid(body, a, b, name, rules):
+            if name in rules.title_only or not _valid(body, a, b, name, rules):
                 continue
             sym = rules.names[name]
             counts[sym] += 1

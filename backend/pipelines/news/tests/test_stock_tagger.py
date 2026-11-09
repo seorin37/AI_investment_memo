@@ -7,11 +7,14 @@ from backend.pipelines.news import stock_tagger as st
 
 STOCKS = {"034730": "SK", "000660": "SK하이닉스", "017670": "SK텔레콤", "006260": "LS", "001680": "대상",
           "005930": "삼성전자", "005935": "삼성전자우", "035420": "NAVER", "000270": "기아", "003550": "LG",
-          "066570": "LG전자", "030200": "KT", "103140": "풍산"}
-CFG = {"aliases": {"035420": ["네이버"], "000660": ["하이닉스"]}, "blockers": ["SK쉴더스", "SK그룹"],
-       "group_names": ["SK", "LG"], "group_suffixes": ["그룹", "家", "회장"], "require_context": ["대상", "풍산"],
-       "short_ok": ["기아"], "context_words": ["주가", "실적", "공시", "㈜", "목표가"], "context_window": 20,
-       "max_body_tags": 2, "lead_chars": 40}
+          "066570": "LG전자", "030200": "KT", "103140": "풍산", "000150": "두산", "012030": "DB", "007980": "TP",
+          "002380": "KCC", "006800": "미래에셋증권", "093050": "LF", "034120": "SBS"}
+CFG = {"aliases": {"035420": ["네이버"], "000660": ["하이닉스"], "093050": ["LF몰"]}, "blockers": ["SK쉴더스", "SK그룹"],
+       "group_names": ["SK", "LG", "두산", "LS"], "group_suffixes": ["그룹", "家", "회장"],
+       "require_context": ["대상", "풍산", "SBS"], "short_ok": ["기아"],
+       "context_words": ["주가", "실적", "공시", "㈜", "목표가"], "context_window": 20, "max_body_tags": 2, "lead_chars": 40,
+       "sports_names": ["두산", "DB", "SK"], "sports_words": ["프로야구", "농구", "선수", "대표팀"],
+       "prefix_check_max_len": 3, "title_only_words": ["증권"]}
 RULES = st.build_rules(STOCKS, CFG, {"SK스퀘어", "SK하이닉스"})
 
 
@@ -63,9 +66,31 @@ def test_title_lead_body_rules_and_body_cap():
     assert tags("기아 신차", "기아가 공개했다.")["000270"] == "title"                # 강한 규칙 하나만
 
 
+def test_rules_from_sample_review():                 # 2026-11-09 오탐 표본 O/X
+    assert tags("두산 최민석, 팔꿈치 부상으로 대표팀 낙마") == {}                     # 야구 선수
+    assert tags("프로농구 SK-DB 경기") == {}
+    assert tags("두산, 3분기 실적 발표") == {"000150": "title"}
+    assert tags("LS오토, 대표 사장 승진") == {}                                    # 비상장 계열사 앞부분
+    assert tags("KCC실리콘, 뷰티 소재 공략") == {}
+    assert tags("기아대책-LG화학, 환경교육") == {}                                  # 기아대책은 기아가 아니다
+    assert tags("기아는 신차를 공개했다") == {"000270": "title"}                     # 조사는 괜찮다
+    assert tags("LF몰, 블랙프라이데이 행사") == {"093050": "title"}                  # 별칭
+    body = "업계 소식이다. " * 10 + "미래에셋증권에 따르면 수익률이 높다. 미래에셋증권은 또 분석했다."
+    assert tags("ETF 투자 비율", body) == {}                                       # 증권사는 제목에서만
+    assert tags("미래에셋증권, 3분기 순이익 증가") == {"006800": "title"}
+    assert tags("울산TP와 함께 스마트팜 홍보") == {}                                 # 2글자 영문 앞이 한글
+    assert tags("SBS 예능 프로그램 방송") == {}
+    assert tags("SBS 3분기 실적 발표") == {"034120": "title"}
+    assert tags("현대重 대표, 글로벌품질경영인대상 수상") == {}                       # 다른 낱말의 뒷부분
+    assert tags("LG생건·대상은 3분기 실적 개선") == {"001680": "title"}            # 앞이 구분 기호면 괜찮다
+
+
 def test_project_config_loads():
     cfg = yaml.safe_load(Path("configs/stock_aliases.yaml").read_text(encoding="utf-8"))
     rules = st.build_rules({**STOCKS, "005380": "현대차"}, cfg)
     assert rules.names["네이버"] == "035420"
     assert "대상" in rules.require_context and "남성" not in rules.names
+    assert "상장" not in cfg["context_words"]
+    assert st.match_article("기아대책, 초등학생 환경교육", None,
+                            st.build_rules({"000270": "기아", "051910": "LG화학"}, cfg)) == []
     assert cfg["max_body_tags"] == 5 and cfg["lead_chars"] == 200
