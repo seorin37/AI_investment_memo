@@ -270,7 +270,7 @@ def main(argv: list[str] | None = None) -> int:
             f" · 멈춘 날부터 {tcfg.get('stop_window_days', 0)}일 전까지 포함 · 자회사 공시 {'포함' if rcfg.get('include_subsidiary') else '제외'}",
             f"- 뉴스 검색: {json.dumps(news_search, ensure_ascii=False)}"
             + (" · **원문 청크 임계값 보정 전 (min_similarity_news 값을 임시로 씀)**" if news_search.get("uncalibrated") else ""),
-            f"- 같은 사건 묶기: {'켬 ' + json.dumps(scfg, ensure_ascii=False) if same_event_on else '꺼짐'}",
+            f"- 같은 사건 묶기: {'켬 ' + json.dumps({**scfg, 'enabled': True}, ensure_ascii=False) if same_event_on else '꺼짐'}",
             f"- 유사도 분포: 최소 {q(0)} / 25% {q(.25)} / 중앙 {q(.5)} / 75% {q(.75)} / 최대 {q(1)}",
             *[f"  - {k}: {json.dumps(dist(v), ensure_ascii=False)}" for k, v in kind_sims.items()],
             f"- 처리 결과: {json.dumps(status_count, ensure_ascii=False)}",
