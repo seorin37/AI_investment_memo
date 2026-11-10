@@ -266,6 +266,30 @@ class EvaluateTest(unittest.TestCase):
         self.assertEqual(s["price_extra"], 0)
 
 
+
+class RelativeParseTest(unittest.TestCase):
+    """상대 가격 조건 풀어 보기 (확인 질문 선택지용, 판정은 그대로)."""
+
+    def test_cases(self):
+        from pipelines.tracking.price import RelativeCondition, parse_relative
+        cases = {
+            "삼성전자 고점에서 30% 넘게 빠지면 바로 알려주세요.": RelativeCondition("high", 30.0, "below", "고점"),
+            "최근 바닥에서 10% 넘게 오르면 알려줘": RelativeCondition("low", 10.0, "above", "최근 바닥"),
+            "여기서 10% 더 빠지면 추가 매수": RelativeCondition("current", 10.0, "below", "여기"),
+            "지금 고점 대비 20% 내려오면": RelativeCondition("high", 20.0, "below", "고점"),
+            "10% 오르면 체크": RelativeCondition("current", 10.0, "above", ""),
+            "평단에서 15프로 떨어지면 손절": RelativeCondition("cost", 15.0, "below", "평단"),
+            "전고점 뚫으면 알려줘": RelativeCondition("high", 0.0, "above", "전고점"),
+            "52주 신저가 찍으면": RelativeCondition("low", 0.0, "below", "52주 신저가"),
+            "신고가 찍으면 알려줘": RelativeCondition("high", 0.0, "above", "신고가"),
+            "삼전 고점 대비 20% 넘넘게 빠지면 알림.": RelativeCondition("high", 20.0, "below", "고점"),   # 오타 '넘넘게'
+            "전고점 다시 넘어서면 알려주세요": RelativeCondition("high", 0.0, "above", "전고점"),
+        }
+        for text, want in cases.items():
+            self.assertEqual(parse_relative(text), want, text)
+        self.assertIsNone(parse_relative("HBM 실적 계속 볼게요"))
+
+
 if __name__ == "__main__":
     unittest.main()
 

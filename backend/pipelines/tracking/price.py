@@ -144,3 +144,53 @@ def classify_rest(rest: str, lex: Lexicon) -> str:
     if all(w.startswith(lex.notify_words) for w in words):
         return "notify"
     return "other"
+
+
+# ---------------------------------------------------------------- 상대 가격 조건 풀어 보기 (2026-11-10, 확인 필요 질문용)
+# 판정은 바꾸지 않는다 (상대 조건은 계속 확인 필요). 확인 질문의 선택지를 코드가 계산할 수 있게 기준어·%·방향만 꺼낸다.
+
+@dataclass(frozen=True)
+class RelativeCondition:
+    base: str                    # high(고점) | low(저점·바닥) | current(지금·현재·여기, 기준어 없는 %) | cost(평단·매수가)
+    pct: float                   # 기준값에서 몇 % (0이면 기준값 그대로: "전고점 뚫으면", "신저가 찍으면")
+    direction: str | None        # below | above | None(방향을 못 찾음)
+    base_word: str               # 문장에 쓰인 기준어 ("최근 고점"). 기준어 없는 %면 ""
+
+
+_BASES = [  # 앞에 있을수록 먼저 본다 (긴 말 먼저)
+    ("high", r"52\s*주\s*(?:신)?(?:고가|최고가?)|전고점|신고가|역사적\s*고점|최근\s*고점|고점|꼭지"),
+    ("low", r"52\s*주\s*(?:신)?(?:저가|최저가?)|전저점|신저가|역사적\s*저점|최근\s*(?:저점|바닥)|저점|바닥"),
+    ("cost", r"평단가?|평균\s*단가|매수가|산\s*가격|매입가"),
+    ("current", r"지금|현재가?|여기"),
+]
+_PCT = re.compile(r"(\d+(?:\.\d+)?)\s*(?:%|퍼센트|프로)")
+_DOWN = re.compile(r"빠지|빠져|떨어지|떨어져|내리|내려|하락|급락|깨지|깨면|이탈|밀리")
+# '넘게'(오타 '넘넘게' 포함)는 정도 표현이라 방향어가 아니다 (2026-11-10 P042-L3 "고점 대비 20% 넘넘게 빠지면"을 위로 읽었다).
+# '찍으면'은 방향이 없다 (신고가·신저가는 기준어로 정한다)
+_UP = re.compile(r"오르|올라|상승|급등|뚫|(?<!넘)넘(?![넘게])|돌파")
+
+
+def parse_relative(text: str) -> RelativeCondition | None:
+    """"고점에서 30% 넘게 빠지면" → (high, 30, below, "고점"). 기준어도 %도 없으면 None.
+    방향은 기준어·% 뒤의 첫 방향어로 정한다. '넘게'는 정도 표현이라 방향어로 보지 않는다.
+    신고가·신저가처럼 방향어가 없으면 고점은 위로, 저점은 아래로 본다."""
+    found = None                 # 고점·저점·평단을 '지금'보다 먼저 본다 ("지금 고점 대비 30%"의 기준은 고점)
+    hits = [(base, m) for base, pattern in _BASES if (m := re.search(pattern, text))]
+    specific = [h for h in hits if h[0] != "current"]
+    if specific or hits:
+        found = min(specific or hits, key=lambda h: h[1].start())
+    pct = _PCT.search(text, found[1].end() if found else 0)
+    if found is None and pct is None:
+        return None
+    base, word = (found[0], re.sub(r"\s+", " ", found[1].group(0))) if found else ("current", "")
+    tail_from = pct.end() if pct else found[1].end()
+    tail = text[tail_from:]
+    down, up = _DOWN.search(tail), _UP.search(tail)
+    direction = None
+    if down and (not up or down.start() < up.start()):
+        direction = "below"
+    elif up:
+        direction = "above"
+    elif base in ("high", "low") and pct is None:
+        direction = "above" if base == "high" else "below"
+    return RelativeCondition(base, float(pct.group(1)) if pct else 0.0, direction, word)
