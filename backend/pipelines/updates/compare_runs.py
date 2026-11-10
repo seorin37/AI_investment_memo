@@ -63,8 +63,8 @@ def freshness(conn, state: dict, outcomes: list[dict], cards: dict[str, list[str
     symbol = {o["item_id"]: o["symbol"] for o in outcomes}
     fake = [Candidate(ref, "news" if ref.startswith("news:") else "disclosure", "", "", "", "", None, "", 0.0)
             for refs in cards.values() for ref in refs]
-    published: dict = {}
-    times = ready_times(conn, fake, variant, published)
+    published, chunk_ready = {}, {}
+    times = ready_times(conn, fake, variant, published, chunk_ready)
     old_evidence, late_chunk = [], []
     for item_id, refs in cards.items():
         if item_id not in state:
@@ -74,9 +74,10 @@ def freshness(conn, state: dict, outcomes: list[dict], cards: dict[str, list[str
             ready = times.get(ref)
             if ready is None or ready <= ts:
                 row = {"item_id": item_id, "ref": ref, "ready": str(ready), "last_checked_at": str(ts)}
-                pub = published.get(ref)
-                # 확인 전부터 검색 가능했던 기사지만 발행 3일 안: 원문 청크로 찾은 late chunk 근거 (drop_not_ready가 허용)
-                if pub is not None and pub >= ts - timedelta(days=FRESH_PUBLISHED_DAYS):
+                pub, chunk = published.get(ref), chunk_ready.get(ref)
+                # 확인 전부터 검색 가능했던 기사지만 청크 임베딩이 확인 뒤에 붙었고 발행 3일 안: late chunk 근거 (drop_not_ready가 허용)
+                if (pub is not None and pub >= ts - timedelta(days=FRESH_PUBLISHED_DAYS)
+                        and chunk is not None and chunk > ts):
                     late_chunk.append({**row, "published": str(pub)})
                 else:
                     old_evidence.append(row)

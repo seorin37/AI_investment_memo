@@ -1253,6 +1253,7 @@ class NewsChunkSearchTest(unittest.TestCase):
     def test_default_config_uses_chunk_search(self):
         cfg = load_config("configs/updates.yaml")
         self.assertEqual(cfg["news"]["search"], "chunks")                         # 2026-11-10 기본값 전환
+        self.assertEqual(cfg["topic"]["card_schema"], "v2")                        # 2026-11-10 미리보기 확인 후 v2
         self.assertNotIn("min_similarity_news_chunks", cfg["topic"])              # 임계값은 아직 보정 전 (그대로)
         self.assertTrue(cfg["news"]["chunks"]["fallback_headline"])               # 청크 없는 기사는 제목+요약 벡터로 보충
 
@@ -1485,7 +1486,8 @@ class ExtraRulesAndPredictionTest(unittest.TestCase):
         card = Card("update", self.NAVER_CARD["title"], self.NAVER_CARD["summary"], self.NAVER_CARD["reason"],
                     [("E1", self.NAVER_CARD["evidence"][0]["fact"])], 0.9)
         self.assertIn("PREDICTION", check_card(card, evidence, BANNED, self.TOPIC))
-        out = check_topic(item, [ev_news], reply(self.NAVER_CARD), BANNED, {**self.TOPIC, "verify_call": False})
+        out = check_topic(item, [ev_news], reply(self.NAVER_CARD), BANNED,
+                          {**self.TOPIC, "verify_call": False, "card_schema": "v1"})   # v1 모양 응답 (기본값은 v2)
         self.assertIsNone(out.draft)                                                   # on_check_fail: drop
         self.assertIn("PREDICTION", out.fail_codes)
 
@@ -2111,8 +2113,9 @@ class FreshAndStaleTest(unittest.TestCase):
         class Cur(_Cursor):
             def execute(self, sql, params):
                 self.sql, self.params = sql, params
-                # 뉴스: (id, 처음 검색 가능해진 시각 = 제목+요약 임베딩, 발행 시각)
-                self.rows = ([(1, t(9), t(8)), (2, t(11), t(10)), (3, t(9), t(8) - timedelta(days=5)), (4, t(9), t(8))]
+                # 뉴스: (id, 처음 검색 가능해진 시각 = 제목+요약 임베딩, 발행 시각, 원문 청크 임베딩 시각)
+                self.rows = ([(1, t(9), t(8), t(11)), (2, t(11), t(10), t(11)),
+                              (3, t(9), t(8) - timedelta(days=5), t(11)), (4, t(9), t(8), t(11)), (5, t(8), t(8), t(9))]
                              if "news_articles" in sql else [("R1", 0, t(11)), ("R1", 3, t(9))])
 
         class Conn(_Conn):
@@ -2120,16 +2123,17 @@ class FreshAndStaleTest(unittest.TestCase):
                 self.cur = Cur([])
         t = lambda h: datetime(2026, 11, 10, h, 0, tzinfo=timezone.utc)
         chunk = lambda ref: replace(news(ref), doc="chunk")
-        cands = [news("news:1"), chunk("news:1"), news("news:2"), chunk("news:3"), chunk("news:4"),
+        cands = [news("news:1"), chunk("news:1"), news("news:2"), chunk("news:3"), chunk("news:4"), chunk("news:5"),
                  disc("disc:R1#0"), disc("disc:R1#3"), news("news:9")]
         since = t(10) - timedelta(days=3)
         kept, dropped, late = drop_not_ready(Conn(), cands, t(10), late_chunk_since=since, used={"news:4"})
-        # news:1은 9시에 처음 검색 가능(확인 전): 제목+요약 후보는 뺀다. 원문 청크로 찾은 후보는 발행 3일 안·카드에 안 쓴 기사라 남긴다.
-        # news:3 청크는 발행 5일 전이라, news:4 청크는 이미 카드에 쓴 기사라 뺀다. 시각을 모르는 news:9도 뺀다
+        # news:1은 9시에 처음 검색 가능(확인 전): 제목+요약 후보는 뺀다. 원문 청크로 찾은 후보는 청크가 11시(확인 뒤)에 붙었고
+        # 발행 3일 안·카드에 안 쓴 기사라 남긴다. news:3 청크는 발행 5일 전이라, news:4 청크는 이미 카드에 쓴 기사라,
+        # news:5 청크는 청크 임베딩도 확인 전(9시)이라 ((가) 결정: 청크가 붙은 뒤 한 번만) 뺀다. 시각을 모르는 news:9도 뺀다
         self.assertEqual([(c.ref, c.doc) for c in kept],
                          [("news:1", "chunk"), ("news:2", ""), ("disc:R1#0", "")])
         self.assertEqual([c.ref for c in late], ["news:1"])
-        self.assertEqual([c.ref for c in dropped], ["news:1", "news:3", "news:4", "disc:R1#3", "news:9"])
+        self.assertEqual([c.ref for c in dropped], ["news:1", "news:3", "news:4", "news:5", "disc:R1#3", "news:9"])
         # 쓴 근거 기록이 없으면(알 수 없음) late chunk를 남기지 않는다
         kept, _, late = drop_not_ready(Conn(), cands, t(10), late_chunk_since=since)
         self.assertEqual((late, [c.ref for c in kept]), ([], ["news:2", "disc:R1#0"]))

@@ -53,6 +53,8 @@ class ParseTest(unittest.TestCase):
         self.assertTrue(wants_comparison("작년보다 배당 늘었나?"))
         self.assertFalse(wants_comparison("HBM 소식 알려줘"))
         self.assertTrue(asks_why("왜 떨어졌어?"))
+        for memo in ("KB랑 신한 중에 뭐가 나음?", "삼전이랑 하닉 뭐가 낫냐", "둘 중 어느 쪽이 좋아?"):
+            self.assertTrue(wants_comparison(memo), memo)
         p = build_prompt(ITEM, ev(disc()), schema="v2")
         self.assertIn("- 비교를 원함: 예", p)
         self.assertIn("- 이유를 물음: 아니오", p)
@@ -93,6 +95,21 @@ class CheckTest(unittest.TestCase):
         self.assertIn("FORMAT_REASON", check_card_v2(card(memo_link="한 문장. 두 문장."), ev(disc()), [], CFG))
         self.assertIn("BANNED", check_card_v2(card(memo_link="호재예요."), ev(disc()), ["호재"], CFG))
         self.assertIn("LOW_CONF", check_card_v2(card(confidence=0.3), ev(disc()), [], CFG))
+
+    def test_comparison_judgment_is_blocked(self):
+        from pipelines.common.config import load_config
+        cfg = {**CFG, "judgment_patterns": load_config("configs/updates.yaml")["topic"]["judgment_patterns"]}
+        e = ev(disc(), news())
+        two = dict(facts=[("보통주 1주당 20,000원 배당을 결정했어요.", "E1"), ("주가는 2.62% 올랐어요.", "E2")],
+                   sources=["E1", "E2"])
+        self.assertEqual(check_card_v2(card(**two), e, [], cfg), [])               # 두 사실을 나란히: 통과
+        for link in ("배당만 보면 SK하이닉스가 더 나아요.", "KB가 나은 선택이에요.", "지금 갈아타는 게 좋아요.",
+                     "SK하이닉스가 상대적으로 매력적이에요.", "삼성전자가 더 싸 보여요."):
+            self.assertIn("JUDGMENT", check_card_v2(card(memo_link=link, **two), e, [], cfg), link)
+        ok = card(memo_link="메모의 'KB랑 신한' 비교 관심사와 연결돼요.", **two)
+        self.assertEqual(check_card_v2(ok, e, [], cfg), [])
+        fact = card(facts=[("KB의 시가배당률이 신한보다 더 높아요.", "E1")])
+        self.assertNotIn("JUDGMENT", check_card_v2(fact, ev(disc()), [], cfg))     # 수치를 견준 사실은 판단이 아니다
 
     def test_text_dates(self):
         self.assertEqual(text_dates("2026.10.28 및 2026년 11월 3일"), {"2026-10-28", "2026-11-03"})

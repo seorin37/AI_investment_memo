@@ -22,7 +22,7 @@ _PART = re.compile(rf"({_NUMK})\s*(조|억|만)?")
 
 DEFAULTS = {"title_max": 20, "max_sentences": 3, "sentence_max_chars": 60, "min_confidence": 0.7, "min_fact_overlap": 0.6,
             "reason_max": 80, "fact_max": 100, "max_evidence": 3, "banned_patterns": [],
-            "prediction_terms": [], "prediction_exempt": []}
+            "prediction_terms": [], "prediction_exempt": [], "judgment_patterns": []}
 
 # 회사가 한 말을 전달하는 문장은 시제 패턴(예측 표현) 검사에서 뺀다 ("회사는 ~라고 밝혔어요", 지침서 [근거 우선순위])
 # "로 전망했"·"로 예상했": 증권사·언론이 주어인 전망 문장 ("KB증권은 매출이 상승할 것으로 전망했어요")
@@ -269,6 +269,10 @@ def check_card_v2(card, evidence: list[Evidence], banned: list[str], cfg: dict |
         codes.append("NUMBER")
     if cfg["prediction_terms"] and prediction_text(texts, cfg):
         codes.append("PREDICTION")
+    # 비교 판단·선택 권유 ("KB가 더 나아요", "갈아타는 게 좋아요"): 두 대상의 사실만 나란히 보여 주고 판단은 하지 않는다 (2026-11-10)
+    judges = [re.compile(p) for p in cfg["judgment_patterns"]]
+    if any(p.search(t) for p in judges for t in texts):
+        codes.append("JUDGMENT")
     if card.confidence < cfg["min_confidence"]:
         codes.append("LOW_CONF")
     return list(dict.fromkeys(codes))

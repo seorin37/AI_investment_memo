@@ -73,8 +73,15 @@ topic:
   # 합이 max_total을 넘으면 뉴스부터 자른다)
   # 2026-11-10 카드 모양. v1: title·summary·reason (configs/update_judge_prompt.md, 기본) | v2: headline·when·facts[문장, 근거]·
   # memo_link (configs/update_judge_prompt_v2.md, 사건 하나·문장마다 근거 하나·같은 메모 같은 근거 카드 합치기). experiment --card-schema
-  card_schema: v1
+  card_schema: v2               # 2026-11-10 미리보기 확인 후 v2를 기본값으로 (v1은 --card-schema v1)
   compare_prior: true           # v2에서 실적·배당·정기보고서 근거에 직전 같은 기간 값(DB, compare_prior.py)을 비교 근거로 넣는다
+  # v2 비교 판단·선택 권유 검사 (JUDGMENT). "나음?"류 메모에도 두 대상의 사실만 나란히, 어느 쪽이 낫다는 말은 하지 않는다.
+  # "더 높아요"처럼 수치를 견준 사실은 걸리지 않게 판단 낱말(낫·좋·유리·매력·싸)만 본다
+  judgment_patterns:
+    - '(더|가장|훨씬|상대적으로)\s*(나아|낫|나은|좋아|좋은|좋습|우수|매력|싸|저렴|비싸)'
+    - '(이|가|쪽이|편이)\s*(나아요|낫|나은\s*(선택|편|쪽))'
+    - '(갈아타|선택하|고르|추천)(세요|는\s*게|기를|할\s*만)'
+    - '(싸|비싸|저렴해)\s*(보여요|보입니다|보인다)'
   evidence_mode: all            # 2026-11-09 기본값 all (공시 2·뉴스 3 고정 폐지). legacy는 평가 비교용으로만 남긴다
   max_disclosure_docs: 5
   max_chunks_per_disclosure: 2
