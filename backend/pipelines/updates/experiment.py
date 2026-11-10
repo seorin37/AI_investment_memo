@@ -126,6 +126,7 @@ def main(argv: list[str] | None = None) -> int:
                                         "이번 카드가 쓴 근거를 더해 적는다. 기본: 쓰지 않음")
     ap.add_argument("--used-refs-match", choices=["ref", "doc"], default="ref",
                     help="ref: 같은 ref만 뺀다 (기본) · doc: 같은 공시의 다른 청크도 뺀다")
+    ap.add_argument("--item-state", help="항목 상태 파일 (item_state.FileItemStateStore). 주면 항목별 마지막 확인 시각·응답 유형을 적는다")
     args = ap.parse_args(argv)
 
     import psycopg
@@ -161,6 +162,14 @@ def main(argv: list[str] | None = None) -> int:
         from .used_refs import FileUsedRefStore
         used_store = FileUsedRefStore(resolve_path(args.used_refs))
     used_skipped = 0                                            # 이미 카드에 쓴 근거라 뺀 후보 수 (항목·후보 쌍)
+    from .response import item_response, source_data
+    from .results import draft_to_dict
+    state_store = None
+    if args.item_state:
+        from .item_state import FileItemStateStore
+        state_store = FileItemStateStore(resolve_path(args.item_state))
+    responses = []                                              # 항목별 응답 유형 (responses.jsonl, response.py)
+    has_data: dict[str, bool] = {}                              # 종목별 조회 기간 뉴스·공시 유무 (no_data b)
 
     vectors = {}
     if topic_items:
@@ -242,6 +251,10 @@ def main(argv: list[str] | None = None) -> int:
                 if used_store is not None:
                     from .used_refs import card_refs
                     used_store.record(item.item_id, card_refs(out.draft))
+                if item.symbol not in has_data:
+                    has_data[item.symbol] = any(source_data(conn, item.symbol, since, date.today(), d_since).values())
+                responses.append(item_response(item, out.kind, out.fail_codes,
+                                               draft_to_dict(out.draft) if out.draft else None, has_data[item.symbol]))
                 outcomes.append(_outcome(item, out))
                 status_count[out.kind] = status_count.get(out.kind, 0) + 1
                 for code in out.fail_codes:                     # 원본 LLM 출력이 어떤 검사에 걸렸는지 (평가 지표)
@@ -261,6 +274,7 @@ def main(argv: list[str] | None = None) -> int:
                              f"메모: {item.memo_text}", ""]
                 if not rows:
                     status_count["price_no_data"] = status_count.get("price_no_data", 0) + 1
+                    responses.append(item_response(item, "price_no_data", [], None, None))
                     empties.append(_empty(item, "price_no_data"))
                     sections += ["결과: **price_no_data** (prices_daily에 종가 없음)", ""]
                     continue
@@ -268,6 +282,8 @@ def main(argv: list[str] | None = None) -> int:
                 draft = check_price(item, float(close), prev, str(day), cfg["price"]["near_pct"])
                 key = f"price_{draft.price_state}" if draft else "price_no_card"
                 status_count[key] = status_count.get(key, 0) + 1
+                responses.append(item_response(item, "price_card" if draft else "price_no_card", [],
+                                               draft_to_dict(draft) if draft else None, None))
                 if draft:
                     drafts.append(draft)
                 else:
@@ -316,6 +332,14 @@ def main(argv: list[str] | None = None) -> int:
     summary["no_company_news"] = len(no_company_news)
     summary["used_refs"] = None if used_store is None else {"file": str(used_store.path), "match": args.used_refs_match,
                                                             "skipped": used_skipped}
+    from .response import summarize, to_dict
+    summary["responses"] = summarize(responses)
+    head.append(f"- 응답 유형: {json.dumps(summary['responses']['by_type'], ensure_ascii=False)}"
+                f" · 사용자 표시 {summary['responses']['user_visible']}건"
+                f" · 이유별: {json.dumps(summary['responses']['reasons'], ensure_ascii=False)}")
+    if state_store is not None:
+        for r in responses:
+            state_store.record(r)
     if used_store is not None:
         head.append(f"- 이미 카드에 쓴 근거 빼기: {used_skipped}건 (파일 {used_store.path}, 기준 {args.used_refs_match})")
     head.append(f"- 후보 거르기(recent.filters): {json.dumps(filters, ensure_ascii=False)}"
@@ -339,6 +363,9 @@ def main(argv: list[str] | None = None) -> int:
     with (run_dir / "outcomes.jsonl").open("w", encoding="utf-8") as f:
         for o in outcomes:
             f.write(json.dumps(o, ensure_ascii=False, default=str) + "\n")
+    with (run_dir / "responses.jsonl").open("w", encoding="utf-8") as f:
+        for r in responses:
+            f.write(json.dumps(to_dict(r), ensure_ascii=False, default=str) + "\n")
     preview_path = write_preview(run_dir, drafts, cand_rows, empties, f"{run_dir.name} · LLM {args.llm}")
     print("\n".join(head))
     print(f"결과 폴더: {run_dir}  (cards.jsonl, report.md, summary.json, candidates.csv, outcomes.jsonl) — DB에는 아무것도 쓰지 않았습니다.")

@@ -92,6 +92,27 @@ class UpdateDraft:
 
 
 @dataclass
+class Response:
+    """사용자 응답 한 건 (response.py가 정한다, 2026-11-10). LLM이 아니라 코드가 유형을 정한다.
+    type: update_card | price_card | no_new_info | no_data | needs_confirmation | out_of_scope
+    scope: item(추적 항목) | sentence(메모 문장) | memo(메모 전체)"""
+    type: str
+    scope: str
+    memo_id: str = ""
+    item_id: str = ""
+    sentence_index: int | None = None
+    user_visible: bool = True          # False면 내부 기록(responses.jsonl)에만 남고 사용자에게 보이지 않는다
+    reason: str = ""                   # 왜 이 유형인지 (check_failed, call_failed, parse_failed, no_candidates …)
+    message: str = ""                  # 사용자에게 보일 문구 (카드면 카드 제목)
+    question: str = ""                 # needs_confirmation: 질문 문장
+    options: list[dict] = field(default_factory=list)   # needs_confirmation: 선택지 (없으면 빈 목록)
+    card: dict | None = None           # update_card·price_card: results.draft_to_dict 모양
+    fail_codes: list[str] = field(default_factory=list)
+    checked_at: str = ""               # 확인한 시각 (no_new_info는 이 값과 status만 남긴다)
+    text: str = ""                     # sentence 범위: 메모 문장
+
+
+@dataclass
 class TopicOutcome:
     kind: str                         # no_candidates | not_called | no_update | update | fixed_card
     evidence: list[Evidence] = field(default_factory=list)

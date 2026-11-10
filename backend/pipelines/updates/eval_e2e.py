@@ -12,6 +12,8 @@
    - baseline: 제목+요약 뉴스 검색, 근거 legacy(공시 2·뉴스 3), 같은 사건 묶기 꺼짐, 추가 규칙·예측 검사 없음
    - new: 원문 청크 뉴스 검색(보정 전 임시 임계값), 같은 사건 묶기, 근거 all(공시 5건·청크 2개, 전체 15), 추가 규칙, 예측 검사
    기간은 --since ~ --until (기본 2026-11-01 ~ 2026-11-09, 뉴스·공시 같게). 검색 뒤 --until보다 늦은 후보는 뺀다.
+⑤ 응답 유형(response.py): 조건별 responses_<조건>.jsonl, summary의 responses(유형·사용자 표시·이유별 건수)와
+   data_need(메모 단위 no_data 검증, 정답 세트에 data_need가 있을 때). 확인 필요 선택지는 prices_daily로 계산한다.
 표본: 종목을 다양하게(종목당 처음엔 1개씩), 11-01 이후 기사 연결이 충분한 종목(--rich-min건 이상) 위주로 섞는다.
    기사 연결 수는 news_stocks + 태그 확대(stock_tagger) dry-run을 합쳐 센다 (태그를 아직 쓰지 않았어도 같은 표본이 나오게).
 """
@@ -246,6 +248,36 @@ def outcome_row(item: TrackingItem, out, calls_before: int, client, seconds: flo
             "reasoning_tokens": sum(r.reasoning_tokens or 0 for r in calls), "seconds": round(seconds, 2)}
 
 
+def condition_responses(sample: list[dict], judged_by_memo: dict[str, list], items: list[TrackingItem], rows: list[dict],
+                        has_data: dict[str, bool], confirm, checked_at: str = "") -> tuple[list, list[dict]]:
+    """조건 하나의 결과 → 응답 목록(response.py)과 메모 단위 data_need 검증 행.
+    confirm(judgment, symbol) → (질문, 선택지, 정보). has_data: 종목별 조회 기간 뉴스·공시 유무."""
+    from .response import item_response, memo_response, order_key, sentence_responses
+
+    by_id = {it.item_id: it for it in items}
+    rows_by_memo: dict[str, list[dict]] = defaultdict(list)
+    for r in rows:
+        rows_by_memo[r["item_id"].split(":", 1)[0]].append(r)
+    out, checks = [], []
+    for m in sample:
+        mid, judged = m["memo_id"], judged_by_memo.get(m["memo_id"], [])
+        mine = sentence_responses(mid, judged, lambda j, s=m["symbol"]: confirm(j, s), checked_at)
+        memo_rows = rows_by_memo.get(mid, [])
+        whole = memo_response(mid, judged, len(memo_rows), checked_at)
+        if whole:
+            mine.append(whole)
+        for r in memo_rows:
+            item = by_id[r["item_id"]]
+            mine.append(item_response(item, r["kind"], r["fail_codes"], r["card"], has_data.get(item.symbol), mid,
+                                      checked_at))
+        mine.sort(key=order_key)
+        out += mine
+        nd = [x.reason for x in mine if x.type == "no_data"]
+        checks.append({"memo_id": mid, "data_need": m.get("data_need"), "no_data": bool(nd), "no_data_reasons": nd,
+                       "out_of_scope": whole is not None})
+    return out, checks
+
+
 def summarize_condition(rows: list[dict]) -> dict:
     topic = [r for r in rows if r["type"] == "topic"]
     kinds = Counter(r["kind"] for r in rows)
@@ -326,6 +358,7 @@ def run(args, sample, counts, rich_symbols, run_dir: Path, since_d: date, until_
     from .models import TopicOutcome
     from .news_search import NewsChunkSearch, load_query_encoder, release_gpu
     from .price import check_price
+    from .response import data_need_check, summarize as summarize_responses, to_dict
     from .same_event import link_same_event
     from .topic import check_topic, thresholds
 
@@ -337,12 +370,14 @@ def run(args, sample, counts, rich_symbols, run_dir: Path, since_d: date, until_
     analyst = OpenAIClient.from_env()
     analyst.response_format = None                              # 문장 판정은 JSON 배열 응답
     memo_rows, items, analysis_rows = [], [], []
+    judged_by_memo: dict[str, list] = {}                        # 응답 유형(문장·메모 단위)을 정할 때 다시 쓴다
     t0 = time.perf_counter()
     for m in sample:
         text = m["memo_body"]
         before = len(analyst.calls)
         judged = judge_memo(text, m["symbol"], lex)
         judge_with_llm(judged, m["symbol"], m["company_primary"], analyst)
+        judged_by_memo[m["memo_id"]] = judged
         calls = analyst.calls[before:]
         pairs = align(text, m["sentences"], judged, m.get("memo_body_clean"))
         for g, p in pairs:
@@ -389,9 +424,16 @@ def run(args, sample, counts, rich_symbols, run_dir: Path, since_d: date, until_
     news_lead = news_company_lead(filters)
     symbol_aliases = load_symbol_aliases() if news_lead is not None else {}
     card_client = OpenAIClient.from_env()
-    results = {}
+    results, response_sets = {}, {}
     with psycopg.connect(get_read_dsn()) as conn:
         conn.read_only = True
+        from .confirm import confirmation, price_window
+        from .response import source_data
+        symbols = sorted({m["symbol"] for m in sample})
+        has_data = {s: any(source_data(conn, s, since_d, until_d).values()) for s in symbols}
+        windows = {s: price_window(conn, s) for s in symbols}
+        confirm = lambda j, s: confirmation(j.cleaned_text or j.text, j.reason_code, windows.get(s, []))
+        stamp = datetime.now().astimezone().isoformat(timespec="seconds")
         searcher = NewsChunkSearch(conn, chunk_encoder, cfg["news"].get("chunks")) if chunk_encoder else None
         for name in wanted:
             spec = conds[name]
@@ -437,11 +479,21 @@ def run(args, sample, counts, rich_symbols, run_dir: Path, since_d: date, until_
                 for r in rows:
                     f.write(json.dumps(r, ensure_ascii=False, default=str) + "\n")
             print(f"{name}:", json.dumps(summarize_condition(rows), ensure_ascii=False))
+            resp, checks = condition_responses(sample, judged_by_memo, items, rows, has_data, confirm, stamp)
+            response_sets[name] = (resp, checks)
+            with (run_dir / f"responses_{name}.jsonl").open("w", encoding="utf-8") as f:
+                for r in resp:
+                    f.write(json.dumps(to_dict(r), ensure_ascii=False, default=str) + "\n")
+            rs = summarize_responses(resp)
+            print(f"{name} 응답: {json.dumps(rs['by_type'], ensure_ascii=False)} · 사용자 표시 {rs['user_visible']}"
+                  f" · 이유별 {json.dumps(rs['reasons'], ensure_ascii=False)}")
 
     summary = {"sample": len(sample), "symbols": len({m["symbol"] for m in sample}),
                "news_rich_memos": sum(m["symbol"] in rich_symbols for m in sample), "since": str(since_d),
                "until": str(until_d), "analysis": analysis, "items": len(items), "topic_items": len(topic_items),
-               "conditions": {n: {"spec": {k: v for k, v in conds[n].items() if k != "topic"}, **summarize_condition(r)}
+               "conditions": {n: {"spec": {k: v for k, v in conds[n].items() if k != "topic"}, **summarize_condition(r),
+                                  "responses": summarize_responses(response_sets[n][0]),
+                                  "data_need": data_need_check(response_sets[n][1])}
                               for n, r in results.items()}}
     blocked = [{"condition": n, **{k: r[k] for k in ("item_id", "description", "llm_card", "evidence", "fail_codes")}}
                for n, rows in results.items() for r in rows if "PREDICTION" in r["fail_codes"]]

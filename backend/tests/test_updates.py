@@ -1870,5 +1870,173 @@ class UsedRefsTest(unittest.TestCase):
         self.assertEqual(check_topic(ITEM, kept, call, BANNED).kind, "no_candidates")   # 다 썼으면 후보 없음
 
 
+
+def _j(idx, decision, text="문장", reason=None, category=None):
+    from types import SimpleNamespace
+    return SimpleNamespace(sentence_index=idx, decision=decision, text=text, cleaned_text=text, reason_code=reason,
+                           category=category)
+
+
+# 최신순 일봉 (trade_date, high, low, close): 52주 고점 100,000(2026-03-02), 최근 20거래일 고점 80,000(2026-11-03)
+def _rows():
+    from datetime import date, timedelta
+    rows = []
+    d = date(2026, 11, 9)
+    for k in range(250):
+        day = d - timedelta(days=k)
+        high = 80000.0 if k == 6 else 70000.0
+        rows.append((day, high, 60000.0 - (5000 if k == 3 else 0), 65000.0))
+    rows.append((date(2026, 3, 2), 100000.0, 40000.0, 95000.0))              # 52주 저점 40,000도 이날
+    rows.append((date(2025, 9, 1), 200000.0, 1.0, 150000.0))                  # 365일 밖: 52주 값에 넣지 않는다
+    rows.sort(key=lambda r: r[0], reverse=True)
+    return rows
+
+
+class ConfirmTest(unittest.TestCase):
+    """확인 필요 질문·선택지 (confirm.py, 2026-11-10)."""
+
+    def test_high_two_options_with_basis(self):
+        from pipelines.updates.confirm import confirmation
+        q, opts, info = confirmation("삼성전자 고점에서 30% 넘게 빠지면 바로 알려주세요.", "UNSUPPORTED_CONDITION", _rows())
+        self.assertEqual(q, "'고점'을 어느 가격으로 볼까요?")
+        self.assertEqual(info["base"], "high")
+        self.assertEqual([o["basis"]["kind"] for o in opts], ["52w_high", "20d_high"])
+        self.assertEqual([o["basis"]["value"] for o in opts], [100000.0, 80000.0])
+        self.assertEqual([o["basis"]["trade_date"] for o in opts], ["2026-03-02", "2026-11-03"])   # 기준일
+        self.assertEqual(opts[0]["basis"]["as_of"], "2026-11-09")
+        self.assertEqual([o["item"] for o in opts],
+                         [{"type": "price_below", "price_threshold": 70000, "description": "70,000원 아래로"},
+                          {"type": "price_below", "price_threshold": 56000, "description": "56,000원 아래로"}])
+        self.assertIn("52주 고점 100,000원(2026-03-02)에서 30% → 70,000원 아래로", opts[0]["label"])
+
+    def test_low_current_cost_and_no_rows(self):
+        from pipelines.updates.confirm import confirmation
+        q, opts, _ = confirmation("최근 바닥에서 10% 넘게 오르면 알려줘", None, _rows())
+        self.assertEqual(q, "'최근 바닥'을 어느 가격으로 볼까요?")
+        self.assertEqual([(o["basis"]["kind"], o["item"]["type"]) for o in opts], [("52w_low", "price_above"),
+                                                                                    ("20d_low", "price_above")])
+        self.assertEqual(opts[1]["item"]["price_threshold"], 60500)              # 55,000 × 1.1
+        q, opts, _ = confirmation("지금보다 10% 빠지면 알려줘", None, _rows())
+        self.assertEqual((q, [o["item"]["price_threshold"] for o in opts]), ("지금 가격(최근 종가) 기준으로 볼까요?", [58500]))
+        q, opts, _ = confirmation("평단에서 20% 빠지면 손절", None, _rows())
+        self.assertEqual((q, opts), ("평단을 알려 주시면 그 가격 기준으로 알려 드릴게요.", []))
+        q, opts, info = confirmation("고점에서 30% 빠지면 알려줘", None, [])
+        self.assertEqual((q, opts, info["no_price_rows"]), ("'고점'을 어느 가격으로 볼까요?", [], True))
+        q, opts, info = confirmation("60일선 깨지면 알려줘", "UNSUPPORTED_CONDITION", _rows())
+        self.assertEqual((opts, info), ([], None))                                 # 이동평균선은 선택지 없이 질문만
+        self.assertTrue(q)
+        self.assertEqual(confirmation("확신이 없는 문장", "LOW_CONFIDENCE", [])[0], "이 문장을 추적할 내용으로 볼지 확인해 주시겠어요?")
+        # 이유를 모르는 확인 필요(가격 조건 아님)에 가격을 묻지 않는다 (2026-11-10 P040-L1)
+        self.assertEqual(confirmation("유튜브에선 다들 좋다는데 잘 몰라요", None, [])[0], "이 문장을 추적할 내용으로 볼지 확인해 주시겠어요?")
+
+    def test_same_threshold_once(self):
+        from datetime import date
+        from pipelines.tracking.price import RelativeCondition
+        from pipelines.updates.confirm import build_options
+        rows = [(date(2026, 11, 9), 100.0, 90.0, 95.0), (date(2026, 11, 6), 99.0, 91.0, 92.0)]
+        self.assertEqual(len(build_options(RelativeCondition("high", 10, "below", "고점"), rows)), 1)   # 같은 고점이면 하나
+
+
+class ResponseTest(unittest.TestCase):
+    """응답 유형 결정 (response.py, 2026-11-10)."""
+
+    def resp(self, kind, codes=(), card=None, has_data=True, item=ITEM):
+        from pipelines.updates.response import item_response
+        return item_response(item, kind, list(codes), card, has_data, "M07", "2026-11-10T09:00:00+09:00")
+
+    def test_item_types_and_reasons(self):
+        r = self.resp("update", card={"title": "HBM 매출 8.0% 증가", "origin": "llm"})
+        self.assertEqual((r.type, r.user_visible, r.message), ("update_card", True, "HBM 매출 8.0% 증가"))
+        cases = {("no_update", ("BANNED",)): "check_failed", ("no_update", ("CALL_FAILED:Timeout",)): "call_failed",
+                 ("no_update", ("FORMAT_PARSE",)): "parse_failed", ("no_update", ("VERIFY_UNSUPPORTED",)): "verify_failed",
+                 ("no_update", ("VERIFY_PARSE",)): "parse_failed", ("fixed_card", ("NUMBER",)): "check_failed",
+                 ("no_update", ()): "llm_no_update", ("no_candidates", ()): "no_candidates",
+                 ("already_shown", ()): "already_shown"}
+        for (kind, codes), reason in cases.items():
+            card = {"title": "관련 기사가 있어요", "origin": "fixed"} if kind == "fixed_card" else None
+            r = self.resp(kind, codes, card=card)
+            self.assertEqual((r.type, r.reason, r.user_visible), ("no_new_info", reason, False), (kind, codes))
+            self.assertEqual(r.checked_at, "2026-11-10T09:00:00+09:00")
+        r = self.resp("no_candidates", has_data=False)                                       # (b) 뉴스·공시가 아예 없음
+        self.assertEqual((r.type, r.reason), ("no_data", "no_source_data"))
+        self.assertEqual(self.resp("no_candidates", has_data=None).type, "no_new_info")       # 모르면 no_data로 보지 않는다
+
+    def test_price_items(self):
+        pitem = TrackingItem("M07:2:0", "000660", "price_below", "100원 아래로", price_threshold=100)
+        self.assertEqual(self.resp("price_card", card={"title": "조건가에 도달했어요", "origin": "fixed"}, item=pitem).type,
+                         "price_card")
+        r = self.resp("price_no_data", item=pitem, has_data=None)
+        self.assertEqual((r.type, r.reason, r.user_visible), ("no_data", "no_price", True))
+        r = self.resp("price_no_card", item=pitem, has_data=False)                           # (b)는 주제 항목에만
+        self.assertEqual((r.type, r.reason), ("no_new_info", "price_unchanged"))
+
+    def test_card_failure_is_no_new_info_end_to_end(self):
+        """on_check_fail=drop: 금지 표현 카드 → 고정 문구 카드 없이 no_new_info(check_failed)."""
+        bad = {**GOOD, "summary": ["HBM 매출이 늘어 호재예요. [E1]"]}
+        out = check_topic(ITEM, [disc()], reply(bad), BANNED, {"on_check_fail": "drop"})
+        self.assertEqual((out.kind, out.draft), ("no_update", None))
+        r = self.resp(out.kind, out.fail_codes)
+        self.assertEqual((r.type, r.reason, r.user_visible), ("no_new_info", "check_failed", False))
+
+        def boom(prompt):
+            raise TimeoutError("x")
+        out = check_topic(ITEM, [disc()], boom, BANNED, {"on_check_fail": "drop"})
+        self.assertEqual(self.resp(out.kind, out.fail_codes).reason, "call_failed")
+        out = check_topic(ITEM, [disc()], lambda p: "JSON 아님", BANNED, {"on_check_fail": "drop"})
+        self.assertEqual(self.resp(out.kind, out.fail_codes).reason, "parse_failed")
+        self.assertEqual(load_config("configs/updates.yaml")["topic"]["on_check_fail"], "drop")   # 2026-11-10 결정
+
+    def test_sentence_and_memo_scope(self):
+        from pipelines.updates.response import OUT_OF_SCOPE_MEMO, memo_response, sentence_responses
+        ask = lambda j: ("질문?", [{"label": "a"}], {"base": "high"})
+        judged = [_j(0, "full_fallback", "오를 것 같아요", category="B2"),
+                  _j(1, "needs_confirmation", "고점에서 30%", "UNSUPPORTED_CONDITION")]
+        rs = sentence_responses("M1", judged, ask)
+        self.assertEqual([(r.type, r.scope, r.user_visible) for r in rs],
+                         [("out_of_scope", "sentence", False), ("needs_confirmation", "sentence", True)])
+        self.assertEqual((rs[0].reason, rs[1].question, rs[1].options), ("B2", "질문?", [{"label": "a"}]))
+        self.assertIsNone(memo_response("M1", judged, 0))                       # 확인 질문이 있으면 메모 단위 응답 없음
+        self.assertIsNone(memo_response("M1", [_j(0, "full_fallback"), _j(1, "normal")], 0))   # 추적 문장이 있으면 없음
+        self.assertIsNone(memo_response("M1", [_j(0, "full_fallback")], 1))
+        whole = memo_response("M1", [_j(0, "full_fallback"), _j(1, "full_fallback")], 0)
+        self.assertEqual((whole.type, whole.scope, whole.user_visible, whole.message),
+                         ("out_of_scope", "memo", True, OUT_OF_SCOPE_MEMO))
+
+    def test_summarize_and_data_need(self):
+        from pipelines.updates.models import Response
+        from pipelines.updates.response import data_need_check, summarize
+        rs = [Response("needs_confirmation", "sentence", options=[{"a": 1}], fail_codes=["relative:high"]),
+              Response("needs_confirmation", "sentence"),
+              Response("no_new_info", "item", user_visible=False, reason="check_failed"),
+              Response("out_of_scope", "sentence", user_visible=False)]
+        s = summarize(rs)
+        self.assertEqual((s["user_visible"], s["needs_confirmation"]),
+                         (2, {"total": 2, "with_options": 1, "relative_parsed": 1}))
+        self.assertEqual(s["reasons"]["no_new_info"], {"check_failed": 1})
+        self.assertEqual(s["by_type"]["update_card"], 0)
+        chk = data_need_check([
+            {"memo_id": "A", "data_need": ["뉴스"], "no_data": True, "no_data_reasons": ["no_source_data"]},
+            {"memo_id": "B", "data_need": ["재무"], "no_data": True, "no_data_reasons": ["no_source_data"]},
+            {"memo_id": "C", "data_need": [], "no_data": False, "no_data_reasons": [], "out_of_scope": True},
+            {"memo_id": "D", "data_need": None, "no_data": False}])
+        self.assertEqual((chk["memos"], chk["b_needs_news_or_disclosure"], chk["b_but_need_has_no_news_or_disclosure"],
+                          chk["data_need_empty_and_out_of_scope"]), (3, 1, 1, 1))
+        self.assertEqual([m["memo_id"] for m in chk["mismatch"]], ["B"])
+
+    def test_item_state_store(self):
+        from pipelines.updates.item_state import FileItemStateStore
+        from pipelines.updates.models import Response
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "state.json"
+            st = FileItemStateStore(path)
+            st.record(self.resp("no_candidates"))
+            st.record(self.resp("update", card={"title": "t", "origin": "llm"}))     # 덮어쓴다
+            st.record(Response("out_of_scope", "memo", "M07"))                     # 항목 범위가 아니면 적지 않는다
+            again = FileItemStateStore(path)
+            self.assertEqual(again.get(ITEM.item_id),
+                             {"last_checked_at": "2026-11-10T09:00:00+09:00", "status": "update_card", "reason": "card"})
+            self.assertEqual(len(again.data), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
