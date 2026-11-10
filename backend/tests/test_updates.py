@@ -1232,13 +1232,12 @@ class NewsChunkSearchTest(unittest.TestCase):
             "000660", "HBM 실적", datetime(2026, 10, 1).date(), 50, 0.6, headline_vec=[0.1])
         self.assertNotIn("news:9", [c.ref for c in no_fallback])
 
-    def test_chunks_mode_needs_calibrated_threshold(self):
+    def test_chunks_mode_reports_uncalibrated_threshold(self):
         from pipelines.updates.news_search import check_mode
-        check_mode("article", {})
-        with self.assertRaises(ValueError):
-            check_mode("chunks", {"min_similarity_news": 0.58})                   # 보정 전에는 켜지 않는다
-        check_mode("chunks", {"min_similarity_news_chunks": 0.62})
-        check_mode("chunks", {}, uncalibrated=True)                              # 시험 비교만
+        self.assertFalse(check_mode("article", {}))
+        self.assertTrue(check_mode("chunks", {"min_similarity_news": 0.58}))      # 보정 전: 멈추지 않고 '보정 전'만 알린다
+        self.assertFalse(check_mode("chunks", {"min_similarity_news_chunks": 0.62}))
+        self.assertTrue(check_mode("chunks", {}, uncalibrated=True))              # 예전 플래그는 호환용
         with self.assertRaises(ValueError):
             check_mode("chunk", {})
 
@@ -1251,10 +1250,20 @@ class NewsChunkSearchTest(unittest.TestCase):
         chunk = replace(news(sim=0.62), doc="chunk")
         self.assertEqual(pick_recent([chunk], floor, {"news": 1.01, "news_chunks": 1.01, "disclosure": 1.01}), [])
 
-    def test_default_config_keeps_article_search(self):
+    def test_default_config_uses_chunk_search(self):
         cfg = load_config("configs/updates.yaml")
-        self.assertEqual(cfg["news"]["search"], "article")                        # 팀 결과가 바뀌지 않게 기본은 기존 방식
-        self.assertNotIn("min_similarity_news_chunks", cfg["topic"])
+        self.assertEqual(cfg["news"]["search"], "chunks")                         # 2026-11-10 기본값 전환
+        self.assertNotIn("min_similarity_news_chunks", cfg["topic"])              # 임계값은 아직 보정 전 (그대로)
+        self.assertTrue(cfg["news"]["chunks"]["fallback_headline"])               # 청크 없는 기사는 제목+요약 벡터로 보충
+
+    def test_used_refs_skip_news_by_article(self):
+        from pipelines.updates.used_refs import drop_used
+        # 같은 기사는 원문 청크로 찾든 제목+요약으로 찾든 ref가 news:<기사 id> 하나라 기사 단위로 빠진다
+        cands = [replace(news("news:1"), doc="chunk"), news("news:1"), news("news:2")]
+        for match in ("ref", "doc"):
+            kept, dropped = drop_used(cands, {"news:1"}, match)
+            self.assertEqual([c.ref for c in kept], ["news:2"])
+            self.assertEqual(len(dropped), 2)
 
     def test_candidates_csv_and_calibrate_count_chunks_separately(self):
         with tempfile.TemporaryDirectory() as d:
@@ -2096,25 +2105,34 @@ class FreshAndStaleTest(unittest.TestCase):
         self.assertEqual(d, date(2026, 11, 9))
 
     def test_drop_not_ready(self):
-        from datetime import timezone
+        from datetime import timedelta, timezone
         from pipelines.updates.candidates import drop_not_ready
 
         class Cur(_Cursor):
             def execute(self, sql, params):
                 self.sql, self.params = sql, params
-                self.rows = ([(1, t(9), t(11)), (2, t(11), t(11))] if "news_articles" in sql
-                             else [("R1", 0, t(11)), ("R1", 3, t(9))])
+                # 뉴스: (id, 처음 검색 가능해진 시각 = 제목+요약 임베딩, 발행 시각)
+                self.rows = ([(1, t(9), t(8)), (2, t(11), t(10)), (3, t(9), t(8) - timedelta(days=5)), (4, t(9), t(8))]
+                             if "news_articles" in sql else [("R1", 0, t(11)), ("R1", 3, t(9))])
 
         class Conn(_Conn):
             def __init__(self):
                 self.cur = Cur([])
         t = lambda h: datetime(2026, 11, 10, h, 0, tzinfo=timezone.utc)
-        chunk = replace(news("news:1"), doc="chunk")
-        cands = [news("news:1"), chunk, news("news:2"), disc("disc:R1#0"), disc("disc:R1#3"), news("news:9")]
-        kept, dropped = drop_not_ready(Conn(), cands, t(10))
-        # news:1 제목+요약은 9시에 검색 가능(확인 전) → 뺌, 원문 청크는 11시 임베딩 → 남김. 시각을 모르는 news:9는 뺀다
-        self.assertEqual([(c.ref, c.doc) for c in kept], [("news:1", "chunk"), ("news:2", ""), ("disc:R1#0", "")])
-        self.assertEqual([c.ref for c in dropped], ["news:1", "disc:R1#3", "news:9"])
+        chunk = lambda ref: replace(news(ref), doc="chunk")
+        cands = [news("news:1"), chunk("news:1"), news("news:2"), chunk("news:3"), chunk("news:4"),
+                 disc("disc:R1#0"), disc("disc:R1#3"), news("news:9")]
+        since = t(10) - timedelta(days=3)
+        kept, dropped, late = drop_not_ready(Conn(), cands, t(10), late_chunk_since=since, used={"news:4"})
+        # news:1은 9시에 처음 검색 가능(확인 전): 제목+요약 후보는 뺀다. 원문 청크로 찾은 후보는 발행 3일 안·카드에 안 쓴 기사라 남긴다.
+        # news:3 청크는 발행 5일 전이라, news:4 청크는 이미 카드에 쓴 기사라 뺀다. 시각을 모르는 news:9도 뺀다
+        self.assertEqual([(c.ref, c.doc) for c in kept],
+                         [("news:1", "chunk"), ("news:2", ""), ("disc:R1#0", "")])
+        self.assertEqual([c.ref for c in late], ["news:1"])
+        self.assertEqual([c.ref for c in dropped], ["news:1", "news:3", "news:4", "disc:R1#3", "news:9"])
+        # 쓴 근거 기록이 없으면(알 수 없음) late chunk를 남기지 않는다
+        kept, _, late = drop_not_ready(Conn(), cands, t(10), late_chunk_since=since)
+        self.assertEqual((late, [c.ref for c in kept]), ([], ["news:2", "disc:R1#0"]))
 
     def test_preferred_map(self):
         from pipelines.updates.preferred import build_map, is_preferred, name_matches, source_symbol

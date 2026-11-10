@@ -116,8 +116,11 @@ NEWER_VERSION = rf"""NOT EXISTS (SELECT 1 FROM disclosures d2
                THEN d2.title ~ '^\[[^]]*정정' AND d2.rcept_dt <= d.rcept_dt + {CORRECTION_DAYS}
                ELSE d2.period_end IS NOT DISTINCT FROM d.period_end END)"""
 # 새 자료만 받기 (2026-11-10, 항목의 마지막 확인 시각 이후). 수집 시각 기준 (2026-11-10 두 번째 결정):
-# - 마지막 확인 이후 '검색에 쓸 수 있게 된' 자료만: 뉴스 max(collected_at, 임베딩 embedded_at), 공시 max(created_at, 청크 embedded_at).
-#   적재만 보면 적재 뒤 임베딩이 늦게 붙은 자료를 영영 놓친다. 이 판정은 SQL이 아니라 drop_not_ready가 후보마다 한다.
+# - 마지막 확인 이후 '검색에 쓸 수 있게 된' 자료만: 공시 max(created_at, 청크 embedded_at).
+#   뉴스는 기사가 처음 검색 가능해진 시각 = 제목+요약 임베딩 시각(없으면 collected_at) (2026-11-10 chunks 전환 결정).
+#   나중에 원문 청크 임베딩이 붙어도 다시 새 자료로 보지 않는다. 대신 처음 검색 가능해진 게 확인 전이어도
+#   원문 청크로 찾은 기사(doc="chunk")는 아직 그 항목 카드에 쓰이지 않았고 발행 3일 안이면 남긴다 (late chunk).
+#   이 판정은 SQL이 아니라 drop_not_ready가 후보마다 한다.
 # - 그중 발행 시각(공시는 접수일)이 FRESH_PUBLISHED_DAYS일 안인 것만: 오래된 자료를 다시 적재·임베딩해도 새 소식이 아니다.
 # - 원본이 마지막 확인 전에 이미 적재돼 있던 보고서의 정정(기재정정 등)은 새 자료가 아니다. 원본은 disclosure_events.corrects
 #   (수시공시) 또는 같은 종류·같은 제목(앞 [..] 표시 뗀 것)·같은 기간 끝(정기보고서)/30일 안(수시공시)의 앞선 보고서.
@@ -277,9 +280,7 @@ def recent_disclosure_candidates(conn, symbol: str, query_vec, since: date, k: i
 
 # 후보가 검색에 쓸 수 있게 된 시각 (새 자료만 받기). 제목+요약 뉴스는 그 변형 임베딩, 원문 청크 뉴스는 그 기사 청크 임베딩의 가장 늦은 시각,
 # 공시는 그 청크 임베딩 시각과 적재 시각 중 늦은 쪽.
-NEWS_READY_SQL = """SELECT a.id,
-       GREATEST(a.collected_at, COALESCE(v.embedded_at, a.collected_at)),
-       GREATEST(a.collected_at, COALESCE((SELECT max(nc.embedded_at) FROM news_chunks nc WHERE nc.news_id = a.id), a.collected_at))
+NEWS_READY_SQL = """SELECT a.id, COALESCE(v.embedded_at, a.collected_at), a.published_at
 FROM news_articles a LEFT JOIN news_embedding_variants v ON v.news_id = a.id AND v.variant = %(variant)s
 WHERE a.id = ANY(%(ids)s)"""
 DISC_READY_SQL = """SELECT c.rcept_no, c.chunk_index, GREATEST(d.created_at, COALESCE(c.embedded_at, d.created_at))
@@ -299,8 +300,9 @@ def fresh_window(last_checked: datetime | None, now: datetime, since: date,
     return start, start.date()
 
 
-def ready_times(conn, cands: list[Candidate], variant: str = "hybrid") -> dict[str, datetime]:
-    """ref → 검색에 쓸 수 있게 된 시각."""
+def ready_times(conn, cands: list[Candidate], variant: str = "hybrid",
+                published: dict[str, datetime] | None = None) -> dict[str, datetime]:
+    """ref → 검색에 쓸 수 있게 된 시각 (뉴스는 기사가 처음 검색 가능해진 시각). published를 주면 뉴스 발행 시각을 채운다."""
     news = sorted({int(c.ref.split(":", 1)[1]) for c in cands if c.kind == "news"})
     discs = sorted({(c.ref.split(":", 1)[1].split("#", 1)[0], int(c.ref.split("#", 1)[1])) for c in cands
                     if c.kind == "disclosure"})
@@ -308,8 +310,10 @@ def ready_times(conn, cands: list[Candidate], variant: str = "hybrid") -> dict[s
     with conn.cursor() as cur:
         if news:
             cur.execute(NEWS_READY_SQL, {"ids": news, "variant": variant})
-            for nid, head, chunk in cur.fetchall():
-                out[f"news:{nid}"], out[f"news:{nid}@chunk"] = head, chunk
+            for nid, ready, pub in cur.fetchall():
+                out[f"news:{nid}"] = ready
+                if published is not None:
+                    published[f"news:{nid}"] = pub
         if discs:
             cur.execute(DISC_READY_SQL, {"nos": [n for n, _ in discs], "ix": [i for _, i in discs]})
             for no, idx, ready in cur.fetchall():
@@ -317,16 +321,29 @@ def ready_times(conn, cands: list[Candidate], variant: str = "hybrid") -> dict[s
     return out
 
 
-def drop_not_ready(conn, cands: list[Candidate], last_checked: datetime,
-                   variant: str = "hybrid") -> tuple[list[Candidate], list[Candidate]]:
-    """마지막 확인 이후 검색에 쓸 수 있게 된 후보만 남긴다. (남은 후보, 뺀 후보). 시각을 모르는 후보는 뺀다."""
-    times = ready_times(conn, cands, variant)
-    kept, dropped = [], []
+def drop_not_ready(conn, cands: list[Candidate], last_checked: datetime, variant: str = "hybrid", *,
+                   late_chunk_since: datetime | None = None,
+                   used: set[str] | None = None) -> tuple[list[Candidate], list[Candidate], list[Candidate]]:
+    """마지막 확인 이후 검색에 쓸 수 있게 된 후보만 남긴다. (남은 후보, 뺀 후보, 남은 후보 중 late chunk).
+    시각을 모르는 후보는 뺀다. late chunk: 기사는 확인 전부터 검색 가능했지만 원문 청크로 찾은 후보(doc="chunk")가
+    발행 late_chunk_since 이후이고 그 항목 카드에 아직 안 쓴 기사(used에 없음)면 남긴다. used가 None이면
+    (쓴 근거 기록이 없어 알 수 없음) 남기지 않는다."""
+    published: dict[str, datetime] = {}
+    times = ready_times(conn, cands, variant, published)
+    kept, dropped, late = [], [], []
     for c in cands:
-        key = f"{c.ref}@chunk" if c.kind == "news" and c.doc == "chunk" else c.ref
-        ready = times.get(key)
-        (kept if ready is not None and ready > last_checked else dropped).append(c)
-    return kept, dropped
+        ready = times.get(c.ref)
+        if ready is not None and ready > last_checked:
+            kept.append(c)
+            continue
+        pub = published.get(c.ref)
+        if (c.kind == "news" and c.doc == "chunk" and ready is not None and used is not None and c.ref not in used
+                and late_chunk_since is not None and pub is not None and pub >= late_chunk_since):
+            kept.append(c)
+            late.append(c)
+        else:
+            dropped.append(c)
+    return kept, dropped, late
 
 
 def company_terms(company: str, symbol: str, rcfg: dict | None = None, symbol_aliases: dict | None = None) -> list[str]:

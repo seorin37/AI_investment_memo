@@ -5,8 +5,9 @@ news:
   top_k: 8
   # 2026-11-09 뉴스 후보 검색 방식. article: 제목+요약 벡터(news_embedding_variants, 기존) | chunks: 원문 청크(news_chunks,
   # dense+sparse → colbert 재정렬 → 기사 단위 최고 청크 → body_hash 중복 제거, 원문 없는 기사는 article 방식으로 보충).
-  # chunks는 topic.min_similarity_news_chunks를 calibrate·noise_floor(--news-search chunks)로 정해 적은 뒤에 켠다
-  search: article
+  # 2026-11-10 기본값 chunks로 전환. topic.min_similarity_news_chunks(calibrate·noise_floor --news-search chunks)를 정하기 전에는
+  # min_similarity_news 값을 임시로 쓴다 (실행 때 경고, summary search.news_search.uncalibrated). 기존 방식은 --news-search article
+  search: chunks
   chunks:
     dense_k: 100
     sparse_k: 100

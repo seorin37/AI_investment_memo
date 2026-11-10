@@ -70,13 +70,13 @@ LIMIT %(k)s
 """
 
 
-def check_mode(mode: str, topic_cfg: dict, uncalibrated: bool = False) -> None:
-    """chunks는 min_similarity_news_chunks를 보정해 적은 뒤에만 켠다. 시험 비교는 uncalibrated=True로만 (기존 뉴스 값을 임시로 쓴다)."""
+def check_mode(mode: str, topic_cfg: dict, uncalibrated: bool = False) -> bool:
+    """검색 방식을 확인하고, chunks인데 min_similarity_news_chunks가 아직 없으면 True(보정 전: 기존 뉴스 값을 임시로 쓴다).
+    2026-11-10 기본값을 chunks로 바꾸면서 보정 전에도 멈추지 않는다 (임계값은 바꾸지 않음). 호출자가 경고하고 summary에 남긴다.
+    uncalibrated(--uncalibrated-chunks)는 예전 명령 호환용으로만 받는다."""
     if mode not in MODES:
         raise ValueError(f"news.search는 {MODES} 중 하나여야 합니다: {mode}")
-    if mode == "chunks" and "min_similarity_news_chunks" not in topic_cfg and not uncalibrated:
-        raise ValueError("news.search: chunks는 topic.min_similarity_news_chunks를 calibrate·noise_floor로 정해 적은 뒤에 켜세요 "
-                         "(시험 비교만 하려면 --uncalibrated-chunks)")
+    return mode == "chunks" and "min_similarity_news_chunks" not in topic_cfg
 
 
 def load_query_encoder(batch_size: int = 4):

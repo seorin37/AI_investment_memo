@@ -14,16 +14,17 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
+from .candidates import FRESH_PUBLISHED_DAYS
 from .relevance_compare import PRICES
 
 # 마지막 확인 이후 검색 가능해진 자료 중 발행 3일 안 (experiment의 새 자료 기준과 같게, 발행 기준은 확인 시각 - 3일로 넓게 본다)
 FRESH_NEWS_SQL = """SELECT count(*) FROM news_stocks ns JOIN news_articles a ON a.id = ns.news_id
 LEFT JOIN news_embedding_variants v ON v.news_id = a.id AND v.variant = %(variant)s
 WHERE ns.symbol = %(symbol)s AND a.published_at >= %(ts)s - make_interval(days => %(days)s)
-  AND GREATEST(a.collected_at, COALESCE(v.embedded_at, a.collected_at)) > %(ts)s"""
+  AND COALESCE(v.embedded_at, a.collected_at) > %(ts)s"""
 FRESH_DISC_SQL = """SELECT count(*) FROM disclosure_chunks c JOIN disclosures d ON d.rcept_no = c.rcept_no
 WHERE d.symbol = %(symbol)s AND d.rcept_dt >= (%(ts)s - make_interval(days => %(days)s))::date
   AND GREATEST(d.created_at, COALESCE(c.embedded_at, d.created_at)) > %(ts)s"""
@@ -54,7 +55,7 @@ def repeated(first: dict[str, list[str]], second: dict[str, list[str]]) -> dict[
 def freshness(conn, state: dict, outcomes: list[dict], cards: dict[str, list[str]], variant: str = "hybrid") -> dict:
     """state: item_state 파일의 items (뒤 회차 직전). 뒤 회차 카드 근거가 마지막 확인 이후 검색 가능해진 자료인지,
     마지막 확인 이후 새 자료(우선주는 보통주 자료)가 없는 항목이 카드를 받았는지."""
-    from .candidates import FRESH_PUBLISHED_DAYS, ready_times
+    from .candidates import ready_times
     from .models import Candidate
     from .preferred import load_map, source_symbol
 
@@ -62,8 +63,9 @@ def freshness(conn, state: dict, outcomes: list[dict], cards: dict[str, list[str
     symbol = {o["item_id"]: o["symbol"] for o in outcomes}
     fake = [Candidate(ref, "news" if ref.startswith("news:") else "disclosure", "", "", "", "", None, "", 0.0)
             for refs in cards.values() for ref in refs]
-    times = ready_times(conn, fake, variant)
-    old_evidence = []
+    published: dict = {}
+    times = ready_times(conn, fake, variant, published)
+    old_evidence, late_chunk = [], []
     for item_id, refs in cards.items():
         if item_id not in state:
             continue
@@ -71,7 +73,13 @@ def freshness(conn, state: dict, outcomes: list[dict], cards: dict[str, list[str
         for ref in refs:
             ready = times.get(ref)
             if ready is None or ready <= ts:
-                old_evidence.append({"item_id": item_id, "ref": ref, "ready": str(ready), "last_checked_at": str(ts)})
+                row = {"item_id": item_id, "ref": ref, "ready": str(ready), "last_checked_at": str(ts)}
+                pub = published.get(ref)
+                # 확인 전부터 검색 가능했던 기사지만 발행 3일 안: 원문 청크로 찾은 late chunk 근거 (drop_not_ready가 허용)
+                if pub is not None and pub >= ts - timedelta(days=FRESH_PUBLISHED_DAYS):
+                    late_chunk.append({**row, "published": str(pub)})
+                else:
+                    old_evidence.append(row)
     no_new, carded_without_new = [], []
     with conn.cursor() as cur:
         for item_id, rec in state.items():
@@ -87,7 +95,7 @@ def freshness(conn, state: dict, outcomes: list[dict], cards: dict[str, list[str
                 no_new.append(item_id)
                 if item_id in cards:
                     carded_without_new.append(item_id)
-    return {"cards_checked": len(cards), "cards_with_old_evidence": old_evidence,
+    return {"cards_checked": len(cards), "cards_with_old_evidence": old_evidence, "late_chunk_evidence": late_chunk,
             "items_without_new_material": len(no_new), "of_which_got_card": carded_without_new}
 
 
@@ -127,6 +135,8 @@ def main(argv: list[str] | None = None) -> int:
             conn.rollback()
         print(f"\n새 자료 확인: 마지막 회차 카드 {f['cards_checked']}건 중 마지막 확인 이전 근거를 쓴 카드 근거 "
               f"{len(f['cards_with_old_evidence'])}개 {f['cards_with_old_evidence']}")
+        print(f"확인 전부터 있던 기사를 원문 청크로 찾은 근거(발행 3일 안, 허용) {len(f['late_chunk_evidence'])}개 "
+              f"{f['late_chunk_evidence']}")
         print(f"마지막 확인 이후 종목에 새 뉴스·공시가 하나도 없는 항목 {f['items_without_new_material']}개 중 카드를 받은 항목: "
               f"{f['of_which_got_card']}")
     print(f"\n합계 비용 ${total:.3f}")

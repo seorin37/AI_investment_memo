@@ -10,16 +10,18 @@
     PYTHONPATH=backend python -m pipelines.updates.experiment --llm none
     # 2) LLM 카드 + 코드 검사까지 (OpenAI 호출, .env의 LLM_API_KEY 필요)
     PYTHONPATH=backend python -m pipelines.updates.experiment --llm openai --limit 10
-    # 3) 뉴스를 원문 청크로 검색 (news_search). min_similarity_news_chunks 보정 전에는 --uncalibrated-chunks로만 (시험 비교)
-    PYTHONPATH=backend python -m pipelines.updates.experiment --llm none --news-search chunks --uncalibrated-chunks
+    # 3) 뉴스 검색 방식 (기본 설정 news.search: chunks, 2026-11-10). 기존 방식은 --news-search article.
+    #    min_similarity_news_chunks 보정 전에는 min_similarity_news 값을 임시로 쓰고 경고·summary(uncalibrated)에 남긴다
+    PYTHONPATH=backend python -m pipelines.updates.experiment --llm none --news-search article
     # 4) 같은 사건 묶기 (same_event): 공시와 같은 사건 기사를 근거에서 빼고 공시 카드의 보조 기사로 (기본 꺼짐)
-    PYTHONPATH=backend python -m pipelines.updates.experiment --llm none --news-search chunks --uncalibrated-chunks --same-event
+    PYTHONPATH=backend python -m pipelines.updates.experiment --llm none --news-search chunks --same-event
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import sys
 from dataclasses import replace
 from datetime import date, timedelta
 from pathlib import Path
@@ -119,7 +121,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--same-event", action=argparse.BooleanOptionalAction, default=None,
                     help="같은 사건 묶기를 켜거나(--same-event) 끈다(--no-same-event). 기본: 설정 same_event.enabled (없으면 꺼짐)")
     ap.add_argument("--evidence-mode", choices=["legacy", "all"], help="근거 고르기 (기본: 설정 topic.evidence_mode)")
-    ap.add_argument("--uncalibrated-chunks", action="store_true",
+    ap.add_argument("--uncalibrated-chunks", action="store_true",   # 2026-11-10부터 없어도 돈다 (경고만). 예전 명령 호환
                     help="min_similarity_news_chunks가 없어도 chunks로 돈다 (기존 뉴스 임계값을 임시로 씀, 시험 비교용)")
     ap.add_argument("--used-refs", help="이미 카드에 쓴 근거 기록 파일 (used_refs.FileUsedRefStore). 주면 그 근거를 후보에서 빼고, "
                                         "이번 카드가 쓴 근거를 더해 적는다. 기본: 쓰지 않음")
@@ -139,7 +141,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.evidence_mode:
         tcfg = {**tcfg, "evidence_mode": args.evidence_mode}
     news_mode = args.news_search or cfg["news"].get("search", "article")
-    check_mode(news_mode, tcfg, args.uncalibrated_chunks)
+    if check_mode(news_mode, tcfg, args.uncalibrated_chunks):
+        print("경고: news.search=chunks인데 topic.min_similarity_news_chunks가 없어 min_similarity_news 값을 임시로 씁니다 "
+              "(calibrate·noise_floor로 보정 전)", file=sys.stderr)
     scfg = cfg.get("same_event") or {}
     same_event_on = scfg.get("enabled", False) if args.same_event is None else args.same_event
     banned = list(cfg["banned"])
@@ -227,7 +231,7 @@ def main(argv: list[str] | None = None) -> int:
         from .price import market_dates, price_outcome
         from .response import now_iso
         dates = market_dates(conn)                              # 오래된 종가 판단용 시장 거래일 (stale_price)
-        fresh_items, not_ready = 0, 0                           # 새 자료만 받은 항목 수, 마지막 확인 전에 이미 검색 가능했던 후보 수
+        fresh_items, not_ready, late_chunks, fresh_news = 0, 0, 0, 0                           # 새 자료만 받은 항목 수, 마지막 확인 전에 이미 검색 가능했던 후보 수
         for item in items:
             checked = now_iso()                                 # 확인 시각 = 이 항목을 검색하기 시작한 때 (검색 중 들어온 자료를 놓치지 않게)
             if item.type == "topic":
@@ -251,12 +255,17 @@ def main(argv: list[str] | None = None) -> int:
                                                         floor["event"], rcfg.get("include_subsidiary", False), filters,
                                                         fresh_since=fresh, pub_since=d_from))
                 if fresh is not None:
-                    cands, late = drop_not_ready(conn, cands, fresh, cfg["news"]["variant"])
+                    cands, late, late_chunk = drop_not_ready(
+                        conn, cands, fresh, cfg["news"]["variant"], late_chunk_since=n_since,
+                        used=used_store.used(item.item_id) if used_store is not None else None)
                     not_ready += len(late)
+                    late_chunks += len(late_chunk)
                 if rcfg.get("drop_other_company_news", True):
                     cands, dropped = drop_other_company_news(cands, src_name, all_names,
                                                              aliases.get(src_name, []))
                     other_news += [(item, c) for c in dropped]
+                if fresh is not None:                           # 새 자료로 잡힌 뉴스 후보 (회사 이름 거르기 뒤, 쓴 근거 빼기 전)
+                    fresh_news += sum(c.kind == "news" for c in cands)
                 sims += [c.similarity for c in cands]
                 for c in cands:
                     kind_sims[threshold_key(c)].append(c.similarity)
@@ -357,8 +366,10 @@ def main(argv: list[str] | None = None) -> int:
     summary["search_filters"] = filters
     summary["no_company_news"] = len(no_company_news)
     summary["fresh_items"], summary["fresh_not_ready"] = fresh_items, not_ready
+    summary["fresh_news"], summary["fresh_late_chunks"] = fresh_news, late_chunks
     if state_store is not None:
         head.append(f"- 새 자료만 받기(마지막 확인 이후 검색 가능해진 자료, 발행 {FRESH_PUBLISHED_DAYS}일 안): 주제 항목 {fresh_items}개"
+                    f" · 새 자료 뉴스 후보 {fresh_news}건(그중 확인 전부터 있던 기사를 원문 청크로 찾은 것 {late_chunks}건)"
                     f" · 확인 전에 이미 있던 후보라 뺀 것 {not_ready}건 · 나머지 항목은 첫 확인이라 조회 기간 전체")
     summary["preferred_items"] = sorted({i.item_id for i in items if i.symbol in pref_map})
     summary["used_refs"] = None if used_store is None else {"file": str(used_store.path), "match": args.used_refs_match,
