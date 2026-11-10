@@ -3,13 +3,14 @@
     PYTHONPATH=backend python -m pipelines.updates.fresh_check --since 2026-08-01 --symbols 005930,000660,035420,105560
 
 기준 날짜 이후 접수한 공시 중 제목에 '정정'이 있는 것을 보여 주고, FRESH_DISCLOSURE를 통과하는지(새 자료),
-빠지는지(원본이 기준 날짜 전에 있었음)와 찾은 원본을 함께 적는다. 결과는 화면 출력만.
+빠지는지(원본이 기준 날짜 0시 전에 적재돼 있었음)와 찾은 원본을 함께 적는다. 결과는 화면 출력만.
 """
 
 from __future__ import annotations
 
 import argparse
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from .candidates import BASE_TITLE, CORRECTION_DAYS, EVENT_KINDS, FRESH_DISCLOSURE
 
@@ -22,7 +23,7 @@ SQL = f"""SELECT btrim(d.symbol), d.rcept_no, d.rcept_dt, d.kind::text, d.period
            AND CASE WHEN d.kind::text IN {EVENT_KINDS} THEN d0.rcept_dt >= d.rcept_dt - {CORRECTION_DAYS}
                     ELSE d0.period_end IS NOT DISTINCT FROM d.period_end END) AS originals
 FROM disclosures d
-WHERE d.symbol = ANY(%(symbols)s) AND d.rcept_dt >= %(fresh)s AND d.title ~ '정정'
+WHERE d.symbol = ANY(%(symbols)s) AND d.rcept_dt >= %(pub_since)s AND d.title ~ '정정'
 ORDER BY d.symbol, d.rcept_dt"""
 
 
@@ -38,7 +39,9 @@ def main(argv: list[str] | None = None) -> int:
 
     with psycopg.connect(get_read_dsn()) as conn:
         conn.read_only = True
-        rows = conn.execute(SQL, {"symbols": args.symbols.split(","), "fresh": date.fromisoformat(args.since)}).fetchall()
+        day = date.fromisoformat(args.since)
+        ts = datetime.combine(day, datetime.min.time(), ZoneInfo("Asia/Seoul"))   # 그날 0시에 확인했다고 본다
+        rows = conn.execute(SQL, {"symbols": args.symbols.split(","), "pub_since": day, "fresh_ts": ts}).fetchall()
         conn.rollback()
     print(f"{args.since} 이후 접수한 정정 공시 {len(rows)}건 (새 자료 {sum(r[6] for r in rows)}건, 뺌 {sum(not r[6] for r in rows)}건)")
     for sym, no, day, kind, pend, title, fresh, originals in rows:

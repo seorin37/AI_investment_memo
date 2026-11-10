@@ -2065,22 +2065,72 @@ class FreshAndStaleTest(unittest.TestCase):
     """새 자료만 받기·no_data 조회 기간·오래된 종가 (2026-11-10)."""
 
     def test_fresh_disclosure_sql(self):
+        from datetime import date, timezone
         from pipelines.updates.candidates import FRESH_DISCLOSURE, recent_disclosure_candidates, recent_disclosure_sql
-        self.assertNotIn("%(fresh)s", recent_disclosure_sql("period_end", True))           # 첫 확인은 그대로
+        self.assertNotIn("%(fresh_ts)s", recent_disclosure_sql("period_end", True))        # 첫 확인은 그대로
         sql = recent_disclosure_sql("period_end", True, fresh=True)
         self.assertIn(FRESH_DISCLOSURE, sql)
-        self.assertIn("d.rcept_dt >= %(fresh)s", sql)                                        # 기준은 접수일
-        self.assertNotIn("period_end >= %(fresh)s", sql)                                    # period_end는 정렬에만
+        self.assertIn("d.rcept_dt >= %(pub_since)s", sql)                                    # 발행(접수일) 3일 안
+        self.assertNotIn("period_end >= %(pub_since)s", sql)                                # period_end는 정렬에만
         self.assertIn("e.corrects", FRESH_DISCLOSURE)                                       # 정정 공시의 원본 확인
-        self.assertIn("d0.rcept_dt < %(fresh)s", FRESH_DISCLOSURE)
+        self.assertIn("d0.created_at < %(fresh_ts)s", FRESH_DISCLOSURE)                     # 원본이 확인 전에 적재돼 있었나
+        ts = datetime(2026, 11, 10, 10, 0, tzinfo=timezone.utc)
         conn = _Conn([])
-        recent_disclosure_candidates(conn, "105560", [0.1], datetime(2025, 11, 9).date(), 50, 0.64,
-                                     fresh_since=datetime(2026, 11, 10).date())
-        self.assertEqual(conn.cur.params["fresh"], datetime(2026, 11, 10).date())
-        self.assertIn("%(fresh)s", conn.cur.sql)
+        recent_disclosure_candidates(conn, "105560", [0.1], date(2026, 11, 7), 50, 0.64, fresh_since=ts,
+                                     pub_since=date(2026, 11, 7))
+        self.assertEqual((conn.cur.params["fresh_ts"], conn.cur.params["pub_since"]), (ts, date(2026, 11, 7)))
         conn = _Conn([])
-        recent_disclosure_candidates(conn, "105560", [0.1], datetime(2025, 11, 9).date(), 50, 0.64)
-        self.assertNotIn("fresh", conn.cur.params)
+        recent_disclosure_candidates(conn, "105560", [0.1], date(2025, 11, 9), 50, 0.64)
+        self.assertNotIn("fresh_ts", conn.cur.params)
+        with self.assertRaises(ValueError):                                                 # 발행 기준 시작일 없이 부르면 안 된다
+            recent_disclosure_candidates(_Conn([]), "105560", [0.1], date(2025, 11, 9), 50, 0.64, fresh_since=ts)
+
+    def test_fresh_window(self):
+        from datetime import date, timezone
+        from pipelines.updates.candidates import fresh_window
+        now = datetime(2026, 11, 10, 10, 0, tzinfo=timezone.utc)
+        self.assertEqual(fresh_window(None, now, date(2025, 11, 9)), (date(2025, 11, 9), None))   # 첫 확인: 조회 기간 전체
+        start, d = fresh_window(now, now, date(2025, 11, 9))
+        self.assertEqual((start, d), (datetime(2026, 11, 7, 10, 0, tzinfo=timezone.utc), date(2026, 11, 7)))   # 발행 3일 안
+        start, d = fresh_window(now, now, date(2026, 11, 9))                                # 조회 기간이 더 짧으면 그쪽
+        self.assertEqual(d, date(2026, 11, 9))
+
+    def test_drop_not_ready(self):
+        from datetime import timezone
+        from pipelines.updates.candidates import drop_not_ready
+
+        class Cur(_Cursor):
+            def execute(self, sql, params):
+                self.sql, self.params = sql, params
+                self.rows = ([(1, t(9), t(11)), (2, t(11), t(11))] if "news_articles" in sql
+                             else [("R1", 0, t(11)), ("R1", 3, t(9))])
+
+        class Conn(_Conn):
+            def __init__(self):
+                self.cur = Cur([])
+        t = lambda h: datetime(2026, 11, 10, h, 0, tzinfo=timezone.utc)
+        chunk = replace(news("news:1"), doc="chunk")
+        cands = [news("news:1"), chunk, news("news:2"), disc("disc:R1#0"), disc("disc:R1#3"), news("news:9")]
+        kept, dropped = drop_not_ready(Conn(), cands, t(10))
+        # news:1 제목+요약은 9시에 검색 가능(확인 전) → 뺌, 원문 청크는 11시 임베딩 → 남김. 시각을 모르는 news:9는 뺀다
+        self.assertEqual([(c.ref, c.doc) for c in kept], [("news:1", "chunk"), ("news:2", ""), ("disc:R1#0", "")])
+        self.assertEqual([c.ref for c in dropped], ["news:1", "disc:R1#3", "news:9"])
+
+    def test_preferred_map(self):
+        from pipelines.updates.preferred import build_map, is_preferred, name_matches, source_symbol
+        stocks = [("005930", "삼성전자", None, "KOSPI"), ("005935", "삼성전자우", None, "KOSPI"),
+                  ("00088K", "한화3우B", None, "KOSPI"), ("000880", "한화", None, "KOSPI"),
+                  ("008355", "남선알미우", None, "KOSPI"), ("008350", "남선알미늄", None, "KOSPI"),
+                  ("123455", "고아우", None, "KOSPI"),                                       # 보통주가 없다
+                  ("111115", "가나우", "C1", "KOSPI"), ("222220", "가나", "C1", "KOSPI")]   # 고유번호가 규칙보다 먼저
+        mapping, rows = build_map(stocks)
+        self.assertEqual(mapping, {"005935": "005930", "00088K": "000880", "008355": "008350", "111115": "222220"})
+        status = {r["symbol"]: r["status"] for r in rows}
+        self.assertEqual((status["005935"], status["123455"], status["111115"]), ("rule_only", "unmapped", "db_rule_differs"))
+        self.assertTrue(is_preferred("두산2우B") and is_preferred("CJ4우(전환)") and not is_preferred("우리금융지주"))
+        self.assertTrue(name_matches("남선알미우", "남선알미늄"))
+        self.assertFalse(name_matches("삼성전자우", "SK하이닉스"))
+        self.assertEqual((source_symbol("005935", mapping), source_symbol("005930", mapping)), ("005930", "005930"))
 
     def test_last_checked(self):
         from pipelines.updates.item_state import MemoryItemStateStore, last_checked

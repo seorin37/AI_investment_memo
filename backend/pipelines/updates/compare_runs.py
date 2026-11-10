@@ -5,7 +5,7 @@
 
 - 같은 근거로 다시 나온 카드: 뒤 회차 update_card의 sources ref가 앞 회차 같은 항목 카드의 ref와 겹치는 수 (0이어야 한다).
 - --state-before(뒤 회차를 돌리기 직전의 item_state 파일)를 주면 DB(읽기 전용)로 확인한다:
-  · 뒤 회차 카드의 근거가 모두 그 항목의 마지막 확인 이후 자료인가 (뉴스 발행 시각 > 확인 시각, 공시 접수일 >= 확인 날짜).
+  · 뒤 회차 카드의 근거가 모두 그 항목의 마지막 확인 이후 자료인가 (검색 가능해진 시각 = 적재·임베딩 중 늦은 쪽 > 확인 시각).
   · 마지막 확인 이후 그 종목에 새 뉴스·공시가 하나도 없는 항목이 카드를 받지 않았는가.
 비용은 summary.json의 토큰 × PRICES (relevance_compare). 2026-11-10 저장소 밖 compare_runs.py를 옮겼다.
 """
@@ -19,11 +19,14 @@ from pathlib import Path
 
 from .relevance_compare import PRICES
 
+# 마지막 확인 이후 검색 가능해진 자료 중 발행 3일 안 (experiment의 새 자료 기준과 같게, 발행 기준은 확인 시각 - 3일로 넓게 본다)
 FRESH_NEWS_SQL = """SELECT count(*) FROM news_stocks ns JOIN news_articles a ON a.id = ns.news_id
-WHERE ns.symbol = %(symbol)s AND a.published_at > %(ts)s"""
-FRESH_DISC_SQL = "SELECT count(*) FROM disclosures d WHERE d.symbol = %(symbol)s AND d.rcept_dt >= %(day)s"
-NEWS_TIME_SQL = "SELECT id, published_at FROM news_articles WHERE id = ANY(%(ids)s)"
-DISC_DAY_SQL = "SELECT rcept_no, rcept_dt FROM disclosures WHERE rcept_no = ANY(%(nos)s)"
+LEFT JOIN news_embedding_variants v ON v.news_id = a.id AND v.variant = %(variant)s
+WHERE ns.symbol = %(symbol)s AND a.published_at >= %(ts)s - make_interval(days => %(days)s)
+  AND GREATEST(a.collected_at, COALESCE(v.embedded_at, a.collected_at)) > %(ts)s"""
+FRESH_DISC_SQL = """SELECT count(*) FROM disclosure_chunks c JOIN disclosures d ON d.rcept_no = c.rcept_no
+WHERE d.symbol = %(symbol)s AND d.rcept_dt >= (%(ts)s - make_interval(days => %(days)s))::date
+  AND GREATEST(d.created_at, COALESCE(c.embedded_at, d.created_at)) > %(ts)s"""
 
 
 def load_run(run: Path) -> tuple[dict, list[dict], list[dict]]:
@@ -48,35 +51,37 @@ def repeated(first: dict[str, list[str]], second: dict[str, list[str]]) -> dict[
     return {i: v for i, v in out.items() if v}
 
 
-def freshness(conn, state: dict, outcomes: list[dict], cards: dict[str, list[str]]) -> dict:
-    """state: item_state 파일의 items (뒤 회차 직전). 뒤 회차 카드 근거의 시각과, 새 자료가 없는 항목의 카드 여부."""
+def freshness(conn, state: dict, outcomes: list[dict], cards: dict[str, list[str]], variant: str = "hybrid") -> dict:
+    """state: item_state 파일의 items (뒤 회차 직전). 뒤 회차 카드 근거가 마지막 확인 이후 검색 가능해진 자료인지,
+    마지막 확인 이후 새 자료(우선주는 보통주 자료)가 없는 항목이 카드를 받았는지."""
+    from .candidates import FRESH_PUBLISHED_DAYS, ready_times
+    from .models import Candidate
+    from .preferred import load_map, source_symbol
+
+    pref_map = load_map(conn)
     symbol = {o["item_id"]: o["symbol"] for o in outcomes}
-    news_ids = sorted({int(r.split(":", 1)[1]) for refs in cards.values() for r in refs if r.startswith("news:")})
-    nos = sorted({r.split(":", 1)[1].split("#", 1)[0] for refs in cards.values() for r in refs if r.startswith("disc:")})
-    with conn.cursor() as cur:
-        cur.execute(NEWS_TIME_SQL, {"ids": news_ids})
-        news_time = {f"news:{i}": t for i, t in cur.fetchall()}
-        cur.execute(DISC_DAY_SQL, {"nos": nos})
-        disc_day = {n: d for n, d in cur.fetchall()}
+    fake = [Candidate(ref, "news" if ref.startswith("news:") else "disclosure", "", "", "", "", None, "", 0.0)
+            for refs in cards.values() for ref in refs]
+    times = ready_times(conn, fake, variant)
     old_evidence = []
     for item_id, refs in cards.items():
-        ts = datetime.fromisoformat(state[item_id]["last_checked_at"]) if item_id in state else None
-        if ts is None:
+        if item_id not in state:
             continue
+        ts = datetime.fromisoformat(state[item_id]["last_checked_at"])
         for ref in refs:
-            when = news_time.get(ref) if ref.startswith("news:") else disc_day.get(ref.split(":", 1)[1].split("#", 1)[0])
-            new = (when > ts) if ref.startswith("news:") else (when is not None and when >= ts.date())
-            if not new:
-                old_evidence.append({"item_id": item_id, "ref": ref, "when": str(when), "last_checked_at": str(ts)})
+            ready = times.get(ref)
+            if ready is None or ready <= ts:
+                old_evidence.append({"item_id": item_id, "ref": ref, "ready": str(ready), "last_checked_at": str(ts)})
     no_new, carded_without_new = [], []
     with conn.cursor() as cur:
         for item_id, rec in state.items():
             if item_id not in symbol:
                 continue
-            ts = datetime.fromisoformat(rec["last_checked_at"])
-            cur.execute(FRESH_NEWS_SQL, {"symbol": symbol[item_id], "ts": ts})
+            p = {"symbol": source_symbol(symbol[item_id], pref_map), "ts": datetime.fromisoformat(rec["last_checked_at"]),
+                 "days": FRESH_PUBLISHED_DAYS, "variant": variant}
+            cur.execute(FRESH_NEWS_SQL, p)
             n_news = cur.fetchone()[0]
-            cur.execute(FRESH_DISC_SQL, {"symbol": symbol[item_id], "day": ts.date()})
+            cur.execute(FRESH_DISC_SQL, p)
             n_disc = cur.fetchone()[0]
             if n_news == 0 and n_disc == 0:
                 no_new.append(item_id)

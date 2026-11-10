@@ -29,7 +29,7 @@
 from __future__ import annotations
 
 import re
-from datetime import date
+from datetime import date, datetime, timedelta
 
 from .models import Candidate
 
@@ -115,16 +115,20 @@ NEWER_VERSION = rf"""NOT EXISTS (SELECT 1 FROM disclosures d2
       AND CASE WHEN d.kind::text IN {EVENT_KINDS}
                THEN d2.title ~ '^\[[^]]*정정' AND d2.rcept_dt <= d.rcept_dt + {CORRECTION_DAYS}
                ELSE d2.period_end IS NOT DISTINCT FROM d.period_end END)"""
-# 새 자료만 받기 (2026-11-10, 항목의 마지막 확인 시각 이후): 접수일이 확인한 날 이후인 공시만. 단, 원본이 그 전에
-# 이미 있던 보고서의 정정(기재정정·첨부정정 등)은 새 자료가 아니다. 원본은 disclosure_events.corrects(수시공시) 또는
-# 같은 종류·같은 제목(앞 [..] 표시 뗀 것)·같은 기간 끝(정기보고서)/30일 안(수시공시)의 앞선 보고서로 찾는다.
-# period_end는 정렬에만 쓰고 여기서는 보지 않는다 (기준은 접수일).
-FRESH_DISCLOSURE = rf"""d.rcept_dt >= %(fresh)s
+# 새 자료만 받기 (2026-11-10, 항목의 마지막 확인 시각 이후). 수집 시각 기준 (2026-11-10 두 번째 결정):
+# - 마지막 확인 이후 '검색에 쓸 수 있게 된' 자료만: 뉴스 max(collected_at, 임베딩 embedded_at), 공시 max(created_at, 청크 embedded_at).
+#   적재만 보면 적재 뒤 임베딩이 늦게 붙은 자료를 영영 놓친다. 이 판정은 SQL이 아니라 drop_not_ready가 후보마다 한다.
+# - 그중 발행 시각(공시는 접수일)이 FRESH_PUBLISHED_DAYS일 안인 것만: 오래된 자료를 다시 적재·임베딩해도 새 소식이 아니다.
+# - 원본이 마지막 확인 전에 이미 적재돼 있던 보고서의 정정(기재정정 등)은 새 자료가 아니다. 원본은 disclosure_events.corrects
+#   (수시공시) 또는 같은 종류·같은 제목(앞 [..] 표시 뗀 것)·같은 기간 끝(정기보고서)/30일 안(수시공시)의 앞선 보고서.
+# period_end는 정렬에만 쓴다. %(pub_since)s = 발행 기준 시작일, %(fresh_ts)s = 마지막 확인 시각.
+FRESH_PUBLISHED_DAYS = 3
+FRESH_DISCLOSURE = rf"""d.rcept_dt >= %(pub_since)s
   AND NOT (d.title ~ '^\[[^]]*정정' AND (
     EXISTS (SELECT 1 FROM disclosure_events e JOIN disclosures d0 ON d0.rcept_no = e.corrects
-            WHERE e.rcept_no = d.rcept_no AND d0.rcept_dt < %(fresh)s)
+            WHERE e.rcept_no = d.rcept_no AND d0.created_at < %(fresh_ts)s)
     OR EXISTS (SELECT 1 FROM disclosures d0
-            WHERE d0.symbol = d.symbol AND d0.kind = d.kind AND d0.rcept_no <> d.rcept_no AND d0.rcept_dt < %(fresh)s
+            WHERE d0.symbol = d.symbol AND d0.kind = d.kind AND d0.rcept_no <> d.rcept_no AND d0.created_at < %(fresh_ts)s
               AND {BASE_TITLE.format(t="d0")} = {BASE_TITLE.format(t="d")}
               AND CASE WHEN d.kind::text IN {EVENT_KINDS} THEN d0.rcept_dt >= d.rcept_dt - {CORRECTION_DAYS}
                        ELSE d0.period_end IS NOT DISTINCT FROM d.period_end END)))"""
@@ -167,7 +171,7 @@ def recent_disclosure_sql(periodic_date: str = "rcept_dt", latest_version_only: 
         raise ValueError(f"periodic_date는 rcept_dt 또는 period_end: {periodic_date}")
     day = PERIOD_DATE if periodic_date == "period_end" else "d.rcept_dt"
     extra = f"\n  AND {NEWER_VERSION}" if latest_version_only else ""
-    if fresh:                                            # fresh=True면 %(fresh)s(마지막 확인 날짜) 자리표시자가 필요하다
+    if fresh:                                            # fresh=True면 %(pub_since)s·%(fresh_ts)s 자리표시자가 필요하다
         extra += f"\n  AND {FRESH_DISCLOSURE}"
     return f"""
 SELECT c.rcept_no, c.chunk_index, c.section, c.chunk_text, d.title, {day}, d.source_url, d.kind::text, {UNIT},
@@ -253,18 +257,76 @@ def recent_news_candidates(conn, symbol: str, query_vec, since: date, k: int, fl
 
 def recent_disclosure_candidates(conn, symbol: str, query_vec, since: date, k: int, floor: float,
                                  event_floor: float | None = None, include_subsidiary: bool = False,
-                                 filters: dict | None = None, fresh_since: date | None = None) -> list[Candidate]:
+                                 filters: dict | None = None, fresh_since: datetime | None = None,
+                                 pub_since: date | None = None) -> list[Candidate]:
     """floor는 정기보고서, event_floor는 수시공시 임계값 (없으면 floor를 같이 쓴다). filters: search_filters() 결과.
     periodic_date=period_end이면 정기보고서 후보의 date가 보고 기간 끝이다.
-    fresh_since: 항목의 마지막 확인 날짜. 주면 그날 이후 접수한 공시만 (원본이 그 전에 있던 정정 공시는 뺀다, FRESH_DISCLOSURE)."""
+    fresh_since: 항목의 마지막 확인 시각. 주면 접수일이 pub_since 이후인 공시만, 원본이 그 시각 전에 적재돼 있던 정정 공시는 뺀다
+    (FRESH_DISCLOSURE). 마지막 확인 이후 검색 가능해졌는지는 호출자가 drop_not_ready로 본다."""
     f = {**FILTER_DEFAULTS, **(filters or {})}
     sql = recent_disclosure_sql(f["periodic_date"], f["latest_version_only"], fresh=fresh_since is not None)
     params = {"q": vector_literal(query_vec), "symbol": symbol, "since": since, "k": k, "floor": floor,
               "event_floor": floor if event_floor is None else event_floor, "subsidiary": include_subsidiary}
     if fresh_since is not None:
-        params["fresh"] = fresh_since
+        if pub_since is None:
+            raise ValueError("fresh_since를 주면 pub_since(발행 기준 시작일)도 줘야 합니다")
+        params.update(fresh_ts=fresh_since, pub_since=pub_since)
     out = _disclosure_rows(conn, sql, params, symbol)
     return dedupe_same_text(out)[0] if f["dedupe_same_text"] else out
+
+
+# 후보가 검색에 쓸 수 있게 된 시각 (새 자료만 받기). 제목+요약 뉴스는 그 변형 임베딩, 원문 청크 뉴스는 그 기사 청크 임베딩의 가장 늦은 시각,
+# 공시는 그 청크 임베딩 시각과 적재 시각 중 늦은 쪽.
+NEWS_READY_SQL = """SELECT a.id,
+       GREATEST(a.collected_at, COALESCE(v.embedded_at, a.collected_at)),
+       GREATEST(a.collected_at, COALESCE((SELECT max(nc.embedded_at) FROM news_chunks nc WHERE nc.news_id = a.id), a.collected_at))
+FROM news_articles a LEFT JOIN news_embedding_variants v ON v.news_id = a.id AND v.variant = %(variant)s
+WHERE a.id = ANY(%(ids)s)"""
+DISC_READY_SQL = """SELECT c.rcept_no, c.chunk_index, GREATEST(d.created_at, COALESCE(c.embedded_at, d.created_at))
+FROM disclosure_chunks c JOIN disclosures d ON d.rcept_no = c.rcept_no
+JOIN unnest(%(nos)s::text[], %(ix)s::int[]) AS k(n, i) ON c.rcept_no = k.n AND c.chunk_index = k.i"""
+
+
+def fresh_window(last_checked: datetime | None, now: datetime, since: date,
+                 days: int = FRESH_PUBLISHED_DAYS) -> tuple[datetime | date, date | None]:
+    """(뉴스 발행 시작, 공시 접수 시작). 첫 확인(last_checked=None)이면 조회 기간 시작 그대로 (공시는 None = 호출자의 시작일).
+    새 자료만 받을 때는 지금부터 days일 전 (조회 기간 시작보다 앞이면 조회 기간 시작)."""
+    if last_checked is None:
+        return since, None
+    start = now - timedelta(days=days)
+    floor_ts = datetime.combine(since, datetime.min.time(), now.tzinfo)
+    start = max(start, floor_ts)
+    return start, start.date()
+
+
+def ready_times(conn, cands: list[Candidate], variant: str = "hybrid") -> dict[str, datetime]:
+    """ref → 검색에 쓸 수 있게 된 시각."""
+    news = sorted({int(c.ref.split(":", 1)[1]) for c in cands if c.kind == "news"})
+    discs = sorted({(c.ref.split(":", 1)[1].split("#", 1)[0], int(c.ref.split("#", 1)[1])) for c in cands
+                    if c.kind == "disclosure"})
+    out: dict[str, datetime] = {}
+    with conn.cursor() as cur:
+        if news:
+            cur.execute(NEWS_READY_SQL, {"ids": news, "variant": variant})
+            for nid, head, chunk in cur.fetchall():
+                out[f"news:{nid}"], out[f"news:{nid}@chunk"] = head, chunk
+        if discs:
+            cur.execute(DISC_READY_SQL, {"nos": [n for n, _ in discs], "ix": [i for _, i in discs]})
+            for no, idx, ready in cur.fetchall():
+                out[f"disc:{no}#{idx}"] = ready
+    return out
+
+
+def drop_not_ready(conn, cands: list[Candidate], last_checked: datetime,
+                   variant: str = "hybrid") -> tuple[list[Candidate], list[Candidate]]:
+    """마지막 확인 이후 검색에 쓸 수 있게 된 후보만 남긴다. (남은 후보, 뺀 후보). 시각을 모르는 후보는 뺀다."""
+    times = ready_times(conn, cands, variant)
+    kept, dropped = [], []
+    for c in cands:
+        key = f"{c.ref}@chunk" if c.kind == "news" and c.doc == "chunk" else c.ref
+        ready = times.get(key)
+        (kept if ready is not None and ready > last_checked else dropped).append(c)
+    return kept, dropped
 
 
 def company_terms(company: str, symbol: str, rcfg: dict | None = None, symbol_aliases: dict | None = None) -> list[str]:
