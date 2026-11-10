@@ -81,7 +81,9 @@ def failure_reason(codes: list[str]) -> str:
 
 
 _NO_NEW = {"no_candidates": "no_candidates", "already_shown": "already_shown", "no_update": "llm_no_update",
-           "not_called": "not_called", "price_no_card": "price_unchanged"}
+           "not_called": "not_called", "price_no_card": "price_unchanged",
+           "no_relevant_candidates": "no_relevant_candidates",      # 관련성 판정 뒤 남은 후보 없음 (relevance.py)
+           "relevance_failed": "relevance_failed"}                  # 판정 호출·응답 실패: 카드를 만들지 않는다
 
 
 def item_response(item: TrackingItem, kind: str, fail_codes: list[str], card: dict | None,

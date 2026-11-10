@@ -144,6 +144,7 @@ class Response:
     fail_codes: list[str] = field(default_factory=list)
     checked_at: str = ""               # 확인한 시각 (no_new_info는 이 값과 status만 남긴다)
     text: str = ""                     # sentence 범위: 메모 문장
+    relevance: dict | None = None      # 관련성 판정 (relevance.Relevance.to_dict, 2026-11-10): 범위·판정 수·이유 코드·후보별 O/X
 
 
 @dataclass

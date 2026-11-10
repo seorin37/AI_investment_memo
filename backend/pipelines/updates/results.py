@@ -63,15 +63,23 @@ CANDIDATE_TEXT = 500      # 공시·제목+요약 뉴스의 내용 칸 길이
 NEWS_CHUNK_TEXT = 800     # 2026-11-09: 뉴스 원문 청크는 전문(최대 773자)을 적는다 (autolabel.MAX_TEXT와 같게)
 
 
-def write_candidates_csv(run_dir: Path, rows: list[tuple[TrackingItem, Candidate]]) -> Path:
-    """항목×후보 한 줄씩. 엑셀에서 바로 열리도록 utf-8-sig로 쓴다. 마지막 열 '관련(O/X)'을 사람이 채운다."""
+RELEVANCE_COLUMNS = ["판정(O/X)", "판정코드", "판정범위"]
+
+
+def write_candidates_csv(run_dir: Path, rows: list[tuple[TrackingItem, Candidate]],
+                         relevance: dict[tuple[str, str], tuple[str, str, str]] | None = None) -> Path:
+    """항목×후보 한 줄씩. 엑셀에서 바로 열리도록 utf-8-sig로 쓴다. '관련(O/X)'을 사람이 채운다.
+    relevance((항목, ref) → (O/X, 이유 코드, 범위))를 주면 관련성 판정 열 3개를 맨 뒤에 더한다 (판정하지 않은 후보는 빈 칸)."""
     path = run_dir / "candidates.csv"
     with path.open("w", encoding="utf-8-sig", newline="") as f:
         w = csv.writer(f)
-        w.writerow(CANDIDATE_COLUMNS)
+        w.writerow(CANDIDATE_COLUMNS + (RELEVANCE_COLUMNS if relevance is not None else []))
         for item, c in rows:
             kind = "news_chunks" if c.doc == "chunk" else c.kind     # 원문 청크 후보는 calibrate가 따로 센다
             limit = NEWS_CHUNK_TEXT if c.doc == "chunk" else CANDIDATE_TEXT
-            w.writerow([item.item_id, item.symbol, item.category, item.description, item.memo_text, kind, c.ref,
-                        c.date, c.title, (c.text or "").replace("\n", " ")[:limit], f"{c.similarity:.4f}", ""])
+            row = [item.item_id, item.symbol, item.category, item.description, item.memo_text, kind, c.ref,
+                   c.date, c.title, (c.text or "").replace("\n", " ")[:limit], f"{c.similarity:.4f}", ""]
+            if relevance is not None:
+                row += list(relevance.get((item.item_id, c.ref), ("", "", "")))
+            w.writerow(row)
     return path

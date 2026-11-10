@@ -21,7 +21,10 @@ from pathlib import Path
 
 # 내용 칸 이름은 autolabel·relevance_compare가 읽는 '내용(앞부분)' 그대로 (값은 매칭된 청크 전문)
 SHOW = ["item_id", "symbol", "항목", "메모 문장", "종류", "ref", "날짜", "매체", "제목", "링크", "내용(앞부분)"]
-DEFAULT_EXCLUDE = ["results/updates/run_20261109_133043/review_key.csv"]
+# 이미 사람이 본 검수: 1차 32건, 뉴스 40건(article), 뉴스 42건(chunks)
+DEFAULT_EXCLUDE = ["results/updates/run_20261109_133043/review_key.csv",
+                   "results/updates/run_20261109_170506/review_key_news2.csv",
+                   "results/updates/run_20261109_173514/review_key_news2_chunks.csv"]
 CHUNK_SQL = "SELECT chunk_index, chunk_text FROM news_chunks WHERE news_id = %(n)s ORDER BY chunk_index"
 
 
@@ -45,6 +48,26 @@ def balanced_sample(rows: list[dict], n: int, seed: int = 20261109) -> list[dict
                 picked.append(r)
                 seen.add(r["ref"])
     rng.shuffle(picked)
+    return picked
+
+
+INDUSTRY_WORDS = ("업황", "수요", "가격", "경쟁", "산업", "업계", "시장", "공급", "증설", "단가")
+
+
+def is_industry(r: dict) -> bool:
+    """산업·업황 항목: 관련성 판정 범위(판정범위 열)가 industry이거나, 판정이 없으면 항목 설명의 낱말로."""
+    scope = (r.get("판정범위") or "").strip()
+    return scope == "industry" if scope else any(w in (r.get("항목") or "") for w in INDUSTRY_WORDS)
+
+
+def prioritized_sample(rows: list[dict], n: int, prefer_symbols: set[str], seed: int = 20261109) -> list[dict]:
+    """산업·업황 항목이나 prefer_symbols 종목의 후보를 먼저(항목마다 돌아가며), 모자라면 나머지에서 채운다."""
+    first = [r for r in rows if is_industry(r) or r["symbol"].strip().zfill(6) in prefer_symbols]
+    picked = balanced_sample(first, n, seed)
+    if len(picked) < n:
+        seen = {r["ref"] for r in picked}
+        picked += balanced_sample([r for r in rows if r not in first and r["ref"] not in seen], n - len(picked), seed)
+    random.Random(seed).shuffle(picked)
     return picked
 
 
@@ -75,6 +98,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--include-headline", action="store_true", help="원문 없이 제목+요약으로 보충된 후보도 넣는다")
     ap.add_argument("--seed", type=int, default=20261109)
     ap.add_argument("--config", default="configs/updates.yaml")
+    ap.add_argument("--prefer-symbols", default="",
+                    help="먼저 뽑을 종목코드(쉼표). 산업·업황 항목(판정범위 industry 또는 항목 낱말)과 함께 먼저 뽑는다")
+    ap.add_argument("--judged-only", action="store_true",
+                    help="관련성 판정을 받은 후보(판정(O/X) 열이 있는 것)만 (판정 결과를 사람 판정과 맞춰 보려고)")
     args = ap.parse_args(argv)
 
     import json
@@ -92,7 +119,10 @@ def main(argv: list[str] | None = None) -> int:
     refs = json.loads((run / "refs.json").read_text(encoding="utf-8")) if (run / "refs.json").is_file() else {}
     exclude = {r["ref"] for p in args.exclude if resolve_path(p).is_file() for r in read_csv(resolve_path(p))}
     pool = candidate_pool(rows, exclude, args.include_headline)
-    picked = balanced_sample(pool, args.n, args.seed)
+    if args.judged_only:
+        pool = [r for r in pool if (r.get("판정(O/X)") or "").strip()]
+    prefer = {s.strip().zfill(6) for s in args.prefer_symbols.split(",") if s.strip()}
+    picked = prioritized_sample(pool, args.n, prefer, args.seed)   # 우선 대상이 없으면 balanced_sample과 같다
     rcfg = load_config(args.config).get("recent", {})
     aliases = load_symbol_aliases()
     out_rows, key_rows = [], []
@@ -116,7 +146,10 @@ def main(argv: list[str] | None = None) -> int:
             key_rows.append({"review_id": rid, "item_id": r["item_id"], "ref": r["ref"], "종류": r["종류"],
                              "유사도": r["유사도"], "청크번호": "" if idx is None else idx,
                              "청크전문": "예" if idx is not None else ("해당 없음" if r["종류"] != "news_chunks" else "못 찾음"),
-                             "제목만_종목명_필터": "남음" if title_kept else "빠짐", "sol": ""})
+                             "제목만_종목명_필터": "남음" if title_kept else "빠짐", "sol": "",
+                             # 파이프라인 관련성 판정 (relevance.py, candidates.csv에 있을 때). 사람 판정과 맞춰 볼 값
+                             "판정": r.get("판정(O/X)", ""), "판정코드": r.get("판정코드", ""), "판정범위": r.get("판정범위", ""),
+                             "산업항목": "예" if is_industry(r) else ""})
     human_path, key_path = run / f"review_human_{args.name}.csv", run / f"review_key_{args.name}.csv"
     with human_path.open("w", encoding="utf-8-sig", newline="") as f:
         w = csv.writer(f)

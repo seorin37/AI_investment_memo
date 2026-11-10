@@ -121,6 +121,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--same-event", action=argparse.BooleanOptionalAction, default=None,
                     help="같은 사건 묶기를 켜거나(--same-event) 끈다(--no-same-event). 기본: 설정 same_event.enabled (없으면 꺼짐)")
     ap.add_argument("--evidence-mode", choices=["legacy", "all"], help="근거 고르기 (기본: 설정 topic.evidence_mode)")
+    ap.add_argument("--relevance", action=argparse.BooleanOptionalAction, default=None,
+                    help="뉴스 후보 관련성 판정을 켜거나(--relevance) 끈다(--no-relevance). 기본: 설정 relevance.enabled (기본 켬). "
+                         "LLM을 부를 때만 돈다")
     ap.add_argument("--card-schema", choices=["v1", "v2"],
                     help="카드 모양 (기본: 설정 topic.card_schema, 없으면 v1). v2: 사건 하나·문장마다 근거·직전 같은 기간 비교 근거")
     ap.add_argument("--uncalibrated-chunks", action="store_true",   # 2026-11-10부터 없어도 돈다 (경고만). 예전 명령 호환
@@ -199,6 +202,25 @@ def main(argv: list[str] | None = None) -> int:
                 client.response_format = response_format(RESPONSE_SCHEMA_V2, "update_card_v2")
         else:
             client = OpenAIClient.from_env()
+    rel_cfg = None
+    rel_client = None
+    if client is not None:
+        from .relevance import config as relevance_config
+        rel_cfg = relevance_config(cfg.get("relevance"))
+        if args.relevance is not None:
+            rel_cfg["enabled"] = args.relevance
+        if not rel_cfg["enabled"]:
+            rel_cfg = None
+        else:
+            from .autolabel import load_prompt
+            rel_prompt = load_prompt(rel_cfg["prompt"])
+            rel_client = client
+            if args.response_schema or (rel_cfg.get("model") and rel_cfg["model"] != client.model):
+                rel_client = OpenAIClient.from_env()            # 카드 응답 형식을 강제하지 않는 판정용 클라이언트
+                if rel_cfg.get("model"):
+                    rel_client.model = rel_cfg["model"]
+    relevance_rows: dict[tuple[str, str], tuple[str, str, str]] = {}   # (항목, ref) → (O/X, 이유 코드, 범위): candidates.csv
+    relevance_items: list[dict] = []
 
     names: dict[str, str] = {}
     sims: list[float] = []
@@ -282,6 +304,14 @@ def main(argv: list[str] | None = None) -> int:
                     from .used_refs import drop_used
                     cands, skipped = drop_used(cands, used_store.used(item.item_id), args.used_refs_match)
                     used_skipped += len(skipped)
+                rel, stop = None, None
+                if rel_cfg is not None:                         # 관련성 판정 (뉴스만, 항목별 1회): O인 뉴스만 카드 생성에
+                    from .relevance import filter_candidates
+                    cands, rel, stop = filter_candidates(item, cands, floor, rel_client, rel_cfg, rel_prompt)
+                    for ref, (ok, code) in rel.labels.items():
+                        relevance_rows[(item.item_id, ref)] = ("O" if ok else "X", code, rel.scope)
+                    relevance_items.append({"item_id": item.item_id, **{k: v for k, v in rel.to_dict().items()
+                                                                        if k != "labels"}, "stop": stop})
                 links = {}
                 if same_event_on:
                     from .same_event import link_same_event
@@ -290,7 +320,11 @@ def main(argv: list[str] | None = None) -> int:
                 if card_schema == "v2" and tcfg.get("compare_prior", True):
                     from .compare_prior import prior_evidence
                     extra = lambda ev: prior_evidence(conn, ev)          # 실적·배당 공시의 직전 같은 기간 값 (DB 읽기 전용)
-                out = check_topic(item, cands, client, banned, tcfg, links, extra_evidence=extra)
+                if stop is not None:                            # 관련 후보가 없거나 판정 실패: 카드 생성 호출 없이
+                    from .models import TopicOutcome
+                    out = TopicOutcome(stop)                    # 실패 이유는 responses의 relevance.failed에 남는다
+                else:
+                    out = check_topic(item, cands, client, banned, tcfg, links, extra_evidence=extra)
                 if used_store is not None:
                     from .used_refs import card_refs
                     used_store.record(item.item_id, card_refs(out.draft))
@@ -299,7 +333,10 @@ def main(argv: list[str] | None = None) -> int:
                 responses.append(item_response(item, out.kind, out.fail_codes,
                                                draft_to_dict(out.draft) if out.draft else None, has_data[src],
                                                checked_at=checked))
-                outcomes.append({**_outcome(item, out), "fresh_since": fresh.isoformat() if fresh is not None else None})
+                if rel is not None:
+                    responses[-1].relevance = rel.to_dict()
+                outcomes.append({**_outcome(item, out), "fresh_since": fresh.isoformat() if fresh is not None else None,
+                                 "relevance": rel.to_dict() if rel is not None else None})
                 status_count[out.kind] = status_count.get(out.kind, 0) + 1
                 for code in out.fail_codes:                     # 원본 LLM 출력이 어떤 검사에 걸렸는지 (평가 지표)
                     key = code.split(":")[0]
@@ -426,9 +463,31 @@ def main(argv: list[str] | None = None) -> int:
                     + (f" · 추론 강도 {client.reasoning_effort}" if client.reasoning_effort else ""))
         summary.update(u)
         summary["model"], summary["reasoning_effort"] = client.model, client.reasoning_effort
+    if rel_cfg is not None:
+        from ..tracking.openai_client import usage_totals as _usage
+        ru = _usage(rel_client.calls) if rel_client is not client else None
+        if ru is not None and rel_client.model == client.model:   # 같은 모델이면 비용 계산(compare_runs)이 함께 세게 더한다
+            for k in ("llm_calls", "prompt_tokens", "output_tokens", "reasoning_tokens"):
+                summary[k] = summary.get(k, 0) + ru.get(k, 0)
+        judged = sum(r["judged"] for r in relevance_items)
+        summary["relevance"] = {
+            "prompt": rel_cfg["prompt"], "model": rel_client.model, "separate_client": rel_client is not client,
+            "items_called": sum(1 for r in relevance_items if r["judged"]), "judged": judged,
+            "relevant": sum(r["relevant"] for r in relevance_items), "dropped": sum(r["dropped"] for r in relevance_items),
+            "no_relevant_candidates": sum(1 for r in relevance_items if r["stop"] == "no_relevant_candidates"),
+            "failed": sum(1 for r in relevance_items if r["failed"]),
+            "scope": {s: sum(1 for r in relevance_items if r["judged"] and r["scope"] == s) for s in ("company", "industry", "")},
+            "codes": {c: sum(r["codes"].get(c, 0) for r in relevance_items)
+                      for c in sorted({c for r in relevance_items for c in r["codes"]})},
+            "usage_separate": ru}
+        head.append(f"- 관련성 판정(뉴스, {rel_client.model}): 판정 {judged}건 · O {summary['relevance']['relevant']} · "
+                    f"X {summary['relevance']['dropped']} · 관련 후보가 없어 카드 생성을 안 부른 항목 "
+                    f"{summary['relevance']['no_relevant_candidates']}개 · 범위 {summary['relevance']['scope']}")
+    elif client is not None:
+        summary["relevance"] = {"enabled": False}
     run_dir = new_run_dir(args.out_dir)
     write_results(run_dir, drafts, "\n".join(head + [""] + sections) + "\n", summary)
-    csv_path = write_candidates_csv(run_dir, cand_rows)
+    csv_path = write_candidates_csv(run_dir, cand_rows, relevance_rows if rel_cfg is not None else None)
     with (run_dir / "outcomes.jsonl").open("w", encoding="utf-8") as f:
         for o in outcomes:
             f.write(json.dumps(o, ensure_ascii=False, default=str) + "\n")
