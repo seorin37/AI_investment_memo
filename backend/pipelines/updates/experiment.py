@@ -29,7 +29,6 @@ from .candidates import (company_terms, drop_news_without_company, news_company_
                          load_symbol_aliases, recent_disclosure_candidates, recent_news_candidates, search_filters)
 from .models import TrackingItem
 from .preview import write_preview
-from .price import check_price
 from .results import new_run_dir, write_candidates_csv, write_results
 from .evidence import threshold_key
 from .news_search import check_mode, release_gpu
@@ -218,19 +217,29 @@ def main(argv: list[str] | None = None) -> int:
         if chunk_encoder is not None:
             from .news_search import NewsChunkSearch
             searcher = NewsChunkSearch(conn, chunk_encoder, cfg["news"].get("chunks"))
+        from .item_state import last_checked
+        from .price import market_dates, price_outcome
+        dates = market_dates(conn)                              # 오래된 종가 판단용 시장 거래일 (stale_price)
+        fresh_items = 0                                         # 마지막 확인 이후 자료만 받은 항목 수
         for item in items:
             if item.type == "topic":
                 vec = vectors[item.item_id]
-                news = (searcher.recent(item.symbol, item.query_text, since, fetch_k, floor["news_chunks"], headline_vec=vec,
+                # 새 자료만 받기 (2026-11-10): 상태 파일에 마지막 확인 시각이 있으면 뉴스는 그 시각 이후 발행,
+                # 공시는 그날 이후 접수만 (정정 공시는 원본이 그 전에 있었으면 뺀다). 첫 확인은 조회 기간 전체.
+                fresh = last_checked(state_store, item.item_id)
+                fresh_items += fresh is not None
+                n_since = fresh if fresh is not None else since
+                news = (searcher.recent(item.symbol, item.query_text, n_since, fetch_k, floor["news_chunks"], headline_vec=vec,
                                         headline_floor=floor["news"], variant=cfg["news"]["variant"]) if searcher else
-                        recent_news_candidates(conn, item.symbol, vec, since, fetch_k, floor["news"], cfg["news"]["variant"]))
+                        recent_news_candidates(conn, item.symbol, vec, n_since, fetch_k, floor["news"], cfg["news"]["variant"]))
                 if news_lead is not None:
                     news, dropped = drop_news_without_company(
                         news, company_terms(item.company_name, item.symbol, rcfg, symbol_aliases),
                         news_lead)
                     no_company_news += [(item, c) for c in dropped]
                 cands = (news + recent_disclosure_candidates(conn, item.symbol, vec, d_since, fetch_k, floor["disclosure"],
-                                                        floor["event"], rcfg.get("include_subsidiary", False), filters))
+                                                        floor["event"], rcfg.get("include_subsidiary", False), filters,
+                                                        fresh_since=fresh.date() if fresh is not None else None))
                 if rcfg.get("drop_other_company_news", True):
                     cands, dropped = drop_other_company_news(cands, item.company_name, all_names,
                                                              aliases.get(item.company_name, []))
@@ -255,7 +264,7 @@ def main(argv: list[str] | None = None) -> int:
                     has_data[item.symbol] = any(source_data(conn, item.symbol, since, date.today(), d_since).values())
                 responses.append(item_response(item, out.kind, out.fail_codes,
                                                draft_to_dict(out.draft) if out.draft else None, has_data[item.symbol]))
-                outcomes.append(_outcome(item, out))
+                outcomes.append({**_outcome(item, out), "fresh_since": fresh.isoformat() if fresh is not None else None})
                 status_count[out.kind] = status_count.get(out.kind, 0) + 1
                 for code in out.fail_codes:                     # 원본 LLM 출력이 어떤 검사에 걸렸는지 (평가 지표)
                     key = code.split(":")[0]
@@ -278,17 +287,20 @@ def main(argv: list[str] | None = None) -> int:
                     empties.append(_empty(item, "price_no_data"))
                     sections += ["결과: **price_no_data** (prices_daily에 종가 없음)", ""]
                     continue
-                (day, close), prev = rows[0], (float(rows[1][1]) if len(rows) > 1 else None)
-                draft = check_price(item, float(close), prev, str(day), cfg["price"]["near_pct"])
-                key = f"price_{draft.price_state}" if draft else "price_no_card"
+                pkind, draft, pinfo = price_outcome(item, rows, dates, cfg["price"]["near_pct"])
+                key = f"price_{draft.price_state}" if draft else pkind
                 status_count[key] = status_count.get(key, 0) + 1
-                responses.append(item_response(item, "price_card" if draft else "price_no_card", [],
-                                               draft_to_dict(draft) if draft else None, None))
+                responses.append(item_response(item, pkind, [], draft_to_dict(draft) if draft else None, None))
                 if draft:
                     drafts.append(draft)
                 else:
-                    empties.append(_empty(item, "price_no_card"))
-                sections += [f"기준일 {day} 종가 {float(close):,.0f}원 → " + (f"**{draft.title}** / {draft.summary}" if draft else "**카드 없음**"), ""]
+                    empties.append(_empty(item, pkind))
+                if pkind == "price_stale":
+                    sections += [f"결과: **price_stale** (마지막 종가 {pinfo['trade_date']}, 시장 최근 거래일 "
+                                 f"{pinfo['market_latest']}보다 {pinfo['lag_trading_days']}거래일 오래됨 → 가격 카드 안 만듦)", ""]
+                    continue
+                sections += [f"기준일 {pinfo['trade_date']} 종가 {pinfo['close']:,.0f}원 → "
+                             + (f"**{draft.title}** / {draft.summary}" if draft else "**카드 없음**"), ""]
 
     sims.sort()
     q = lambda p: round(sims[int(p * (len(sims) - 1))], 3) if sims else None
@@ -330,6 +342,9 @@ def main(argv: list[str] | None = None) -> int:
     summary["other_company_news"] = len(other_news)
     summary["search_filters"] = filters
     summary["no_company_news"] = len(no_company_news)
+    summary["fresh_items"] = fresh_items
+    if state_store is not None:
+        head.append(f"- 새 자료만 받기(마지막 확인 이후): 주제 항목 {fresh_items}개 · 나머지는 첫 확인이라 조회 기간 전체")
     summary["used_refs"] = None if used_store is None else {"file": str(used_store.path), "match": args.used_refs_match,
                                                             "skipped": used_skipped}
     from .response import summarize, to_dict

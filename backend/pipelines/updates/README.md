@@ -19,6 +19,8 @@
 | 가격 | `price.py` | 종가와 조건가를 코드로 비교. 상태가 바뀌어 "가까워짐/도달"이 될 때만 카드 (LLM 없음) |
 | 즉시 답변 | `instant.py` | 지침 2장: 규칙으로 분기(투자판단·예측→고정 문구, 현재가→코드 답, 단순 재무→코드 답(DB 조회 미구현)), 공시·뉴스 정리 질문은 `update_instant_prompt.md`로 LLM 답변 + 검사. 저장 위치는 미정 |
 | 응답 유형 | `response.py`, `confirm.py`, `item_state.py` | 코드가 6개 유형(update_card·price_card·no_new_info·no_data·needs_confirmation·out_of_scope)을 정한다. 카드 실패는 no_new_info(reason에 이유), 확인 필요는 질문+선택지(52주·20거래일 고점·저점, 최근 종가), 범위 밖 문장은 내부 기록만. 항목 상태(마지막 확인 시각·유형)는 파일 저장소. `responses.jsonl` |
+| 새 자료만 받기 | `candidates.py`(FRESH_DISCLOSURE), `item_state.py`(last_checked), `fresh_check.py` | `--item-state`에 마지막 확인 시각이 있으면 뉴스는 그 시각 이후 발행, 공시는 그날 이후 접수만 후보로 (원본이 그 전에 있던 정정 공시는 제외). 첫 확인은 조회 기간 전체 |
+| 점검 도구 | `response_dist.py`, `compare_runs.py`, `nodata_check.py`, `fresh_check.py` | 응답 유형 분포(LLM 없음), 연속 실행 비교(같은 근거 재사용·새 자료), no_data·오래된 종가 점검, 정정 공시 처리 점검. 모두 DB 읽기 전용 |
 | 쓴 근거 건너뛰기 | `used_refs.py` | 항목별로 카드 문장이 쓴 근거 ref를 기록하고 다음 실행에서 후보에서 뺀다. 저장소 인터페이스 + 파일 구현(DB 테이블 없음). `experiment --used-refs <파일>`로만 켠다 |
 | 결과 저장 | `results.py` | 결과를 DB가 아니라 `results/updates/run_<시각>/` 파일로 저장 |
 | 임계값 보정 | `calibrate.py`, `autolabel.py`, `noise_floor.py` | 후보 O/X 표시(사람 또는 LLM)로 구간별 정밀도·재현율과 추천 임계값 계산, 다른 종목 자료로 하한선 계산 |

@@ -1,6 +1,6 @@
 """정답 메모 세트의 응답 유형 분포 (LLM 호출 없음, DB 읽기 전용). 결과는 파일로만.
 
-    PYTHONPATH=backend python -m pipelines.updates.response_dist                       # memos_long_v2, 2026-11-01~11-09
+    PYTHONPATH=backend python -m pipelines.updates.response_dist                       # memos_long_v2, 기준일 2026-11-09
     PYTHONPATH=backend python -m pipelines.updates.response_dist --saved <judgments.jsonl 또는 sentences.jsonl>
 
 메모 분석: 지금 코드의 로직 판정(judge_memo) + 로직이 LLM으로 넘긴 조각은 저장된 LLM 판정을 쓴다.
@@ -9,7 +9,8 @@
   못 찾는 조각은 '판정 없음'으로 따로 세고, 그런 메모는 메모 단위 범위 밖을 정하지 않는다. 항목도 없다.
 추적 항목이 저장돼 있지 않은 추적 문장은 '항목 미저장' 주제 항목 하나로 본다. 카드 단계(LLM)는 돌리지 않으므로
 주제 항목은 no_data(조회 기간 뉴스·공시 없음)가 아니면 'topic_card_not_run'(no_new_info 또는 update_card)으로 센다.
-가격 항목은 experiment와 같은 PRICE_SQL·check_price로 판정한다. 2026-11-10 저장소 밖 resp_dist.py를 옮겼다.
+가격 항목은 experiment와 같은 PRICE_SQL·price_outcome(오래된 종가는 no_data)으로 판정한다.
+no_data (b)는 기준일에서 recent.lookback_days(365일) 전까지 전체에 뉴스·공시가 없을 때만. 2026-11-10 저장소 밖 resp_dist.py를 옮겼다.
 """
 
 from __future__ import annotations
@@ -75,7 +76,6 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="응답 유형 분포 (LLM 없음, DB 읽기 전용, 결과는 파일로만)")
     ap.add_argument("--memos", default=DEFAULT_MEMOS)
     ap.add_argument("--saved", default=DEFAULT_SAVED, help="저장된 LLM 판정 (evaluate_long의 judgments.jsonl 또는 sentences.jsonl)")
-    ap.add_argument("--since", default="2026-11-01")
     ap.add_argument("--until", default="2026-11-09")
     ap.add_argument("--config", default="configs/updates.yaml")
     ap.add_argument("--out", help="결과 폴더 (기본: results/updates/responses_<세트>_<시각>)")
@@ -89,16 +89,17 @@ def main(argv: list[str] | None = None) -> int:
     from .confirm import confirmation, price_window
     from .eval_e2e import fill_symbols, load_memos, stock_names
     from .experiment import PRICE_SQL
-    from .price import check_price
-    from .response import (data_need_check, item_response, memo_response, order_key, sentence_responses, source_data,
-                           summarize, to_dict)
+    from .price import market_dates, price_outcome
+    from .response import (data_need_check, item_response, lookback_since, memo_response, order_key, sentence_responses,
+                           source_data, summarize, to_dict)
     from .results import draft_to_dict
 
-    since, until = date.fromisoformat(args.since), date.fromisoformat(args.until)
+    until = date.fromisoformat(args.until)
     memos = load_memos(args.memos)
     fmt, saved = load_saved(resolve_path(args.saved))
     lex = load_lexicon()
-    near_pct = load_config(args.config)["price"]["near_pct"]
+    cfg = load_config(args.config)
+    near_pct = cfg["price"]["near_pct"]
     stamp = datetime.now().astimezone().isoformat(timespec="seconds")
     stat = Counter({"saved_format_" + fmt: 1})
     responses, checks = [], []
@@ -108,7 +109,9 @@ def main(argv: list[str] | None = None) -> int:
         memos = [m for m in memos if m.get("symbol")]
         stat["memos_without_symbol"] = no_symbol
         symbols = sorted({m["symbol"] for m in memos})
-        has_data = {s: any(source_data(conn, s, since, until).values()) for s in symbols}
+        nd_since = lookback_since(cfg, until)                 # no_data (b): 조회 기간 전체 (2026-11-10)
+        has_data = {s: any(source_data(conn, s, nd_since, until).values()) for s in symbols}
+        dates = market_dates(conn)
         windows = {s: price_window(conn, s) for s in symbols}
         prices = {}
         for s in symbols:
@@ -148,14 +151,8 @@ def main(argv: list[str] | None = None) -> int:
                     stat["topic_card_not_run"] += 1
                 continue
             stat["price_items"] += 1
-            rows = prices.get(sym) or []
-            if not rows:
-                mine.append(item_response(item, "price_no_data", [], None, None, mid, stamp))
-                continue
-            (day, close), prev = rows[0], (float(rows[1][1]) if len(rows) > 1 else None)
-            draft = check_price(item, float(close), prev, str(day), near_pct)
-            mine.append(item_response(item, "price_card" if draft else "price_no_card", [],
-                                      draft_to_dict(draft) if draft else None, None, mid, stamp))
+            pkind, draft, _ = price_outcome(item, prices.get(sym) or [], dates, near_pct)
+            mine.append(item_response(item, pkind, [], draft_to_dict(draft) if draft else None, None, mid, stamp))
         mine.sort(key=order_key)
         responses += mine
         nd = [x.reason for x in mine if x.type == "no_data"]
@@ -167,7 +164,7 @@ def main(argv: list[str] | None = None) -> int:
         need = set(c["data_need"] or [])
         key = "news_or_disclosure" if need & {"뉴스", "공시"} else ("empty" if not need else "other_only")
         tab[f"{key}/{'no_data' if c['no_data'] else 'no_no_data'}"] += 1
-    summ = {"memos": args.memos, "saved": args.saved, "window": [args.since, args.until], "symbols": len(symbols),
+    summ = {"memos": args.memos, "saved": args.saved, "window": [str(nd_since), args.until], "symbols": len(symbols),
             "symbols_without_news_or_disclosure": sorted(s for s, v in has_data.items() if not v),
             "analysis": dict(stat), "responses": summarize(responses), "data_need": data_need_check(checks),
             "data_need_table": dict(tab)}

@@ -38,6 +38,19 @@ class MemoryItemStateStore:
                                        "reason": response.reason}
 
 
+def last_checked(store: ItemStateStore | None, item_id: str):
+    """마지막 확인 시각(timezone 있는 datetime). 기록이 없으면 None (첫 확인: 조회 기간 전체를 쓴다)."""
+    from datetime import datetime
+
+    rec = store.get(item_id) if store is not None else None
+    if not rec or not rec.get("last_checked_at"):
+        return None
+    ts = datetime.fromisoformat(rec["last_checked_at"])
+    if ts.tzinfo is None:
+        raise ValueError(f"last_checked_at에 시간대가 없습니다: {rec['last_checked_at']}")
+    return ts
+
+
 class FileItemStateStore(MemoryItemStateStore):
     """JSON 파일 하나: {"version": 1, "items": {항목 ID: {last_checked_at, status, reason}}}. 쓸 때 임시 파일 후 교체."""
 

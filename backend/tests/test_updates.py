@@ -2060,5 +2060,74 @@ class ResponseTest(unittest.TestCase):
             self.assertEqual(len(again.data), 1)
 
 
+
+class FreshAndStaleTest(unittest.TestCase):
+    """새 자료만 받기·no_data 조회 기간·오래된 종가 (2026-11-10)."""
+
+    def test_fresh_disclosure_sql(self):
+        from pipelines.updates.candidates import FRESH_DISCLOSURE, recent_disclosure_candidates, recent_disclosure_sql
+        self.assertNotIn("%(fresh)s", recent_disclosure_sql("period_end", True))           # 첫 확인은 그대로
+        sql = recent_disclosure_sql("period_end", True, fresh=True)
+        self.assertIn(FRESH_DISCLOSURE, sql)
+        self.assertIn("d.rcept_dt >= %(fresh)s", sql)                                        # 기준은 접수일
+        self.assertNotIn("period_end >= %(fresh)s", sql)                                    # period_end는 정렬에만
+        self.assertIn("e.corrects", FRESH_DISCLOSURE)                                       # 정정 공시의 원본 확인
+        self.assertIn("d0.rcept_dt < %(fresh)s", FRESH_DISCLOSURE)
+        conn = _Conn([])
+        recent_disclosure_candidates(conn, "105560", [0.1], datetime(2025, 11, 9).date(), 50, 0.64,
+                                     fresh_since=datetime(2026, 11, 10).date())
+        self.assertEqual(conn.cur.params["fresh"], datetime(2026, 11, 10).date())
+        self.assertIn("%(fresh)s", conn.cur.sql)
+        conn = _Conn([])
+        recent_disclosure_candidates(conn, "105560", [0.1], datetime(2025, 11, 9).date(), 50, 0.64)
+        self.assertNotIn("fresh", conn.cur.params)
+
+    def test_last_checked(self):
+        from pipelines.updates.item_state import MemoryItemStateStore, last_checked
+        st = MemoryItemStateStore({"A": {"last_checked_at": "2026-11-10T10:00:15+09:00", "status": "no_new_info"}})
+        ts = last_checked(st, "A")
+        self.assertEqual((ts.hour, ts.utcoffset().total_seconds()), (10, 9 * 3600))
+        self.assertIsNone(last_checked(st, "B"))                                            # 첫 확인
+        self.assertIsNone(last_checked(None, "A"))                                          # 상태 파일을 안 쓰면
+        with self.assertRaises(ValueError):
+            last_checked(MemoryItemStateStore({"A": {"last_checked_at": "2026-11-10T10:00:15"}}), "A")
+
+    def test_lookback_since(self):
+        from datetime import date
+        from pipelines.updates.response import lookback_since
+        self.assertEqual(lookback_since({}, date(2026, 11, 9)), date(2025, 11, 9))
+        self.assertEqual(lookback_since({"recent": {"lookback_days": 30}}, date(2026, 11, 9)), date(2026, 10, 10))
+        self.assertEqual(lookback_since(load_config("configs/updates.yaml"), date(2026, 11, 9)), date(2025, 11, 9))
+
+    def test_trading_lag_and_stale_price(self):
+        from datetime import date
+        from pipelines.updates.price import price_outcome, trading_lag
+        dates = [date(2026, 11, d) for d in (10, 9, 6, 5, 4, 3, 2)]                          # 최신순 시장 거래일
+        self.assertEqual(trading_lag(date(2026, 11, 10), dates), 0)
+        self.assertEqual(trading_lag(date(2026, 11, 5), dates), 3)
+        self.assertEqual(trading_lag(date(2026, 11, 4), dates), 4)
+        self.assertEqual(trading_lag(date(2026, 10, 1), dates), len(dates) + 1)              # 목록보다 오래됨
+        self.assertEqual(trading_lag(date(2026, 10, 1), []), 0)                              # 판단할 수 없으면 오래됐다고 안 본다
+        item = TrackingItem("P:0:0", "000660", "price_below", "100원 아래로", price_threshold=100)
+        kind, draft, info = price_outcome(item, [(date(2026, 11, 4), 99.0), (date(2026, 11, 3), 101.0)], dates)
+        self.assertEqual((kind, draft, info["lag_trading_days"]), ("price_stale", None, 4))   # 도달했어도 카드 없음
+        kind, draft, _ = price_outcome(item, [(date(2026, 11, 5), 99.0), (date(2026, 11, 4), 101.0)], dates)
+        self.assertEqual((kind, draft.price_state), ("price_card", "reached"))              # 3거래일은 아직 괜찮다
+        self.assertEqual(price_outcome(item, [], dates)[0], "price_no_data")
+        self.assertEqual(price_outcome(item, [(date(2026, 11, 10), 150.0)], dates)[0], "price_no_card")
+        from pipelines.updates.response import item_response
+        r = item_response(item, "price_stale", [], None, None, "M")
+        self.assertEqual((r.type, r.reason, r.user_visible), ("no_data", "stale_price", True))
+
+    def test_compare_repeated(self):
+        from pipelines.updates.compare_runs import card_refs, repeated
+        first = card_refs([{"type": "update_card", "item_id": "A", "card": {"sources": [{"ref": "news:1"}]}},
+                           {"type": "no_new_info", "item_id": "B", "card": None}])
+        second = {"A": ["news:2"], "B": ["disc:9#0"]}
+        self.assertEqual(first, {"A": ["news:1"]})
+        self.assertEqual(repeated(first, second), {})
+        self.assertEqual(repeated(first, {"A": ["news:1", "news:3"]}), {"A": ["news:1"]})
+
+
 if __name__ == "__main__":
     unittest.main()

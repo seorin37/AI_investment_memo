@@ -357,7 +357,6 @@ def run(args, sample, counts, rich_symbols, run_dir: Path, since_d: date, until_
     from .experiment import PRICE_SQL
     from .models import TopicOutcome
     from .news_search import NewsChunkSearch, load_query_encoder, release_gpu
-    from .price import check_price
     from .response import data_need_check, summarize as summarize_responses, to_dict
     from .same_event import link_same_event
     from .topic import check_topic, thresholds
@@ -428,9 +427,13 @@ def run(args, sample, counts, rich_symbols, run_dir: Path, since_d: date, until_
     with psycopg.connect(get_read_dsn()) as conn:
         conn.read_only = True
         from .confirm import confirmation, price_window
-        from .response import source_data
+        from .price import market_dates, price_outcome
+        from .response import lookback_since, source_data
         symbols = sorted({m["symbol"] for m in sample})
-        has_data = {s: any(source_data(conn, s, since_d, until_d).values()) for s in symbols}
+        # no_data (b)는 조회 기간 전체(lookback)에 뉴스·공시가 없을 때만 (2026-11-10). 후보 검색 기간(--since)과 따로 본다
+        nd_since = lookback_since(cfg, until_d)
+        has_data = {s: any(source_data(conn, s, nd_since, until_d).values()) for s in symbols}
+        dates = market_dates(conn)
         windows = {s: price_window(conn, s) for s in symbols}
         confirm = lambda j, s: confirmation(j.cleaned_text or j.text, j.reason_code, windows.get(s, []))
         stamp = datetime.now().astimezone().isoformat(timespec="seconds")
@@ -446,12 +449,8 @@ def run(args, sample, counts, rich_symbols, run_dir: Path, since_d: date, until_
                     with conn.cursor() as cur:
                         cur.execute(PRICE_SQL, {"symbol": item.symbol})
                         prices = cur.fetchall()
-                    draft = None
-                    if prices:
-                        (day, close), prev = prices[0], (float(prices[1][1]) if len(prices) > 1 else None)
-                        draft = check_price(item, float(close), prev, str(day), cfg["price"]["near_pct"])
-                    out = TopicOutcome("price_card" if draft else ("price_no_card" if prices else "price_no_data"),
-                                       draft=draft)
+                    pkind, draft, _ = price_outcome(item, prices, dates, cfg["price"]["near_pct"])
+                    out = TopicOutcome(pkind, draft=draft)              # price_card | price_no_card | price_no_data | price_stale
                     rows.append(outcome_row(item, out, before, card_client, time.perf_counter() - started))
                     continue
                 vec = vectors[item.item_id]

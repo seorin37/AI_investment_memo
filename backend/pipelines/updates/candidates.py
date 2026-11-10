@@ -115,6 +115,19 @@ NEWER_VERSION = rf"""NOT EXISTS (SELECT 1 FROM disclosures d2
       AND CASE WHEN d.kind::text IN {EVENT_KINDS}
                THEN d2.title ~ '^\[[^]]*정정' AND d2.rcept_dt <= d.rcept_dt + {CORRECTION_DAYS}
                ELSE d2.period_end IS NOT DISTINCT FROM d.period_end END)"""
+# 새 자료만 받기 (2026-11-10, 항목의 마지막 확인 시각 이후): 접수일이 확인한 날 이후인 공시만. 단, 원본이 그 전에
+# 이미 있던 보고서의 정정(기재정정·첨부정정 등)은 새 자료가 아니다. 원본은 disclosure_events.corrects(수시공시) 또는
+# 같은 종류·같은 제목(앞 [..] 표시 뗀 것)·같은 기간 끝(정기보고서)/30일 안(수시공시)의 앞선 보고서로 찾는다.
+# period_end는 정렬에만 쓰고 여기서는 보지 않는다 (기준은 접수일).
+FRESH_DISCLOSURE = rf"""d.rcept_dt >= %(fresh)s
+  AND NOT (d.title ~ '^\[[^]]*정정' AND (
+    EXISTS (SELECT 1 FROM disclosure_events e JOIN disclosures d0 ON d0.rcept_no = e.corrects
+            WHERE e.rcept_no = d.rcept_no AND d0.rcept_dt < %(fresh)s)
+    OR EXISTS (SELECT 1 FROM disclosures d0
+            WHERE d0.symbol = d.symbol AND d0.kind = d.kind AND d0.rcept_no <> d.rcept_no AND d0.rcept_dt < %(fresh)s
+              AND {BASE_TITLE.format(t="d0")} = {BASE_TITLE.format(t="d")}
+              AND CASE WHEN d.kind::text IN {EVENT_KINDS} THEN d0.rcept_dt >= d.rcept_dt - {CORRECTION_DAYS}
+                       ELSE d0.period_end IS NOT DISTINCT FROM d.period_end END)))"""
 # 청크 텍스트 맨 앞의 머리말 "[KB금융 2025 반기 | I. 회사의 개요 > 4. 주식의 총수 등] "은 보고서·절마다 달라 떼고 비교한다
 CHUNK_BODY = r"regexp_replace({t}.chunk_text, '^\[[^]]*\]\s*', '')"
 _CHUNK_HEAD = re.compile(r"^\[[^\]]*\]\s*")
@@ -146,7 +159,7 @@ def dedupe_same_text(cands: list[Candidate]) -> tuple[list[Candidate], list[Cand
     return kept, dropped
 
 
-def recent_disclosure_sql(periodic_date: str = "rcept_dt", latest_version_only: bool = False) -> str:
+def recent_disclosure_sql(periodic_date: str = "rcept_dt", latest_version_only: bool = False, fresh: bool = False) -> str:
     """recent.filters에 맞춘 공시 후보 SQL. 모두 기본값이면 RECENT_DISCLOSURE_SQL과 같다.
     periodic_date=period_end는 정렬과 후보 날짜(pick_recent의 최신순)에만 쓴다. 기간 시작(since) 비교는 접수일 그대로
     (2026-11-09: 기간 시작에도 쓰면 2025-11-14 접수 2025.09 분기보고서가 빠졌다)."""
@@ -154,6 +167,8 @@ def recent_disclosure_sql(periodic_date: str = "rcept_dt", latest_version_only: 
         raise ValueError(f"periodic_date는 rcept_dt 또는 period_end: {periodic_date}")
     day = PERIOD_DATE if periodic_date == "period_end" else "d.rcept_dt"
     extra = f"\n  AND {NEWER_VERSION}" if latest_version_only else ""
+    if fresh:                                            # fresh=True면 %(fresh)s(마지막 확인 날짜) 자리표시자가 필요하다
+        extra += f"\n  AND {FRESH_DISCLOSURE}"
     return f"""
 SELECT c.rcept_no, c.chunk_index, c.section, c.chunk_text, d.title, {day}, d.source_url, d.kind::text, {UNIT},
        1 - (c.dense_embedding <=> %(q)s::vector) AS sim
@@ -238,14 +253,17 @@ def recent_news_candidates(conn, symbol: str, query_vec, since: date, k: int, fl
 
 def recent_disclosure_candidates(conn, symbol: str, query_vec, since: date, k: int, floor: float,
                                  event_floor: float | None = None, include_subsidiary: bool = False,
-                                 filters: dict | None = None) -> list[Candidate]:
+                                 filters: dict | None = None, fresh_since: date | None = None) -> list[Candidate]:
     """floor는 정기보고서, event_floor는 수시공시 임계값 (없으면 floor를 같이 쓴다). filters: search_filters() 결과.
-    periodic_date=period_end이면 정기보고서 후보의 date가 보고 기간 끝이다."""
+    periodic_date=period_end이면 정기보고서 후보의 date가 보고 기간 끝이다.
+    fresh_since: 항목의 마지막 확인 날짜. 주면 그날 이후 접수한 공시만 (원본이 그 전에 있던 정정 공시는 뺀다, FRESH_DISCLOSURE)."""
     f = {**FILTER_DEFAULTS, **(filters or {})}
-    sql = recent_disclosure_sql(f["periodic_date"], f["latest_version_only"])
-    out = _disclosure_rows(conn, sql, {
-        "q": vector_literal(query_vec), "symbol": symbol, "since": since, "k": k, "floor": floor,
-        "event_floor": floor if event_floor is None else event_floor, "subsidiary": include_subsidiary}, symbol)
+    sql = recent_disclosure_sql(f["periodic_date"], f["latest_version_only"], fresh=fresh_since is not None)
+    params = {"q": vector_literal(query_vec), "symbol": symbol, "since": since, "k": k, "floor": floor,
+              "event_floor": floor if event_floor is None else event_floor, "subsidiary": include_subsidiary}
+    if fresh_since is not None:
+        params["fresh"] = fresh_since
+    out = _disclosure_rows(conn, sql, params, symbol)
     return dedupe_same_text(out)[0] if f["dedupe_same_text"] else out
 
 

@@ -9,7 +9,9 @@
     확인 필요 문장이 있으면 그 질문이 사용자에게 가므로 "찾지 못했어요"를 함께 보이지 않는다.
 - 확인 필요(needs_confirmation): 메모 분석이 확인 필요로 판정한 문장. 질문(question)과 선택지(options, confirm.py).
 - 가격 카드(price_card): 가격 항목이 가까워짐·도달로 바뀌었을 때.
-- 데이터 없음(no_data): (a) 가격 항목인데 종가가 없음 (b) 조회 기간에 그 종목의 뉴스·공시가 아예 없음. 이 둘만.
+- 데이터 없음(no_data): (a) 가격 항목인데 종가가 없음, 또는 종가가 시장 최근 거래일보다 3거래일 넘게 오래됨(stale_price)
+  (b) 조회 기간 전체(recent.lookback_days, 기본 365일)에 그 종목의 뉴스·공시가 하나도 없음 (2026-11-10: 최근에만 없으면
+  no_new_info). 새 자료만 받기(마지막 확인 이후)로 후보가 비어도 no_data가 아니다 — 기준은 언제나 조회 기간 전체.
 - 새 소식 없음(no_new_info): 알림 대상이 아니다 (user_visible=false). 상태(type·reason)와 확인 시각만 남긴다.
   카드 생성·검수 실패(검사 실패·호출 실패·형식 오류·검수 실패)도 고정 문구 카드 대신 여기로 온다 (reason에 이유).
 - 업데이트 카드(update_card): 나머지 (LLM 카드가 검사·검수를 통과).
@@ -36,6 +38,15 @@ SOURCE_SQL = """SELECT
           WHERE ns.symbol = %(symbol)s AND a.published_at >= %(since)s AND a.published_at < %(until)s),
   EXISTS (SELECT 1 FROM disclosures d
           WHERE d.symbol = %(symbol)s AND d.rcept_dt >= %(since_d)s AND d.rcept_dt <= %(until_d)s)"""
+
+
+LOOKBACK_DAYS = 365
+
+
+def lookback_since(cfg: dict | None, until: date) -> date:
+    """no_data (b)의 조회 기간 시작일: until - recent.lookback_days(기본 365일)."""
+    days = ((cfg or {}).get("recent") or {}).get("lookback_days", LOOKBACK_DAYS)
+    return until - timedelta(days=days)
 
 
 def now_iso() -> str:
@@ -83,6 +94,8 @@ def item_response(item: TrackingItem, kind: str, fail_codes: list[str], card: di
         return Response("price_card", reason="price_changed", message=card.get("title", ""), card=card, **base)
     if kind == "price_no_data":
         return Response("no_data", reason="no_price", message=NO_DATA, **base)
+    if kind == "price_stale":                             # 마지막 종가가 3거래일 넘게 오래됨 (price.price_outcome)
+        return Response("no_data", reason="stale_price", message=NO_DATA, **base)
     if item.type == "topic" and has_data is False:
         return Response("no_data", reason="no_source_data", message=NO_DATA, **base)
     if kind == "update" and card and card.get("origin", "llm") == "llm":
