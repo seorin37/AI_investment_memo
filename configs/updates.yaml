@@ -71,6 +71,10 @@ topic:
   # 2026-11-09 근거 고르기. legacy: 공시 max_disclosure_evidence개(청크)·뉴스 max_news_evidence개 (기본, 팀 결과 유지) |
   # all: 임계값 넘는 건 다 넣고 안전 상한만 (공시는 접수번호 단위로 공시당 최고 청크 2개·최대 5건, 뉴스는 중복 뺀 나머지 전부,
   # 합이 max_total을 넘으면 뉴스부터 자른다)
+  # 2026-11-10 카드 모양. v1: title·summary·reason (configs/update_judge_prompt.md, 기본) | v2: headline·when·facts[문장, 근거]·
+  # memo_link (configs/update_judge_prompt_v2.md, 사건 하나·문장마다 근거 하나·같은 메모 같은 근거 카드 합치기). experiment --card-schema
+  card_schema: v1
+  compare_prior: true           # v2에서 실적·배당·정기보고서 근거에 직전 같은 기간 값(DB, compare_prior.py)을 비교 근거로 넣는다
   evidence_mode: all            # 2026-11-09 기본값 all (공시 2·뉴스 3 고정 폐지). legacy는 평가 비교용으로만 남긴다
   max_disclosure_docs: 5
   max_chunks_per_disclosure: 2

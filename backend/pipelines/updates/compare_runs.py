@@ -43,7 +43,7 @@ def cost(summary: dict) -> float | None:
 
 
 def card_refs(responses: list[dict]) -> dict[str, list[str]]:
-    return {r["item_id"]: [s["ref"] for s in (r["card"] or {}).get("sources", [])]
+    return {r["item_id"]: [s["ref"] for s in (r["card"] or {}).get("sources", []) if not s["ref"].startswith("cmp:")]
             for r in responses if r["type"] == "update_card"}
 
 

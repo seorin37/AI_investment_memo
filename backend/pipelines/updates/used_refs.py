@@ -95,4 +95,5 @@ def card_refs(draft: UpdateDraft | None) -> list[str]:
     """카드 문장이 쓴 근거 ref (중복 없이 순서대로). 카드가 없거나 가격 카드면 빈 목록."""
     if draft is None or draft.type == "price_condition":
         return []
-    return list(dict.fromkeys(ref for ref, _ in draft.sources if ref))
+    # cmp:<접수번호>는 코드가 DB에서 만든 비교용 근거 (compare_prior)라 기록하지 않는다
+    return list(dict.fromkeys(ref for ref, _ in draft.sources if ref and not ref.startswith("cmp:")))

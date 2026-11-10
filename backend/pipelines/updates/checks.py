@@ -201,6 +201,84 @@ def check_card(card: Card, evidence: list[Evidence], banned: list[str], cfg: dic
     return list(dict.fromkeys(codes))
 
 
+_ISO = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_KDATE = re.compile(r"(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일")
+_SENT_END = re.compile(r"[.!?。](?=\s|$)")
+
+
+def text_dates(text: str) -> set[str]:
+    """글 속 날짜를 YYYY-MM-DD로 ("2026-10-28", "2026.10.28", "2026년 10월 28일")."""
+    out = set()
+    for m in list(_DATE.finditer(text or "")) + list(_KDATE.finditer(text or "")):
+        y, mo, d = m.group(1), m.group(2), m.group(3)
+        if d:
+            out.add(f"{int(y):04d}-{int(mo):02d}-{int(d):02d}")
+    return out
+
+
+def _banned_hit(texts: list[str], banned: list[str], cfg: dict) -> bool:
+    """v1 _check_body와 같은 금지 표현 검사: 사전은 부분 문자열, 시제 패턴은 회사 발언 전달 문장을 뺀 문장에만."""
+    if any(term in " ".join(texts) for term in banned):
+        return True
+    patterns = [re.compile(p) for p in cfg["banned_patterns"]]
+    return any(not any(a in t for a in ATTRIBUTION) and any(p.search(t) for p in patterns) for t in texts)
+
+
+def _ev_text(e: Evidence) -> str:
+    return f"{e.candidate.title} {e.shown_text} {e.candidate.date}"
+
+
+def check_card_v2(card, evidence: list[Evidence], banned: list[str], cfg: dict | None = None) -> list[str]:
+    """v2 카드(CardV2) 검사. v1과 같은 이유 코드를 쓰고, 숫자·날짜는 facts 문장마다 그 문장의 evidence_id 근거 하나와 대조한다
+    (다른 근거의 숫자를 섞으면 NUMBER). "비교 자료 없음"(evidence_id "")만 근거 없이 허용한다.
+    - FORMAT_TITLE headline · FORMAT_WHEN when(YYYY-MM-DD, 쓴 근거의 날짜나 근거 본문에 적힌 날짜)
+    - FORMAT_SUMMARY facts 개수(1~max_sentences, 비교 자료 없음 제외)·문장 길이·[E#] 표시
+    - FORMAT_REASON memo_link(한 문장, reason_max자) · SOURCE 번호·sources 목록·비교용 근거만으로 만든 카드
+    - BANNED · PREDICTION(headline·facts·memo_link) · LOW_CONF. FACT_OVERLAP(v1의 evidence.fact 대조)는 v2에 없다."""
+    cfg = {**DEFAULTS, **(cfg or {})}
+    ids = {e.eid: e for e in evidence}
+    codes: list[str] = []
+    if not card.headline or len(card.headline) > cfg["title_max"]:
+        codes.append("FORMAT_TITLE")
+    facts = [(t, eid) for t, eid in card.facts if not (t == "비교 자료 없음" and not eid)]
+    cited = [ids[eid] for _, eid in facts if eid in ids]
+    allowed = set()
+    for e in cited:
+        allowed |= {e.candidate.date} | text_dates(_ev_text(e))
+    if not _ISO.match(card.when or "") or card.when not in allowed:
+        codes.append("FORMAT_WHEN")
+    if not (1 <= len(facts) <= cfg["max_sentences"]) or any(
+            not t or len(t) > cfg["sentence_max_chars"] or _TAG.search(t) for t, _ in facts):
+        codes.append("FORMAT_SUMMARY")
+    if (not card.memo_link or len(card.memo_link) > cfg["reason_max"]
+            or len(_SENT_END.findall(card.memo_link.strip())) > 1):
+        codes.append("FORMAT_REASON")
+    used = [eid for _, eid in facts]
+    if (any(eid not in ids for eid in used) or {s for s in card.sources if s} != set(used)
+            or (cited and all(e.candidate.doc == "compare" for e in cited))):
+        codes.append("SOURCE")
+    texts = [card.headline, *(t for t, _ in facts), card.memo_link]
+    if _banned_hit(texts, banned, cfg):
+        codes.append("BANNED")
+    # 숫자: 문장마다 그 근거 하나에만. 제목·memo_link는 쓴 근거 전체 안에서
+    union = set()
+    for e in cited:
+        union |= evidence_numbers(_ev_text(e))
+    bad = any(eid in ids and not numbers(t) <= evidence_numbers(_ev_text(ids[eid])) for t, eid in facts)
+    if bad or not numbers(card.headline) <= union or not numbers(card.memo_link) <= union:
+        codes.append("NUMBER")
+    if cfg["prediction_terms"] and prediction_text(texts, cfg):
+        codes.append("PREDICTION")
+    if card.confidence < cfg["min_confidence"]:
+        codes.append("LOW_CONF")
+    return list(dict.fromkeys(codes))
+
+
+def check_no_update_v2(card) -> list[str]:
+    ok = not card.headline and not card.when and not card.memo_link and not card.facts and not card.sources
+    return [] if ok else ["FORMAT_STATE"]
+
+
 def check_no_update(card: Card) -> list[str]:
     """no_update는 제목·이유가 비고 summary·evidence가 빈 배열이어야 한다 (지침서 3-2). 확신도 기준은 적용하지 않는다."""
     ok = not card.title and not card.reason and not card.summary and not card.evidence

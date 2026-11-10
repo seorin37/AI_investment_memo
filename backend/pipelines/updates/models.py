@@ -65,6 +65,35 @@ class Card:
 
 
 @dataclass
+class CardV2:
+    """v2 카드 (2026-11-10, topic.card_schema: v2). 사건 하나 · 문장마다 근거 하나.
+    title·summary·reason·evidence는 v1 Card를 읽던 코드(보고서·검수 호출)가 그대로 쓰게 맞춘 별칭이다."""
+    status: str                       # update | no_update
+    headline: str = ""
+    when: str = ""                    # 사건 날짜 YYYY-MM-DD
+    facts: list[tuple[str, str]] = field(default_factory=list)      # (문장, evidence_id). "비교 자료 없음"은 evidence_id ""
+    memo_link: str = ""
+    sources: list[str] = field(default_factory=list)                 # facts에서 쓴 evidence_id
+    confidence: float = 0.0
+
+    @property
+    def title(self) -> str:
+        return self.headline
+
+    @property
+    def summary(self) -> list[str]:
+        return [t for t, _ in self.facts]
+
+    @property
+    def reason(self) -> str:
+        return self.memo_link
+
+    @property
+    def evidence(self) -> list[tuple[str, str]]:
+        return [(eid, t) for t, eid in self.facts if eid]
+
+
+@dataclass
 class Answer:
     """즉시 답변 (지침서 2). status는 answer | cannot_answer."""
     status: str
@@ -89,6 +118,11 @@ class UpdateDraft:
     related_news: list[tuple[str, str]] = field(default_factory=list)   # (ref, 기사 제목): 공시 카드에 덧붙는 관련 기사 (링크만, LLM 문장 없음)
     # 같은 사건 기사 (same_event): 공시와 같은 사건으로 묶여 근거에서 뺀 기사. {ref, title, source, date, url}만, 기사 문장은 쓰지 않는다
     supporting_news: list[dict] = field(default_factory=list)
+    # v2 카드 (card_schema="v2"일 때만 채운다. v1 카드의 cards.jsonl 모양은 그대로)
+    card_schema: str = "v1"
+    when: str = ""
+    facts: list[dict] = field(default_factory=list)          # {text, ref}. ref ""는 코드가 붙인 "비교 자료 없음"
+    merged_items: list[dict] = field(default_factory=list)   # 같은 메모·같은 근거라 이 카드로 합친 다른 항목 {item_id, description}
 
 
 @dataclass

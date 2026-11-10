@@ -121,6 +121,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--same-event", action=argparse.BooleanOptionalAction, default=None,
                     help="같은 사건 묶기를 켜거나(--same-event) 끈다(--no-same-event). 기본: 설정 same_event.enabled (없으면 꺼짐)")
     ap.add_argument("--evidence-mode", choices=["legacy", "all"], help="근거 고르기 (기본: 설정 topic.evidence_mode)")
+    ap.add_argument("--card-schema", choices=["v1", "v2"],
+                    help="카드 모양 (기본: 설정 topic.card_schema, 없으면 v1). v2: 사건 하나·문장마다 근거·직전 같은 기간 비교 근거")
     ap.add_argument("--uncalibrated-chunks", action="store_true",   # 2026-11-10부터 없어도 돈다 (경고만). 예전 명령 호환
                     help="min_similarity_news_chunks가 없어도 chunks로 돈다 (기존 뉴스 임계값을 임시로 씀, 시험 비교용)")
     ap.add_argument("--used-refs", help="이미 카드에 쓴 근거 기록 파일 (used_refs.FileUsedRefStore). 주면 그 근거를 후보에서 빼고, "
@@ -140,6 +142,9 @@ def main(argv: list[str] | None = None) -> int:
     tcfg = cfg["topic"]
     if args.evidence_mode:
         tcfg = {**tcfg, "evidence_mode": args.evidence_mode}
+    if args.card_schema:
+        tcfg = {**tcfg, "card_schema": args.card_schema}
+    card_schema = tcfg.get("card_schema", "v1")
     news_mode = args.news_search or cfg["news"].get("search", "article")
     if check_mode(news_mode, tcfg, args.uncalibrated_chunks):
         print("경고: news.search=chunks인데 topic.min_similarity_news_chunks가 없어 min_similarity_news 값을 임시로 씁니다 "
@@ -187,8 +192,11 @@ def main(argv: list[str] | None = None) -> int:
     client = None
     if args.llm == "openai":
         if args.response_schema:
-            from .openai_schema import SchemaOpenAIClient
+            from .openai_schema import SchemaOpenAIClient, response_format
             client = SchemaOpenAIClient.from_env()
+            if card_schema == "v2":                              # 검수 호출도 이 형식을 받게 되므로 v2 + 스키마 모드는 미검증
+                from .judge import RESPONSE_SCHEMA_V2
+                client.response_format = response_format(RESPONSE_SCHEMA_V2, "update_card_v2")
         else:
             client = OpenAIClient.from_env()
 
@@ -278,7 +286,11 @@ def main(argv: list[str] | None = None) -> int:
                 if same_event_on:
                     from .same_event import link_same_event
                     links = {ref: link.rcept_no for ref, link in link_same_event(conn, cands, scfg).items()}
-                out = check_topic(item, cands, client, banned, tcfg, links)
+                extra = None
+                if card_schema == "v2" and tcfg.get("compare_prior", True):
+                    from .compare_prior import prior_evidence
+                    extra = lambda ev: prior_evidence(conn, ev)          # 실적·배당 공시의 직전 같은 기간 값 (DB 읽기 전용)
+                out = check_topic(item, cands, client, banned, tcfg, links, extra_evidence=extra)
                 if used_store is not None:
                     from .used_refs import card_refs
                     used_store.record(item.item_id, card_refs(out.draft))
@@ -325,6 +337,20 @@ def main(argv: list[str] | None = None) -> int:
                 sections += [f"기준일 {pinfo['trade_date']} 종가 {pinfo['close']:,.0f}원 → "
                              + (f"**{draft.title}** / {draft.summary}" if draft else "**카드 없음**"), ""]
 
+    merged: dict[str, str] = {}
+    if card_schema == "v2":                                     # 같은 메모·같은 근거 카드는 하나로 (topic.merge_same_source)
+        from .topic import merge_same_source
+        drafts, merged = merge_same_source(drafts)
+        by_item = {d.item.item_id: d for d in drafts}
+        for r in responses:
+            if r.item_id in merged:
+                r.user_visible, r.reason = False, f"merged_into:{merged[r.item_id]}"
+            elif r.item_id in by_item and by_item[r.item_id].merged_items:
+                r.card = draft_to_dict(by_item[r.item_id])
+        for o in outcomes:
+            if o["item_id"] in merged:
+                o["merged_into"] = merged[o["item_id"]]
+
     sims.sort()
     q = lambda p: round(sims[int(p * (len(sims) - 1))], 3) if sims else None
 
@@ -335,7 +361,8 @@ def main(argv: list[str] | None = None) -> int:
     summary = {"items": len(items), "topic_items": len(topic_items), "candidates": len(sims), "news_since": str(since),
                "llm": args.llm, "similarity": {"min": q(0), "p25": q(.25), "median": q(.5), "p75": q(.75), "max": q(1)},
                "similarity_by_kind": {k: dist(v) for k, v in kind_sims.items()},
-               "outcomes": status_count, "llm_check_failures": fail_count, "cards": len(drafts)}
+               "outcomes": status_count, "llm_check_failures": fail_count, "cards": len(drafts),
+               "card_schema": card_schema, "merged_cards": merged}
     news_search = {"mode": news_mode}
     if news_mode == "chunks":
         ms = searcher.timings_ms if searcher else []

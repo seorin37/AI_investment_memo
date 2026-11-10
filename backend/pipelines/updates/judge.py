@@ -13,7 +13,7 @@ import re
 from functools import lru_cache
 
 from ..common.config import resolve_path
-from .models import Answer, Card, Evidence, TrackingItem
+from .models import Answer, Card, CardV2, Evidence, TrackingItem
 
 PROMPT_PATH = "configs/update_judge_prompt.md"
 INSTANT_PROMPT_PATH = "configs/update_instant_prompt.md"
@@ -95,6 +95,44 @@ RESPONSE_SCHEMA = {
     "required": ["status", "title", "summary", "reason", "evidence", "confidence"],
 }
 
+# v2 카드 (2026-11-10, topic.card_schema: v2): 사건 하나 · 문장(facts)마다 근거 번호 하나. 프롬프트는 configs/update_judge_prompt_v2.md
+_FACT = {"type": "OBJECT", "properties": {"text": {"type": "STRING"}, "evidence_id": {"type": "STRING"}},
+         "required": ["text", "evidence_id"]}
+RESPONSE_SCHEMA_V2 = {
+    "type": "OBJECT",
+    "properties": {
+        "status": {"type": "STRING", "enum": ["update", "no_update"]},
+        "headline": {"type": "STRING"},
+        "when": {"type": "STRING"},
+        "facts": {"type": "ARRAY", "items": _FACT, "maxItems": 4},      # 문장 3개 + "비교 자료 없음"
+        "memo_link": {"type": "STRING"},
+        "sources": {"type": "ARRAY", "items": {"type": "STRING"}, "maxItems": 4},
+        "confidence": {"type": "NUMBER"},
+    },
+    "required": ["status", "headline", "when", "facts", "memo_link", "sources", "confidence"],
+}
+PROMPT_PATHS = {"v1": PROMPT_PATH, "v2": "configs/update_judge_prompt_v2.md"}
+CARD_SCHEMAS = tuple(PROMPT_PATHS)
+NO_COMPARISON = "비교 자료 없음"
+
+V2_OUTPUT = """# 출력 요청
+추적 항목과 새 근거의 직접 관련성을 판단하고, 지정된 JSON 구조로만 반환하세요.
+facts는 {"text": 문장, "evidence_id": "E1"} 객체의 배열이고(예: [{"text": "첫 문장이에요.", "evidence_id": "E1"}]),
+sources는 facts에서 쓴 근거 번호 배열입니다(예: ["E1"]). JSON 키: status, headline, when, facts, memo_link, sources, confidence."""
+
+# 메모 성격 (코드가 메모 문장 표현으로 판단해 v2 입력에 적는다)
+_WANTS_COMPARISON = re.compile(r"비교|대비|작년|전년|지난\s*(?:해|분기|번|달)|전\s*분기|이전보다|예전보다|늘었|줄었|늘어|줄어|증가|감소|보다\s*(?:많|적|높|낮|크|작)")
+_ASKS_WHY = re.compile(r"왜|이유|원인|때문")
+
+
+def wants_comparison(memo: str) -> bool:
+    return bool(_WANTS_COMPARISON.search(memo or ""))
+
+
+def asks_why(memo: str) -> bool:
+    return bool(_ASKS_WHY.search(memo or ""))
+
+
 INSTANT_RESPONSE_SCHEMA = {
     "type": "OBJECT",
     "properties": {
@@ -119,7 +157,9 @@ def evidence_block(evidence: list[Evidence]) -> str:
     parts = []
     for e in evidence:
         c = e.candidate
-        if c.kind == "disclosure":
+        if c.doc == "compare":                       # compare_prior: 코드가 DB에서 찾아 넣은 비교값 (v2)
+            parts.append(f"{e.eid} [직전 같은 기간 비교]\n{e.shown_text}")
+        elif c.kind == "disclosure":
             parts.append(f"{e.eid} [공시]\n- 보고서명: {c.title}\n- 접수일: {c.date}\n- 원문 발췌: {e.shown_text}")
         else:
             parts.append(f"{e.eid} [뉴스]\n- 제목: {c.title}\n- 언론사: {c.source}\n- 게시 일자: {c.date}\n- 제공 요약: {e.shown_text}")
@@ -133,16 +173,26 @@ def _dash(value) -> str:
 def fill_limits(guide: str, limits: dict | None = None) -> str:
     """프롬프트의 {title_max}·{max_sentences}·{sentence_max_chars}를 설정값으로 채운다.
     limits가 없으면 기존 기본값(20자·3문장·60자)이라 이전 프롬프트와 같은 글이 된다."""
-    values = {"title_max": 20, "max_sentences": 3, "sentence_max_chars": 60, **(limits or {})}
+    values = {"title_max": 20, "max_sentences": 3, "sentence_max_chars": 60, "reason_max": 80, **(limits or {})}
     for key, value in values.items():
         guide = guide.replace("{" + key + "}", str(value))
     return guide
 
 
 def build_prompt(item: TrackingItem, evidence: list[Evidence], guide: str | None = None,
-                 limits: dict | None = None, rules: list[str] | None = None) -> str:
-    """rules(topic.extra_rules): 지침서 프롬프트 파일은 그대로 두고 입력 끝에 붙이는 추가 규칙 (2026-11-09 공시 숫자 우선, 예측 기사)."""
-    body = INPUT_TEMPLATE.format(
+                 limits: dict | None = None, rules: list[str] | None = None, schema: str = "v1") -> str:
+    """rules(topic.extra_rules): 지침서 프롬프트 파일은 그대로 두고 입력 끝에 붙이는 추가 규칙 (2026-11-09 공시 숫자 우선, 예측 기사).
+    schema="v2": v2 프롬프트 파일, [메모 성격](비교를 원함·이유를 물음, 코드 판단)과 v2 출력 요청을 쓴다."""
+    if schema not in PROMPT_PATHS:
+        raise ValueError(f"card_schema는 {CARD_SCHEMAS} 중 하나여야 합니다: {schema}")
+    template = INPUT_TEMPLATE
+    if schema == "v2":
+        yes = lambda b: "예" if b else "아니오"
+        template = (INPUT_TEMPLATE.split("# 출력 요청")[0]
+                    + f"# 메모 성격 (코드 판단)\n- 비교를 원함: {yes(wants_comparison(item.memo_text))}\n"
+                      f"- 이유를 물음: {yes(asks_why(item.memo_text))}\n\n"
+                    + V2_OUTPUT.replace("{", "{{").replace("}", "}}"))
+    body = template.format(
         tracking_item_id=item.item_id, company_name=item.company_name or item.symbol, stock_code=item.symbol,
         tracking_item_title=item.description, tracking_keywords=", ".join(item.keywords) or "없음",
         classification_code=item.category or "없음", previous_checked_at=_dash(item.previous_checked_at),
@@ -151,7 +201,7 @@ def build_prompt(item: TrackingItem, evidence: list[Evidence], guide: str | None
         memo_sentence=item.memo_text or "없음", evidence_block=evidence_block(evidence))
     if rules:
         body += "\n\n# 추가 규칙\n" + "\n".join(f"- {r}" for r in rules)
-    return f"{fill_limits(guide or load_guide(), limits)}\n\n{body}"
+    return f"{fill_limits(guide or load_guide(PROMPT_PATHS[schema]), limits)}\n\n{body}"
 
 
 def build_verify_prompt(card: Card, evidence: list[Evidence], company: str = "", item: str = "") -> str:
@@ -200,6 +250,29 @@ def parse_card(raw: str) -> Card | None:
     except (TypeError, ValueError):
         return None
     return Card(data["status"], data["title"], summary, data["reason"], evidence, conf)
+
+
+def parse_card_v2(raw: str) -> CardV2 | None:
+    """v2 필수 키 7개와 타입을 확인해 CardV2로. 어긋나면 None."""
+    data = _json_object(raw)
+    if data is None or data.get("status") not in ("update", "no_update"):
+        return None
+    if any(k not in data for k in ("headline", "when", "facts", "memo_link", "sources", "confidence")):
+        return None
+    facts, sources = data["facts"], data["sources"]
+    if not isinstance(facts, list) or not all(isinstance(f, dict) and isinstance(f.get("text"), str) for f in facts):
+        return None
+    if not isinstance(sources, list) or not all(isinstance(s, str) for s in sources):
+        return None
+    if not all(isinstance(data[k], str) for k in ("headline", "when", "memo_link")):
+        return None
+    try:
+        conf = float(data["confidence"])
+    except (TypeError, ValueError):
+        return None
+    return CardV2(data["status"], data["headline"].strip(), data["when"].strip(),
+                  [(f["text"].strip(), str(f.get("evidence_id") or "").strip()) for f in facts],
+                  data["memo_link"].strip(), [s.strip() for s in sources], conf)
 
 
 def parse_verify(raw: str, n: int) -> list[tuple[bool, str]] | None:
