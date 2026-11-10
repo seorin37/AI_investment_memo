@@ -1898,7 +1898,13 @@ class ConfirmTest(unittest.TestCase):
     def test_high_two_options_with_basis(self):
         from pipelines.updates.confirm import confirmation
         q, opts, info = confirmation("삼성전자 고점에서 30% 넘게 빠지면 바로 알려주세요.", "UNSUPPORTED_CONDITION", _rows())
-        self.assertEqual(q, "'고점'을 어느 가격으로 볼까요?")
+        # 최근 종가 65,000원: 52주 고점 기준 70,000원 아래로는 이미 넘었다 (P029 같은 경우)
+        self.assertEqual(q, "'고점'을 어느 가격으로 볼까요? (52주 고점 기준 70,000원 아래로는 이미 도달했어요 · 2026-11-09 종가 65,000원)")
+        self.assertEqual([o["status"] for o in opts], ["already_reached", "not_reached"])
+        self.assertEqual(opts[0]["current"], {"close": 65000.0, "trade_date": "2026-11-09"})
+        self.assertIn("· 이미 도달 (2026-11-09 종가 65,000원)", opts[0]["label"])
+        self.assertNotIn("이미 도달", opts[1]["label"])
+        self.assertEqual(info["already_reached"], 1)
         self.assertEqual(info["base"], "high")
         self.assertEqual([o["basis"]["kind"] for o in opts], ["52w_high", "20d_high"])
         self.assertEqual([o["basis"]["value"] for o in opts], [100000.0, 80000.0])
@@ -1912,7 +1918,9 @@ class ConfirmTest(unittest.TestCase):
     def test_low_current_cost_and_no_rows(self):
         from pipelines.updates.confirm import confirmation
         q, opts, _ = confirmation("최근 바닥에서 10% 넘게 오르면 알려줘", None, _rows())
-        self.assertEqual(q, "'최근 바닥'을 어느 가격으로 볼까요?")
+        self.assertEqual(q, "'최근 바닥'을 어느 가격으로 볼까요? (52주 저점 기준 44,000원 위로, 최근 20거래일 저점 기준 "
+                            "60,500원 위로는 모두 이미 도달했어요 · 2026-11-09 종가 65,000원)")
+        self.assertEqual({o["status"] for o in opts}, {"already_reached"})
         self.assertEqual([(o["basis"]["kind"], o["item"]["type"]) for o in opts], [("52w_low", "price_above"),
                                                                                     ("20d_low", "price_above")])
         self.assertEqual(opts[1]["item"]["price_threshold"], 60500)              # 55,000 × 1.1
@@ -1935,6 +1943,20 @@ class ConfirmTest(unittest.TestCase):
         from pipelines.updates.confirm import build_options
         rows = [(date(2026, 11, 9), 100.0, 90.0, 95.0), (date(2026, 11, 6), 99.0, 91.0, 92.0)]
         self.assertEqual(len(build_options(RelativeCondition("high", 10, "below", "고점"), rows)), 1)   # 같은 고점이면 하나
+
+    def test_reached_boundary(self):
+        from datetime import date
+        from pipelines.tracking.price import RelativeCondition
+        from pipelines.updates.confirm import build_options, reached
+        self.assertTrue(reached("below", 90.0, 90))                              # 같으면 도달 (price_state와 같은 뜻)
+        self.assertTrue(reached("above", 90.0, 90))
+        self.assertFalse(reached("below", 90.5, 90))
+        rows = [(date(2026, 11, 9), 100.0, 80.0, 90.0)]                         # 종가 90 = 고점 100의 10% 아래
+        opt = build_options(RelativeCondition("high", 10, "below", "고점"), rows)[0]
+        self.assertEqual((opt["item"]["price_threshold"], opt["status"]), (90, "already_reached"))
+        opt = build_options(RelativeCondition("high", 0, "above", "전고점"), rows)[0]
+        self.assertEqual(opt["status"], "not_reached")
+        self.assertEqual(build_options(RelativeCondition("high", 10, "below", "고점"), []), [])
 
 
 class ResponseTest(unittest.TestCase):
@@ -2011,7 +2033,7 @@ class ResponseTest(unittest.TestCase):
               Response("out_of_scope", "sentence", user_visible=False)]
         s = summarize(rs)
         self.assertEqual((s["user_visible"], s["needs_confirmation"]),
-                         (2, {"total": 2, "with_options": 1, "relative_parsed": 1}))
+                         (2, {"total": 2, "with_options": 1, "with_already_reached": 0, "relative_parsed": 1}))
         self.assertEqual(s["reasons"]["no_new_info"], {"check_failed": 1})
         self.assertEqual(s["by_type"]["update_card"], 0)
         chk = data_need_check([

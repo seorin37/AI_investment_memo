@@ -140,6 +140,8 @@ def summarize(responses: list[Response]) -> dict:
             "reasons": {t: dict(Counter(r.reason for r in responses if r.type == t)) for t in TYPES
                         if any(r.type == t for r in responses)},
             "needs_confirmation": {"total": len(asks), "with_options": sum(bool(r.options) for r in asks),
+                                   "with_already_reached": sum(any(o.get("status") == "already_reached" for o in r.options)
+                                                               for r in asks),
                                    "relative_parsed": sum(any(c.startswith("relative:") for c in r.fail_codes) for r in asks)}}
 
 

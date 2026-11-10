@@ -7,6 +7,8 @@
 - 선택지 하나 = {label, item: {type, price_threshold, description}, basis: {kind, label, value, trade_date, as_of, pct, direction}}.
   basis.value는 기준값, basis.trade_date는 그 기준값이 나온 거래일(기준일), as_of는 계산에 쓴 최근 거래일이다.
   조건가는 원 단위 반올림. 사용자가 고르면 그 item으로 가격 항목을 만들면 된다 (화면·저장은 아직 없다).
+  선택지마다 status(already_reached | not_reached)와 current(최근 종가·거래일). 이미 넘은 선택지가 있으면 질문 문장에도
+  "이미 도달했어요"를 붙인다 (2026-11-10, P029 52주 고점 기준 262,150원 아래로인데 종가가 22만원대).
 - 평단가·매수가 기준, 방향을 모르는 문장, 이동평균선·거래량·가격 범위 같은 조건, 일봉이 없는 종목은 선택지 없이 질문만.
 """
 
@@ -67,15 +69,27 @@ def threshold(value: float, pct: float, direction: str) -> int:
     return int(round(value * (1 - pct / 100) if direction == "below" else value * (1 + pct / 100)))
 
 
+def reached(direction: str, close: float, thr: float) -> bool:
+    """최근 종가가 이미 조건을 넘었는가 (아래로: 종가 <= 조건가, 위로: 종가 >= 조건가. price.price_state의 reached와 같은 뜻)."""
+    return close <= thr if direction == "below" else close >= thr
+
+
 def build_options(cond: RelativeCondition, rows: list[tuple]) -> list[dict]:
-    if cond.direction is None:
+    """선택지마다 status(already_reached | not_reached)와 current(최근 종가·거래일)를 붙인다 (2026-11-10).
+    이미 넘은 조건가를 고르면 바로 '도달' 상태가 되므로 사용자가 고르기 전에 보이게 한다."""
+    if cond.direction is None or not rows:
         return []
     word = "아래로" if cond.direction == "below" else "위로"
+    current = {"close": rows[0][3], "trade_date": str(rows[0][0])}
     out = []
     for p in base_points(rows, cond.base):
         thr = threshold(p["value"], cond.pct, cond.direction)
         how = f"에서 {cond.pct:g}% → " if cond.pct else " → "
-        out.append({"label": f"{p['label']} {p['value']:,.0f}원({p['trade_date']}){how}{thr:,}원 {word}",
+        done = reached(cond.direction, current["close"], thr)
+        label = f"{p['label']} {p['value']:,.0f}원({p['trade_date']}){how}{thr:,}원 {word}"
+        if done:
+            label += f" · 이미 도달 ({current['trade_date']} 종가 {current['close']:,.0f}원)"
+        out.append({"label": label, "status": "already_reached" if done else "not_reached", "current": current,
                     "item": {"type": f"price_{cond.direction}", "price_threshold": thr, "description": f"{thr:,}원 {word}"},
                     "basis": {**p, "pct": cond.pct, "direction": cond.direction}})
     # 52주와 20거래일 고점이 같은 날이면 선택지 하나로 (같은 조건가를 두 번 보여 주지 않는다)
@@ -106,5 +120,11 @@ def confirmation(text: str, reason_code: str | None, rows: list[tuple]) -> tuple
     else:
         word = cond.base_word or _BASE_LABEL[cond.base]
         question = f"'{word}'{_obj(word)[len(word):]} 어느 가격으로 볼까요?"     # '고점'을 어느 가격으로 볼까요?
+    done = [o for o in options if o["status"] == "already_reached"]
+    if done:                                             # "이미 도달"을 질문에도 보인다
+        which = ", ".join(f"{o['basis']['label']} 기준 {o['item']['description']}" for o in done)
+        cur = done[0]["current"]
+        question += f" ({which}{'는' if len(done) == 1 else '는 모두'} 이미 도달했어요 · {cur['trade_date']} 종가 {cur['close']:,.0f}원)"
     info["no_price_rows"] = not rows                     # 일봉이 없으면 선택지 없이 질문만
+    info["already_reached"] = len(done)
     return question, options, info
