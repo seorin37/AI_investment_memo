@@ -63,8 +63,15 @@ def main(argv: list[str] | None = None) -> int:
     with psycopg.connect(get_read_dsn()) as conn:
         conn.read_only = True
         total = conn.execute("SELECT count(*) FROM stocks WHERE market::text = 'KOSPI'").fetchone()[0]
-        none_year = no_source(conn, since, until)
-        none_recent = no_source(conn, recent, until)
+        from .preferred import load_map, source_symbol
+        pref_map = load_map(conn)
+        own_year = no_source(conn, since, until)                 # 종목 자기 코드로 셌을 때
+        own_recent = no_source(conn, recent, until)
+        # 우선주는 보통주의 공시·뉴스로 본다 (2026-11-10): 보통주에 자료가 있으면 no_data가 아니다
+        mapped = lambda rows: [x for x in rows if source_symbol(x[0], pref_map) == x[0]
+                               or source_symbol(x[0], pref_map) in {r[0] for r in rows}]
+        none_year, none_recent = mapped(own_year), mapped(own_recent)
+        print(f"(우선주→보통주 매핑 전: 기간 전체 없음 {len(own_year)}개, 최근 없음 {len(own_recent)}개 · 매핑 {len(pref_map)}개)")
         print(f"KOSPI {total}개 중")
         print(f"- 조회 기간 전체({since}~{until})에 뉴스·공시가 하나도 없는 종목 (no_data): {len(none_year)}개 {none_year[:20]}")
         import re
@@ -81,10 +88,12 @@ def main(argv: list[str] | None = None) -> int:
               f"{STALE_TRADING_DAYS}거래일 넘게 오래된 KOSPI 종목: {len(stale)}개 {stale[:10]}")
 
         recent_only = [x for x in none_recent if x not in set(none_year)]
-        for label, picks in (("기간 전체 없음", none_year[:args.n]), ("최근만 없음", recent_only[:args.n])):
+        pref_rescued = [x for x in own_year if x not in none_year][:args.n]     # 매핑으로 no_data에서 빠진 우선주
+        for label, picks in (("기간 전체 없음", none_year[:args.n]), ("최근만 없음", recent_only[:args.n]),
+                             ("우선주(보통주 자료)", pref_rescued)):
             for sym, name in picks:
                 item = TrackingItem(f"NODATA:{sym}:0", sym, "topic", f"{name} 실적 발표", ("실적",), company_name=name)
-                data = source_data(conn, sym, since, until)
+                data = source_data(conn, source_symbol(sym, pref_map), since, until)
                 out = check_topic(item, [], None, [], {"on_check_fail": "drop"})   # 후보가 없다고 두고 LLM 없이
                 r = item_response(item, out.kind, out.fail_codes, None, any(data.values()), "NODATA")
                 rows.append((label, sym, name, "topic", data, r.type, r.reason, r.user_visible))

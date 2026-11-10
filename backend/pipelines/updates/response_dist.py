@@ -110,7 +110,9 @@ def main(argv: list[str] | None = None) -> int:
         stat["memos_without_symbol"] = no_symbol
         symbols = sorted({m["symbol"] for m in memos})
         nd_since = lookback_since(cfg, until)                 # no_data (b): 조회 기간 전체 (2026-11-10)
-        has_data = {s: any(source_data(conn, s, nd_since, until).values()) for s in symbols}
+        from .preferred import load_map, source_symbol
+        pref_map = load_map(conn)                             # 우선주는 보통주의 공시·뉴스로
+        has_data = {s: any(source_data(conn, source_symbol(s, pref_map), nd_since, until).values()) for s in symbols}
         dates = market_dates(conn)
         windows = {s: price_window(conn, s) for s in symbols}
         prices = {}

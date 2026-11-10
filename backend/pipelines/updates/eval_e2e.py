@@ -432,7 +432,9 @@ def run(args, sample, counts, rich_symbols, run_dir: Path, since_d: date, until_
         symbols = sorted({m["symbol"] for m in sample})
         # no_data (b)는 조회 기간 전체(lookback)에 뉴스·공시가 없을 때만 (2026-11-10). 후보 검색 기간(--since)과 따로 본다
         nd_since = lookback_since(cfg, until_d)
-        has_data = {s: any(source_data(conn, s, nd_since, until_d).values()) for s in symbols}
+        from .preferred import load_map, source_symbol
+        pref_map = load_map(conn)                       # 우선주 항목은 보통주의 공시·뉴스로 (가격은 우선주 그대로)
+        has_data = {s: any(source_data(conn, source_symbol(s, pref_map), nd_since, until_d).values()) for s in symbols}
         dates = market_dates(conn)
         windows = {s: price_window(conn, s) for s in symbols}
         confirm = lambda j, s: confirmation(j.cleaned_text or j.text, j.reason_code, windows.get(s, []))
@@ -454,17 +456,18 @@ def run(args, sample, counts, rich_symbols, run_dir: Path, since_d: date, until_
                     rows.append(outcome_row(item, out, before, card_client, time.perf_counter() - started))
                     continue
                 vec = vectors[item.item_id]
+                src = source_symbol(item.symbol, pref_map)
                 if spec["news"] == "chunks":
-                    news = searcher.recent(item.symbol, item.query_text, since_d, fetch_k, floor["news_chunks"],
+                    news = searcher.recent(src, item.query_text, since_d, fetch_k, floor["news_chunks"],
                                            headline_vec=vec, headline_floor=floor["news"], variant=cfg["news"]["variant"])
                 else:
-                    news = recent_news_candidates(conn, item.symbol, vec, since_d, fetch_k, floor["news"],
+                    news = recent_news_candidates(conn, src, vec, since_d, fetch_k, floor["news"],
                                                   cfg["news"]["variant"])
                 if news_lead is not None:
                     news, _ = drop_news_without_company(
-                        news, company_terms(item.company_name, item.symbol, rcfg, symbol_aliases),
+                        news, company_terms(item.company_name, src, rcfg, symbol_aliases),
                         news_lead)
-                discs = recent_disclosure_candidates(conn, item.symbol, vec, since_d, fetch_k, floor["disclosure"],
+                discs = recent_disclosure_candidates(conn, src, vec, since_d, fetch_k, floor["disclosure"],
                                                      floor["event"], rcfg.get("include_subsidiary", False), filters)
                 cands = within(news + discs, until_d)
                 links = {}
