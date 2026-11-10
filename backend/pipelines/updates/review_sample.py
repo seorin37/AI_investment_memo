@@ -24,7 +24,8 @@ SHOW = ["item_id", "symbol", "항목", "메모 문장", "종류", "ref", "날짜
 # 이미 사람이 본 검수: 1차 32건, 뉴스 40건(article), 뉴스 42건(chunks)
 DEFAULT_EXCLUDE = ["results/updates/run_20261109_133043/review_key.csv",
                    "results/updates/run_20261109_170506/review_key_news2.csv",
-                   "results/updates/run_20261109_173514/review_key_news2_chunks.csv"]
+                   "results/updates/run_20261109_173514/review_key_news2_chunks.csv",
+                   "results/updates/run_20261110_154307/review_key_news3_chunks.csv"]   # 2026-11-10 25건
 CHUNK_SQL = "SELECT chunk_index, chunk_text FROM news_chunks WHERE news_id = %(n)s ORDER BY chunk_index"
 
 
@@ -71,6 +72,25 @@ def prioritized_sample(rows: list[dict], n: int, prefer_symbols: set[str], seed:
     return picked
 
 
+def quota_sample(rows: list[dict], n: int, prefer_symbols: set[str], min_industry: int, min_prefer: int,
+                 seed: int = 20261109) -> list[dict]:
+    """산업 항목 후보 min_industry건, prefer_symbols 종목 후보 min_prefer건을 먼저 채우고(항목마다 돌아가며) 나머지는 전체에서.
+    두 조건에 다 맞는 후보는 양쪽에 센다. 모자라면 있는 만큼만."""
+    sym = lambda r: r["symbol"].strip().zfill(6)
+    picked = balanced_sample([r for r in rows if is_industry(r)], min(min_industry, n), seed)
+    seen = {r["ref"] for r in picked}
+    have = sum(1 for r in picked if sym(r) in prefer_symbols)
+    if have < min_prefer:
+        more = [r for r in rows if sym(r) in prefer_symbols and r["ref"] not in seen]
+        add = balanced_sample(more, min(min_prefer - have, n - len(picked)), seed)
+        picked += add
+        seen |= {r["ref"] for r in add}
+    if len(picked) < n:
+        picked += balanced_sample([r for r in rows if r["ref"] not in seen], n - len(picked), seed)
+    random.Random(seed).shuffle(picked)
+    return picked
+
+
 def full_chunk(chunks: list[tuple[int, str]], shown: str) -> tuple[int | None, str]:
     """csv에 잘려 들어간 내용(shown)으로 시작하는 청크 (chunk_index, 전문). 못 찾으면 (None, shown)."""
     head = (shown or "").strip()[:120]
@@ -100,6 +120,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--config", default="configs/updates.yaml")
     ap.add_argument("--prefer-symbols", default="",
                     help="먼저 뽑을 종목코드(쉼표). 산업·업황 항목(판정범위 industry 또는 항목 낱말)과 함께 먼저 뽑는다")
+    ap.add_argument("--min-industry", type=int, default=0, help="산업·업황 항목 후보를 이만큼 먼저 (모자라면 있는 만큼)")
+    ap.add_argument("--min-prefer", type=int, default=0, help="--prefer-symbols 종목 후보를 이만큼 먼저")
     ap.add_argument("--judged-only", action="store_true",
                     help="관련성 판정을 받은 후보(판정(O/X) 열이 있는 것)만 (판정 결과를 사람 판정과 맞춰 보려고)")
     args = ap.parse_args(argv)
@@ -122,7 +144,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.judged_only:
         pool = [r for r in pool if (r.get("판정(O/X)") or "").strip()]
     prefer = {s.strip().zfill(6) for s in args.prefer_symbols.split(",") if s.strip()}
-    picked = prioritized_sample(pool, args.n, prefer, args.seed)   # 우선 대상이 없으면 balanced_sample과 같다
+    if args.min_industry or args.min_prefer:
+        picked = quota_sample(pool, args.n, prefer, args.min_industry, args.min_prefer, args.seed)
+    else:
+        picked = prioritized_sample(pool, args.n, prefer, args.seed)   # 우선 대상이 없으면 balanced_sample과 같다
     rcfg = load_config(args.config).get("recent", {})
     aliases = load_symbol_aliases()
     out_rows, key_rows = [], []

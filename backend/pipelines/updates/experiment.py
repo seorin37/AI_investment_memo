@@ -121,6 +121,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--same-event", action=argparse.BooleanOptionalAction, default=None,
                     help="같은 사건 묶기를 켜거나(--same-event) 끈다(--no-same-event). 기본: 설정 same_event.enabled (없으면 꺼짐)")
     ap.add_argument("--evidence-mode", choices=["legacy", "all"], help="근거 고르기 (기본: 설정 topic.evidence_mode)")
+    ap.add_argument("--no-cards", action="store_true",
+                    help="--llm openai여도 카드 생성은 부르지 않는다 (후보 검색·관련성 판정까지만, 검수 표본용)")
     ap.add_argument("--relevance", action=argparse.BooleanOptionalAction, default=None,
                     help="뉴스 후보 관련성 판정을 켜거나(--relevance) 끈다(--no-relevance). 기본: 설정 relevance.enabled (기본 켬). "
                          "LLM을 부를 때만 돈다")
@@ -324,7 +326,8 @@ def main(argv: list[str] | None = None) -> int:
                     from .models import TopicOutcome
                     out = TopicOutcome(stop)                    # 실패 이유는 responses의 relevance.failed에 남는다
                 else:
-                    out = check_topic(item, cands, client, banned, tcfg, links, extra_evidence=extra)
+                    out = check_topic(item, cands, None if args.no_cards else client, banned, tcfg, links,
+                                      extra_evidence=extra)          # --no-cards: 근거 준비까지만 (not_called)
                 if used_store is not None:
                     from .used_refs import card_refs
                     used_store.record(item.item_id, card_refs(out.draft))

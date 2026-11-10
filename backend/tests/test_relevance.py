@@ -45,7 +45,8 @@ class RelevanceTest(unittest.TestCase):
         from pipelines.updates.relevance_compare import example_overlaps, read_csv
         sets = ["results/updates/run_20261109_173514/review_human_news2_chunks.csv",
                 "results/updates/run_20261109_133043/review_human.csv",
-                "results/updates/run_20261109_170506/review_human_news2.csv"]
+                "results/updates/run_20261109_170506/review_human_news2.csv",
+                "results/updates/run_20261110_154307/review_human_news3_chunks.csv"]
         rows = [r for s in sets if resolve_path(s).is_file() for r in read_csv(resolve_path(s))]
         if not rows:
             self.skipTest("검수 파일 없음")
@@ -119,6 +120,40 @@ class RelevanceTest(unittest.TestCase):
         refs = {r["ref"] for r in picked}
         self.assertTrue({"news:10", "news:11", "news:12", "news:20", "news:21", "news:30"} <= refs)   # 우선 대상 6건 모두
         self.assertEqual(len(picked), 7)
+
+    def test_quota_sample(self):
+        from pipelines.updates.review_sample import quota_sample
+        row = lambda i, sym, item, scope="company": {"item_id": item, "symbol": sym, "ref": f"news:{i}", "항목": item,
+                                                    "판정범위": scope}
+        rows = ([row(i, "005930", f"삼성 배당 {i % 3}") for i in range(30)]
+                + [row(100 + i, "000660", f"HBM {i % 4}", "industry") for i in range(8)]
+                + [row(200 + i, "105560", f"KB 배당 {i % 2}") for i in range(5)])
+        picked = quota_sample(rows, 20, {"105560", "035420"}, 15, 10)
+        self.assertEqual(len(picked), 20)
+        self.assertEqual(sum(r["판정범위"] == "industry" for r in picked), 8)     # 모자라면 있는 만큼
+        self.assertEqual(sum(r["symbol"] == "105560" for r in picked), 5)
+        self.assertEqual(len({r["ref"] for r in picked}), 20)
+
+    def test_subsidiary_rule_in_prompt(self):
+        p = load_prompt(config(None)["prompt"])
+        self.assertIn("자회사·계열사가 하는 사업 소식은 다른 회사로 보지 않고", p)
+        self.assertNotIn("현대모비스", p)                                          # 계열사를 다른 회사로 본 옛 예시
+
+    def test_sample_memos(self):
+        from pipelines.updates.sample_memos import select, to_items
+        mk = lambda mid, company, body, tracked=True: {"memo_id": mid, "company_primary": company, "memo_body": body,
+                                                      "sentences": [{"expected_decision": "추적" if tracked else "추적 안 함"}]}
+        memos = [mk("A", "삼성전자", "HBM 수요랑 D램 업황"), mk("B", "삼성전자", "배당 보기"), mk("C", "KB금융", "배당"),
+                 mk("D", "NAVER", "광고 실적"), mk("E", "SK하이닉스", "HBM 경쟁사", tracked=False)]
+        picked = [m["memo_id"] for m in select(memos, n_industry=5, per_company=1)]
+        self.assertEqual(picked, ["A", "C", "D"])                               # 추적 문장 없는 E는 뺀다, B는 산업·우선 회사 아님
+        j = [{"memo_id": "A", "symbol": "005930", "judged": [
+            {"sentence_index": 0, "text": "t", "decision": "normal", "items": [{"type": "topic", "description": "HBM"}]},
+            {"sentence_index": 1, "text": "u", "decision": "normal", "merge_into": 0, "items": [{"type": "topic"}]},
+            {"sentence_index": 2, "text": "v", "decision": "full_fallback", "items": []}]},
+             {"memo_id": "B", "symbol": "005930", "judged": []}]
+        items = to_items(j)
+        self.assertEqual([(m["memo_id"], [s["sentence_index"] for s in m["sentences"]]) for m in items], [("A", [0])])
 
     def test_default_config(self):
         from pipelines.common.config import load_config

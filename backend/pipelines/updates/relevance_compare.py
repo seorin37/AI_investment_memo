@@ -188,6 +188,13 @@ def main(argv: list[str] | None = None) -> int:
     if all(key[i].get("sol", "").strip().upper() in ("O", "X") for i in human):     # chunks 표본처럼 sol 판정이 없으면 건너뛴다
         sol_old = {i: key[i]["sol"].strip().upper() == "O" for i in human}
         conds["(2') sol 기존 프롬프트"] = {"metrics": metrics(sol_old, human)}
+    if all(key[i].get("판정", "").strip().upper() in ("O", "X") for i in human):   # 파이프라인이 실행 중에 한 판정 (relevance.py, 비용 0)
+        conds["(4) 파이프라인 판정 (실행 때)"] = {"metrics": metrics({i: key[i]["판정"].strip().upper() == "O" for i in human}, human)}
+        for scope in ("company", "industry"):
+            ids = {i for i in human if key[i].get("판정범위") == scope}
+            if ids:
+                conds[f"(4) 파이프라인 판정 · {scope}"] = {"metrics": metrics(
+                    {i: key[i]["판정"].strip().upper() == "O" for i in ids}, {i: human[i] for i in ids})}
     per_row = {r["review_id"]: {"review_id": r["review_id"], "item_id": r["item_id"], "ref": r["ref"], "제목": r["제목"],
                                 "사람": "O" if human[r["review_id"]] else "X", "제목모드": "남음" if title[r["review_id"]] else "빠짐",
                                 "sol_기존": key[r["review_id"]].get("sol", "")} for r in rows}
