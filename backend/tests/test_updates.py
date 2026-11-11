@@ -602,6 +602,8 @@ class ReadOnlyGuardTest(unittest.TestCase):
     DDL = re.compile(r"\b(DROP\s|ALTER\s+TABLE|CREATE\s+TABLE|TRUNCATE)\b", re.I)
     WRITER = "db_store.py"
     CLEANUP = "db_cleanup.py"           # 2026-11-11 두 번째 예외: 실행 한 번이 쓴 행만 지우기·되돌리기 (DELETE·UPDATE만)
+    # 2026-11-11 세 번째 예외: 앱 API를 로컬 테스트 DB로 부르는 점검 도구 (쓰기 SQL은 없고 앱 세션 commit만). 공용 DB는 거부
+    TEST_DB_TOOLS = {"updates_api_check.py", "memo_api_check.py"}
 
     def test_no_write_sql(self):
         for f in self.PKG.glob("*.py"):
@@ -612,8 +614,13 @@ class ReadOnlyGuardTest(unittest.TestCase):
         for f in self.PKG.glob("*.py"):
             text = f.read_text(encoding="utf-8")
             # 공용 DB 쓰기 주소(database_url)는 db_store.shared_write_dsn 한 곳에서만, commit은 db_store.finish에서만
-            bads = ("get_dsn(", "get_engine(", "alembic") if f.name == self.WRITER else \
-                ("get_dsn(", "get_engine(", "database_url(", "commit(", "alembic")
+            if f.name == self.WRITER:
+                bads = ("get_dsn(", "get_engine(", "alembic")
+            elif f.name in self.TEST_DB_TOOLS:                  # 테스트 DB 점검 도구: 세션 commit만, 대상 확인 필수
+                bads = ("get_dsn(", "get_engine(", "database_url(", "alembic")
+                self.assertIn("check_test_target(dsn)", text, f.name)
+            else:
+                bads = ("get_dsn(", "get_engine(", "database_url(", "commit(", "alembic")
             for bad in bads:
                 self.assertNotIn(bad, text.replace("read_database_url", ""), f"{f.name}: {bad}")
 
