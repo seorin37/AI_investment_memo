@@ -1,11 +1,11 @@
 """항목당 하루 평균 LLM 비용 (usage_log.jsonl, 파일만 읽음).
 
-    PYTHONPATH=backend python -m pipelines.updates.usage_daily [--runs-per-day 24] [--since 2026-11-11]
+    PYTHONPATH=backend python -m pipelines.updates.usage_daily [--runs-per-day 1] [--since 2026-11-11]
 
 - 실행마다: 비용 ÷ 항목 수 = 항목당 실행 1회 비용. 첫 확인(새 자료만 받기 없음)과 이어 확인(fresh_items > 0)을 따로 본다.
   첫 확인은 조회 기간 전체를 보므로 비싸고, 이어 확인은 새 자료가 있는 항목만 LLM을 부른다.
 - 하루 평균: (1) 실제 기록 — 날짜별로 그날 실행 비용 합 ÷ 그날 실행의 최대 항목 수.
-  (2) 추정 — 이어 확인 1회 평균 비용 × --runs-per-day (매시 돌면 24).
+  (2) 추정 — 이어 확인 1회 평균 비용 × --runs-per-day (기본 1: 서비스는 하루 한 번, 다음 날 업데이트).
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ def load(path: Path, since: str | None = None) -> list[dict]:
     return [r for r in rows if not since or r["run_at"][:10] >= since]
 
 
-def summarize(rows: list[dict], runs_per_day: int = 24) -> dict:
+def summarize(rows: list[dict], runs_per_day: int = 1) -> dict:
     per_run = []
     for r in rows:
         cost = (r.get("total") or {}).get("usd")
@@ -50,7 +50,7 @@ def summarize(rows: list[dict], runs_per_day: int = 24) -> dict:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="항목당 하루 평균 LLM 비용 (usage_log.jsonl)")
     ap.add_argument("--log", default="results/updates/usage_log.jsonl")
-    ap.add_argument("--runs-per-day", type=int, default=24, help="하루에 이어 확인을 몇 번 도는지 (추정용)")
+    ap.add_argument("--runs-per-day", type=int, default=1, help="하루에 이어 확인을 몇 번 도는지 (추정용, 기본 1: 하루 한 번 다음 날 업데이트)")
     ap.add_argument("--since", help="이 날짜(YYYY-MM-DD)부터의 실행만")
     args = ap.parse_args(argv)
     from ..common.config import resolve_path

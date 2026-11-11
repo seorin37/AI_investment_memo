@@ -177,6 +177,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"DB 저장 대상: {store_target}")
         wconn = _pg.connect(dsn)
         items = db_items(wconn, tuple(args.symbols.split(",")))
+        from .db_store import item_memos
+        memo_by_item = item_memos(wconn, [i.item_id for i in items])
     else:
         items = load_items(resolve_path(args.gold), tuple(args.symbols.split(",")))
     if args.limit:
@@ -418,7 +420,7 @@ def main(argv: list[str] | None = None) -> int:
     merged: dict[str, str] = {}
     if card_schema == "v2":                                     # 같은 메모·같은 근거 카드는 하나로 (topic.merge_same_source)
         from .topic import merge_same_source
-        drafts, merged = merge_same_source(drafts)
+        drafts, merged = merge_same_source(drafts, (lambda iid: memo_by_item.get(iid, iid)) if wconn is not None else None)
         by_item = {d.item.item_id: d for d in drafts}
         for r in responses:
             if r.item_id in merged:
@@ -554,7 +556,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"사용량: 합계 {json.dumps(uline['total'], ensure_ascii=False)} · 단계별 "
               f"{json.dumps({k: v['calls'] for k, v in uline['stages'].items()}, ensure_ascii=False)} → {run_dir / 'usage_by_item.csv'}")
     print("\n".join(head))
-    print(f"결과 폴더: {run_dir}  (cards.jsonl, report.md, summary.json, candidates.csv, outcomes.jsonl) — DB에는 아무것도 쓰지 않았습니다.")
+    print(f"결과 폴더: {run_dir}  (cards.jsonl, report.md, summary.json, candidates.csv, outcomes.jsonl) — "
+          + (f"카드·판정·확인 시각은 {store_target}에 썼습니다 (공용 DB에는 쓰지 않음)." if wconn is not None
+             else "DB에는 아무것도 쓰지 않았습니다."))
     print(f"미리보기(사용자 화면처럼): {preview_path}")
     print(f"임계값 정하기: {csv_path} 의 마지막 열 '관련(O/X)'을 채운 뒤 python -m pipelines.updates.calibrate --labels {csv_path}")
     return 0

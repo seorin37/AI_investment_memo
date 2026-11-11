@@ -288,9 +288,10 @@ def memo_of(item_id: str) -> str:
     return item_id.split(":", 1)[0]
 
 
-def merge_same_source(drafts: list[UpdateDraft]) -> tuple[list[UpdateDraft], dict[str, str]]:
+def merge_same_source(drafts: list[UpdateDraft], memo_key=None) -> tuple[list[UpdateDraft], dict[str, str]]:
     """같은 메모 안에서 근거(비교용 근거 제외)가 겹치는 카드는 앞 카드 하나로 합친다 (v2). (남은 카드, 합쳐진 항목 → 남은 카드 항목).
     가격 카드·고정 문구 카드는 합치지 않는다. 합친 항목은 남은 카드의 merged_items에 적는다."""
+    key = memo_key or memo_of                                  # DB 항목(숫자 id)은 호출자가 메모 id를 찾아 준다
     kept: list[UpdateDraft] = []
     merged: dict[str, str] = {}
     for d in drafts:
@@ -298,7 +299,7 @@ def merge_same_source(drafts: list[UpdateDraft]) -> tuple[list[UpdateDraft], dic
         target = None
         if d.type != "price_condition" and d.origin == "llm" and refs:
             target = next((k for k in kept if k.type != "price_condition" and k.origin == "llm"
-                           and memo_of(k.item.item_id) == memo_of(d.item.item_id)
+                           and key(k.item.item_id) == key(d.item.item_id)
                            and refs & {r for r, _ in k.sources if not r.startswith("cmp:")}), None)
         if target is None:
             kept.append(d)

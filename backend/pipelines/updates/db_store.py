@@ -64,6 +64,57 @@ def finish(conn) -> None:
     conn.close()
 
 
+# ------------------------------------------------------------------ 테스트 DB 준비 (2026-11-11, test_db_prep copy)
+def _test_columns(dst, table: str) -> list[str]:
+    """테스트 DB 쪽 열 (생성 열은 넣을 수 없어 뺀다)."""
+    return [r[0] for r in dst.execute("""SELECT column_name FROM information_schema.columns
+        WHERE table_name = %s AND is_generated = 'NEVER' ORDER BY ordinal_position""", (table,)).fetchall()]
+
+
+def copy_table(src, dst, table: str, select_sql, columns: list[str] | None = None) -> int:
+    """공용 DB의 SELECT 결과를 테스트 DB 테이블로 COPY 한다 (값을 텍스트 그대로 옮겨 vector·jsonb도 같게). 반환: 행 수.
+    select_sql은 psycopg.sql로 값을 넣은 SELECT (열 순서는 columns와 같아야 한다)."""
+    from psycopg import sql
+
+    check_conn(dst)
+    cols = columns or _test_columns(dst, table)
+    ident = sql.SQL(", ").join(sql.Identifier(c) for c in cols)
+    n = 0
+    with src.cursor().copy(sql.SQL("COPY ({}) TO STDOUT").format(select_sql)) as out, \
+            dst.cursor().copy(sql.SQL("COPY {} ({}) FROM STDIN").format(sql.Identifier(table), ident)) as inp:
+        for block in out:
+            inp.write(block)
+            n += bytes(block).count(b"\n")
+    return n
+
+
+def seed_memos(dst, memos: list[dict], email: str = "updates-test@example.invalid") -> dict:
+    """평가 메모를 테스트 사용자 메모로 넣고, 정답 항목을 tracking_items·tracking_item_revisions(1번)로 넣는다.
+    memo_revisions 1번은 trg_capture_memo_revision이 만든다. 반환: {메모 ID: [(항목 id, 정답 항목)]}."""
+    check_conn(dst)
+    row = dst.execute("SELECT id FROM users WHERE email = %s", (email,)).fetchone()
+    uid = row[0] if row else dst.execute("INSERT INTO users (email, display_name) VALUES (%s, 'updates test') RETURNING id",
+                                         (email,)).fetchone()[0]
+    out = {}
+    for m in memos:
+        mid = dst.execute("INSERT INTO memos (user_id, symbol, title, content) VALUES (%s, %s, %s, %s) RETURNING id",
+                          (uid, m["symbol"], m["memo_id"], m["text"])).fetchone()[0]
+        out[m["memo_id"]] = []
+        for s in m["sentences"]:
+            for it in s["items"]:
+                if it["type"] not in ("topic", "price_below", "price_above"):
+                    continue
+                kw = ", ".join(it.get("keywords") or []) or None
+                iid = dst.execute("""INSERT INTO tracking_items (memo_id, type, description, keywords, price_threshold)
+                    VALUES (%s, %s, %s, %s, %s) RETURNING id""",
+                                  (mid, it["type"], it["description"], kw, it.get("price_threshold"))).fetchone()[0]
+                dst.execute("""INSERT INTO tracking_item_revisions (tracking_item_id, revision_no, type, description, keywords,
+                    price_threshold) VALUES (%s, 1, %s, %s, %s, %s)""",
+                            (iid, it["type"], it["description"], kw, it.get("price_threshold")))
+                out[m["memo_id"]].append((iid, it))
+    return out
+
+
 # ------------------------------------------------------------------ 항목 읽기
 ITEMS_SQL = """SELECT ti.id, btrim(m.symbol), ti.type::text, COALESCE(r.description, ti.description),
        COALESCE(r.keywords, ti.keywords), COALESCE(r.price_threshold, ti.price_threshold), m.content
@@ -87,6 +138,13 @@ def load_items(conn, symbols) -> list[TrackingItem]:
         out.append(TrackingItem(item_id=str(iid), symbol=sym, type=typ, description=desc, keywords=keywords,
                                 price_threshold=None if threshold is None else int(threshold), memo_text=content or ""))
     return out
+
+
+def item_memos(conn, item_ids) -> dict[str, str]:
+    """항목 id → 메모 id (같은 메모 카드 합치기용)."""
+    rows = conn.execute("SELECT id, memo_id FROM tracking_items WHERE id = ANY(%(ids)s)",
+                        {"ids": [int(i) for i in item_ids]}).fetchall()
+    return {str(i): str(m) for i, m in rows}
 
 
 def latest_revisions(conn, item_id: str) -> tuple[int | None, int | None]:

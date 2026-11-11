@@ -124,12 +124,96 @@ def plan(memo_ids=DEFAULT_MEMOS) -> int:
     return 0
 
 
+def copy(memo_ids=DEFAULT_MEMOS) -> int:
+    """계획대로 공용 DB(읽기 전용)에서 테스트 DB로 복사하고 시범 메모·항목을 넣는다. 한 트랜잭션 (실패하면 아무것도 남지 않음)."""
+    import psycopg
+    from psycopg import sql
+
+    from ..common.db import get_read_dsn
+    from .db_store import _test_columns, copy_table, finish, seed_memos
+
+    memos = gold_memos(memo_ids)
+    syms = sorted({m["symbol"] for m in memos})
+    lit = sql.Literal
+    since_ts, since_d, price_since = lit(f"{SINCE} 00:00+09"), lit(SINCE), lit(PRICE_SINCE)
+    news_ids = sql.SQL("""SELECT DISTINCT ns.news_id FROM news_stocks ns JOIN news_articles a ON a.id = ns.news_id
+        WHERE ns.symbol = ANY({syms}) AND a.published_at >= {since}""").format(syms=lit(syms), since=since_ts)
+    disc_nos = sql.SQL("SELECT rcept_no FROM disclosures WHERE symbol = ANY({}) AND rcept_dt >= {}").format(lit(syms), since_d)
+    dst, target = test_conn()
+    have_stocks = [s.strip() for (s,) in dst.execute("SELECT symbol FROM stocks").fetchall()]
+    where = {
+        "stocks": sql.SQL("symbol <> ALL({})").format(lit(have_stocks)),
+        "news_articles": sql.SQL("id IN ({})").format(news_ids),
+        "news_stocks": sql.SQL("symbol = ANY({}) AND news_id IN ({})").format(lit(syms), news_ids),
+        "news_embedding_variants": sql.SQL("news_id IN ({})").format(news_ids),
+        "news_article_bodies": sql.SQL("news_id IN ({})").format(news_ids),
+        "news_chunks": sql.SQL("news_id IN ({})").format(news_ids),
+        "disclosures": sql.SQL("rcept_no IN ({})").format(disc_nos),
+        "disclosure_chunks": sql.SQL("rcept_no IN ({})").format(disc_nos),
+        "disclosure_events": sql.SQL("rcept_no IN ({})").format(disc_nos),
+        "prices_daily": sql.SQL("symbol = ANY({}) AND trade_date >= {}").format(lit(syms), price_since),
+        "financials": sql.SQL("symbol = ANY({})").format(lit(syms)),
+    }
+    done = {}
+    with psycopg.connect(get_read_dsn()) as src:
+        src.read_only = True                                    # 공용 DB는 읽기만
+        for table, cond in where.items():
+            cols = _test_columns(dst, table)
+            exprs = [sql.SQL("CASE WHEN corrects IN ({}) THEN corrects END").format(disc_nos) if (table, c) ==
+                     ("disclosure_events", "corrects") else sql.Identifier(c) for c in cols]   # 범위 밖 원본은 비운다
+            select = sql.SQL("SELECT {} FROM {} WHERE {}").format(sql.SQL(", ").join(exprs), sql.Identifier(table), cond)
+            done[table] = copy_table(src, dst, table, select, cols)
+            print(f"  {table}: {done[table]}행")
+        src.rollback()
+    seeded = seed_memos(dst, memos)
+    n_items = sum(len(v) for v in seeded.values())
+    print(f"  users 1 · memos {len(seeded)} (memo_revisions는 트리거가 만든다) · tracking_items·revisions {n_items}")
+    for mid, its in seeded.items():
+        for iid, it in its:
+            print(f"    {mid} → tracking_items.id {iid} {it['type']} {it['description']}")
+    finish(dst)                                                 # 테스트 DB인지 다시 확인하고 확정
+    print(f"복사 끝: {target}")
+    return 0
+
+
+def show() -> int:
+    """항목별 저장 결과 (읽기만): tracking_items.last_checked_at, tracking_updates, update_sources, tracking_matches."""
+    conn, target = test_conn()
+    with conn:
+        conn.read_only = True
+        print(f"테스트 DB: {target}")
+        items = conn.execute("""SELECT ti.id, m.title, ti.type::text, ti.description, ti.last_checked_at FROM tracking_items ti
+            JOIN memos m ON m.id = ti.memo_id ORDER BY ti.id""").fetchall()
+        for iid, memo, typ, desc, checked in items:
+            print(f"\n[항목 {iid}] {memo} {typ} {desc} · last_checked_at {checked}")
+            for uid, utype, title, state, value, tdate, created, memo_rev, track_rev, cov in conn.execute(
+                    """SELECT id, type::text, title, price_state, observed_value, observed_trade_date, created_at,
+                    memo_revision_id, tracking_revision_id, details->>'coverage' FROM tracking_updates
+                    WHERE tracking_item_id = %s ORDER BY id""", (iid,)).fetchall():
+                print(f"  update {uid} [{utype}] {title} · 생성 {created:%H:%M:%S} · memo_rev {memo_rev} · track_rev {track_rev}"
+                      + (f" · {state} {value} ({tdate})" if utype == "price_condition" else "") + (f" · 범위 {cov}" if cov else ""))
+                for news_id, rcept, quote in conn.execute("""SELECT news_id, disclosure_rcept_no, quote FROM update_sources
+                        WHERE update_id = %s ORDER BY id""", (uid,)).fetchall():
+                    print(f"    source {'news:' + str(news_id) if news_id else 'disc:' + rcept} · {(quote or '')[:70]}")
+            rows = conn.execute("""SELECT decision::text, count(*), round(avg(similarity)::numeric, 3) FROM tracking_matches
+                WHERE tracking_item_id = %s GROUP BY 1 ORDER BY 1""", (iid,)).fetchall()
+            if rows:
+                print("  matches " + " · ".join(f"{d} {n}건(평균 유사도 {s})" for d, n, s in rows))
+        print("\n합계:", {t: n for t, n in counts(conn, ("tracking_updates", "update_sources", "tracking_matches")).items()})
+        conn.rollback()
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="로컬 테스트 DB 준비 (행 수 보기 · 복사 계획)")
-    ap.add_argument("mode", choices=["status", "plan"])
+    ap = argparse.ArgumentParser(description="로컬 테스트 DB 준비 (행 수 보기 · 복사 계획 · 복사 · 결과 보기)")
+    ap.add_argument("mode", choices=["status", "plan", "copy", "show"])
     args = ap.parse_args(argv)
+    if args.mode == "show":
+        return show()
     if args.mode == "plan":
         return plan()
+    if args.mode == "copy":
+        return copy()
     conn, target = test_conn()
     with conn:
         conn.read_only = True
