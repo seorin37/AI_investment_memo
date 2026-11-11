@@ -181,7 +181,8 @@ def fill_limits(guide: str, limits: dict | None = None) -> str:
 
 
 def build_prompt(item: TrackingItem, evidence: list[Evidence], guide: str | None = None,
-                 limits: dict | None = None, rules: list[str] | None = None, schema: str = "v1") -> str:
+                 limits: dict | None = None, rules: list[str] | None = None, schema: str = "v1",
+                 coverage: dict | None = None) -> str:
     """rules(topic.extra_rules): 지침서 프롬프트 파일은 그대로 두고 입력 끝에 붙이는 추가 규칙 (2026-11-09 공시 숫자 우선, 예측 기사).
     schema="v2": v2 프롬프트 파일, [메모 성격](비교를 원함·이유를 물음, 코드 판단)과 v2 출력 요청을 쓴다."""
     if schema not in PROMPT_PATHS:
@@ -190,6 +191,8 @@ def build_prompt(item: TrackingItem, evidence: list[Evidence], guide: str | None
     if schema == "v2":
         yes = lambda b: "예" if b else "아니오"
         template = (INPUT_TEMPLATE.split("# 출력 요청")[0]
+                    + (f"# 자료 범위\n- 뉴스: {coverage['news_since']} 이후 발행된 기사만 있어요. 그 전 기사는 자료에 없어요.\n\n"
+                       if coverage and coverage.get("news_since") else "")
                     + f"# 메모 성격 (코드 판단)\n- 비교를 원함: {yes(wants_comparison(item.memo_text))}\n"
                       f"- 이유를 물음: {yes(asks_why(item.memo_text))}\n\n"
                     + V2_OUTPUT.replace("{", "{{").replace("}", "}}"))

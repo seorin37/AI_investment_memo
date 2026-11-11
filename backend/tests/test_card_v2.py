@@ -111,6 +111,37 @@ class CheckTest(unittest.TestCase):
         fact = card(facts=[("KB의 시가배당률이 신한보다 더 높아요.", "E1")])
         self.assertNotIn("JUDGMENT", check_card_v2(fact, ev(disc()), [], cfg))     # 수치를 견준 사실은 판단이 아니다
 
+    def test_coverage_terms_need_evidence(self):
+        cfg = {**CFG, "coverage_terms": ["처음", "줄곧", "계속", "연속"]}
+        e = ev(news(text="SK하이닉스 주가가 2.62% 올랐다. 3거래일 연속 상승이다."))
+        ok = card(when="2026-10-29", facts=[("주가가 3거래일 연속 2.62% 올랐어요.", "E1")])
+        self.assertEqual(check_card_v2(ok, e, [], cfg), [])                       # '연속'이 근거에 있다
+        bad = card(when="2026-10-29", facts=[("주가가 줄곧 올라 2.62% 상승했어요.", "E1")])
+        self.assertIn("COVERAGE", check_card_v2(bad, e, [], cfg))
+        self.assertIn("COVERAGE", check_card_v2(card(when="2026-10-29", facts=[("주가가 2.62% 올랐어요.", "E1")],
+                                                     memo_link="처음으로 오른 주가예요."), e, [], cfg))
+
+    def test_coverage_text_and_prompt(self):
+        from pipelines.updates.topic import coverage_text
+        self.assertEqual(coverage_text({"news_since": "2026-10-28"}, True), "10월 28일 이후 기사 기준")
+        self.assertEqual(coverage_text({"news_since": "2026-10-28"}, False), "")   # 공시만 쓴 카드
+        self.assertEqual(coverage_text(None, True), "")
+        p = build_prompt(ITEM, ev(disc()), schema="v2", coverage={"news_since": "2026-10-28"})
+        self.assertIn("# 자료 범위\n- 뉴스: 2026-10-28 이후 발행된 기사만 있어요", p)
+        self.assertIn("자료 범위 밖의 원인·추이·배경은 짐작해서 쓰거나 단정하지 않습니다", p)
+        self.assertNotIn("# 자료 범위", build_prompt(ITEM, ev(disc()), schema="v2"))
+
+    def test_news_card_gets_coverage(self):
+        cfg = {**CFG, "coverage": {"news_since": "2026-10-28"}}
+        out = check_topic(ITEM, [news()], lambda p: json.dumps({
+            "status": "update", "headline": "SK하이닉스 주가 상승", "when": "2026-10-29",
+            "facts": [{"text": "SK하이닉스 주가가 2.62% 올랐어요.", "evidence_id": "E1"}],
+            "memo_link": "메모의 '배당' 관심사와 연결된 주가 소식이에요.", "sources": ["E1"], "confidence": 0.9},
+            ensure_ascii=False), [], cfg)
+        self.assertEqual(out.draft.coverage, "10월 28일 이후 기사 기준")
+        from pipelines.updates.results import draft_to_dict
+        self.assertEqual(draft_to_dict(out.draft)["coverage"], "10월 28일 이후 기사 기준")
+
     def test_text_dates(self):
         self.assertEqual(text_dates("2026.10.28 및 2026년 11월 3일"), {"2026-10-28", "2026-11-03"})
 

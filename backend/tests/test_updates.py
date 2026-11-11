@@ -973,7 +973,7 @@ class AutoLabelTest(unittest.TestCase):
             self.assertEqual((stats["labeled"], stats["failed_items"]), (1, 1))
 
     def test_prompt_file_and_codes(self):
-        body = autolabel.load_prompt("configs/candidate_relevance_prompt_draft.md")
+        body = autolabel.load_prompt("configs/candidate_relevance_prompt.md")
         self.assertTrue(body.startswith("당신은"))                                  # 사람용 설명(주석)은 빠진다
         self.assertNotIn("<!--", body)
         self.assertIn("ON_TOPIC_EVENT", body)
@@ -988,8 +988,8 @@ class AutoLabelTest(unittest.TestCase):
         self.assertIn(chunk, p)                                                     # 청크 전문이 들어간다
         self.assertNotIn("가" * 501, autolabel.build_prompt({"symbol": "1", "description": "d", "memo": "m"},
                          [{"cid": "C1", "kind": "news", "date": "d", "title": "t", "text": chunk}], max_text=500))
-        self.assertEqual(autolabel.default_out(Path("r/c.csv"), "gpt-6.1-sol", "configs/candidate_relevance_prompt_draft.md").name,
-                         "candidates_auto_gpt-6.1-sol_candidate_relevance_prompt_draft.csv")
+        self.assertEqual(autolabel.default_out(Path("r/c.csv"), "gpt-6.1-sol", "configs/candidate_relevance_prompt.md").name,
+                         "candidates_auto_gpt-6.1-sol_candidate_relevance_prompt.csv")
         with tempfile.TemporaryDirectory() as tmp:
             src, dst = Path(tmp) / "c.csv", Path(tmp) / "auto.csv"
             write_csv(src, [cand_row("i1", "news", "news:1", "기사 A", 0.5, "O")])

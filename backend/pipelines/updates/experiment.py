@@ -150,6 +150,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.card_schema:
         tcfg = {**tcfg, "card_schema": args.card_schema}
     card_schema = tcfg.get("card_schema", "v1")
+    news_since_db = None                                        # 자료 범위: DB의 가장 오래된 뉴스 발행일 (v2 카드 coverage, 연결 뒤 채운다)
     news_mode = args.news_search or cfg["news"].get("search", "article")
     if check_mode(news_mode, tcfg, args.uncalibrated_chunks):
         print("경고: news.search=chunks인데 topic.min_similarity_news_chunks가 없어 min_similarity_news 값을 임시로 씁니다 "
@@ -240,6 +241,10 @@ def main(argv: list[str] | None = None) -> int:
         conn.read_only = True                                   # 이 연결은 쓰기를 시도하면 DB가 거부한다
         from .preferred import load_map, source_symbol
         pref_map = load_map(conn)                               # 우선주 → 보통주 (공시·뉴스는 보통주로 조회, 가격은 우선주 그대로)
+        if card_schema == "v2":
+            from .candidates import news_coverage
+            news_since_db = news_coverage(conn)
+            tcfg = {**tcfg, "coverage": {"news_since": news_since_db}}
         with conn.cursor() as cur:
             wanted_syms = {i.symbol for i in items} | {source_symbol(i.symbol, pref_map) for i in items}
             cur.execute("SELECT symbol, name FROM stocks WHERE symbol = ANY(%(s)s)", {"s": sorted(wanted_syms)})
@@ -402,7 +407,7 @@ def main(argv: list[str] | None = None) -> int:
                "llm": args.llm, "similarity": {"min": q(0), "p25": q(.25), "median": q(.5), "p75": q(.75), "max": q(1)},
                "similarity_by_kind": {k: dist(v) for k, v in kind_sims.items()},
                "outcomes": status_count, "llm_check_failures": fail_count, "cards": len(drafts),
-               "card_schema": card_schema, "merged_cards": merged}
+               "card_schema": card_schema, "merged_cards": merged, "news_since_db": news_since_db}
     news_search = {"mode": news_mode}
     if news_mode == "chunks":
         ms = searcher.timings_ms if searcher else []

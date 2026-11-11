@@ -206,7 +206,8 @@ def _judge_v2(item: TrackingItem, evidence, call: Callable[[str], str] | None, b
             draft.related_news = related_news(real, set(), cfg.get("related_news_min_similarity", 0.6))
         return TopicOutcome("fixed_card", evidence, card, codes, draft, raw, retried)
 
-    prompt = build_prompt(item, evidence, limits=_limits(cfg), rules=cfg.get("extra_rules"), schema="v2")
+    prompt = build_prompt(item, evidence, limits=_limits(cfg), rules=cfg.get("extra_rules"), schema="v2",
+                          coverage=cfg.get("coverage"))
     try:
         raw = call(prompt)
     except CreditsExhausted:
@@ -268,8 +269,18 @@ def _judge_v2(item: TrackingItem, evidence, call: Callable[[str], str] | None, b
         if utype == "disclosure" else []
     draft = UpdateDraft(item=item, type=utype, title=card.headline, summary=" ".join(r["text"] for r in fact_rows),
                         reason=card.memo_link, sources=sources, related_news=related,
-                        card_schema="v2", when=card.when, facts=fact_rows)
+                        card_schema="v2", when=card.when, facts=fact_rows,
+                        coverage=coverage_text(cfg.get("coverage"), any(by_id[eid].candidate.kind == "news" for _, eid in facts)))
     return TopicOutcome("update", evidence, card, [], draft, raw, retried)
+
+
+def coverage_text(coverage: dict | None, uses_news: bool) -> str:
+    """카드의 자료 범위 문구 (v2, 2026-11-11). 뉴스를 쓴 카드만: DB의 가장 오래된 발행일 → "10월 28일 이후 기사 기준"."""
+    since = (coverage or {}).get("news_since")
+    if not uses_news or not since:
+        return ""
+    _, month, day = since.split("-")
+    return f"{int(month)}월 {int(day)}일 이후 기사 기준"
 
 
 def memo_of(item_id: str) -> str:

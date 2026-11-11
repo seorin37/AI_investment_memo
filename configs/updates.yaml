@@ -19,11 +19,12 @@ news:
 disclosure:
   top_k: 4
 # 2026-11-10 뉴스 후보 관련성 판정 (relevance.py): 후보 검색 → 판정(항목별 뉴스 후보를 묶어 1회) → O인 뉴스만 카드 생성.
-# 판정 뒤 남은 후보가 없으면 카드 생성 없이 no_new_info(no_relevant_candidates). 사람 검수 42건(chunks)에서
-# 필터만 정밀도 69% → sol 판정 88%·재현율 76% (범위 규칙 추가 전). experiment --no-relevance로 끈다. 공시는 판정하지 않는다
+# 판정 뒤 남은 후보가 없으면 카드 생성 없이 no_new_info(no_relevant_candidates). experiment --no-relevance로 끈다. 공시는 판정하지 않는다.
+# 2026-11-11 프롬프트 고정 (configs/candidate_relevance_prompt.md). 재검증(페르소나 메모 40건): 정밀도 82%·재현율 82%
+# (company 88%/78%, industry 78%/88%). 이전 42건(범위 규칙 전): 필터만 69% → 판정 88%·재현율 76%. 제목 모드는 효과 없음(재현율 71%)
 relevance:
   enabled: true
-  prompt: configs/candidate_relevance_prompt_draft.md
+  prompt: configs/candidate_relevance_prompt.md
   model: gpt-6.1-sol         # 카드 생성과 같은 모델이면 같은 클라이언트로 부른다 (비용이 summary 토큰에 함께 들어간다)
   max_text: 800              # 후보 내용 최대 글자 수 (원문 청크 전문)
 # 2026-11-09 같은 사건 묶기: 근거 공시와 같은 사건 기사를 LLM 근거에서 빼고 공시 카드의 보조 기사(제목·매체·날짜·링크)로 붙인다.
@@ -90,6 +91,9 @@ topic:
     - '(이|가|쪽이|편이)\s*(나아요|낫|나은\s*(선택|편|쪽))'
     - '(갈아타|선택하|고르|추천)(세요|는\s*게|기를|할\s*만)'
     - '(싸|비싸|저렴해)\s*(보여요|보입니다|보인다)'
+  # 2026-11-11 v2 자료 범위 (COVERAGE): 뉴스는 DB의 가장 오래된 발행일 이후만 있어 카드에 "○월 ○일 이후 기사 기준"을 붙인다.
+  # 그 전 기간을 전제로 한 아래 말은 쓴 근거에 그 말이 그대로 있을 때만 허용 (범위 밖 원인·추이를 단정하지 않게)
+  coverage_terms: [처음, 최초, 사상 첫, 줄곧, 계속, 꾸준히, 그동안, 오랫동안, 연속, 이전부터, 여전히]
   evidence_mode: all            # 2026-11-09 기본값 all (공시 2·뉴스 3 고정 폐지). legacy는 평가 비교용으로만 남긴다
   max_disclosure_docs: 5
   max_chunks_per_disclosure: 2

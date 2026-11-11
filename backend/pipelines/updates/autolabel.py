@@ -6,7 +6,7 @@
 - DB에 접속하지 않는다. 비용: 항목 수만큼의 OpenAI 호출 (토큰은 실행 끝에 출력).
 - 모델: `--model` > 환경변수 `LABELER_MODEL` > `LLM_MODEL`. 라벨러는 파이프라인 모델과 따로 고른다.
   기본 출력 파일명에 모델명을 붙인다 (candidates_auto_<모델>.csv) — 모델끼리 덮어쓰지 않게.
-- 판정 지시문: 기본은 아래 PROMPT. `--prompt <파일>`이면 그 파일의 첫 '---' 줄 아래 본문을 쓰고(configs/candidate_relevance_prompt_draft.md),
+- 판정 지시문: 기본은 아래 PROMPT. `--prompt <파일>`이면 그 파일의 첫 '---' 줄 아래 본문을 쓰고(configs/candidate_relevance_prompt.md),
   응답의 이유 코드(code)를 'LLM이유코드' 열에 적는다. 출력 파일명에 프롬프트 파일 이름을 붙인다.
 - 한계: LLM의 판단은 정답이 아니다. 사람이 일부(30~50건)를 표시해 calibrate의 '일치율'로 확인한다.
 

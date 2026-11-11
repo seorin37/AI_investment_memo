@@ -148,6 +148,7 @@ def _card_v2_html(c: dict, refs: dict[str, dict], label: str, name: str, dev: st
     merged = "".join(f"<li>{escape(m.get('description') or m.get('item_id') or '')}</li>" for m in c.get("merged_items") or [])
     merged_html = f'<div class="label">같은 근거라 함께 묶은 관심사</div><ul class="facts">{merged}</ul>' if merged else ""
     link = f'<div class="label">내 메모와의 연결</div><div>{escape(c.get("memo_link") or "")}</div>' if c.get("memo_link") else ""
+    cov = f'<div class="note">자료 범위: {escape(c["coverage"])}</div>' if c.get("coverage") else ""
     return (
         f'<details class="card" data-type="{escape(utype)}"><summary>'
         f'<div class="row"><span class="chip {escape(utype)}">{label}</span><span>{name}</span>'
@@ -155,7 +156,7 @@ def _card_v2_html(c: dict, refs: dict[str, dict], label: str, name: str, dev: st
         f'<div class="title">{escape(c.get("headline") or c.get("title") or "")}</div></summary>'
         f'<div class="body"><div class="label">확인된 사실</div><ul class="facts">{facts}</ul>{link}'
         f'<div class="label">연결된 내 메모</div><div class="memo">{escape(c.get("memo_text") or "")}</div>{merged_html}'
-        f'<div class="label">출처</div>{src_lines}{related_html}'
+        f'<div class="label">출처</div>{src_lines}{related_html}{cov}'
         f'<div class="note">AI가 요약했어요. 자세히에서 메모와 출처를 볼 수 있어요.</div></div></details>'
     )
 

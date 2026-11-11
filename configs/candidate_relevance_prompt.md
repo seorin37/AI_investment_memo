@@ -1,6 +1,12 @@
 <!--
-초안 (2026-11-09, 사람 검수 40건 뒤 비교 실행 예정). 후보 관련성 라벨러에 쓸 판정 지시문.
-- autolabel.py의 기본 PROMPT는 그대로 두고, `--prompt configs/candidate_relevance_prompt_draft.md`로 줄 때만 이 본문을 쓴다.
+정식 판정 지시문 (2026-11-11 고정, candidate_relevance_prompt_draft.md에서 옮김). 파이프라인 관련성 판정(relevance.py, 설정 relevance.prompt)과
+라벨러(autolabel --prompt)가 쓴다. 본문을 바꾸면 사람 검수 표본으로 다시 재고(relevance_compare) 아래 기록을 고친다.
+- 재검증 (2026-11-11, 페르소나 메모 40건 review_human_news4_memos.csv, 사람 O 17 · X 23, 범위·자회사 규칙 포함, sol, 실행 때 판정):
+  정밀도 82%(14/17) · 재현율 82% · 일치 85%. company 범위 정밀도 88%(7/8)·재현율 78%, industry 범위 정밀도 78%(7/9)·재현율 88%.
+  제목 모드(news_require_company: title)는 효과 없음: 정밀도 41%(12/29)로 거르기 전(42%)과 같고 재현율만 71%로 떨어진다 → 끈 채로 둔다.
+  (결과: run_20261110_161734/relevance_compare_20261111_124132/report.md)
+- 이전 기록 (초안): 2026-11-09 사람 검수 뒤 비교 실행용으로 만들었다.
+- autolabel.py의 기본 PROMPT는 그대로 두고, `--prompt configs/candidate_relevance_prompt.md`로 줄 때만 이 본문을 쓴다.
 - 근거: run_20261109_133043 사람 검수 32건(review_findings.md). sol은 재현율 100%였지만 시황·제도 설명·의견 칼럼·다른 회사 기사·상투 각주를 O로 봤다(정밀도 75%).
 - 예시 문장은 검수 32건(review_human.csv)·40건(review_human_news2.csv)과 겹치지 않게 시범 4종목이 아닌 회사로 지어낸 문장만 쓴다.
   평가 세트의 문장을 예시로 넣으면 그 세트로 잰 점수가 부풀어 오른다. 예시를 바꿀 때는 아래 '예시:' 줄만 고치고,

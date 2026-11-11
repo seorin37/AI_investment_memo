@@ -2,7 +2,7 @@
 
 - 대상: 뉴스 후보 중 종류별 최소 유사도(topic.min_similarity_*)를 넘은 것만. 넘지 못한 뉴스는 어차피 카드 근거가 되지 않아
   판정하지 않고 뺀다. 공시는 판정하지 않고 그대로 둔다.
-- 프롬프트: configs/candidate_relevance_prompt_draft.md (autolabel.build_prompt와 같은 입력 모양, 후보 순서는 항목별 고정 시드로 섞음).
+- 프롬프트: configs/candidate_relevance_prompt.md (autolabel.build_prompt와 같은 입력 모양, 후보 순서는 항목별 고정 시드로 섞음).
   출력 {"scope": company|industry, "labels": [{id, relevant, code}]}. 유사도는 LLM에 보여 주지 않는다.
 - 판정 뒤 남은 후보가 하나도 없으면(판정 전에는 있었는데) 카드 생성을 부르지 않고 no_relevant_candidates.
   판정 호출이 실패하거나 응답을 읽을 수 없으면 카드를 만들지 않는다(relevance_failed). CreditsExhausted는 그대로 올린다.
@@ -20,7 +20,7 @@ from . import autolabel
 from .evidence import threshold_key
 from .models import Candidate, CreditsExhausted, TrackingItem
 
-DEFAULTS = {"enabled": True, "prompt": "configs/candidate_relevance_prompt_draft.md", "model": None,
+DEFAULTS = {"enabled": True, "prompt": "configs/candidate_relevance_prompt.md", "model": None,
             "max_text": autolabel.MAX_TEXT, "seed": 7}
 SCOPES = ("company", "industry")
 

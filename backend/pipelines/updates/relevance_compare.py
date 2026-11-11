@@ -4,7 +4,7 @@
   (1) 현재 기본          : 검수 후보 전부를 보여 준다 → 정밀도 = 사람 O 비율, 재현율 = 100% (정의상)
   (2) 제목 모드          : recent.filters.news_require_company: title (제목에 종목명·별칭, 하닉 반영)이 남기는 후보
   (2') sol 기존 프롬프트  : review_key_news2.csv의 sol 열 (autolabel 기본 PROMPT, 이미 있는 판정 · 비용 0)
-  (3) 관련성 판정 프롬프트 : configs/candidate_relevance_prompt_draft.md를 모델별로 (기본 sol·terra). --run-llm일 때만 호출
+  (3) 관련성 판정 프롬프트 : configs/candidate_relevance_prompt.md를 모델별로 (기본 sol·terra). --run-llm일 때만 호출
   (3+2) 프롬프트 O이면서 제목 모드에도 남는 후보
 
     # 비용 예상만 (LLM 없음, DB는 stocks 이름만 읽음)
@@ -36,7 +36,7 @@ from .calibrate import LABEL_COL, LLM_COL
 PRICES = {"gpt-6.1-sol": (2.0, 10.0), "gpt-6.1-terra": (1.0, 5.0)}   # 1M 토큰당 (입력, 출력) USD
 TOKENS_PER_CHAR = 0.59          # 2026-11-09 memos_long 실측 (sol 프롬프트 글자당 입력 토큰)
 OUTPUT_TOKENS_PER_CAND = 40     # 후보당 출력 (코드 포함, 추론 토큰 여유)
-PROMPT_PATH = "configs/candidate_relevance_prompt_draft.md"
+PROMPT_PATH = "configs/candidate_relevance_prompt.md"
 OLD_REVIEW = "results/updates/run_20261109_133043/review_human.csv"
 
 

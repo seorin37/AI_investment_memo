@@ -290,6 +290,12 @@ FROM disclosure_chunks c JOIN disclosures d ON d.rcept_no = c.rcept_no
 JOIN unnest(%(nos)s::text[], %(ix)s::int[]) AS k(n, i) ON c.rcept_no = k.n AND c.chunk_index = k.i"""
 
 
+def news_coverage(conn) -> str | None:
+    """DB의 가장 오래된 뉴스 발행일(한국 날짜, YYYY-MM-DD). 기사가 없으면 None. v2 카드 자료 범위 문구에 쓴다."""
+    row = conn.execute("SELECT (min(published_at) AT TIME ZONE 'Asia/Seoul')::date FROM news_articles").fetchone()
+    return None if row is None or row[0] is None else str(row[0])
+
+
 def fresh_window(last_checked: datetime | None, now: datetime, since: date,
                  days: int = FRESH_PUBLISHED_DAYS) -> tuple[datetime | date, date | None]:
     """(뉴스 발행 시작, 공시 접수 시작). 첫 확인(last_checked=None)이면 조회 기간 시작 그대로 (공시는 None = 호출자의 시작일).

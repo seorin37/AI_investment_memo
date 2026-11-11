@@ -30,7 +30,7 @@ def draft_to_dict(d: UpdateDraft) -> dict:
     out = _v1_dict(d)
     if d.card_schema == "v2":                       # v1 카드는 예전 모양 그대로
         out.update(card_schema="v2", headline=d.title, when=d.when, facts=d.facts, memo_link=d.reason,
-                   merged_items=d.merged_items)
+                   merged_items=d.merged_items, coverage=d.coverage)
     return out
 
 

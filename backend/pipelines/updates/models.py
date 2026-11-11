@@ -123,6 +123,7 @@ class UpdateDraft:
     when: str = ""
     facts: list[dict] = field(default_factory=list)          # {text, ref}. ref ""는 코드가 붙인 "비교 자료 없음"
     merged_items: list[dict] = field(default_factory=list)   # 같은 메모·같은 근거라 이 카드로 합친 다른 항목 {item_id, description}
+    coverage: str = ""                                        # 자료 범위 문구 ("10월 28일 이후 기사 기준", 뉴스를 쓴 v2 카드만)
 
 
 @dataclass
