@@ -251,10 +251,19 @@ def shared(cost_per_item: float = COST_PER_ITEM) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="로컬 테스트 DB 준비 (행 수 보기 · 복사 계획 · 복사 · 결과 보기) · 공용 DB 집계(읽기만)")
-    ap.add_argument("mode", choices=["status", "plan", "copy", "show", "shared"])
+    ap.add_argument("mode", choices=["status", "plan", "copy", "show", "shared", "ai-on"])
     args = ap.parse_args(argv)
     if args.mode == "shared":
         return shared()
+    if args.mode == "ai-on":                                    # 테스트 DB 시범 메모의 AI 연결 켜기
+        from .db_store import enable_test_memos_ai, finish, load_items
+        conn, target = test_conn()
+        before = len(load_items(conn, None))
+        n = enable_test_memos_ai(conn)
+        after = len(load_items(conn, None))
+        finish(conn)
+        print(f"{target}: AI 켠 메모 {n}개 · 매일 실행 대상 항목 {before} → {after}")
+        return 0
     if args.mode == "show":
         return show()
     if args.mode == "plan":

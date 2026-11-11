@@ -126,7 +126,10 @@ NEWER_VERSION = rf"""NOT EXISTS (SELECT 1 FROM disclosures d2
 # - 원본이 마지막 확인 전에 이미 적재돼 있던 보고서의 정정(기재정정 등)은 새 자료가 아니다. 원본은 disclosure_events.corrects
 #   (수시공시) 또는 같은 종류·같은 제목(앞 [..] 표시 뗀 것)·같은 기간 끝(정기보고서)/30일 안(수시공시)의 앞선 보고서.
 # period_end는 정렬에만 쓴다. %(pub_since)s = 발행 기준 시작일, %(fresh_ts)s = 마지막 확인 시각.
-FRESH_PUBLISHED_DAYS = 3
+FRESH_PUBLISHED_DAYS = 3        # (예전 규칙, 2026-11-11까지) 지금은 아래 두 값을 쓴다
+# 2026-11-11 확정: 이어 확인은 '마지막 확인 하루 전부터 발행된 자료, 최대 14일'. 실행이 며칠 빠져도 그 사이 자료를 놓치지 않는다
+FRESH_BEFORE_CHECK_DAYS = 1
+FRESH_MAX_DAYS = 14
 FRESH_DISCLOSURE = rf"""d.rcept_dt >= %(pub_since)s
   AND NOT (d.title ~ '^\[[^]]*정정' AND (
     EXISTS (SELECT 1 FROM disclosure_events e JOIN disclosures d0 ON d0.rcept_no = e.corrects
@@ -297,12 +300,13 @@ def news_coverage(conn) -> str | None:
 
 
 def fresh_window(last_checked: datetime | None, now: datetime, since: date,
-                 days: int = FRESH_PUBLISHED_DAYS) -> tuple[datetime | date, date | None]:
+                 before_days: int = FRESH_BEFORE_CHECK_DAYS,
+                 max_days: int = FRESH_MAX_DAYS) -> tuple[datetime | date, date | None]:
     """(뉴스 발행 시작, 공시 접수 시작). 첫 확인(last_checked=None)이면 조회 기간 시작 그대로 (공시는 None = 호출자의 시작일).
-    새 자료만 받을 때는 지금부터 days일 전 (조회 기간 시작보다 앞이면 조회 기간 시작)."""
+    새 자료만 받을 때는 마지막 확인 before_days일 전부터, 단 지금부터 max_days일 전보다 앞서지 않게 (조회 기간 시작보다 앞이면 그쪽)."""
     if last_checked is None:
         return since, None
-    start = now - timedelta(days=days)
+    start = max(last_checked - timedelta(days=before_days), now - timedelta(days=max_days))
     floor_ts = datetime.combine(since, datetime.min.time(), now.tzinfo)
     start = max(start, floor_ts)
     return start, start.date()

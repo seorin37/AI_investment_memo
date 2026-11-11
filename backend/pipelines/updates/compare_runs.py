@@ -17,7 +17,7 @@ import json
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from .candidates import FRESH_PUBLISHED_DAYS
+from .candidates import FRESH_BEFORE_CHECK_DAYS, FRESH_MAX_DAYS
 from .relevance_compare import PRICES
 
 # 마지막 확인 이후 검색 가능해진 자료 중 발행 3일 안 (experiment의 새 자료 기준과 같게, 발행 기준은 확인 시각 - 3일로 넓게 본다)
@@ -76,7 +76,7 @@ def freshness(conn, state: dict, outcomes: list[dict], cards: dict[str, list[str
                 row = {"item_id": item_id, "ref": ref, "ready": str(ready), "last_checked_at": str(ts)}
                 pub, chunk = published.get(ref), chunk_ready.get(ref)
                 # 확인 전부터 검색 가능했던 기사지만 청크 임베딩이 확인 뒤에 붙었고 발행 3일 안: late chunk 근거 (drop_not_ready가 허용)
-                if (pub is not None and pub >= ts - timedelta(days=FRESH_PUBLISHED_DAYS)
+                if (pub is not None and pub >= ts - timedelta(days=FRESH_BEFORE_CHECK_DAYS)
                         and chunk is not None and chunk > ts):
                     late_chunk.append({**row, "published": str(pub)})
                 else:
@@ -87,7 +87,7 @@ def freshness(conn, state: dict, outcomes: list[dict], cards: dict[str, list[str
             if item_id not in symbol:
                 continue
             p = {"symbol": source_symbol(symbol[item_id], pref_map), "ts": datetime.fromisoformat(rec["last_checked_at"]),
-                 "days": FRESH_PUBLISHED_DAYS, "variant": variant}
+                 "days": FRESH_BEFORE_CHECK_DAYS, "variant": variant}
             cur.execute(FRESH_NEWS_SQL, p)
             n_news = cur.fetchone()[0]
             cur.execute(FRESH_DISC_SQL, p)

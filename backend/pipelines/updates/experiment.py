@@ -488,7 +488,7 @@ def main(argv: list[str] | None = None) -> int:
     summary["fresh_items"], summary["fresh_not_ready"] = fresh_items, not_ready
     summary["fresh_news"], summary["fresh_late_chunks"] = fresh_news, late_chunks
     if state_store is not None:
-        head.append(f"- 새 자료만 받기(마지막 확인 이후 검색 가능해진 자료, 발행 {FRESH_PUBLISHED_DAYS}일 안): 주제 항목 {fresh_items}개"
+        head.append(f"- 새 자료만 받기(마지막 확인 이후 검색 가능해진 자료, 마지막 확인 하루 전부터 발행·최대 14일): 주제 항목 {fresh_items}개"
                     f" · 새 자료 뉴스 후보 {fresh_news}건(그중 확인 전부터 있던 기사를 원문 청크로 찾은 것 {late_chunks}건)"
                     f" · 확인 전에 이미 있던 후보라 뺀 것 {not_ready}건 · 나머지 항목은 첫 확인이라 조회 기간 전체")
     summary["preferred_items"] = sorted({i.item_id for i in items if i.symbol in pref_map})

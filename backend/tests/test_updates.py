@@ -2133,7 +2133,12 @@ class FreshAndStaleTest(unittest.TestCase):
         now = datetime(2026, 11, 10, 10, 0, tzinfo=timezone.utc)
         self.assertEqual(fresh_window(None, now, date(2025, 11, 9)), (date(2025, 11, 9), None))   # 첫 확인: 조회 기간 전체
         start, d = fresh_window(now, now, date(2025, 11, 9))
-        self.assertEqual((start, d), (datetime(2026, 11, 7, 10, 0, tzinfo=timezone.utc), date(2026, 11, 7)))   # 발행 3일 안
+        self.assertEqual((start, d), (datetime(2026, 11, 9, 10, 0, tzinfo=timezone.utc), date(2026, 11, 9)))   # 마지막 확인 하루 전부터
+        from datetime import timedelta
+        start, _ = fresh_window(now - timedelta(days=5), now, date(2025, 11, 9))       # 실행이 5일 빠짐: 6일 전부터
+        self.assertEqual(start, datetime(2026, 11, 4, 10, 0, tzinfo=timezone.utc))
+        start, _ = fresh_window(now - timedelta(days=30), now, date(2025, 11, 9))      # 최대 14일
+        self.assertEqual(start, datetime(2026, 10, 27, 10, 0, tzinfo=timezone.utc))
         start, d = fresh_window(now, now, date(2026, 11, 9))                                # 조회 기간이 더 짧으면 그쪽
         self.assertEqual(d, date(2026, 11, 9))
 

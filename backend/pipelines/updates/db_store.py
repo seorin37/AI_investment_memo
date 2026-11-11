@@ -133,6 +133,13 @@ def seed_memos(dst, memos: list[dict], email: str = "updates-test@example.invali
     return out
 
 
+def enable_test_memos_ai(dst) -> int:
+    """테스트 DB 전용: 시범 note 메모의 AI 연결을 켠다 (매일 실행 대상 조건 확인용). 로컬 테스트 DB가 아니면 멈춘다."""
+    check_conn(dst)                                             # allow_shared 없이: 테스트 DB만
+    return dst.execute("""UPDATE memos SET ai_linked = true, ai_linked_at = COALESCE(ai_linked_at, now())
+        WHERE kind = 'note' AND deleted_at IS NULL AND NOT ai_linked""").rowcount
+
+
 # ------------------------------------------------------------------ 항목 읽기
 ITEMS_SQL = """SELECT ti.id, btrim(m.symbol), ti.type::text, COALESCE(r.description, ti.description),
        COALESCE(r.keywords, ti.keywords), COALESCE(r.price_threshold, ti.price_threshold), m.content
@@ -140,7 +147,8 @@ FROM tracking_items ti
 JOIN memos m ON m.id = ti.memo_id
 LEFT JOIN LATERAL (SELECT description, keywords, price_threshold FROM tracking_item_revisions
                    WHERE tracking_item_id = ti.id ORDER BY revision_no DESC LIMIT 1) r ON true
-WHERE ti.status = 'active' AND m.deleted_at IS NULL AND (%(all)s OR btrim(m.symbol) = ANY(%(symbols)s))
+WHERE ti.status = 'active' AND m.deleted_at IS NULL AND m.ai_linked AND m.kind = 'note'
+  AND (%(all)s OR btrim(m.symbol) = ANY(%(symbols)s))
 ORDER BY ti.id"""
 REVISIONS_SQL = """SELECT
   (SELECT mr.id FROM memo_revisions mr JOIN tracking_items ti ON ti.memo_id = mr.memo_id
@@ -149,7 +157,7 @@ REVISIONS_SQL = """SELECT
 
 
 def load_items(conn, symbols) -> list[TrackingItem]:
-    """활성 추적 항목 (최신 버전의 설명·핵심어·조건가). item_id는 tracking_items.id 문자열."""
+    """AI가 켜진 note 메모의 활성 추적 항목 (최신 버전의 설명·핵심어·조건가). item_id는 tracking_items.id 문자열."""
     out = []
     params = {"all": symbols is None, "symbols": list(symbols or [])}     # symbols None = 전체 활성 항목
     for iid, sym, typ, desc, kw, threshold, content in conn.execute(ITEMS_SQL, params).fetchall():
