@@ -593,19 +593,37 @@ def run_draft():
 
 
 class ReadOnlyGuardTest(unittest.TestCase):
-    """updates 패키지는 DB에 쓰지 않고, Alembic·SQL 파일을 건드리지 않는다."""
+    """updates 패키지는 DB에 쓰지 않고, Alembic·SQL 파일을 건드리지 않는다.
+    예외 하나 (2026-11-11 카드 DB 저장): db_store.py만 INSERT·UPDATE·commit을 쓴다. 그 쓰기 클래스는 연결이 로컬 테스트 DB
+    (127.0.0.1:5433, 이름에 test)일 때만 만들어진다 (test_db_store_writes_only_to_test_db). 테이블 구조는 바꾸지 않는다."""
     PKG = Path(__file__).resolve().parents[1] / "pipelines" / "updates"
     WRITE = re.compile(r"\b(INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM|DROP\s|ALTER\s+TABLE|CREATE\s+TABLE|TRUNCATE)\b", re.I)
+    SCHEMA = re.compile(r"\b(DELETE\s+FROM|DROP\s|ALTER\s+TABLE|CREATE\s+TABLE|TRUNCATE)\b", re.I)
+    WRITER = "db_store.py"
 
     def test_no_write_sql(self):
         for f in self.PKG.glob("*.py"):
-            self.assertIsNone(self.WRITE.search(f.read_text(encoding="utf-8")), f.name)
+            pattern = self.SCHEMA if f.name == self.WRITER else self.WRITE   # db_store도 삭제·스키마 변경은 안 된다
+            self.assertIsNone(pattern.search(f.read_text(encoding="utf-8")), f.name)
 
     def test_no_write_connection_or_alembic(self):
         for f in self.PKG.glob("*.py"):
             text = f.read_text(encoding="utf-8")
-            for bad in ("get_dsn(", "get_engine(", "database_url(", "commit(", "alembic"):
+            bads = ("get_dsn(", "get_engine(", "database_url(", "alembic") if f.name == self.WRITER else \
+                ("get_dsn(", "get_engine(", "database_url(", "commit(", "alembic")
+            for bad in bads:
                 self.assertNotIn(bad, text.replace("read_database_url", ""), f"{f.name}: {bad}")
+
+    def test_db_store_writes_only_to_test_db(self):
+        from types import SimpleNamespace
+
+        from pipelines.updates.db_store import DbCardWriter, DbItemStateStore, NotTestDatabase, finish
+        shared = SimpleNamespace(info=SimpleNamespace(host="192.168.0.105", port=15432, dbname="memos"))
+        for make in (DbCardWriter, DbItemStateStore, finish):
+            with self.assertRaises(NotTestDatabase):
+                make(shared)
+        text = (self.PKG / "experiment.py").read_text(encoding="utf-8")
+        self.assertIn("check_test_target(dsn)", text)                   # 연결 전에 주소로 한 번 더 확인한다
 
     def test_experiment_uses_read_only_connection(self):
         text = (self.PKG / "experiment.py").read_text(encoding="utf-8")

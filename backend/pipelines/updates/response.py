@@ -137,6 +137,22 @@ def memo_response(memo_id: str, judgments: list, n_items: int, checked_at: str =
                     checked_at=checked_at or now_iso())
 
 
+def memo_analysis_responses(memo_id: str, judgments: list, n_items: int, price_rows: list[tuple] | None = None,
+                            checked_at: str = "") -> list[Response]:
+    """메모 저장 API용 (2026-11-11): 메모 분석 결과(judge_memo + LLM 판정)에서 사용자에게 바로 보여 줄 응답만 돌려준다.
+    needs_confirmation(문장마다 질문·선택지)과 메모 단위 out_of_scope. DB에는 쓰지 않는다 (db_store 설명 참고).
+    price_rows는 그 종목의 최근 일봉(confirm.price_window) — 확인 질문의 선택지(52주·20일 고저점)에 쓴다. 없으면 선택지 없이."""
+    from .confirm import confirmation
+
+    stamp = checked_at or now_iso()
+    rows = price_rows or []
+    out = [r for r in sentence_responses(memo_id, judgments, lambda j: confirmation(j.cleaned_text or j.text,
+                                                                                   j.reason_code, rows), stamp)
+           if r.type == "needs_confirmation"]
+    whole = memo_response(memo_id, judgments, n_items, stamp)
+    return out + ([whole] if whole else [])
+
+
 def order_key(r: Response) -> int:
     return TYPES.index(r.type) if r.type in TYPES else len(TYPES)
 

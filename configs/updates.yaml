@@ -1,4 +1,7 @@
 # AI 업데이트 파이프라인 설정. 임계값은 experiment 결과(유사도 분포)를 보고 조정한다 (아래 값은 임시).
+# 2026-11-11 저장 방식. file: 결과 폴더 파일 + --used-refs·--item-state 파일 (기본) | db: 기존 테이블(tracking_updates·update_sources·
+# tracking_matches·tracking_items.last_checked_at)에 쓰고 항목도 DB에서 읽는다 (db_store.py, 로컬 테스트 DB만). experiment --store
+store: file
 news:
   variant: hybrid            # news_embedding_variants.variant (dense | hybrid). 둘 다 dense 벡터로 검색한다
   lookback_days: 30

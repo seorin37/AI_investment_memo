@@ -121,6 +121,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--same-event", action=argparse.BooleanOptionalAction, default=None,
                     help="같은 사건 묶기를 켜거나(--same-event) 끈다(--no-same-event). 기본: 설정 same_event.enabled (없으면 꺼짐)")
     ap.add_argument("--evidence-mode", choices=["legacy", "all"], help="근거 고르기 (기본: 설정 topic.evidence_mode)")
+    ap.add_argument("--store", choices=["file", "db"],
+                    help="카드·이미 쓴 근거·마지막 확인 시각 저장 (기본: 설정 updates.store, 없으면 file). db: 기존 테이블에 쓴다 "
+                         "(db_store.py). 항목도 DB(tracking_items)에서 읽는다. 쓰기 대상은 환경변수 TEST_DATABASE_URL의 "
+                         "로컬 테스트 DB(127.0.0.1:5433, 이름에 test)만 허용")
     ap.add_argument("--no-cards", action="store_true",
                     help="--llm openai여도 카드 생성은 부르지 않는다 (후보 검색·관련성 판정까지만, 검수 표본용)")
     ap.add_argument("--relevance", action=argparse.BooleanOptionalAction, default=None,
@@ -158,7 +162,23 @@ def main(argv: list[str] | None = None) -> int:
     scfg = cfg.get("same_event") or {}
     same_event_on = scfg.get("enabled", False) if args.same_event is None else args.same_event
     banned = list(cfg["banned"])
-    items = load_items(resolve_path(args.gold), tuple(args.symbols.split(",")))
+    store_kind = args.store or (cfg.get("store") or "file")
+    wconn = None
+    if store_kind == "db":
+        import os
+
+        import psycopg as _pg
+
+        from .db_store import check_test_target, load_items as db_items
+        dsn = os.environ.get("TEST_DATABASE_URL", "")
+        if not dsn:
+            raise SystemExit("--store db: 환경변수 TEST_DATABASE_URL(로컬 테스트 DB)이 없습니다")
+        store_target = check_test_target(dsn)                    # 로컬 테스트 DB가 아니면 여기서 멈춘다
+        print(f"DB 저장 대상: {store_target}")
+        wconn = _pg.connect(dsn)
+        items = db_items(wconn, tuple(args.symbols.split(",")))
+    else:
+        items = load_items(resolve_path(args.gold), tuple(args.symbols.split(",")))
     if args.limit:
         items = items[:args.limit]
     topic_items = [it for it in items if it.type == "topic"]
@@ -172,14 +192,20 @@ def main(argv: list[str] | None = None) -> int:
     symbol_aliases = load_symbol_aliases() if news_lead is not None else {}
     floor, strong = thresholds(tcfg)
     used_store = None
-    if args.used_refs:
+    writer = None
+    if wconn is not None:                                       # DB 저장: 이미 쓴 근거 = update_sources, 마지막 확인 = tracking_items
+        from .db_store import DbCardWriter, DbItemStateStore, DbUsedRefStore
+        used_store, writer = DbUsedRefStore(wconn), DbCardWriter(wconn)
+    elif args.used_refs:
         from .used_refs import FileUsedRefStore
         used_store = FileUsedRefStore(resolve_path(args.used_refs))
     used_skipped = 0                                            # 이미 카드에 쓴 근거라 뺀 후보 수 (항목·후보 쌍)
     from .response import item_response, source_data
     from .results import draft_to_dict
     state_store = None
-    if args.item_state:
+    if wconn is not None:
+        state_store = DbItemStateStore(wconn)
+    elif args.item_state:
         from .item_state import FileItemStateStore
         state_store = FileItemStateStore(resolve_path(args.item_state))
     responses = []                                              # 항목별 응답 유형 (responses.jsonl, response.py)
@@ -237,7 +263,8 @@ def main(argv: list[str] | None = None) -> int:
     outcomes = []                                               # 항목별 근거·결과 (outcomes.jsonl, 방식끼리 나란히 비교할 때)
     empties = []                                                # 카드가 없는 항목 (미리보기의 '근거 없음' 목록)
     sections = []
-    with psycopg.connect(get_read_dsn()) as conn:
+    # DB 저장이면 검색도 같은 테스트 DB에서 한다 (update_sources·tracking_matches가 그 DB의 기사·공시를 참조한다)
+    with psycopg.connect(get_read_dsn() if wconn is None else os.environ["TEST_DATABASE_URL"]) as conn:
         conn.read_only = True                                   # 이 연결은 쓰기를 시도하면 DB가 거부한다
         from .preferred import load_map, source_symbol
         pref_map = load_map(conn)                               # 우선주 → 보통주 (공시·뉴스는 보통주로 조회, 가격은 우선주 그대로)
@@ -314,7 +341,10 @@ def main(argv: list[str] | None = None) -> int:
                 rel, stop = None, None
                 if rel_cfg is not None:                         # 관련성 판정 (뉴스만, 항목별 1회): O인 뉴스만 카드 생성에
                     from .relevance import filter_candidates
+                    sim_before = {c.ref: c.similarity for c in cands}
                     cands, rel, stop = filter_candidates(item, cands, floor, rel_client, rel_cfg, rel_prompt)
+                    if writer is not None:                      # 판정한 후보 전체 → tracking_matches
+                        writer.write_matches(item, rel.labels, sim_before)
                     for ref, (ok, code) in rel.labels.items():
                         relevance_rows[(item.item_id, ref)] = ("O" if ok else "X", code, rel.scope)
                     relevance_items.append({"item_id": item.item_id, **{k: v for k, v in rel.to_dict().items()
@@ -444,18 +474,27 @@ def main(argv: list[str] | None = None) -> int:
                     f" · 새 자료 뉴스 후보 {fresh_news}건(그중 확인 전부터 있던 기사를 원문 청크로 찾은 것 {late_chunks}건)"
                     f" · 확인 전에 이미 있던 후보라 뺀 것 {not_ready}건 · 나머지 항목은 첫 확인이라 조회 기간 전체")
     summary["preferred_items"] = sorted({i.item_id for i in items if i.symbol in pref_map})
-    summary["used_refs"] = None if used_store is None else {"file": str(used_store.path), "match": args.used_refs_match,
+    summary["used_refs"] = None if used_store is None else {"file": str(getattr(used_store, "path", "db")), "match": args.used_refs_match,
                                                             "skipped": used_skipped}
     from .response import summarize, to_dict
     summary["responses"] = summarize(responses)
     head.append(f"- 응답 유형: {json.dumps(summary['responses']['by_type'], ensure_ascii=False)}"
                 f" · 사용자 표시 {summary['responses']['user_visible']}건"
                 f" · 이유별: {json.dumps(summary['responses']['reasons'], ensure_ascii=False)}")
+    if writer is not None:                                      # 카드 → tracking_updates·update_sources (합친 카드는 남은 카드 하나만)
+        for d in drafts:
+            if d.origin == "llm" or d.type == "price_condition":
+                writer.write(d.item, d, draft_to_dict(d))
+        summary["db_store"] = {"target": store_target, **writer.written}
+        head.append(f"- DB 저장 ({store_target}): {json.dumps(writer.written, ensure_ascii=False)}")
     if state_store is not None:
         for r in responses:
             state_store.record(r)
+    if wconn is not None:
+        from .db_store import finish
+        finish(wconn)                                           # 쓰기 확정 (로컬 테스트 DB인지 다시 확인한 뒤)
     if used_store is not None:
-        head.append(f"- 이미 카드에 쓴 근거 빼기: {used_skipped}건 (파일 {used_store.path}, 기준 {args.used_refs_match})")
+        head.append(f"- 이미 카드에 쓴 근거 빼기: {used_skipped}건 ({getattr(used_store, 'path', 'DB update_sources')}, 기준 {args.used_refs_match})")
     head.append(f"- 후보 거르기(recent.filters): {json.dumps(filters, ensure_ascii=False)}"
                 f" · 종목명 없어 뺀 기사 {len(no_company_news)}건 (항목·기사 쌍)")
     titles: dict[str, list[str]] = {}
