@@ -231,6 +231,8 @@ def main(argv: list[str] | None = None) -> int:
                 client.response_format = response_format(RESPONSE_SCHEMA_V2, "update_card_v2")
         else:
             client = OpenAIClient.from_env()
+    from .usage import UsageTracker
+    tracker = UsageTracker()                                    # LLM 호출을 항목·단계별로 센다 (usage_by_item.csv, usage_log.jsonl)
     rel_cfg = None
     rel_client = None
     if client is not None:
@@ -342,7 +344,8 @@ def main(argv: list[str] | None = None) -> int:
                 if rel_cfg is not None:                         # 관련성 판정 (뉴스만, 항목별 1회): O인 뉴스만 카드 생성에
                     from .relevance import filter_candidates
                     sim_before = {c.ref: c.similarity for c in cands}
-                    cands, rel, stop = filter_candidates(item, cands, floor, rel_client, rel_cfg, rel_prompt)
+                    cands, rel, stop = filter_candidates(item, cands, floor, tracker.caller(rel_client, item, "relevance"),
+                                                         rel_cfg, rel_prompt)
                     if writer is not None:                      # 판정한 후보 전체 → tracking_matches
                         writer.write_matches(item, rel.labels, sim_before)
                     for ref, (ok, code) in rel.labels.items():
@@ -361,7 +364,7 @@ def main(argv: list[str] | None = None) -> int:
                     from .models import TopicOutcome
                     out = TopicOutcome(stop)                    # 실패 이유는 responses의 relevance.failed에 남는다
                 else:
-                    out = check_topic(item, cands, None if args.no_cards else client, banned, tcfg, links,
+                    out = check_topic(item, cands, None if args.no_cards else tracker.caller(client, item), banned, tcfg, links,
                                       extra_evidence=extra)          # --no-cards: 근거 준비까지만 (not_called)
                 if used_store is not None:
                     from .used_refs import card_refs
@@ -542,6 +545,14 @@ def main(argv: list[str] | None = None) -> int:
         for r in responses:
             f.write(json.dumps(to_dict(r), ensure_ascii=False, default=str) + "\n")
     preview_path = write_preview(run_dir, drafts, cand_rows, empties, f"{run_dir.name} · LLM {args.llm}")
+    if client is not None:                                      # 사용량 기록 (결정 (다): DB가 아니라 파일)
+        from .usage import LOG_PATH, write_usage
+        uline = write_usage(tracker, run_dir, resolve_path(LOG_PATH), items=len(items), topic_items=len(topic_items),
+                            cards=len(drafts), fresh_items=fresh_items,
+                            extra={"news_search": news_mode, "card_schema": card_schema, "store": store_kind,
+                                   "relevance": rel_cfg is not None, "no_cards": args.no_cards})
+        print(f"사용량: 합계 {json.dumps(uline['total'], ensure_ascii=False)} · 단계별 "
+              f"{json.dumps({k: v['calls'] for k, v in uline['stages'].items()}, ensure_ascii=False)} → {run_dir / 'usage_by_item.csv'}")
     print("\n".join(head))
     print(f"결과 폴더: {run_dir}  (cards.jsonl, report.md, summary.json, candidates.csv, outcomes.jsonl) — DB에는 아무것도 쓰지 않았습니다.")
     print(f"미리보기(사용자 화면처럼): {preview_path}")
