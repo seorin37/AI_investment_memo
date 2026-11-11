@@ -204,10 +204,57 @@ def show() -> int:
     return 0
 
 
+PILOT = ("005930", "000660", "035420", "105560")
+COST_PER_ITEM = 0.019                                      # 2026-11-11 테스트 DB 첫 확인 실측 (항목당, usage_daily)
+
+
+def shared(cost_per_item: float = COST_PER_ITEM) -> int:
+    """공용 DB(읽기 계정)의 추적 항목·메모·사용자 수와 첫 실행 예상 비용. 아무것도 쓰지 않는다."""
+    import psycopg
+
+    from ..common.db import get_read_dsn
+    with psycopg.connect(get_read_dsn()) as conn:
+        conn.read_only = True
+        info = conn.info
+        print(f"공용 DB (읽기 전용): {info.host}:{info.port}/{info.dbname}")
+        q = lambda sql, p=None: conn.execute(sql, p).fetchall()
+        print("\n추적 항목 (status × type):")
+        for st, ty, n in q("SELECT status::text, type::text, count(*) FROM tracking_items GROUP BY 1, 2 ORDER BY 1, 2"):
+            print(f"  {st} · {ty}: {n}")
+        print("\n활성 항목 · 메모가 지워지지 않은 것, 종목별:")
+        rows = q("""SELECT btrim(m.symbol), s.name, count(*) FILTER (WHERE ti.type = 'topic'),
+                   count(*) FILTER (WHERE ti.type <> 'topic'), count(*)
+            FROM tracking_items ti JOIN memos m ON m.id = ti.memo_id LEFT JOIN stocks s ON s.symbol = m.symbol
+            WHERE ti.status = 'active' AND m.deleted_at IS NULL GROUP BY 1, 2 ORDER BY 5 DESC, 1""")
+        for sym, name, topic, price, n in rows:
+            print(f"  {sym} {name or ''}: 주제 {topic} · 가격 {price} · 합계 {n}")
+        total = sum(r[4] for r in rows)
+        pilot = sum(r[4] for r in rows if r[0] in PILOT)
+        memos = q("""SELECT count(*), count(*) FILTER (WHERE deleted_at IS NULL), count(*) FILTER (WHERE ai_linked AND deleted_at IS NULL)
+            FROM memos""")[0]
+        users = q("SELECT count(*), count(*) FILTER (WHERE deleted_at IS NULL) FROM users")[0]
+        users_with_items = q("""SELECT count(DISTINCT m.user_id) FROM tracking_items ti JOIN memos m ON m.id = ti.memo_id
+            WHERE ti.status = 'active' AND m.deleted_at IS NULL""")[0][0]
+        no_rev = q("""SELECT count(*) FROM tracking_items ti WHERE ti.status = 'active'
+            AND NOT EXISTS (SELECT 1 FROM tracking_item_revisions r WHERE r.tracking_item_id = ti.id)""")[0][0]
+        existing = {t: q(f"SELECT count(*) FROM {t}")[0][0] for t in ("tracking_updates", "update_sources", "tracking_matches")}
+        conn.rollback()
+    print(f"\n메모 {memos[0]} (지워지지 않음 {memos[1]}, AI 연결 {memos[2]}) · 사용자 {users[0]} (탈퇴 아님 {users[1]})"
+          f" · 활성 항목이 있는 사용자 {users_with_items}")
+    print(f"활성 항목 중 항목 버전(tracking_item_revisions)이 없는 것 {no_rev}개 (가격 카드는 버전이 있어야 저장된다)")
+    print(f"이미 있는 행: {existing}")
+    print(f"\n첫 실행 예상 비용 (항목당 ${cost_per_item}):")
+    print(f"  전체 활성 항목 {total}개 → 약 ${total * cost_per_item:.2f}")
+    print(f"  시범 4종목만 {pilot}개 → 약 ${pilot * cost_per_item:.2f}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="로컬 테스트 DB 준비 (행 수 보기 · 복사 계획 · 복사 · 결과 보기)")
-    ap.add_argument("mode", choices=["status", "plan", "copy", "show"])
+    ap = argparse.ArgumentParser(description="로컬 테스트 DB 준비 (행 수 보기 · 복사 계획 · 복사 · 결과 보기) · 공용 DB 집계(읽기만)")
+    ap.add_argument("mode", choices=["status", "plan", "copy", "show", "shared"])
     args = ap.parse_args(argv)
+    if args.mode == "shared":
+        return shared()
     if args.mode == "show":
         return show()
     if args.mode == "plan":
