@@ -77,6 +77,10 @@ class UsageTracker:
             out.append({**a, "usd": None if cost is None else round(cost, 6)})
         return sorted(out, key=lambda a: (a["item_id"], STAGES.index(a["stage"]) if a["stage"] in STAGES else 9))
 
+    def usd(self) -> float:
+        """지금까지 쓴 비용 (가격을 모르는 모델은 0으로 센다)."""
+        return sum(a["usd"] or 0.0 for a in self.by_item())
+
     def stages(self) -> dict:
         out = defaultdict(lambda: {"calls": 0, "prompt_tokens": 0, "output_tokens": 0, "reasoning_tokens": 0, "usd": 0.0})
         for a in self.by_item():

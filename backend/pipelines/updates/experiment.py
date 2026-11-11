@@ -128,6 +128,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--allow-shared-write", action="store_true",
                     help="--store db에서 공용 DB(db_store.SHARED_TARGETS)에 쓰기를 허용한다. 없으면 로컬 테스트 DB만. "
                          "--symbols로 범위를 좁힐 수 있다 (ALL이면 전체 활성 항목)")
+    ap.add_argument("--max-usd", type=float,
+                    help="이번 실행 LLM 비용 상한. 넘으면 남은 항목은 건너뛴다(확인 시각 그대로 → 다음 실행에서 처리). 매일 실행기가 준다")
+    ap.add_argument("--job", default="experiment", help="usage_log의 작업 이름 (매일 실행기는 daily, 하루 한도는 daily만 센다)")
     ap.add_argument("--no-cards", action="store_true",
                     help="--llm openai여도 카드 생성은 부르지 않는다 (후보 검색·관련성 판정까지만, 검수 표본용)")
     ap.add_argument("--relevance", action=argparse.BooleanOptionalAction, default=None,
@@ -312,7 +315,12 @@ def main(argv: list[str] | None = None) -> int:
         from .response import now_iso
         dates = market_dates(conn)                              # 오래된 종가 판단용 시장 거래일 (stale_price)
         fresh_items, not_ready, late_chunks, fresh_news = 0, 0, 0, 0                           # 새 자료만 받은 항목 수, 마지막 확인 전에 이미 검색 가능했던 후보 수
+        budget_stopped, skipped_items = False, 0
         for item in items:
+            if args.max_usd is not None and tracker.usd() >= args.max_usd:   # 비용 상한: 항목 단위로 멈춘다
+                budget_stopped = True
+                skipped_items += 1
+                continue
             checked = now_iso()                                 # 확인 시각 = 이 항목을 검색하기 시작한 때 (검색 중 들어온 자료를 놓치지 않게)
             if item.type == "topic":
                 vec = vectors[item.item_id]
@@ -496,6 +504,9 @@ def main(argv: list[str] | None = None) -> int:
                                                             "skipped": used_skipped}
     from .response import summarize, to_dict
     summary["responses"] = summarize(responses)
+    summary["budget"] = {"max_usd": args.max_usd, "stopped": budget_stopped, "skipped_items": skipped_items}
+    if budget_stopped:
+        head.append(f"- 비용 상한 ${args.max_usd}에 닿아 항목 {skipped_items}개를 건너뜀 (다음 실행에서 처리)")
     head.append(f"- 응답 유형: {json.dumps(summary['responses']['by_type'], ensure_ascii=False)}"
                 f" · 사용자 표시 {summary['responses']['user_visible']}건"
                 f" · 이유별: {json.dumps(summary['responses']['reasons'], ensure_ascii=False)}")
@@ -581,7 +592,9 @@ def main(argv: list[str] | None = None) -> int:
         uline = write_usage(tracker, run_dir, resolve_path(LOG_PATH), items=len(items), topic_items=len(topic_items),
                             cards=len(drafts), fresh_items=fresh_items,
                             extra={"news_search": news_mode, "card_schema": card_schema, "store": store_kind,
-                                   "relevance": rel_cfg is not None, "no_cards": args.no_cards})
+                                   "relevance": rel_cfg is not None, "no_cards": args.no_cards, "job": args.job,
+                                   "run_id": run_id, "budget_stopped": budget_stopped, "skipped_items": skipped_items,
+                                   "shared": shared})
         print(f"사용량: 합계 {json.dumps(uline['total'], ensure_ascii=False)} · 단계별 "
               f"{json.dumps({k: v['calls'] for k, v in uline['stages'].items()}, ensure_ascii=False)} → {run_dir / 'usage_by_item.csv'}")
     print("\n".join(head))
