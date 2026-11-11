@@ -133,6 +133,17 @@ def seed_memos(dst, memos: list[dict], email: str = "updates-test@example.invali
     return out
 
 
+def seed_user_stocks(dst, symbols, email: str = "updates-test@example.invalid") -> int:
+    """테스트 DB 전용: 시범 사용자의 종목 보드(user_stocks)를 만든다 (메모 API 점검용). 반환: 사용자 id."""
+    check_conn(dst)
+    uid = dst.execute("SELECT id FROM users WHERE email = %s", (email,)).fetchone()[0]
+    for sym in symbols:
+        dst.execute("""INSERT INTO user_stocks (user_id, symbol, status) SELECT %s, %s, 'watching'
+            WHERE NOT EXISTS (SELECT 1 FROM user_stocks WHERE user_id = %s AND symbol = %s AND deleted_at IS NULL)""",
+                    (uid, sym, uid, sym))
+    return uid
+
+
 def enable_test_memos_ai(dst) -> int:
     """테스트 DB 전용: 시범 note 메모의 AI 연결을 켠다 (매일 실행 대상 조건 확인용). 로컬 테스트 DB가 아니면 멈춘다."""
     check_conn(dst)                                             # allow_shared 없이: 테스트 DB만
