@@ -41,11 +41,15 @@ def main(argv: list[str] | None = None) -> int:
     from .test_db_prep import gold_memos
 
     load_env()
+    # 소셜 로그인 복귀 주소는 비밀값이 아니고 이 점검은 소셜 로그인을 쓰지 않는다. .env에 없으면 이 실행(과 점검 서버)에서만 개발용 값
+    check_defaults = {"AUTH_WEB_RETURN_URLS": "http://localhost:8081", "AUTH_MOBILE_RETURN_URLS": "memos://auth"}
+    filled = [k for k, v in check_defaults.items() if not os.environ.get(k) and not os.environ.__setitem__(k, v)]
     dsn = shared_write_dsn()
     target = check_test_target(dsn, allow_shared=True)          # 공용 DB(허용 목록)만
     out_dir = REPO_ROOT / "results/updates" / f"shared_e2e_{datetime.now():%Y%m%d_%H%M%S}"
     out_dir.mkdir(parents=True)
-    created: dict = {"target": target, "started_at": datetime.now().astimezone().isoformat(timespec="seconds")}
+    created: dict = {"target": target, "started_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+                     "check_only_env_defaults": filled}
     save = lambda: (out_dir / "created.json").write_text(json.dumps(created, ensure_ascii=False, indent=1, default=str),
                                                         encoding="utf-8")
     print(f"공용 DB: {target} · 기록: {out_dir / 'created.json'}")
@@ -55,6 +59,12 @@ def main(argv: list[str] | None = None) -> int:
     conn = psycopg.connect(dsn)
     created.update(seed_test_user(conn, EMAIL, NAME, sorted({m["symbol"] for m in memos}), allow_shared=True))
     created["email"] = EMAIL
+    for prev in sorted((REPO_ROOT / "results/updates").glob("shared_e2e_*/created.json")):   # 앞 점검이 만든 사용자·보드는 이어받는다
+        p = json.loads(prev.read_text(encoding="utf-8"))
+        if prev.parent != out_dir and p.get("user_id") == created["user_id"] and p.get("target") == target:
+            created["created_user"] = created["created_user"] or bool(p.get("created_user"))
+            created["user_stock_symbols"] = sorted(set(created["user_stock_symbols"]) | set(p.get("user_stock_symbols") or []))
+            created.setdefault("previous_runs", []).append(prev.parent.name)
     finish(conn, allow_shared=True)
     save()
     print(f"[1] 테스트 사용자 {created['user_id']} (새로 만듦 {created['created_user']}) · 종목 보드 {created['user_stock_symbols']}")
