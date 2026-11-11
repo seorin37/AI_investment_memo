@@ -31,9 +31,20 @@ class Conn:
         self.info = SimpleNamespace(host="127.0.0.1", port=5433, dbname="memos_test")   # 쓰기 클래스는 테스트 DB 연결만 받는다
         self.calls, self.revisions, self.returning = [], revisions, returning
         self.used_rows, self.last_checked = used_rows, last_checked
+        self.prev_match, self.has_price = None, False
+
+    def transaction(self):
+        from contextlib import nullcontext
+        return nullcontext()
 
     def execute(self, sql, params=None):
         self.calls.append((sql, params))
+        if "FROM tracking_matches" in sql and sql.lstrip().startswith("SELECT"):
+            return Cur(self.prev_match)
+        if sql.lstrip().startswith("INSERT INTO tracking_matches"):
+            return Cur((500 + params["news"],))
+        if "SELECT EXISTS" in sql:
+            return Cur((self.has_price,))
         if "memo_revisions" in sql and "tracking_item_revisions" in sql:
             return Cur(self.revisions)
         if sql.lstrip().startswith("INSERT INTO tracking_updates"):
@@ -109,12 +120,90 @@ class WriterTest(unittest.TestCase):
 
     def test_matches(self):
         conn = Conn()
-        n = DbCardWriter(conn).write_matches(ITEM, {"news:1": (True, "ON_TOPIC_EVENT"), "news:2": (False, "OFF_TOPIC")},
-                                             {"news:1": 0.71, "news:2": 0.6})
+        w = DbCardWriter(conn, "run_1")
+        n = w.write_matches(ITEM, {"news:1": (True, "ON_TOPIC_EVENT"), "news:2": (False, "OFF_TOPIC")},
+                            {"news:1": 0.71, "news:2": 0.6})
         self.assertEqual(n, 2)
-        self.assertEqual([(p["news"], p["decision"], p["sim"]) for _, p in conn.calls],
-                         [(1, "relevant", 0.71), (2, "irrelevant", 0.6)])
-        self.assertIn("ON CONFLICT (tracking_item_id, news_id) DO UPDATE", conn.calls[0][0])
+        ups = [c for c in conn.calls if c[0].lstrip().startswith("INSERT INTO tracking_matches")]
+        self.assertEqual([(p["news"], p["decision"], p["sim"]) for _, p in ups], [(1, "relevant", 0.71), (2, "irrelevant", 0.6)])
+        self.assertIn("ON CONFLICT (tracking_item_id, news_id) DO UPDATE", ups[0][0])
+        self.assertEqual(w.manifest["tracking_matches_inserted"], [501, 502])   # 정리 스크립트가 지울 행
+        conn2 = Conn()
+        conn2.prev_match = (7, 0.5, "pending", None)
+        w2 = DbCardWriter(conn2, "run_2")
+        w2.write_matches(ITEM, {"news:1": (True, "")}, {"news:1": 0.7})
+        self.assertEqual(w2.manifest["tracking_matches_updated"],
+                         [{"id": 501, "similarity": 0.5, "decision": "pending", "decided_at": None}])   # 되돌릴 값
+
+    def test_run_id_and_manifest(self):
+        conn = Conn()
+        w = DbCardWriter(conn, "run_20261111_160000")
+        d = UpdateDraft(ITEM, "news", "t", "s", "r", [("news:9", "q")])
+        w.write(ITEM, d, {"headline": "t"})
+        p = next(c[1] for c in conn.calls if c[0].lstrip().startswith("INSERT INTO tracking_updates"))
+        self.assertEqual(json.loads(p["details"])["run_id"], "run_20261111_160000")
+        self.assertEqual((w.manifest["run_id"], w.manifest["target"], w.manifest["tracking_updates"]),
+                         ("run_20261111_160000", "127.0.0.1:5433/memos_test", [100]))
+
+    def test_has_price_card(self):
+        conn = Conn()
+        self.assertFalse(DbCardWriter(conn).has_price_card(PRICE_ITEM))
+        conn.has_price = True
+        self.assertTrue(DbCardWriter(conn).has_price_card(PRICE_ITEM))
+        sql, p = conn.calls[-1]
+        self.assertEqual((p["item"], p["rev"]), (43, 9))                       # 최신 항목 버전 기준
+
+
+class FirstPriceTest(unittest.TestCase):
+    def test_first_time_card_even_if_already_reached(self):
+        from datetime import date
+
+        from pipelines.updates.price import price_outcome
+        item = TrackingItem("2", "000660", "price_above", "40만 원 위로", price_threshold=400000)
+        rows = [(date(2026, 11, 10), 1212000), (date(2026, 11, 9), 1150000)]     # 전날에도 이미 도달
+        dates = [date(2026, 11, 10), date(2026, 11, 9)]
+        self.assertEqual(price_outcome(item, rows, dates)[0], "price_no_card")
+        kind, draft, _ = price_outcome(item, rows, dates, first_time=True)
+        self.assertEqual((kind, draft.price_state), ("price_card", "reached"))
+        far = TrackingItem("5", "005930", "price_below", "7만 원 아래로", price_threshold=70000)
+        self.assertEqual(price_outcome(far, [(date(2026, 11, 10), 198900)], dates, first_time=True)[0], "price_no_card")
+
+
+class MarksCheckedTest(unittest.TestCase):
+    def test_only_saved_cards_and_normal_no_new(self):
+        from pipelines.updates.response import marks_checked
+        r = lambda t, reason="", iid="1": Response(t, "item", item_id=iid, reason=reason)
+        for ok in (r("update_card", "card"), r("price_card"), r("no_data", "stale_price"), r("no_new_info", "no_candidates"),
+                   r("no_new_info", "llm_no_update"), r("no_new_info", "no_relevant_candidates"),
+                   r("no_new_info", "merged_into:7")):
+            self.assertTrue(marks_checked(ok), ok)
+        for bad in (r("no_new_info", "call_failed"), r("no_new_info", "check_failed"), r("no_new_info", "verify_failed"),
+                    r("no_new_info", "relevance_failed"), r("no_new_info", "not_called"),
+                    Response("out_of_scope", "memo", memo_id="M1")):
+            self.assertFalse(marks_checked(bad), bad)
+        self.assertFalse(marks_checked(r("update_card", "card", "9"), {"9"}))   # 카드 저장이 실패한 항목
+
+
+class CleanupTest(unittest.TestCase):
+    def test_plan_and_execute_sql(self):
+        from pipelines.updates.db_cleanup import execute, plan
+
+        class C(Conn):
+            def execute(self, sql, params=None):
+                self.calls.append((sql, params))
+                return Cur((3,))
+        m = {"run_id": "run_x", "target": "127.0.0.1:5433/memos_test", "tracking_updates": [1, 2],
+             "tracking_matches_inserted": [5], "tracking_matches_updated": [{"id": 6, "similarity": 0.5,
+                                                                              "decision": "pending", "decided_at": None}],
+             "last_checked": [{"item_id": 1, "prev": None, "set": "2026-11-11T15:00:00+09:00"}]}
+        conn = C()
+        counts = plan(conn, m)
+        self.assertEqual(counts["tracking_matches 되돌림"], 1)
+        execute(conn, m)
+        sqls = [c[0] for c in conn.calls[-4:]]
+        self.assertTrue(sqls[0].startswith("DELETE FROM tracking_updates") and "details->>'run_id'" in sqls[0])
+        self.assertTrue(sqls[1].startswith("DELETE FROM tracking_matches"))
+        self.assertTrue(sqls[3].startswith("UPDATE tracking_items") and "last_checked_at = %(set)s" in sqls[3])
 
 
 class StateTest(unittest.TestCase):

@@ -153,6 +153,20 @@ def memo_analysis_responses(memo_id: str, judgments: list, n_items: int, price_r
     return out + ([whole] if whole else [])
 
 
+# 마지막 확인 시각을 갱신해도 되는 '정상 종료' (2026-11-11). 실패(call_failed·parse_failed·check_failed·verify_failed·
+# relevance_failed)와 확인하지 않음(not_called)은 갱신하지 않는다 → 다음 실행에서 같은 자료를 다시 본다.
+NORMAL_NO_NEW = {"no_candidates", "already_shown", "llm_no_update", "price_unchanged", "no_relevant_candidates"}
+
+
+def marks_checked(r: Response, failed_items: set[str] | frozenset = frozenset()) -> bool:
+    """이 응답으로 그 항목의 last_checked_at을 갱신해도 되는가. failed_items: 카드 저장이 실패한 항목."""
+    if r.scope != "item" or not r.item_id or r.item_id in failed_items:
+        return False
+    if r.type in ("update_card", "price_card", "no_data"):
+        return True
+    return r.type == "no_new_info" and (r.reason in NORMAL_NO_NEW or r.reason.startswith("merged_into:"))
+
+
 def order_key(r: Response) -> int:
     return TYPES.index(r.type) if r.type in TYPES else len(TYPES)
 

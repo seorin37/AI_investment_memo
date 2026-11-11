@@ -29,13 +29,17 @@ def price_state(direction: str, threshold: float, close: float, near_pct: float 
 
 
 def check_price(item: TrackingItem, close: float, prev_close: float | None, trade_date: str,
-                near_pct: float = NEAR_PCT_DEFAULT, last_state: str | None = None) -> UpdateDraft | None:
+                near_pct: float = NEAR_PCT_DEFAULT, last_state: str | None = None,
+                first_time: bool = False) -> UpdateDraft | None:
+    """first_time(2026-11-11): 그 항목·항목 버전에 가격 카드가 아직 없으면 전날과 상태가 같아도 near·reached 카드를 한 번 만든다
+    (이미 조건에 도달해 있는 항목을 처음 확인할 때 카드가 안 나오던 문제)."""
     direction = "below" if item.type == "price_below" else "above"
     threshold = item.price_threshold
     state = price_state(direction, threshold, close, near_pct)
     if state == "away":
         return None
-    before = last_state or (price_state(direction, threshold, prev_close, near_pct) if prev_close is not None else None)
+    before = None if first_time else (
+        last_state or (price_state(direction, threshold, prev_close, near_pct) if prev_close is not None else None))
     if before == state:
         return None
     rem = max(remaining(direction, threshold, close), 0)
@@ -74,7 +78,7 @@ def trading_lag(day, dates: list) -> int:
 
 
 def price_outcome(item: TrackingItem, rows: list, dates: list, near_pct: float = NEAR_PCT_DEFAULT,
-                  stale_days: int = STALE_TRADING_DAYS) -> tuple[str, UpdateDraft | None, dict]:
+                  stale_days: int = STALE_TRADING_DAYS, first_time: bool = False) -> tuple[str, UpdateDraft | None, dict]:
     """가격 항목 판정. rows는 PRICE_SQL 결과(최신순 trade_date, close 최대 2개).
     반환 (결과 종류, 카드, 정보): price_no_data(종가 없음) | price_stale(오래된 종가) | price_card | price_no_card."""
     if not rows:
@@ -85,5 +89,5 @@ def price_outcome(item: TrackingItem, rows: list, dates: list, near_pct: float =
             "market_latest": str(dates[0]) if dates else None}
     if lag > stale_days:
         return "price_stale", None, info
-    draft = check_price(item, float(close), prev, str(day), near_pct)
+    draft = check_price(item, float(close), prev, str(day), near_pct, first_time=first_time)
     return ("price_card" if draft else "price_no_card"), draft, info

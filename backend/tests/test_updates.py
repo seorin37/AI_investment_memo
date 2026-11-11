@@ -599,17 +599,20 @@ class ReadOnlyGuardTest(unittest.TestCase):
     PKG = Path(__file__).resolve().parents[1] / "pipelines" / "updates"
     WRITE = re.compile(r"\b(INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM|DROP\s|ALTER\s+TABLE|CREATE\s+TABLE|TRUNCATE)\b", re.I)
     SCHEMA = re.compile(r"\b(DELETE\s+FROM|DROP\s|ALTER\s+TABLE|CREATE\s+TABLE|TRUNCATE)\b", re.I)
+    DDL = re.compile(r"\b(DROP\s|ALTER\s+TABLE|CREATE\s+TABLE|TRUNCATE)\b", re.I)
     WRITER = "db_store.py"
+    CLEANUP = "db_cleanup.py"           # 2026-11-11 두 번째 예외: 실행 한 번이 쓴 행만 지우기·되돌리기 (DELETE·UPDATE만)
 
     def test_no_write_sql(self):
         for f in self.PKG.glob("*.py"):
-            pattern = self.SCHEMA if f.name == self.WRITER else self.WRITE   # db_store도 삭제·스키마 변경은 안 된다
+            pattern = {self.WRITER: self.SCHEMA, self.CLEANUP: self.DDL}.get(f.name, self.WRITE)   # 스키마 변경은 어디서도 안 된다
             self.assertIsNone(pattern.search(f.read_text(encoding="utf-8")), f.name)
 
     def test_no_write_connection_or_alembic(self):
         for f in self.PKG.glob("*.py"):
             text = f.read_text(encoding="utf-8")
-            bads = ("get_dsn(", "get_engine(", "database_url(", "alembic") if f.name == self.WRITER else \
+            # 공용 DB 쓰기 주소(database_url)는 db_store.shared_write_dsn 한 곳에서만, commit은 db_store.finish에서만
+            bads = ("get_dsn(", "get_engine(", "alembic") if f.name == self.WRITER else \
                 ("get_dsn(", "get_engine(", "database_url(", "commit(", "alembic")
             for bad in bads:
                 self.assertNotIn(bad, text.replace("read_database_url", ""), f"{f.name}: {bad}")
@@ -623,7 +626,17 @@ class ReadOnlyGuardTest(unittest.TestCase):
             with self.assertRaises(NotTestDatabase):
                 make(shared)
         text = (self.PKG / "experiment.py").read_text(encoding="utf-8")
-        self.assertIn("check_test_target(dsn)", text)                   # 연결 전에 주소로 한 번 더 확인한다
+        self.assertIn("check_test_target(dsn, shared)", text)           # 연결 전에 주소로 한 번 더 확인한다
+        self.assertIn("args.allow_shared_write", text)                  # 공용 DB는 플래그가 있을 때만
+        cleanup = (self.PKG / self.CLEANUP).read_text(encoding="utf-8")
+        self.assertIn("check_test_target(dsn, shared)", cleanup)
+        self.assertIn("details->>'run_id' = %(run)s", cleanup)          # 그 실행의 카드만 지운다
+        shared_db = SimpleNamespace(info=SimpleNamespace(host="192.168.0.105", port=15432, dbname="memos"))
+        self.assertEqual(DbCardWriter(shared_db, "run_x", allow_shared=True).manifest["target"],
+                         "192.168.0.105:15432/memos")                   # 플래그가 있으면 공용 DB 연결을 받는다
+        with self.assertRaises(NotTestDatabase):
+            DbCardWriter(SimpleNamespace(info=SimpleNamespace(host="10.0.0.9", port=15432, dbname="memos")), "r",
+                         allow_shared=True)                             # 허용 목록에 없는 DB는 플래그가 있어도 안 된다
 
     def test_experiment_uses_read_only_connection(self):
         text = (self.PKG / "experiment.py").read_text(encoding="utf-8")

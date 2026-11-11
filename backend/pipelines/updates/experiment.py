@@ -125,6 +125,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="카드·이미 쓴 근거·마지막 확인 시각 저장 (기본: 설정 updates.store, 없으면 file). db: 기존 테이블에 쓴다 "
                          "(db_store.py). 항목도 DB(tracking_items)에서 읽는다. 쓰기 대상은 환경변수 TEST_DATABASE_URL의 "
                          "로컬 테스트 DB(127.0.0.1:5433, 이름에 test)만 허용")
+    ap.add_argument("--allow-shared-write", action="store_true",
+                    help="--store db에서 공용 DB(db_store.SHARED_TARGETS)에 쓰기를 허용한다. 없으면 로컬 테스트 DB만. "
+                         "--symbols로 범위를 좁힐 수 있다 (ALL이면 전체 활성 항목)")
     ap.add_argument("--no-cards", action="store_true",
                     help="--llm openai여도 카드 생성은 부르지 않는다 (후보 검색·관련성 판정까지만, 검수 표본용)")
     ap.add_argument("--relevance", action=argparse.BooleanOptionalAction, default=None,
@@ -163,20 +166,27 @@ def main(argv: list[str] | None = None) -> int:
     same_event_on = scfg.get("enabled", False) if args.same_event is None else args.same_event
     banned = list(cfg["banned"])
     store_kind = args.store or (cfg.get("store") or "file")
+    if args.allow_shared_write and store_kind != "db":
+        raise SystemExit("--allow-shared-write는 --store db와 함께만 씁니다")
     wconn = None
+    shared = False
+    from datetime import datetime as _dt
+    run_started = _dt.now()
+    run_id = f"run_{run_started:%Y%m%d_%H%M%S}"                 # 실행 폴더 이름과 같다 (DB 행의 details.run_id)
     if store_kind == "db":
         import os
 
         import psycopg as _pg
 
-        from .db_store import check_test_target, load_items as db_items
-        dsn = os.environ.get("TEST_DATABASE_URL", "")
+        from .db_store import check_test_target, load_items as db_items, shared_write_dsn
+        shared = args.allow_shared_write
+        dsn = shared_write_dsn() if shared else os.environ.get("TEST_DATABASE_URL", "")
         if not dsn:
             raise SystemExit("--store db: 환경변수 TEST_DATABASE_URL(로컬 테스트 DB)이 없습니다")
-        store_target = check_test_target(dsn)                    # 로컬 테스트 DB가 아니면 여기서 멈춘다
-        print(f"DB 저장 대상: {store_target}")
+        store_target = check_test_target(dsn, shared)            # 허용한 DB가 아니면 여기서 멈춘다
+        print(f"DB 저장 대상: {store_target}" + (" (공용 DB 쓰기 허용)" if shared else ""))
         wconn = _pg.connect(dsn)
-        items = db_items(wconn, tuple(args.symbols.split(",")))
+        items = db_items(wconn, None if args.symbols.upper() == "ALL" else tuple(args.symbols.split(",")))
         from .db_store import item_memos
         memo_by_item = item_memos(wconn, [i.item_id for i in items])
     else:
@@ -197,7 +207,8 @@ def main(argv: list[str] | None = None) -> int:
     writer = None
     if wconn is not None:                                       # DB 저장: 이미 쓴 근거 = update_sources, 마지막 확인 = tracking_items
         from .db_store import DbCardWriter, DbItemStateStore, DbUsedRefStore
-        used_store, writer = DbUsedRefStore(wconn), DbCardWriter(wconn)
+        writer = DbCardWriter(wconn, run_id, allow_shared=shared)
+        used_store = DbUsedRefStore(wconn)
     elif args.used_refs:
         from .used_refs import FileUsedRefStore
         used_store = FileUsedRefStore(resolve_path(args.used_refs))
@@ -206,7 +217,7 @@ def main(argv: list[str] | None = None) -> int:
     from .results import draft_to_dict
     state_store = None
     if wconn is not None:
-        state_store = DbItemStateStore(wconn)
+        state_store = DbItemStateStore(wconn, writer.manifest, allow_shared=shared)
     elif args.item_state:
         from .item_state import FileItemStateStore
         state_store = FileItemStateStore(resolve_path(args.item_state))
@@ -268,7 +279,8 @@ def main(argv: list[str] | None = None) -> int:
     empties = []                                                # 카드가 없는 항목 (미리보기의 '근거 없음' 목록)
     sections = []
     # DB 저장이면 검색도 같은 테스트 DB에서 한다 (update_sources·tracking_matches가 그 DB의 기사·공시를 참조한다)
-    with psycopg.connect(get_read_dsn() if wconn is None else os.environ["TEST_DATABASE_URL"]) as conn:
+    # 테스트 DB 저장이면 검색도 같은 테스트 DB에서 (update_sources·tracking_matches가 그 DB의 기사·공시를 참조). 공용 DB는 읽기 계정으로
+    with psycopg.connect(os.environ["TEST_DATABASE_URL"] if wconn is not None and not shared else get_read_dsn()) as conn:
         conn.read_only = True                                   # 이 연결은 쓰기를 시도하면 DB가 거부한다
         from .preferred import load_map, source_symbol
         pref_map = load_map(conn)                               # 우선주 → 보통주 (공시·뉴스는 보통주로 조회, 가격은 우선주 그대로)
@@ -402,7 +414,8 @@ def main(argv: list[str] | None = None) -> int:
                     empties.append(_empty(item, "price_no_data"))
                     sections += ["결과: **price_no_data** (prices_daily에 종가 없음)", ""]
                     continue
-                pkind, draft, pinfo = price_outcome(item, rows, dates, cfg["price"]["near_pct"])
+                first = writer is not None and not writer.has_price_card(item)   # 그 항목·버전에 가격 카드가 없으면 처음 한 번
+                pkind, draft, pinfo = price_outcome(item, rows, dates, cfg["price"]["near_pct"], first_time=first)
                 key = f"price_{draft.price_state}" if draft else pkind
                 status_count[key] = status_count.get(key, 0) + 1
                 responses.append(item_response(item, pkind, [], draft_to_dict(draft) if draft else None, None, checked_at=checked))
@@ -486,18 +499,32 @@ def main(argv: list[str] | None = None) -> int:
     head.append(f"- 응답 유형: {json.dumps(summary['responses']['by_type'], ensure_ascii=False)}"
                 f" · 사용자 표시 {summary['responses']['user_visible']}건"
                 f" · 이유별: {json.dumps(summary['responses']['reasons'], ensure_ascii=False)}")
+    failed_items: set[str] = set()                              # 카드 저장이 실패한 항목 (last_checked_at을 갱신하지 않는다)
     if writer is not None:                                      # 카드 → tracking_updates·update_sources (합친 카드는 남은 카드 하나만)
         for d in drafts:
             if d.origin == "llm" or d.type == "price_condition":
-                writer.write(d.item, d, draft_to_dict(d))
-        summary["db_store"] = {"target": store_target, **writer.written}
-        head.append(f"- DB 저장 ({store_target}): {json.dumps(writer.written, ensure_ascii=False)}")
-    if state_store is not None:
+                try:
+                    writer.write(d.item, d, draft_to_dict(d))
+                except Exception as exc:                        # 그 카드만 되돌리고(savepoint) 계속한다
+                    writer.written["failed"] += 1
+                    failed_items.add(d.item.item_id)
+                    failed_items.update(m["item_id"] for m in d.merged_items)
+                    print(f"카드 저장 실패 {d.item.item_id}: {type(exc).__name__}: {str(exc)[:200]}", file=sys.stderr)
+        summary["db_store"] = {"target": store_target, "run_id": run_id, "shared": shared, **writer.written,
+                               "failed_items": sorted(failed_items)}
+        head.append(f"- DB 저장 ({store_target}, run_id {run_id}): {json.dumps(writer.written, ensure_ascii=False)}")
+    from .response import marks_checked
+    checked_count = 0
+    if state_store is not None:                                 # 카드 저장 성공 · 정상 '새 소식 없음'만 확인 시각 갱신
         for r in responses:
-            state_store.record(r)
+            if marks_checked(r, failed_items):
+                state_store.record(r)
+                checked_count += 1
+        summary["last_checked_updated"] = checked_count
+        head.append(f"- 마지막 확인 시각 갱신 {checked_count}개 항목 (오류·미확인 항목은 그대로)")
     if wconn is not None:
         from .db_store import finish
-        finish(wconn)                                           # 쓰기 확정 (로컬 테스트 DB인지 다시 확인한 뒤)
+        finish(wconn, shared)                                   # 쓰기 확정 (허용한 DB인지 다시 확인한 뒤)
     if used_store is not None:
         head.append(f"- 이미 카드에 쓴 근거 빼기: {used_skipped}건 ({getattr(used_store, 'path', 'DB update_sources')}, 기준 {args.used_refs_match})")
     head.append(f"- 후보 거르기(recent.filters): {json.dumps(filters, ensure_ascii=False)}"
@@ -537,7 +564,9 @@ def main(argv: list[str] | None = None) -> int:
                     f"{summary['relevance']['no_relevant_candidates']}개 · 범위 {summary['relevance']['scope']}")
     elif client is not None:
         summary["relevance"] = {"enabled": False}
-    run_dir = new_run_dir(args.out_dir)
+    run_dir = new_run_dir(args.out_dir, now=run_started)
+    if writer is not None:                                      # 이번 실행이 넣거나 바꾼 DB 행 (db_cleanup.py가 읽는다)
+        (run_dir / "db_rows.json").write_text(json.dumps(writer.manifest, ensure_ascii=False, indent=1), encoding="utf-8")
     write_results(run_dir, drafts, "\n".join(head + [""] + sections) + "\n", summary)
     csv_path = write_candidates_csv(run_dir, cand_rows, relevance_rows if rel_cfg is not None else None)
     with (run_dir / "outcomes.jsonl").open("w", encoding="utf-8") as f:
