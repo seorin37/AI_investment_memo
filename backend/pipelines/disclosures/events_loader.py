@@ -83,8 +83,11 @@ def find_original(conn: Connection, ref: EventRef, original_date: str | None) ->
     )
     params: dict = {"symbol": ref.symbol, "base": ref.base_title, "rcept_no": ref.rcept_no}
     if original_date:
+        try:
+            params["original_date"] = date.fromisoformat(original_date)
+        except ValueError:
+            return None  # 날짜가 아닌 값이면 추측하지 않는다
         sql += " AND d.rcept_dt = :original_date"
-        params["original_date"] = date.fromisoformat(original_date)
     sql += " ORDER BY d.rcept_no DESC LIMIT 1"
     return conn.execute(text(sql), params).scalar()
 
@@ -166,6 +169,8 @@ def upsert_event(
         status, fields, doc_format = result.parse_status, result.fields, parsed.doc_format
         pairs = [pair.to_dict() for pair in parsed.pairs]
         issues = [f"missing: {name}" for name in result.missing] + list(result.errors) + list(parsed.warnings)
+        if result.note:
+            issues.append(f"{result.note}: 빈 값은 원문에 없음 (검토 불필요)")
     conn.execute(
         text(
             "INSERT INTO disclosure_events (rcept_no, event_type, topic, base_title, is_correction, is_subsidiary,"

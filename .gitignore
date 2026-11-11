@@ -38,5 +38,9 @@ data/events/
 # 뉴스 원문 샘플 HTML (lead_fetcher --probe --save-fixtures, 원문은 커밋하지 않는다)
 samples/
 
+# 금융사 비율 추출 결과 (run_financial_ratios)
+data/financials_ratios/
+data/periodic_updates/
+data/periodic_updates_test/
 # 뉴스 원문 수집 결과 (fulltext.py, 원문은 커밋하지 않는다)
 data/news_raw/
