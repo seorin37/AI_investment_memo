@@ -133,6 +133,22 @@ def seed_memos(dst, memos: list[dict], email: str = "updates-test@example.invali
     return out
 
 
+def seed_test_user(dst, email: str, display_name: str, symbols, allow_shared: bool = False) -> dict:
+    """점검용 테스트 사용자와 종목 보드(user_stocks). 공용 DB는 allow_shared일 때만. 반환: 만든 행 id (나중에 지울 수 있게)."""
+    check_conn(dst, allow_shared)
+    row = dst.execute("SELECT id FROM users WHERE email = %s", (email,)).fetchone()
+    created_user = row is None
+    uid = row[0] if row else dst.execute("INSERT INTO users (email, display_name) VALUES (%s, %s) RETURNING id",
+                                         (email, display_name)).fetchone()[0]
+    stock_symbols = []                                          # user_stocks는 (user_id, symbol)이 키라 id 대신 종목 코드를 남긴다
+    for sym in symbols:
+        r = dst.execute("SELECT 1 FROM user_stocks WHERE user_id = %s AND symbol = %s", (uid, sym)).fetchone()
+        if r is None:
+            dst.execute("INSERT INTO user_stocks (user_id, symbol, status) VALUES (%s, %s, 'watching')", (uid, sym))
+            stock_symbols.append(sym)
+    return {"user_id": uid, "created_user": created_user, "user_stock_symbols": stock_symbols}
+
+
 def seed_user_stocks(dst, symbols, email: str = "updates-test@example.invalid") -> int:
     """테스트 DB 전용: 시범 사용자의 종목 보드(user_stocks)를 만든다 (메모 API 점검용). 반환: 사용자 id."""
     check_conn(dst)

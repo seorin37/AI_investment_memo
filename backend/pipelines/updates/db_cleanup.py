@@ -62,9 +62,50 @@ def execute(conn, m: dict) -> None:
         conn.execute(RESTORE_CHECKED, {"item_id": r["item_id"], "prev": r["prev"], "set": datetime.fromisoformat(r["set"])})
 
 
+# ---------------------------------------------------------------- 공용 DB 끝까지 확인(shared_e2e_check)의 테스트 데이터 한 번에 지우기
+# created.json의 사용자·메모만, 사용자 이메일·이름에 test가 있을 때만. 메모를 지우면 메모 버전·추적 항목·항목 버전·판정·카드·근거가
+# FK ON DELETE CASCADE로 함께 지워진다. 그 뒤 종목 보드·태그·설정·세션, 그리고 이 확인이 새로 만든 사용자만 지운다.
+E2E_COUNTS = {
+    "memos": "SELECT count(*) FROM memos WHERE id = ANY(%(memos)s) AND user_id = %(uid)s",
+    "memo_revisions": "SELECT count(*) FROM memo_revisions WHERE memo_id = ANY(%(memos)s)",
+    "tracking_items": "SELECT count(*) FROM tracking_items WHERE memo_id = ANY(%(memos)s)",
+    "tracking_updates": """SELECT count(*) FROM tracking_updates tu JOIN tracking_items ti ON ti.id = tu.tracking_item_id
+        WHERE ti.memo_id = ANY(%(memos)s)""",
+    "update_sources": """SELECT count(*) FROM update_sources us JOIN tracking_updates tu ON tu.id = us.update_id
+        JOIN tracking_items ti ON ti.id = tu.tracking_item_id WHERE ti.memo_id = ANY(%(memos)s)""",
+    "tracking_matches": """SELECT count(*) FROM tracking_matches tm JOIN tracking_items ti ON ti.id = tm.tracking_item_id
+        WHERE ti.memo_id = ANY(%(memos)s)""",
+    "user_stocks": "SELECT count(*) FROM user_stocks WHERE symbol = ANY(%(stocks)s) AND user_id = %(uid)s",
+    "auth_sessions": "SELECT count(*) FROM auth_sessions WHERE user_id = %(uid)s",
+    "users": "SELECT count(*) FROM users WHERE id = %(uid)s AND %(created_user)s",
+}
+E2E_DELETES = [
+    "DELETE FROM memos WHERE id = ANY(%(memos)s) AND user_id = %(uid)s",
+    "DELETE FROM user_stocks WHERE symbol = ANY(%(stocks)s) AND user_id = %(uid)s",
+    "DELETE FROM memo_tags WHERE tag_id IN (SELECT id FROM tags WHERE user_id = %(uid)s) AND %(created_user)s",
+    "DELETE FROM tags WHERE user_id = %(uid)s AND %(created_user)s",
+    "DELETE FROM user_settings WHERE user_id = %(uid)s AND %(created_user)s",
+    "DELETE FROM auth_sessions WHERE user_id = %(uid)s",
+    "DELETE FROM users WHERE id = %(uid)s AND %(created_user)s",
+]
+
+
+def e2e_params(conn, created: dict) -> dict:
+    """created.json → 지울 대상. 사용자 이메일·이름에 test가 없으면 멈춘다."""
+    row = conn.execute("SELECT email, display_name FROM users WHERE id = %s", (created["user_id"],)).fetchone()
+    if row is None:
+        raise SystemExit("사용자가 이미 없습니다")
+    if "test" not in (row[0] or "").lower() or "test" not in (row[1] or "").lower():
+        raise SystemExit("이메일·이름에 test가 없는 사용자라 지우지 않습니다")
+    return {"uid": created["user_id"], "memos": created.get("memo_ids") or [], "stocks": created.get("user_stock_symbols") or [],
+            "created_user": bool(created.get("created_user"))}
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="실행 한 번이 DB에 쓴 행만 지우기·되돌리기 (기본은 행 수만 보기)")
     ap.add_argument("run_dir")
+    ap.add_argument("--e2e", action="store_true",
+                    help="run_dir이 shared_e2e_check 결과 폴더(created.json)일 때: 테스트 사용자·보드·메모·항목·카드를 한 번에 지운다")
     ap.add_argument("--execute", action="store_true", help="실제로 지운다 (행 수를 보여 주고 yes를 입력받는다)")
     ap.add_argument("--yes", action="store_true", help="--execute의 확인 입력을 건너뛴다 (이미 행 수를 확인했을 때만)")
     ap.add_argument("--allow-shared-write", action="store_true", help="공용 DB에서 만든 실행을 정리할 때")
@@ -74,8 +115,10 @@ def main(argv: list[str] | None = None) -> int:
 
     from .db_store import check_conn, check_test_target, finish, shared_write_dsn
 
-    m = load_manifest(Path(args.run_dir))
     shared = args.allow_shared_write
+    if args.e2e:
+        return e2e(Path(args.run_dir), args, shared)
+    m = load_manifest(Path(args.run_dir))
     dsn = shared_write_dsn() if shared else os.environ.get("TEST_DATABASE_URL", "")
     if not dsn:
         raise SystemExit("환경변수 TEST_DATABASE_URL이 없습니다")
@@ -102,6 +145,42 @@ def main(argv: list[str] | None = None) -> int:
             print("취소했습니다")
             return 1
     execute(conn, m)
+    finish(conn, shared)
+    print("정리했습니다")
+    return 0
+
+
+def e2e(run_dir: Path, args, shared: bool) -> int:
+    import psycopg
+
+    from .db_store import check_conn, check_test_target, finish, shared_write_dsn
+
+    path = run_dir / "created.json"
+    if not path.is_file():
+        raise SystemExit(f"{path}이 없습니다")
+    created = json.loads(path.read_text(encoding="utf-8"))
+    dsn = shared_write_dsn() if shared else os.environ.get("TEST_DATABASE_URL", "")
+    target = check_test_target(dsn, shared)
+    if target != created["target"]:
+        raise SystemExit(f"이 확인은 {created['target']}에 썼습니다. 지금 연결 대상은 {target}입니다")
+    conn = psycopg.connect(dsn)
+    check_conn(conn, shared)
+    p = e2e_params(conn, created)
+    print(f"대상 {target} · 테스트 사용자 {p['uid']} (이 확인이 만든 사용자 {p['created_user']})")
+    for table, sql in E2E_COUNTS.items():
+        print(f"  {table}: {conn.execute(sql, p).fetchone()[0]}")
+    if not args.execute:
+        conn.rollback()
+        conn.close()
+        print("행 수만 봤습니다. 지우려면 --execute")
+        return 0
+    if not args.yes:
+        if not sys.stdin.isatty() or input("위 테스트 데이터를 지울까요? yes를 입력하세요: ").strip() != "yes":
+            conn.close()
+            print("취소했습니다")
+            return 1
+    for sql in E2E_DELETES:
+        conn.execute(sql, p)
     finish(conn, shared)
     print("정리했습니다")
     return 0
