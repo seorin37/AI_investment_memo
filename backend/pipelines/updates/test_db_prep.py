@@ -19,7 +19,7 @@ STATUS_TABLES = ("users", "stocks", "memos", "memo_revisions", "tracking_items",
                  "tracking_updates", "update_sources", "tracking_matches", "tracking_usage_events", "price_events")
 
 
-def test_conn():
+def open_test_db():
     import psycopg
 
     from .db_store import check_test_target
@@ -90,7 +90,7 @@ def plan(memo_ids=DEFAULT_MEMOS) -> int:
     memos = gold_memos(memo_ids)
     syms = sorted({m["symbol"] for m in memos})
     items = [(m["memo_id"], it["type"], it["description"]) for m in memos for it in gold_items(m)]
-    tconn, target = test_conn()
+    tconn, target = open_test_db()
     with tconn:
         tconn.read_only = True
         have = counts(tconn, [t for t, _ in PLAN])
@@ -139,7 +139,7 @@ def copy(memo_ids=DEFAULT_MEMOS) -> int:
     news_ids = sql.SQL("""SELECT DISTINCT ns.news_id FROM news_stocks ns JOIN news_articles a ON a.id = ns.news_id
         WHERE ns.symbol = ANY({syms}) AND a.published_at >= {since}""").format(syms=lit(syms), since=since_ts)
     disc_nos = sql.SQL("SELECT rcept_no FROM disclosures WHERE symbol = ANY({}) AND rcept_dt >= {}").format(lit(syms), since_d)
-    dst, target = test_conn()
+    dst, target = open_test_db()
     have_stocks = [s.strip() for (s,) in dst.execute("SELECT symbol FROM stocks").fetchall()]
     where = {
         "stocks": sql.SQL("symbol <> ALL({})").format(lit(have_stocks)),
@@ -178,7 +178,7 @@ def copy(memo_ids=DEFAULT_MEMOS) -> int:
 
 def show() -> int:
     """항목별 저장 결과 (읽기만): tracking_items.last_checked_at, tracking_updates, update_sources, tracking_matches."""
-    conn, target = test_conn()
+    conn, target = open_test_db()
     with conn:
         conn.read_only = True
         print(f"테스트 DB: {target}")
@@ -257,7 +257,7 @@ def main(argv: list[str] | None = None) -> int:
         return shared()
     if args.mode == "ai-on":                                    # 테스트 DB 시범 메모의 AI 연결 켜기
         from .db_store import enable_test_memos_ai, finish, load_items
-        conn, target = test_conn()
+        conn, target = open_test_db()
         before = len(load_items(conn, None))
         n = enable_test_memos_ai(conn)
         after = len(load_items(conn, None))
@@ -270,7 +270,7 @@ def main(argv: list[str] | None = None) -> int:
         return plan()
     if args.mode == "copy":
         return copy()
-    conn, target = test_conn()
+    conn, target = open_test_db()
     with conn:
         conn.read_only = True
         print(f"테스트 DB: {target}")
