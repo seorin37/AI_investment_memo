@@ -40,20 +40,24 @@ _AMOUNT_PATTERNS = [
     (re.compile(r"([일이삼사오육칠팔구])십?만"), lambda m: _KO_DIGIT[m.group(1)] * (100000 if "십" in m.group(0) else 10000)),
 ]
 # 지원하지 않는 조건. 뒤에 조건 표지(면·시·때)가 있어야 조건으로 본다 ("PER 5배는 싸다"는 감상이지 조건이 아니다).
-_COND_MARK = r"[^.?!]*?(?:면|시(?=\s|$)|때)"
+# 조건 표지 '시'는 낱말 끝의 '시'가 아닐 때만 ("다시·역시·혹시·당시·동시"의 '시'는 조건이 아니다, 2026-11-09 "지금보다 15%는 다시 갈 거요")
+_SI = r"(?<!다)(?<!역)(?<!혹)(?<!당)(?<!동)시(?=\s|$)"
+_COND_MARK = rf"[^.?!]*?(?:면|{_SI}|때)"
 _UNSUPPORTED = [
     re.compile(r"52\s*주\s*(신)?(저가|고가|최저|최고)" + _COND_MARK),
     re.compile(r"(PBR|PER|PSR|EV/EBITDA)\s*\d" + _COND_MARK, re.IGNORECASE),
     re.compile(r"거래량.{0,6}(터지|급증|폭증|늘)" + _COND_MARK),
-    re.compile(r"(지금|현재|평단|매수가|고점|저점)\w*\s*(보다|대비|에서)?\s*\d+(\.\d+)?\s*%" + _COND_MARK),
+    # 기준점 대비 % ("고점에서 30% 빠지면", "여기서 10% 더 빠지면", "최근 바닥에서 10% 넘게 오르면")
+    re.compile(r"(지금|현재|평단|매수가|고점|저점|여기|바닥)\w*\s*(보다|대비|에서)?\s*\d+(\.\d+)?\s*%" + _COND_MARK),
     # 거래량 배수·평소 대비 ("거래량 평소 두 배 넘으면")
     re.compile(r"거래량.{0,10}(\d+(\.\d+)?\s*배|[두세네]\s*배|평소|평균|전일|전날)" + _COND_MARK),
     # 52주 표시가 없는 신저가·신고가, 직전 저점·고점, 이동평균선 ("전저점 깨지면", "60일선 넘으면")
-    re.compile(r"(신저가|신고가|전저점|전고점|역사적\s*(저점|고점)|\d+\s*일\s*(이동평균)?\s*선|이평선|이동평균선)" + _COND_MARK),
+    re.compile(r"(신저가|신고가|전저점|전고점|역사적\s*(저점|고점)|최근\s*(저점|고점|바닥)|\d+\s*일\s*(이동평균)?\s*선|이평선|이동평균선)"
+               + _COND_MARK),
 ]
 # 기준어 없는 상대 % 조건 ("10% 오르면 체크"). 실적·배당 같은 사업 수치의 변화("영업이익 10% 늘면")와 구분하려고
-# % 앞 12자 안에 사업 수치 단어가 있으면 가격 조건으로 보지 않는다.
-_RELATIVE_PCT = re.compile(r"\d+(\.\d+)?\s*%\s*(오르|올라|내리|내려|빠지|떨어지|하락|상승|급락|급등)" + _COND_MARK)
+# % 앞 12자 안에 사업 수치 단어가 있으면 가격 조건으로 보지 않는다. %와 동사 사이 '더·넘게·이상'은 허용 ("10% 더 빠지면")
+_RELATIVE_PCT = re.compile(r"\d+(\.\d+)?\s*%\s*(?:(?:더|넘게|이상)\s*)*(오르|올라|내리|내려|빠지|떨어지|하락|상승|급락|급등)" + _COND_MARK)
 _NOT_PRICE_SUBJECT = re.compile(r"(이익|매출|실적|배당|수익|금리|환율|이자|점유율|마진|성장|증가|비중|비용|부채)")
 
 
@@ -86,7 +90,7 @@ def _condition_after(text: str, pos: int, words: tuple[str, ...]) -> tuple[int, 
         after = pos + idx + len(word)
         if word.endswith("면"):
             return pos + idx, after
-        tail = re.match(r"\s*(?:원\s*)?(?:으로\s*)?(?:가|내려가|올라가|떨어지|오|되|하)?\s*(?:면|시(?=\s|$)|때|언제)", text[after:])
+        tail = re.match(rf"\s*(?:원\s*)?(?:으로\s*)?(?:가|내려가|올라가|떨어지|오|되|하)?\s*(?:면|{_SI}|때|언제)", text[after:])
         if tail:
             return pos + idx, after + tail.end()
     return None
@@ -119,12 +123,12 @@ def parse_conditions(text: str, lex: Lexicon) -> list[PriceResult]:
 
 
 def _rest_after_condition(text: str) -> str:
-    match = re.search(r"(?:면|시|때)\s+(.+)$", text)
+    match = re.search(rf"(?:면|{_SI}|때)\s+(.+)$", text)
     return match.group(1).strip() if match else ""
 
 
 REST_MAX_WORDS = 5
-_MORE_CONDITION = re.compile(r"(?:면|시|때)(?=\s|$|[,.])")
+_MORE_CONDITION = re.compile(r"(?:면|(?<!다)(?<!역)(?<!혹)(?<!당)(?<!동)시|때)(?=\s|$|[,.])")
 
 
 def classify_rest(rest: str, lex: Lexicon) -> str:
@@ -140,3 +144,53 @@ def classify_rest(rest: str, lex: Lexicon) -> str:
     if all(w.startswith(lex.notify_words) for w in words):
         return "notify"
     return "other"
+
+
+# ---------------------------------------------------------------- 상대 가격 조건 풀어 보기 (2026-11-10, 확인 필요 질문용)
+# 판정은 바꾸지 않는다 (상대 조건은 계속 확인 필요). 확인 질문의 선택지를 코드가 계산할 수 있게 기준어·%·방향만 꺼낸다.
+
+@dataclass(frozen=True)
+class RelativeCondition:
+    base: str                    # high(고점) | low(저점·바닥) | current(지금·현재·여기, 기준어 없는 %) | cost(평단·매수가)
+    pct: float                   # 기준값에서 몇 % (0이면 기준값 그대로: "전고점 뚫으면", "신저가 찍으면")
+    direction: str | None        # below | above | None(방향을 못 찾음)
+    base_word: str               # 문장에 쓰인 기준어 ("최근 고점"). 기준어 없는 %면 ""
+
+
+_BASES = [  # 앞에 있을수록 먼저 본다 (긴 말 먼저)
+    ("high", r"52\s*주\s*(?:신)?(?:고가|최고가?)|전고점|신고가|역사적\s*고점|최근\s*고점|고점|꼭지"),
+    ("low", r"52\s*주\s*(?:신)?(?:저가|최저가?)|전저점|신저가|역사적\s*저점|최근\s*(?:저점|바닥)|저점|바닥"),
+    ("cost", r"평단가?|평균\s*단가|매수가|산\s*가격|매입가"),
+    ("current", r"지금|현재가?|여기"),
+]
+_PCT = re.compile(r"(\d+(?:\.\d+)?)\s*(?:%|퍼센트|프로)")
+_DOWN = re.compile(r"빠지|빠져|떨어지|떨어져|내리|내려|하락|급락|깨지|깨면|이탈|밀리")
+# '넘게'(오타 '넘넘게' 포함)는 정도 표현이라 방향어가 아니다 (2026-11-10 P042-L3 "고점 대비 20% 넘넘게 빠지면"을 위로 읽었다).
+# '찍으면'은 방향이 없다 (신고가·신저가는 기준어로 정한다)
+_UP = re.compile(r"오르|올라|상승|급등|뚫|(?<!넘)넘(?![넘게])|돌파")
+
+
+def parse_relative(text: str) -> RelativeCondition | None:
+    """"고점에서 30% 넘게 빠지면" → (high, 30, below, "고점"). 기준어도 %도 없으면 None.
+    방향은 기준어·% 뒤의 첫 방향어로 정한다. '넘게'는 정도 표현이라 방향어로 보지 않는다.
+    신고가·신저가처럼 방향어가 없으면 고점은 위로, 저점은 아래로 본다."""
+    found = None                 # 고점·저점·평단을 '지금'보다 먼저 본다 ("지금 고점 대비 30%"의 기준은 고점)
+    hits = [(base, m) for base, pattern in _BASES if (m := re.search(pattern, text))]
+    specific = [h for h in hits if h[0] != "current"]
+    if specific or hits:
+        found = min(specific or hits, key=lambda h: h[1].start())
+    pct = _PCT.search(text, found[1].end() if found else 0)
+    if found is None and pct is None:
+        return None
+    base, word = (found[0], re.sub(r"\s+", " ", found[1].group(0))) if found else ("current", "")
+    tail_from = pct.end() if pct else found[1].end()
+    tail = text[tail_from:]
+    down, up = _DOWN.search(tail), _UP.search(tail)
+    direction = None
+    if down and (not up or down.start() < up.start()):
+        direction = "below"
+    elif up:
+        direction = "above"
+    elif base in ("high", "low") and pct is None:
+        direction = "above" if base == "high" else "below"
+    return RelativeCondition(base, float(pct.group(1)) if pct else 0.0, direction, word)

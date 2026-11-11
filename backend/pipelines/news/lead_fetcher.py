@@ -103,6 +103,7 @@ class LeadConfig:
     enqueue_days: int = 3
     contact: str = ""
     min_body_chars: int = 0           # 본문(정제 후)이 이보다 짧으면 skipped (사진·단신 기사). 0이면 끔
+    fulltext_max_runs: int = 3        # 원문 수집(fulltext)에서 failed로 끝난 실행이 이만큼이면 포기
 
     @property
     def user_agent(self) -> str:
@@ -138,9 +139,12 @@ def load_config(path: Path = CONFIG_PATH) -> LeadConfig:
         sources=sources, interval=float(raw.get("request_interval_seconds", 4)),
         max_attempts=int(raw.get("max_attempts", 3)), max_chars=int(raw.get("lead_max_chars", 300)),
         min_chars=int(raw.get("lead_min_chars", 40)), enqueue_days=int(raw.get("enqueue_days", 3)),
-        contact=str(raw.get("contact") or ""), min_body_chars=int(raw.get("min_body_chars", 0)))
+        contact=str(raw.get("contact") or ""), min_body_chars=int(raw.get("min_body_chars", 0)),
+        fulltext_max_runs=int(raw.get("fulltext_max_runs", 3)))
     if config.min_body_chars < 0:
         raise ValueError("min_body_chars는 0 이상이어야 합니다")
+    if config.fulltext_max_runs < 1:
+        raise ValueError("fulltext_max_runs는 1 이상이어야 합니다")
     if config.interval < 1 or config.max_attempts < 1 or not 0 < config.min_chars <= config.max_chars <= 300:
         raise ValueError("요청 간격은 1초 이상, 재시도 1회 이상, 리드 길이는 1~300자여야 합니다")
     return config

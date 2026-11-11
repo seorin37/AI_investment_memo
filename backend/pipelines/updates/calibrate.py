@@ -178,7 +178,7 @@ def build_report(rows: list[dict], min_recall: float | None = None, min_precisio
     lines += ["", "## 구간별 정답률 (전체)", "", "| 유사도 구간 | 후보 수 | 관련 O | 정답률 |", "|---|---|---|---|"]
     for b in bin_table(rows):
         lines.append(f"| {b['from']:.2f} ~ {b['to']:.2f} | {b['n']} | {b['relevant']} | {_pct(b['rate'])} |")
-    groups = [("전체", rows)] + [(k, [r for r in rows if r["kind"] == k]) for k in ("disclosure", "news")]
+    groups = [("전체", rows)] + [(k, [r for r in rows if r["kind"] == k]) for k in ("disclosure", "news", "news_chunks")]
     lines += ["", "## 임계값별 통과량·정밀도·재현율", ""]
     recs = {}
     for name, g in groups:
@@ -195,7 +195,7 @@ def build_report(rows: list[dict], min_recall: float | None = None, min_precisio
     finals = {}
     for name, rec in recs.items():
         floor = None
-        if noise and name in ("news", "disclosure"):
+        if noise and name in ("news", "disclosure", "news_chunks"):
             v = (noise.get(name) or {}).get(noise_key)
             floor = None if v is None else math.ceil(v * 100 - 1e-9) / 100
         final = combine_with_floor(rec, floor)
@@ -217,7 +217,8 @@ def build_report(rows: list[dict], min_recall: float | None = None, min_precisio
     lines += ["", "`configs/updates.yaml`의 topic 항목에 반영:", "```yaml", "topic:"]
     if finals.get("전체") is not None:
         lines.append(f"  min_similarity: {finals['전체']:.2f}")
-    for name, key in (("news", "min_similarity_news"), ("disclosure", "min_similarity_disclosure")):
+    for name, key in (("news", "min_similarity_news"), ("disclosure", "min_similarity_disclosure"),
+                      ("news_chunks", "min_similarity_news_chunks")):
         if name in finals:
             lines.append(f"  {key}: {finals[name]:.2f}" if finals[name] is not None else f"  {key}: 0.99   # 정밀도 목표를 만족하는 값이 없어 사실상 사용하지 않음")
     lines += ["```", "", "임계값은 LLM에 넘길 후보를 거르는 첫 문턱입니다. 낮을수록 엉뚱한 근거와 LLM 호출(크레딧)이 늘고, 높을수록 관련 소식을 놓칩니다.",

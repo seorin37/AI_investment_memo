@@ -24,6 +24,8 @@ class TrackingItem:
     already_shown_ids: tuple[str, ...] = ()   # 이미 사용자에게 보여 준 출처 ref (news:123, disc:…)
     previous_summary: str = ""        # 직전 카드 요약
     fingerprint: str = ""             # 직전 카드 식별값
+    time_hint: str = ""               # 메모 분석이 뽑은 시점·기한 원문 ("다음 주", "이번 분기 실적 발표"). 2026-11-09 전달만
+                                      # (DB 열 없음, 기한 날짜 계산·카드 반영은 아직 안 함. 검색어 query_text에도 넣지 않는다)
 
     @property
     def query_text(self) -> str:
@@ -41,7 +43,7 @@ class Candidate:
     url: str | None
     source: str                       # 매체명 또는 "DART"
     similarity: float
-    doc: str = ""                     # 공시만: periodic(정기보고서) | event(수시공시). 임계값을 따로 쓴다
+    doc: str = ""                     # 공시: periodic(정기보고서) | event(수시공시), 뉴스: chunk(원문 청크 검색) | ""(제목+요약). 임계값을 따로 쓴다
 
 
 @dataclass(frozen=True)
@@ -60,6 +62,35 @@ class Card:
     reason: str = ""
     evidence: list[tuple[str, str]] = field(default_factory=list)   # (source_id, fact)
     confidence: float = 0.0
+
+
+@dataclass
+class CardV2:
+    """v2 카드 (2026-11-10, topic.card_schema: v2). 사건 하나 · 문장마다 근거 하나.
+    title·summary·reason·evidence는 v1 Card를 읽던 코드(보고서·검수 호출)가 그대로 쓰게 맞춘 별칭이다."""
+    status: str                       # update | no_update
+    headline: str = ""
+    when: str = ""                    # 사건 날짜 YYYY-MM-DD
+    facts: list[tuple[str, str]] = field(default_factory=list)      # (문장, evidence_id). "비교 자료 없음"은 evidence_id ""
+    memo_link: str = ""
+    sources: list[str] = field(default_factory=list)                 # facts에서 쓴 evidence_id
+    confidence: float = 0.0
+
+    @property
+    def title(self) -> str:
+        return self.headline
+
+    @property
+    def summary(self) -> list[str]:
+        return [t for t, _ in self.facts]
+
+    @property
+    def reason(self) -> str:
+        return self.memo_link
+
+    @property
+    def evidence(self) -> list[tuple[str, str]]:
+        return [(eid, t) for t, eid in self.facts if eid]
 
 
 @dataclass
@@ -85,6 +116,36 @@ class UpdateDraft:
     observed_trade_date: str | None = None
     origin: str = "llm"               # llm | fixed
     related_news: list[tuple[str, str]] = field(default_factory=list)   # (ref, 기사 제목): 공시 카드에 덧붙는 관련 기사 (링크만, LLM 문장 없음)
+    # 같은 사건 기사 (same_event): 공시와 같은 사건으로 묶여 근거에서 뺀 기사. {ref, title, source, date, url}만, 기사 문장은 쓰지 않는다
+    supporting_news: list[dict] = field(default_factory=list)
+    # v2 카드 (card_schema="v2"일 때만 채운다. v1 카드의 cards.jsonl 모양은 그대로)
+    card_schema: str = "v1"
+    when: str = ""
+    facts: list[dict] = field(default_factory=list)          # {text, ref}. ref ""는 코드가 붙인 "비교 자료 없음"
+    merged_items: list[dict] = field(default_factory=list)   # 같은 메모·같은 근거라 이 카드로 합친 다른 항목 {item_id, description}
+    coverage: str = ""                                        # 자료 범위 문구 ("10월 28일 이후 기사 기준", 뉴스를 쓴 v2 카드만)
+
+
+@dataclass
+class Response:
+    """사용자 응답 한 건 (response.py가 정한다, 2026-11-10). LLM이 아니라 코드가 유형을 정한다.
+    type: update_card | price_card | no_new_info | no_data | needs_confirmation | out_of_scope
+    scope: item(추적 항목) | sentence(메모 문장) | memo(메모 전체)"""
+    type: str
+    scope: str
+    memo_id: str = ""
+    item_id: str = ""
+    sentence_index: int | None = None
+    user_visible: bool = True          # False면 내부 기록(responses.jsonl)에만 남고 사용자에게 보이지 않는다
+    reason: str = ""                   # 왜 이 유형인지 (check_failed, call_failed, parse_failed, no_candidates …)
+    message: str = ""                  # 사용자에게 보일 문구 (카드면 카드 제목)
+    question: str = ""                 # needs_confirmation: 질문 문장
+    options: list[dict] = field(default_factory=list)   # needs_confirmation: 선택지 (없으면 빈 목록)
+    card: dict | None = None           # update_card·price_card: results.draft_to_dict 모양
+    fail_codes: list[str] = field(default_factory=list)
+    checked_at: str = ""               # 확인한 시각 (no_new_info는 이 값과 status만 남긴다)
+    text: str = ""                     # sentence 범위: 메모 문장
+    relevance: dict | None = None      # 관련성 판정 (relevance.Relevance.to_dict, 2026-11-10): 범위·판정 수·이유 코드·후보별 O/X
 
 
 @dataclass
@@ -97,3 +158,4 @@ class TopicOutcome:
     raw: str = ""                    # LLM 원문 (형식 오류 원인을 보려고 보고서에 남긴다)
     retried: bool = False            # 형식 오류로 한 번 다시 요청했는지
     verify_notes: list[str] = field(default_factory=list)   # 검수 호출이 막은 문장과 이유 (보고서용)
+    grouped: list = field(default_factory=list)              # (기사 Candidate, 공시 접수번호): 같은 사건으로 묶여 근거에서 뺀 기사

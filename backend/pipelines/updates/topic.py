@@ -6,6 +6,8 @@
 - LLM 호출이 실패해도 고정 문구로 대체하지만, CreditsExhausted는 대체하지 않고 그대로 올린다 (AI 업데이트 일시 중지).
 - 크레딧 확인은 호출자가 call 함수 안에서 한다. call이 None이면 근거 준비까지만 한다.
 - 옵션 verify_call: 코드 검사를 통과한 카드를 LLM이 한 번 더 문장별로 근거와 대조한다 (항목당 호출 +1). 하나라도 근거에 없다고 하면 검사 실패로 본다.
+- 옵션 same_event(기사 ref → 공시 접수번호, same_event.link_same_event): 근거로 뽑힐 공시와 같은 사건 기사는 근거에서 빼고(LLM이 보지 않는다)
+  그 공시를 쓴 공시 카드에 supporting_news(제목·매체·날짜·링크)로 붙인다. 기사 문장은 쓰지 않는다.
 """
 
 from __future__ import annotations
@@ -13,7 +15,7 @@ from __future__ import annotations
 from typing import Callable
 
 from .checks import check_card, check_no_update
-from .evidence import build_evidence, pick_recent, related_news
+from .evidence import build_evidence, evidence_options, pick_recent, rcept_of, related_news, split_same_event
 from .fixed import fixed_card
 from .judge import build_prompt, build_verify_prompt, parse_card, parse_verify
 from .models import Candidate, CreditsExhausted, TopicOutcome, TrackingItem, UpdateDraft
@@ -27,7 +29,7 @@ _REPAIR_REASON = {"FORMAT_TITLE": "title이 {title_max}자(공백 포함)를 넘
 def _limits(cfg: dict) -> dict:
     """카드 규격 설정값. 프롬프트({title_max} 등)와 형식 재시도 안내 문구가 같은 값을 쓴다."""
     return {"title_max": cfg.get("title_max", 20), "max_sentences": cfg.get("max_sentences", 3),
-            "sentence_max_chars": cfg.get("sentence_max_chars", 60)}
+            "sentence_max_chars": cfg.get("sentence_max_chars", 60), "reason_max": cfg.get("reason_max", 80)}
 
 
 def _repair_prompt(prompt: str, raw: str, codes: list[str], cfg: dict) -> str:
@@ -55,24 +57,47 @@ def _verify(card, evidence, call: Callable[[str], str], company: str = "",
 
 
 def thresholds(cfg: dict) -> tuple[dict[str, float], dict[str, float]]:
-    """종류별 (최소 유사도, 강한 후보 기준). 키는 news | disclosure(정기보고서) | event(수시공시).
-    수시공시 값이 없으면 공시 값을 쓴다. 강한 후보 기준이 없으면 1.01(아무도 못 넘음): 멈추지 않고 검색된 기간 전체에서 고른다."""
+    """종류별 (최소 유사도, 강한 후보 기준). 키는 news | news_chunks(원문 청크) | disclosure(정기보고서) | event(수시공시).
+    수시공시 값이 없으면 공시 값을, 원문 청크 값이 없으면 뉴스 값을 쓴다 (news.search: chunks는 보정 전에 켜지 않는다,
+    news_search.check_mode). 강한 후보 기준이 없으면 1.01(아무도 못 넘음): 멈추지 않고 검색된 기간 전체에서 고른다."""
     base = cfg.get("min_similarity", 0.5)
     floor = {k: cfg.get(f"min_similarity_{k}", base) for k in ("news", "disclosure")}
     strong = {k: cfg.get(f"strong_similarity_{k}", 1.01) for k in ("news", "disclosure")}
     floor["event"] = cfg.get("min_similarity_event", floor["disclosure"])
     strong["event"] = cfg.get("strong_similarity_event", strong["disclosure"])
+    floor["news_chunks"] = cfg.get("min_similarity_news_chunks", floor["news"])
+    strong["news_chunks"] = cfg.get("strong_similarity_news_chunks", strong["news"])
     return floor, strong
 
 
 def check_topic(item: TrackingItem, candidates: list[Candidate], call: Callable[[str], str] | None,
-                banned: list[str], cfg: dict | None = None) -> TopicOutcome:
+                banned: list[str], cfg: dict | None = None, same_event: dict[str, str] | None = None,
+                extra_evidence: Callable[[list], list] | None = None) -> TopicOutcome:
+    """extra_evidence(근거 목록) → 덧붙일 근거 (v2 compare_prior.prior_evidence, DB 연결은 호출자가 가진다)."""
     cfg = cfg or {}
     floor, strong = thresholds(cfg)
     passed = pick_recent(candidates, floor, strong, cfg.get("stop_window_days", 0))
+    grouped: list[tuple[Candidate, str]] = []
+    options = evidence_options(cfg)
+    if same_event:
+        passed, grouped = split_same_event(passed, same_event, cfg.get("max_disclosure_evidence", 2), floor, **options)
     evidence = build_evidence(passed, cfg.get("max_disclosure_evidence", 2), cfg.get("max_news_evidence", 3),
                               cfg.get("news_dup_similarity", 0.7), cfg.get("max_text_chars_news", 600),
-                              cfg.get("max_text_chars_disclosure", 800), floor)
+                              cfg.get("max_text_chars_disclosure", 800), floor, **options)
+    if extra_evidence is not None and evidence:
+        evidence = evidence + extra_evidence(evidence)
+    schema = cfg.get("card_schema", "v1")
+    out = _judge_v2(item, evidence, call, banned, cfg) if schema == "v2" else _judge(item, evidence, call, banned, cfg)
+    out.grouped = grouped
+    if grouped and out.draft is not None and out.draft.type == "disclosure":
+        cited = {rcept_of(ref) for ref, _ in out.draft.sources if ref.startswith("disc:")}
+        out.draft.supporting_news = [{"ref": c.ref, "title": c.title, "source": c.source, "date": c.date, "url": c.url}
+                                     for c, rcept in grouped if rcept in cited]   # 카드가 쓴 공시의 기사만
+    return out
+
+
+def _judge(item: TrackingItem, evidence, call: Callable[[str], str] | None, banned: list[str], cfg: dict) -> TopicOutcome:
+    """근거 → LLM 카드 → 코드 검사 → 카드 또는 고정 문구."""
     if not evidence:
         return TopicOutcome("no_candidates")
     if item.already_shown_ids and all(e.candidate.ref in set(item.already_shown_ids) for e in evidence):
@@ -90,7 +115,7 @@ def check_topic(item: TrackingItem, candidates: list[Candidate], call: Callable[
             draft.related_news = related_news(evidence, set(), cfg.get("related_news_min_similarity", 0.6))
         return TopicOutcome("fixed_card", evidence, card, codes, draft, raw, retried)
 
-    prompt = build_prompt(item, evidence, limits=_limits(cfg))   # 설정 파일이 없으면 여기서 바로 실패시킨다 (호출 실패로 숨기지 않는다)
+    prompt = build_prompt(item, evidence, limits=_limits(cfg), rules=cfg.get("extra_rules"))   # 설정 파일이 없으면 여기서 바로 실패시킨다 (호출 실패로 숨기지 않는다)
     try:
         raw = call(prompt)
     except CreditsExhausted:
@@ -142,3 +167,143 @@ def check_topic(item: TrackingItem, candidates: list[Candidate], call: Callable[
     draft = UpdateDraft(item=item, type=utype, title=card.title, summary=summary, reason=card.reason,
                         sources=sources, related_news=related)
     return TopicOutcome("update", evidence, card, [], draft, raw, retried)
+
+
+_REPAIR_REASON_V2 = {"FORMAT_TITLE": "headline이 {title_max}자(공백 포함)를 넘었거나 비었어요",
+                     "FORMAT_SUMMARY": "facts가 1~{max_sentences}개가 아니거나, 한 문장이 {sentence_max_chars}자를 넘었거나, text에 [E#] 표시가 있어요"}
+_COMPARE_WORDS = ("대비", "보다", "비교", "전년", "작년", "직전", "지난", "전기")
+
+
+def _repair_prompt_v2(prompt: str, raw: str, codes: list[str], cfg: dict) -> str:
+    limits = _limits(cfg)
+    reasons = "\n".join("- " + _REPAIR_REASON_V2[c].format(**limits) for c in dict.fromkeys(codes))
+    return (f"{prompt}\n\n# 수정 요청\n직전 답변이 아래 규칙을 어겼어요.\n{reasons}\n\n직전 답변:\n{raw}\n\n"
+            "같은 근거만 사용하고 새 사실이나 숫자는 넣지 말고, 규칙을 지켜 JSON 하나로 다시 작성하세요. 문장은 줄이거나 나눠서 쓰세요.")
+
+
+def _judge_v2(item: TrackingItem, evidence, call: Callable[[str], str] | None, banned: list[str], cfg: dict) -> TopicOutcome:
+    """v2 카드 (judge.parse_card_v2 · checks.check_card_v2). 흐름(이미 보여 준 출처·호출 실패·형식 재요청·검수 호출·실패 처리)은 v1과 같다.
+    비교를 원하는 메모(judge.wants_comparison)인데 카드에 비교 문장이 없으면 코드가 "비교 자료 없음"을 덧붙인다."""
+    from .checks import check_card_v2, check_no_update_v2
+    from .judge import NO_COMPARISON, parse_card_v2, wants_comparison
+    from .models import Card
+
+    if not evidence or all(e.candidate.doc == "compare" for e in evidence):
+        return TopicOutcome("no_candidates", evidence)
+    if item.already_shown_ids and all(e.candidate.ref in set(item.already_shown_ids)
+                                      for e in evidence if e.candidate.doc != "compare"):
+        return TopicOutcome("already_shown", evidence)
+    if call is None:
+        return TopicOutcome("not_called", evidence)
+    raw = ""
+
+    def replace(codes, card=None, retried=False) -> TopicOutcome:
+        if cfg.get("on_check_fail", "fixed") == "drop":
+            return TopicOutcome("no_update", evidence, card, codes, raw=raw, retried=retried)
+        real = [e for e in evidence if e.candidate.doc != "compare"]
+        draft = fixed_card(item, real)
+        if draft is not None and draft.type == "disclosure":
+            draft.related_news = related_news(real, set(), cfg.get("related_news_min_similarity", 0.6))
+        return TopicOutcome("fixed_card", evidence, card, codes, draft, raw, retried)
+
+    prompt = build_prompt(item, evidence, limits=_limits(cfg), rules=cfg.get("extra_rules"), schema="v2",
+                          coverage=cfg.get("coverage"))
+    try:
+        raw = call(prompt)
+    except CreditsExhausted:
+        raise
+    except Exception as exc:
+        return replace([f"CALL_FAILED:{type(exc).__name__}"])
+    card = parse_card_v2(raw)
+    if card is None:
+        return replace(["FORMAT_PARSE"])
+    if card.status == "no_update":
+        codes = check_no_update_v2(card)
+        return replace(codes, card) if codes else TopicOutcome("no_update", evidence, card, raw=raw)
+    codes = check_card_v2(card, evidence, banned, cfg)
+    retried = False
+    if codes and cfg.get("format_retry", 0) and set(codes) <= _FORMAT_CODES:
+        retried = True
+        try:
+            raw = call(_repair_prompt_v2(prompt, raw, codes, cfg))
+        except CreditsExhausted:
+            raise
+        except Exception as exc:
+            return replace([f"CALL_FAILED:{type(exc).__name__}"], card)
+        card2 = parse_card_v2(raw)
+        if card2 is None:
+            return replace(["FORMAT_PARSE"], card, retried=True)
+        card = card2
+        if card.status == "no_update":
+            bad = check_no_update_v2(card)
+            return replace(bad, card, retried=True) if bad else TopicOutcome("no_update", evidence, card, raw=raw, retried=True)
+        codes = check_card_v2(card, evidence, banned, cfg)
+    if codes:
+        return replace(codes, card, retried=retried)
+    facts = [(t, eid) for t, eid in card.facts if eid]          # "비교 자료 없음"은 검수하지 않는다
+    if cfg.get("verify_call"):
+        vcard = Card("update", card.headline, [t for t, _ in facts], card.memo_link, [(e, t) for t, e in facts], card.confidence)
+        vcodes, notes = _verify(vcard, evidence, call, item.company_name or item.symbol, item.description)
+        if vcodes:
+            out = replace(vcodes, card, retried=retried)
+            out.verify_notes = notes
+            return out
+    by_id = {e.eid: e for e in evidence}
+    fact_rows = [{"text": t, "ref": by_id[eid].candidate.ref} for t, eid in facts]
+    has_no_cmp = any(t == NO_COMPARISON and not eid for t, eid in card.facts)
+    compared = any(by_id[eid].candidate.doc == "compare" for _, eid in facts) or any(
+        w in t for t, _ in facts for w in _COMPARE_WORDS)
+    if has_no_cmp or (wants_comparison(item.memo_text) and not compared):
+        fact_rows.append({"text": NO_COMPARISON, "ref": ""})
+    sources: list[tuple[str, str | None]] = []
+    for row in fact_rows:
+        if not row["ref"]:
+            continue
+        if any(r == row["ref"] for r, _ in sources):
+            sources = [(r, f"{q} {row['text']}" if r == row["ref"] else q) for r, q in sources]
+        else:
+            sources.append((row["ref"], row["text"]))
+    kinds = {by_id[eid].candidate.kind for _, eid in facts if by_id[eid].candidate.doc != "compare"}
+    utype = "disclosure" if "disclosure" in kinds else "news"
+    related = related_news(evidence, {r for r, _ in sources}, cfg.get("related_news_min_similarity", 0.6)) \
+        if utype == "disclosure" else []
+    draft = UpdateDraft(item=item, type=utype, title=card.headline, summary=" ".join(r["text"] for r in fact_rows),
+                        reason=card.memo_link, sources=sources, related_news=related,
+                        card_schema="v2", when=card.when, facts=fact_rows,
+                        coverage=coverage_text(cfg.get("coverage"), any(by_id[eid].candidate.kind == "news" for _, eid in facts)))
+    return TopicOutcome("update", evidence, card, [], draft, raw, retried)
+
+
+def coverage_text(coverage: dict | None, uses_news: bool) -> str:
+    """카드의 자료 범위 문구 (v2, 2026-11-11). 뉴스를 쓴 카드만: DB의 가장 오래된 발행일 → "10월 28일 이후 기사 기준"."""
+    since = (coverage or {}).get("news_since")
+    if not uses_news or not since:
+        return ""
+    _, month, day = since.split("-")
+    return f"{int(month)}월 {int(day)}일 이후 기사 기준"
+
+
+def memo_of(item_id: str) -> str:
+    """항목 ID "M03:1:0" → 메모 "M03"."""
+    return item_id.split(":", 1)[0]
+
+
+def merge_same_source(drafts: list[UpdateDraft], memo_key=None) -> tuple[list[UpdateDraft], dict[str, str]]:
+    """같은 메모 안에서 근거(비교용 근거 제외)가 겹치는 카드는 앞 카드 하나로 합친다 (v2). (남은 카드, 합쳐진 항목 → 남은 카드 항목).
+    가격 카드·고정 문구 카드는 합치지 않는다. 합친 항목은 남은 카드의 merged_items에 적는다."""
+    key = memo_key or memo_of                                  # DB 항목(숫자 id)은 호출자가 메모 id를 찾아 준다
+    kept: list[UpdateDraft] = []
+    merged: dict[str, str] = {}
+    for d in drafts:
+        refs = {r for r, _ in d.sources if not r.startswith("cmp:")}
+        target = None
+        if d.type != "price_condition" and d.origin == "llm" and refs:
+            target = next((k for k in kept if k.type != "price_condition" and k.origin == "llm"
+                           and key(k.item.item_id) == key(d.item.item_id)
+                           and refs & {r for r, _ in k.sources if not r.startswith("cmp:")}), None)
+        if target is None:
+            kept.append(d)
+            continue
+        target.merged_items.append({"item_id": d.item.item_id, "description": d.item.description})
+        merged[d.item.item_id] = target.item.item_id
+    return kept, merged

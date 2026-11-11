@@ -82,10 +82,16 @@ def test_already_collected_links_are_skipped_and_failed_retried(tmp_path):
     recs = {r["news_id"]: r for r in lines(tmp_path)}
     assert recs[9]["status"] == "failed" and recs[9]["attempts"] == 3 and recs[9]["http_status"] == 503
     assert 8.0 in slept                                                      # 재시도 간격을 늘려 간다 (4초 × 시도 횟수)
-    get2 = http({})
-    stats = ft.collect(rows, cfg(), get2, tmp_path, sleep=lambda s: None)
-    assert stats["hankyung"]["already"] == 1 and stats["hankyung"]["gave_up"] == 1   # ok는 건너뛰고, 3번 실패는 포기
-    assert get2.calls == []
+    # 다음 실행: ok는 건너뛰고 failed는 다시 시도한다. failed로 끝난 실행이 fulltext_max_runs(3)번이면 포기
+    for _ in range(2):
+        get2 = http({"https://www.hankyung.com/article/9": Resp(503)})
+        stats = ft.collect(rows, cfg(), get2, tmp_path, sleep=lambda s: None)
+        assert stats["hankyung"]["already"] == 1 and stats["hankyung"]["failed"] == 1
+        assert get2.calls.count("https://www.hankyung.com/article/9") == 3        # 실행마다 max_attempts번까지
+    get3 = http({})
+    stats = ft.collect(rows, cfg(), get3, tmp_path, sleep=lambda s: None)
+    assert stats["hankyung"]["gave_up"] == 1 and get3.calls == []
+    assert ft.load_done(tmp_path)[ft.normalize_url(rows[1].url)] == ft.Seen("failed", 9, 3)
 
 
 def test_timeout_then_success_and_stop_on_429(tmp_path):
@@ -116,6 +122,36 @@ def test_empty_body_is_failed_for_retry(tmp_path):                  # 2026-11-06
                sleep=lambda s: None)
     rec = lines(tmp_path)[0]
     assert rec["status"] == "failed" and rec["reason"].startswith("본문 비어 있음")     # 다음 실행에서 다시 받는다
+
+
+def test_failed_run_then_success(tmp_path):                         # 본문이 나중에 채워진 속보
+    empty = "<html><body><div id='b'> </div></body></html>"
+    r = row(1, "https://www.hankyung.com/article/1", title="[속보] 다우 3% 급등")
+    ft.collect([r], cfg(), http({"https://www.hankyung.com/article/1": Resp(200, empty)}), tmp_path, sleep=lambda s: None)
+    stats = ft.collect([r], cfg(), http({}), tmp_path, sleep=lambda s: None)
+    assert stats["hankyung"]["ok"] == 1 and [x["status"] for x in lines(tmp_path)] == ["failed", "ok"]
+    assert ft.collect([r], cfg(), http({}), tmp_path, sleep=lambda s: None)["hankyung"]["already"] == 1
+
+
+def test_load_done_reads_only_given_days(tmp_path):
+    (tmp_path / "2026-11-04.jsonl").write_text(json.dumps({"url": "https://a/1", "status": "ok", "attempts": 1}) + "\n",
+                                               encoding="utf-8")
+    (tmp_path / "2026-11-05.jsonl").write_text(json.dumps({"url": "https://a/2", "status": "failed", "attempts": 1}) + "\n",
+                                               encoding="utf-8")
+    from datetime import date
+    assert set(ft.load_done(tmp_path)) == {"https://a/1", "https://a/2"}
+    only = ft.load_done(tmp_path, [date(2026, 11, 5), date(2026, 11, 6)])        # 없는 날짜 파일은 건너뛴다
+    assert only == {"https://a/2": ft.Seen("failed", 1, 1)}
+
+
+def test_recent_window_and_days():
+    from datetime import date, datetime
+    from zoneinfo import ZoneInfo
+    now = datetime(2026, 11, 8, 3, 0, tzinfo=ZoneInfo("Asia/Seoul"))
+    start, end = ft.recent_window(6, now)
+    assert start.isoformat() == "2026-11-07T12:00:00+00:00" and end.isoformat() == "2026-11-07T18:00:00+00:00"
+    assert ft.window_days(start, end) == [date(2026, 11, 7), date(2026, 11, 8)]       # 전날 21시~ → 이틀 파일
+    assert ft.window_days(*ft.day_window(date(2026, 11, 5))) == [date(2026, 11, 5)]
 
 
 def test_day_window_is_kst():

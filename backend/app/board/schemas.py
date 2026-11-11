@@ -181,6 +181,13 @@ class MemoResponse(BoardBase):
     ai_linked_at: datetime | None
     price_conditions: list = Field(default_factory=list)
     unread_updates: int = 0
+    # 2026-11-11 메모 저장 시 분석 결과 (생성·수정·AI 켜기/끄기·확인 답변 응답에만). 조회 응답에는 없다(null)
+    analysis: dict | None = None
+
+
+class ConfirmationAnswer(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    option_id: str = Field(min_length=10, max_length=4000)
 
 
 class ChecklistResponse(BoardBase):

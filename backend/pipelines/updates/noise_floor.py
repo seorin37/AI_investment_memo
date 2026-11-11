@@ -6,6 +6,7 @@
 재현율은 알 수 없고, 엉뚱한 자료가 새는 비율만 알 수 있다.
 
     PYTHONPATH=backend python -m pipelines.updates.noise_floor --limit 30
+    PYTHONPATH=backend python -m pipelines.updates.noise_floor --limit 30 --news-search chunks   # 원문 청크 검색의 하한선(news_chunks)
 """
 
 from __future__ import annotations
@@ -63,6 +64,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--since", help="뉴스 시작일 YYYY-MM-DD (기본: 설정의 lookback_days 전)")
     ap.add_argument("--disclosure-since", default="2024-01-01")
     ap.add_argument("--out-dir", help="결과 폴더 (기본: results/updates)")
+    ap.add_argument("--news-search", choices=["article", "chunks"], default="article",
+                    help="chunks면 원문 청크 검색(news_search)의 하한선도 잰다 (news_chunks)")
     args = ap.parse_args(argv)
 
     import psycopg
@@ -79,15 +82,27 @@ def main(argv: list[str] | None = None) -> int:
     d_since = date.fromisoformat(args.disclosure_since)
     encode = make_bge_m3_encoder("dense")
     vectors = [d for d, _ in encode([it.query_text for it in items])]
-
+    searcher = None
     sims: dict[str, list[float]] = {"news": [], "disclosure": []}
+    if args.news_search == "chunks":
+        from .news_search import load_query_encoder, release_gpu
+        del encode                                              # 제목+요약 인코더를 내리고 원문 청크용 인코더를 올린다 (GPU 메모리)
+        release_gpu()
+        chunk_encoder = load_query_encoder()
+        sims["news_chunks"] = []
     with psycopg.connect(get_read_dsn()) as conn:
         conn.read_only = True
         with conn.cursor() as cur:
             cur.execute("SELECT symbol, sector::text FROM stocks WHERE symbol = ANY(%(s)s)", {"s": list(universe)})
             sectors = {sym.strip(): sec for sym, sec in cur.fetchall()}
+        if args.news_search == "chunks":
+            from .news_search import NewsChunkSearch
+            searcher = NewsChunkSearch(conn, chunk_encoder, cfg["news"].get("chunks"))
         for item, vec in zip(items, vectors):
             for other in choose_negatives(item.symbol, sectors, universe, args.negatives):
+                if searcher is not None:
+                    for c in searcher.articles(other, item.query_text, since)[:cfg["news"]["top_k"]]:
+                        sims["news_chunks"].append(c.similarity)
                 for c in news_candidates(conn, other, vec, since, cfg["news"]["top_k"], cfg["news"]["variant"]):
                     sims["news"].append(c.similarity)
                 for c in disclosure_candidates(conn, other, vec, d_since, cfg["disclosure"]["top_k"]):
@@ -100,7 +115,7 @@ def main(argv: list[str] | None = None) -> int:
     for kind, s in summary.items():
         lines.append(f"- {kind}: 표본 {s['n']}건, " + ", ".join(f"p{p} {s[f'p{p}']}" for p in PERCENTILES))
     lines += ["", "p95는 '관련 없는 자료의 95%가 이 점수 이하'라는 뜻입니다. 임계값을 이보다 낮게 두면 엉뚱한 자료가 5% 넘게 통과합니다.",
-              f"`python -m pipelines.updates.calibrate --labels <candidates_auto.csv> --noise-floor {out / 'noise_floor.json'}` 로 정밀도 기준 추천과 합칩니다."]
+              f"`python -m pipelines.updates.calibrate --labels <candidates_auto_<모델>.csv> --noise-floor {out / 'noise_floor.json'}` 로 정밀도 기준 추천과 합칩니다."]
     (out / "noise_floor.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines))
     print(f"결과 폴더: {out} — DB에는 아무것도 쓰지 않았습니다.")

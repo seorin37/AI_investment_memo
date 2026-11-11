@@ -3,6 +3,13 @@
 프론트엔드는 이 문서의 엔드포인트만 호출합니다. 타입 정의 원본은 `src/types/models.ts`, 호출 코드는 `src/api/real.ts` 입니다.
 목업(`src/api/mock`)도 같은 인터페이스(`src/api/types.ts`의 `Api`)를 구현하므로, **목업 응답 모양 = 백엔드가 돌려줘야 할 모양**입니다.
 
+> **2026-11-11 변경 (백엔드 구현에 맞춤, 화면 담당 확인 필요)**
+> - 메모 생성·수정·AI 연결·확인 답변 응답에 `analysis`(메모 분석 결과)가 붙습니다 → 3절 `MemoAnalysis`.
+> - 새 API `POST /memos/{id}/confirmations` (확인 질문 답변 → 가격 조건 만들기).
+> - `price_conditions`는 정규식 파싱이 아니라 **메모 분석이 만든 가격 추적 항목**에서 옵니다. `status`의 `reached`는 도달 카드가 나온 뒤.
+> - `AiUpdate`에 `card`·`item`·`sources`·`price`·`created_at`·`reason`이, `MemoTimeline`에 `tracking_items`가 덧붙었습니다(기존 필드는 그대로).
+> - 첫 AI 업데이트는 **매일 아침 실행(06:30)** 때 만들어집니다. 저장 직후에는 카드가 없고 `analysis.next_update_at`으로 안내합니다.
+
 ## 0. 공통 규칙
 
 | 항목 | 규칙 |
@@ -107,17 +114,25 @@ app.add_middleware(
 | POST | `/stocks/{code}/references` | `{title, links:[{title, url, ref_type, source}]}` | `ReferenceBoard` |
 | PATCH | `/board-items/{id}` | 부분 수정 (메모: title/body/tags/color/pinned/position, 체크리스트: title/items, 참고자료: title/links) | `BoardItem` |
 | DELETE | `/board-items/{id}` | 휴지통으로 이동 | 204 |
-| PUT | `/memos/{id}/ai-link` | `{enabled}` | `Memo` |
+| PUT | `/memos/{id}/ai-link` | `{enabled}` | `Memo` (+`analysis`) |
+| POST | `/memos/{id}/confirmations` | `{option_id}` — `analysis.confirmations[].options[].option_id` 중 하나 | `Memo` (+`analysis`, 새 가격 조건). 메모가 그 뒤 바뀌었으면 **409** → 메모를 다시 불러 새 질문을 보여 주세요. 잘못된 선택지는 422 |
 | GET | `/memos/{id}/timeline` | 메모 팝업 'AI 업데이트' 탭 | `MemoTimeline` |
-| GET | `/stocks/{code}/ai-updates` | 보드 우측 패널 (AI 연결 ON 메모에 연결된 것만, 최신순) | `AiUpdate[]` |
-| POST | `/ai-updates/{id}/read` | 읽음 처리 | 204 |
+| GET | `/stocks/{code}/ai-updates?limit=100` | 보드 우측 패널 (AI 연결 ON 메모에 연결된 것만, 최신순) | `AiUpdate[]` |
+| POST | `/ai-updates/{id}/read` | 읽음 처리 (본인 카드가 아니거나 없으면 404) | 204 |
 | POST | `/files` | multipart `file` (참고자료·투자 기록 첨부) | `{url, name}` |
 
 백엔드 규칙 (팀 결정):
 - **체크리스트·참고자료는 AI 연결 없음** — 임베딩/분석 대상 아님.
 - 메모 `title`/`body`가 바뀌면 **새 버전(`MemoVersion`) 저장** → 타임라인에서 어떤 버전에 대한 업데이트였는지 표시.
-- `price_conditions`는 본문의 "15만원 밑이면…" 같은 표현을 **코드(정규식)로 파싱** — LLM 사용 안 함. 매 영업일 종가로 `status`(`waiting`/`reached`/`paused`) 갱신.
+- ~~`price_conditions`는 본문을 정규식으로 파싱~~ → **2026-11-11:** 메모 분석(규칙 + 필요한 문장만 LLM)이 만든 가격 추적 항목입니다.
+  `status`: `waiting`(추적 중) · `reached`(도달 카드가 나옴) · `paused`(AI 연결 OFF). `tracking`은 추적 중이면 true.
+  "고점에서 20% 빠지면"처럼 기준이 애매한 문장은 항목을 만들지 않고 `analysis.confirmations`로 질문합니다 → 답하면 가격 조건이 생깁니다.
 - `ai_linked=false` 메모는 임베딩·LLM 판단에서 제외.
+- **메모 분석 (2026-11-11)**
+  - AI 연결 ON인 일반 메모를 만들거나, 본문이 실제로 바뀌었거나, AI 연결을 켤 때(그 사이 메모가 바뀌었으면) 저장 직후 분석합니다. 제목·색·태그·고정만 바뀌면 분석하지 않습니다(`status: unchanged`).
+  - AI 연결 OFF → 그 메모의 추적을 멈춤(`paused`), 다시 ON → 메모가 그대로면 다시 추적(`unchanged`, 분석 없음).
+  - 분석이 실패해도 **메모 저장은 성공**합니다(`analysis.status: failed`, `error`). 다시 저장하면 다시 분석합니다.
+  - 응답 시간: 분석이 LLM을 부르면 보통 5~15초 더 걸립니다.
 
 ```json
 // Memo
@@ -140,6 +155,50 @@ app.add_middleware(
 { "kind": "memo_edit", "at": "...", "version": { /* MemoVersion */ } }
 { "kind": "ai_linked", "at": "..." }
 ```
+
+**2026-11-11 덧붙은 값** (기존 필드는 그대로, 아래는 추가)
+
+```json
+// Memo 응답의 analysis (생성·수정·AI 연결·확인 답변 응답에만. 보드 조회에서는 null)
+"analysis": {
+  "status": "done",            // done | unchanged | skipped(AI OFF) | failed | confirmed
+  "reason": null,              // skipped일 때 "ai_off"
+  "error": null,               // failed일 때 llm_unavailable | llm_failed | internal_error:… | save_failed:…
+  "items": [ { "id": "13", "type": "topic", "description": "삼성전자 HBM 관련 소식", "price_threshold": null, "status": "active" },
+             { "id": "15", "type": "price_below", "description": "299,600원 아래로", "price_threshold": 299600, "status": "active" } ],
+  "created": 1, "done": 1,     // done일 때: 새로 만든·끝낸 항목 수 (같은 항목은 그대로 둠)
+  "confirmations": [ {
+    "sentence_index": 1, "text": "고점에서 20% 빠지면 알려줘.",
+    "question": "'고점'을 어느 가격으로 볼까요? (… 이미 도달했어요 · 2026-11-10 종가 198,900원)",
+    "reason": "UNSUPPORTED_CONDITION",
+    "options": [ { "option_id": "eyJ…", "status": "already_reached",       // not_reached | already_reached
+                   "basis": { "label": "52주 고점", … }, "current": { "close": 198900, "trade_date": "2026-11-10" },
+                   "item": { "type": "price_below", "description": "299,600원 아래로", "price_threshold": 299600 } } ] } ],
+  "out_of_scope": false,       // true면 "이 메모에서는 추적할 내용을 찾지 못했어요"
+  "paused": 3, "resumed": 3,   // AI 연결 OFF/ON 응답에만
+  "next_update_at": "2026-11-12T06:30:00+09:00"   // 첫 AI 업데이트 예정 시각 (매일 실행). 안내 문구용
+}
+
+// AiUpdate 추가 필드
+{ "created_at": "…",                     // 카드를 만든 시각 (published_at은 근거 자료의 날짜)
+  "reason": "메모의 'HBM 소식'과 연결된 …",  // 메모와의 연결 한 문장 (카드 v2 memo_link)
+  "card": { "headline": "…", "when": "2026-10-29", "facts": [{ "text": "…", "ref": "news:399" }],
+            "memo_link": "…", "coverage": "10월 28일 이후 기사 기준", "merged_items": [], … },
+  "item": { "id": "4", "type": "topic", "description": "주가 부진 원인과 최근 업황", "status": "active",
+            "last_checked_at": "2026-11-11T15:34:00+09:00" },
+  "sources": [ { "kind": "news", "ref": "news:399", "title": "…", "source": "한국경제", "url": "https://…",
+                 "published_at": "…", "quote": "근거 문장" },
+               { "kind": "disclosure", "ref": "disc:2026…", "title": "현금ㆍ현물배당결정", "source": "DART",
+                 "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=…", "published_at": "2026-10-29", "quote": "[청크 0] …" } ],
+  "price": null }                        // 가격 카드: { "state": "near|reached", "observed_value": 1212000, "observed_trade_date": "2026-11-10" }
+
+// MemoTimeline 추가 필드: 추적 항목별 마지막 확인 시각 (done 항목 제외)
+"tracking_items": [ { "id": "4", "type": "topic", "description": "…", "status": "active", "last_checked_at": "…" } ]
+```
+
+- `AiUpdate.type`: 가격 카드는 `price`, `title`은 `"종가 1,212,000원"`, `headline`은 `"조건가에 도달했어요"`, `source`는 `KRX`.
+  뉴스·공시 카드의 `title`은 대표 근거의 제목, `headline`은 카드 제목입니다.
+- `relevance`: 대표 뉴스의 관련성 판정 유사도(0~1). 공시·가격 카드는 1.0.
 
 `type`: `disclosure`(DART) · `news`(네이버 뉴스 검색 API/RSS) · `price`(KIS 확정 일봉 → 규칙·시계열 계산)
 
@@ -182,7 +241,7 @@ app.add_middleware(
 | POST | `/checklist-items` | `{stock_code, text}` (종목 체크리스트 없으면 생성) | `HomeChecklistItem` |
 | GET | `/price-conditions` | 지켜보는 가격 조건 | `PriceConditionRow[]` |
 | PATCH | `/memos/{id}/price-conditions/{cid}` | `{tracking}` | 204 |
-| GET | `/ai-updates/summary` | 메모에 도착한 소식(종목별) | `MemoUpdateSummary[]` |
+| GET | `/ai-updates/summary` | 메모에 도착한 소식(종목별) — **읽지 않은 카드만**, AI 연결 ON 메모, `new_count` 많은 종목 먼저, 메모당 최대 5건 | `MemoUpdateSummary[]` |
 | GET | `/insights/memo-backtest` | **메모대로 했다면** | `MemoBacktest[]` |
 | GET | `/insights/compare-memos` | **비교 메모 자동 카드** | `CompareMemoCard[]` |
 | GET | `/insights/conclude-candidates` | **결론 낼 메모** | `ConcludeCandidate[]` |
@@ -214,6 +273,6 @@ app.add_middleware(
 | 공시 원문·청크 임베딩 | Python Worker (DART 수집) → BGE-M3 | PostgreSQL + pgvector |
 | 뉴스 헤드라인·본문 임베딩 | Python Worker (네이버 뉴스 API/RSS, 중복 제거) → BGE-M3 | PostgreSQL + pgvector |
 | 일봉 OHLCV · 가격 이벤트 | Python Worker (KIS Open API) → 규칙 계산 | `prices_daily`, `adjusted_prices_daily` 등 |
-| 메모 임베딩 | FastAPI (메모 저장/수정 시, `ai_linked=true`만) → BGE-M3 | pgvector |
-| `ai_updates` | Worker: 새 문서 ↔ 메모 임베딩 코사인 유사도 1차 필터 → LLM 관련성 최종 판단 → 짧은 요약 | PostgreSQL |
-| `price_conditions.status` | Worker: 종가 vs 조건 (LLM 없음) | PostgreSQL |
+| 메모 분석 → 추적 항목 (2026-11-11) | FastAPI (메모 저장/수정 시, `ai_linked=true`만): 규칙 판정 + 필요한 문장만 LLM | `tracking_items` · `tracking_item_revisions` |
+| AI 업데이트 카드 (2026-11-11) | Worker 매일 06:30: 추적 항목별 새 자료 검색(임베딩) → 관련성 판정(LLM) → 카드 작성(LLM) · 가격 조건(LLM 없음) | `tracking_updates` · `update_sources` · `tracking_matches` |
+| 가격 조건 상태 | 위 매일 실행: 전날 종가 vs 조건 (LLM 없음). 처음 확인 때 이미 도달했으면 한 번 카드 | `tracking_updates`(price_condition) |

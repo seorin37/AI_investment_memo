@@ -27,6 +27,14 @@ def new_run_dir(root: str | Path | None = None, now: datetime | None = None) -> 
 
 
 def draft_to_dict(d: UpdateDraft) -> dict:
+    out = _v1_dict(d)
+    if d.card_schema == "v2":                       # v1 카드는 예전 모양 그대로
+        out.update(card_schema="v2", headline=d.title, when=d.when, facts=d.facts, memo_link=d.reason,
+                   merged_items=d.merged_items, coverage=d.coverage)
+    return out
+
+
+def _v1_dict(d: UpdateDraft) -> dict:
     return {
         "item_id": d.item.item_id, "symbol": d.item.symbol, "item_type": d.item.type,
         "description": d.item.description, "category": d.item.category,
@@ -34,6 +42,7 @@ def draft_to_dict(d: UpdateDraft) -> dict:
         "update_type": d.type, "title": d.title, "summary": d.summary, "reason": d.reason,
         "sources": [{"ref": r, "quote": q} for r, q in d.sources],
         "related_news": [{"ref": r, "title": t} for r, t in d.related_news],
+        "supporting_news": d.supporting_news,
         "price_state": d.price_state, "details": d.details, "observed_trade_date": d.observed_trade_date,
         "origin": d.origin,
     }
@@ -50,13 +59,27 @@ def write_results(run_dir: Path, drafts: list[UpdateDraft], report: str, summary
 CANDIDATE_COLUMNS = ["item_id", "symbol", "category", "항목", "메모 문장", "종류", "ref", "날짜", "제목", "내용(앞부분)", "유사도", "관련(O/X)"]
 
 
-def write_candidates_csv(run_dir: Path, rows: list[tuple[TrackingItem, Candidate]]) -> Path:
-    """항목×후보 한 줄씩. 엑셀에서 바로 열리도록 utf-8-sig로 쓴다. 마지막 열 '관련(O/X)'을 사람이 채운다."""
+CANDIDATE_TEXT = 500      # 공시·제목+요약 뉴스의 내용 칸 길이
+NEWS_CHUNK_TEXT = 800     # 2026-11-09: 뉴스 원문 청크는 전문(최대 773자)을 적는다 (autolabel.MAX_TEXT와 같게)
+
+
+RELEVANCE_COLUMNS = ["판정(O/X)", "판정코드", "판정범위"]
+
+
+def write_candidates_csv(run_dir: Path, rows: list[tuple[TrackingItem, Candidate]],
+                         relevance: dict[tuple[str, str], tuple[str, str, str]] | None = None) -> Path:
+    """항목×후보 한 줄씩. 엑셀에서 바로 열리도록 utf-8-sig로 쓴다. '관련(O/X)'을 사람이 채운다.
+    relevance((항목, ref) → (O/X, 이유 코드, 범위))를 주면 관련성 판정 열 3개를 맨 뒤에 더한다 (판정하지 않은 후보는 빈 칸)."""
     path = run_dir / "candidates.csv"
     with path.open("w", encoding="utf-8-sig", newline="") as f:
         w = csv.writer(f)
-        w.writerow(CANDIDATE_COLUMNS)
+        w.writerow(CANDIDATE_COLUMNS + (RELEVANCE_COLUMNS if relevance is not None else []))
         for item, c in rows:
-            w.writerow([item.item_id, item.symbol, item.category, item.description, item.memo_text, c.kind, c.ref,
-                        c.date, c.title, (c.text or "").replace("\n", " ")[:500], f"{c.similarity:.4f}", ""])
+            kind = "news_chunks" if c.doc == "chunk" else c.kind     # 원문 청크 후보는 calibrate가 따로 센다
+            limit = NEWS_CHUNK_TEXT if c.doc == "chunk" else CANDIDATE_TEXT
+            row = [item.item_id, item.symbol, item.category, item.description, item.memo_text, kind, c.ref,
+                   c.date, c.title, (c.text or "").replace("\n", " ")[:limit], f"{c.similarity:.4f}", ""]
+            if relevance is not None:
+                row += list(relevance.get((item.item_id, c.ref), ("", "", "")))
+            w.writerow(row)
     return path

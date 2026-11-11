@@ -114,6 +114,25 @@ class PriceTest(unittest.TestCase):
         for text in ["영업이익 10% 늘면 좋겠다", "배당 5% 오르면 좋겠다", "거래량 많은 종목 보기", "60일 동안 지켜보기"]:
             self.assertIsNone(parse_price(text, LEX), text)
 
+    def test_relative_with_base_words_and_fillers(self):
+        """2026-11-09 memos_long: 기준어(여기서·바닥·최근 저점)와 %·동사 사이 '더·넘게'. 상대 조건은 계속 확인 필요."""
+        for text in ["여기서 10% 더 빠지면 알려줘.", "네이버 지금 바닥 근처 같은데 여기서 5% 더 빠지면 한 번 더 물타볼게요.",
+                     "최근 바닥에서 10% 넘게 오르면 알려주세요.", "네이버 최근 저점 다시 깨면 알려줘...",
+                     "5% 넘게 빠지면 알려줘", "10% 더 오르면 일부 팔기", "10% 이상 빠지면 알려줘", "20% 이상 더 오르면 팔기"]:
+            self.assertEqual(parse_price(text, LEX).kind, "unsupported", text)
+            self.assertEqual(judge_one(text).decision, "needs_confirmation", text)
+        self.assertIsNone(parse_price("영업이익 10% 넘게 늘면 좋겠다", LEX))          # 사업 수치는 그대로 제외
+        self.assertIsNone(parse_price("매출 10% 이상 늘면 좋겠다", LEX))
+
+    def test_si_inside_words_is_not_condition(self):
+        """'다시·역시·혹시'의 '시'는 조건 표지가 아니다 (예측 문장이 미지원 조건으로 잡히던 오탐)."""
+        for text in ["이대로면 지금보다 15%는 다시 갈 거요.", "지금보다 10%는 역시 비싸다", "고점 대비 20% 혹시 모르니까"]:
+            self.assertIsNone(parse_price(text, LEX), text)
+        self.assertEqual(parse_price("7만 돌파 시 알림", LEX).direction, "above")      # 띄어 쓴 '시'는 그대로 조건
+        self.assertEqual(parse_price("7만 돌파시 알림", LEX).direction, "above")
+        self.assertEqual(parse_price("고점 대비 30% 하락 시 알림", LEX).kind, "unsupported")
+        self.assertEqual(parse_price("다시 7만 깨지면 알려줘", LEX).price, 70000)
+
 
 class JudgeTest(unittest.TestCase):
     def test_c1_price_with_action(self):
@@ -213,6 +232,19 @@ class LLMInterfaceTest(unittest.TestCase):
         out = llm.apply_llm(js, rows)[0]
         self.assertEqual(sorted(it["type"] for it in out.items), ["price_below", "topic"])
 
+    def test_price_item_without_threshold_becomes_confirmation(self):
+        """LLM이 상대 조건을 가격 항목으로 내면서 조건가를 비우면 카드 단계로 넘기지 않는다."""
+        for threshold in (None, "30%", 0, True):
+            js = judge_memo("HBM 실적 보기\nㅋㅋ\n그거 4분기에 확인", "005930", LEX)
+            rows = [{"sentence_index": 0, "decision": "normal", "category": "A2", "confidence": 0.9,
+                     "items": [{"type": "price_below", "description": "고점 대비 30% 하락", "price_threshold": threshold}]}]
+            out = llm.apply_llm(js, rows)[0]
+            self.assertEqual((out.decision, out.reason_code), ("needs_confirmation", "PRICE_THRESHOLD_MISSING"), threshold)
+        js = judge_memo("HBM 실적 보기", "005930", LEX)
+        ok = [{"sentence_index": 0, "decision": "normal", "category": "A2", "confidence": 0.9,
+               "items": [{"type": "price_below", "description": "7만 아래", "price_threshold": 70000}]}]
+        self.assertEqual(llm.apply_llm(js, ok)[0].decision, "normal")
+
     def test_single_call_only_when_pending(self):
         calls = []
         llm.judge_with_llm(judge_memo("ㅋㅋ", "005930", LEX), "005930", "삼성전자", lambda p: calls.append(p) or "[]")
@@ -232,6 +264,30 @@ class EvaluateTest(unittest.TestCase):
         self.assertEqual(s["over_tracking"], 0)
         self.assertEqual(s["pii_recall"], 1.0)
         self.assertEqual(s["price_extra"], 0)
+
+
+
+class RelativeParseTest(unittest.TestCase):
+    """상대 가격 조건 풀어 보기 (확인 질문 선택지용, 판정은 그대로)."""
+
+    def test_cases(self):
+        from pipelines.tracking.price import RelativeCondition, parse_relative
+        cases = {
+            "삼성전자 고점에서 30% 넘게 빠지면 바로 알려주세요.": RelativeCondition("high", 30.0, "below", "고점"),
+            "최근 바닥에서 10% 넘게 오르면 알려줘": RelativeCondition("low", 10.0, "above", "최근 바닥"),
+            "여기서 10% 더 빠지면 추가 매수": RelativeCondition("current", 10.0, "below", "여기"),
+            "지금 고점 대비 20% 내려오면": RelativeCondition("high", 20.0, "below", "고점"),
+            "10% 오르면 체크": RelativeCondition("current", 10.0, "above", ""),
+            "평단에서 15프로 떨어지면 손절": RelativeCondition("cost", 15.0, "below", "평단"),
+            "전고점 뚫으면 알려줘": RelativeCondition("high", 0.0, "above", "전고점"),
+            "52주 신저가 찍으면": RelativeCondition("low", 0.0, "below", "52주 신저가"),
+            "신고가 찍으면 알려줘": RelativeCondition("high", 0.0, "above", "신고가"),
+            "삼전 고점 대비 20% 넘넘게 빠지면 알림.": RelativeCondition("high", 20.0, "below", "고점"),   # 오타 '넘넘게'
+            "전고점 다시 넘어서면 알려주세요": RelativeCondition("high", 0.0, "above", "전고점"),
+        }
+        for text, want in cases.items():
+            self.assertEqual(parse_relative(text), want, text)
+        self.assertIsNone(parse_relative("HBM 실적 계속 볼게요"))
 
 
 if __name__ == "__main__":
@@ -303,6 +359,33 @@ class OpenAIClientTest(unittest.TestCase):
             client("p")
         self.assertEqual(len(sent), 1)
         self.assertFalse(client.calls[0].ok)
+
+    def test_reasoning_tokens_recorded_separately(self):
+        body = self.ok_body("[]")
+        body["usage"] = {"prompt_tokens": 100, "completion_tokens": 250,
+                         "completion_tokens_details": {"reasoning_tokens": 200}}
+        client, _ = self.make([self.FakeResponse(200, body), self.FakeResponse(200, self.ok_body("[]"))])
+        client("p")
+        client("q")
+        self.assertEqual((client.calls[0].output_tokens, client.calls[0].reasoning_tokens), (250, 200))
+        self.assertIsNone(client.calls[1].reasoning_tokens)                  # 세부 내역이 없는 응답
+        from pipelines.tracking.openai_client import usage_totals
+
+        self.assertEqual(usage_totals(client.calls),
+                         {"llm_calls": 2, "prompt_tokens": 220, "output_tokens": 280, "reasoning_tokens": 200})
+
+    def test_reasoning_effort_only_when_env_set(self):
+        from unittest import mock
+
+        with mock.patch.dict("os.environ", {}, clear=False) as env:
+            env.pop("LLM_REASONING_EFFORT", None)
+            client, sent = self.make([self.FakeResponse(200, self.ok_body("[]"))])
+            client("p")
+            self.assertNotIn("reasoning_effort", sent[0][2])
+            env["LLM_REASONING_EFFORT"] = "low"
+            client, sent = self.make([self.FakeResponse(200, self.ok_body("[]"))])
+            client("p")
+            self.assertEqual(sent[0][2]["reasoning_effort"], "low")
 
 
 class EvaluateLLMTest(unittest.TestCase):
