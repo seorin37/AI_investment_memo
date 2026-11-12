@@ -21,7 +21,8 @@ _RUN = re.compile(rf"(?:{_NUMK}\s*(?:조|억|만)\s*)+(?:{_NUMK}(?=\s*원))?")
 _PART = re.compile(rf"({_NUMK})\s*(조|억|만)?")
 
 DEFAULTS = {"title_max": 20, "max_sentences": 3, "sentence_max_chars": 60, "min_confidence": 0.7, "min_fact_overlap": 0.6,
-            "reason_max": 80, "fact_max": 100, "max_evidence": 3, "banned_patterns": []}
+            "reason_max": 80, "fact_max": 100, "max_evidence": 3, "banned_patterns": [],
+            "prediction_terms": [], "prediction_exempt": [], "judgment_patterns": [], "coverage_terms": []}
 
 # 회사가 한 말을 전달하는 문장은 시제 패턴(예측 표현) 검사에서 뺀다 ("회사는 ~라고 밝혔어요", 지침서 [근거 우선순위])
 # "로 전망했"·"로 예상했": 증권사·언론이 주어인 전망 문장 ("KB증권은 매출이 상승할 것으로 전망했어요")
@@ -163,6 +164,27 @@ def _check_body(lines: list[str], ev_pairs: list[tuple[str, str]], extra: list[s
     return codes
 
 
+# 회사가 스스로 밝힌 계획·발언을 전하는 문장 (공시·발표 내용 자체가 사실이다). ATTRIBUTION과 달리 "로 전망했"·"로 예상했"
+# (증권사·언론이 주어인 전망)는 넣지 않는다: 2026-11-09 결정으로 남의 전망은 주체를 써도 사실 근거로 쓰지 않는다
+COMPANY_STATEMENT = ("라고 밝혔", "고 밝혔", "고 발표", "고 설명", "계획이라고")
+
+
+def prediction_text(texts: list[str], cfg: dict) -> str | None:
+    """예측(전망·예상·추정·관측·가능성 …)을 핵심 사실로 쓴 글. 시제 패턴과 달리 "증권사는 ~로 전망했어요"처럼 주체를 쓴 문장도
+    잡는다 (2026-11-09 "네이버 3분기 매출 3조5천143억원 전망" 카드). 실제 실적을 예상치와 견준 표현(prediction_exempt)과
+    회사가 스스로 밝힌 계획·발언(COMPANY_STATEMENT)은 뺀다."""
+    exempt = [re.compile(p) for p in cfg["prediction_exempt"]]
+    for t in texts:
+        if any(a in t for a in COMPANY_STATEMENT):
+            continue
+        rest = t
+        for p in exempt:
+            rest = p.sub(" ", rest)
+        if any(term in rest for term in cfg["prediction_terms"]):
+            return t
+    return None
+
+
 def check_card(card: Card, evidence: list[Evidence], banned: list[str], cfg: dict | None = None) -> list[str]:
     """status가 update인 카드 검사. 걸린 이유 코드 목록 (비어 있으면 통과)."""
     cfg = {**DEFAULTS, **(cfg or {})}
@@ -172,7 +194,100 @@ def check_card(card: Card, evidence: list[Evidence], banned: list[str], cfg: dic
     if not card.reason.strip() or len(card.reason) > cfg["reason_max"]:
         codes.append("FORMAT_REASON")
     codes += _check_body(card.summary, card.evidence, [card.title, card.reason], card.confidence, evidence, banned, cfg)
+    # 핵심 사실(제목·요약·근거 fact)이 예측이면 실패. 이유(reason)는 메모와의 연결 설명이라 보지 않는다
+    if cfg["prediction_terms"] and prediction_text([card.title, *(_TAG.sub("", s) for s in card.summary),
+                                                    *(f for _, f in card.evidence)], cfg):
+        codes.append("PREDICTION")
     return list(dict.fromkeys(codes))
+
+
+_ISO = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_KDATE = re.compile(r"(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일")
+_SENT_END = re.compile(r"[.!?。](?=\s|$)")
+
+
+def text_dates(text: str) -> set[str]:
+    """글 속 날짜를 YYYY-MM-DD로 ("2026-10-28", "2026.10.28", "2026년 10월 28일")."""
+    out = set()
+    for m in list(_DATE.finditer(text or "")) + list(_KDATE.finditer(text or "")):
+        y, mo, d = m.group(1), m.group(2), m.group(3)
+        if d:
+            out.add(f"{int(y):04d}-{int(mo):02d}-{int(d):02d}")
+    return out
+
+
+def _banned_hit(texts: list[str], banned: list[str], cfg: dict) -> bool:
+    """v1 _check_body와 같은 금지 표현 검사: 사전은 부분 문자열, 시제 패턴은 회사 발언 전달 문장을 뺀 문장에만."""
+    if any(term in " ".join(texts) for term in banned):
+        return True
+    patterns = [re.compile(p) for p in cfg["banned_patterns"]]
+    return any(not any(a in t for a in ATTRIBUTION) and any(p.search(t) for p in patterns) for t in texts)
+
+
+def _ev_text(e: Evidence) -> str:
+    return f"{e.candidate.title} {e.shown_text} {e.candidate.date}"
+
+
+def check_card_v2(card, evidence: list[Evidence], banned: list[str], cfg: dict | None = None) -> list[str]:
+    """v2 카드(CardV2) 검사. v1과 같은 이유 코드를 쓰고, 숫자·날짜는 facts 문장마다 그 문장의 evidence_id 근거 하나와 대조한다
+    (다른 근거의 숫자를 섞으면 NUMBER). "비교 자료 없음"(evidence_id "")만 근거 없이 허용한다.
+    - FORMAT_TITLE headline · FORMAT_WHEN when(YYYY-MM-DD, 쓴 근거의 날짜나 근거 본문에 적힌 날짜)
+    - FORMAT_SUMMARY facts 개수(1~max_sentences, 비교 자료 없음 제외)·문장 길이·[E#] 표시
+    - FORMAT_REASON memo_link(한 문장, reason_max자) · SOURCE 번호·sources 목록·비교용 근거만으로 만든 카드
+    - BANNED · PREDICTION(headline·facts·memo_link) · LOW_CONF. FACT_OVERLAP(v1의 evidence.fact 대조)는 v2에 없다."""
+    cfg = {**DEFAULTS, **(cfg or {})}
+    ids = {e.eid: e for e in evidence}
+    codes: list[str] = []
+    if not card.headline or len(card.headline) > cfg["title_max"]:
+        codes.append("FORMAT_TITLE")
+    facts = [(t, eid) for t, eid in card.facts if not (t == "비교 자료 없음" and not eid)]
+    cited = [ids[eid] for _, eid in facts if eid in ids]
+    allowed = set()
+    for e in cited:
+        allowed |= {e.candidate.date} | text_dates(_ev_text(e))
+    if not _ISO.match(card.when or "") or card.when not in allowed:
+        codes.append("FORMAT_WHEN")
+    if not (1 <= len(facts) <= cfg["max_sentences"]) or any(
+            not t or len(t) > cfg["sentence_max_chars"] or _TAG.search(t) for t, _ in facts):
+        codes.append("FORMAT_SUMMARY")
+    if (not card.memo_link or len(card.memo_link) > cfg["reason_max"]
+            or len(_SENT_END.findall(card.memo_link.strip())) > 1):
+        codes.append("FORMAT_REASON")
+    used = [eid for _, eid in facts]
+    if (any(eid not in ids for eid in used) or {s for s in card.sources if s} != set(used)
+            or (cited and all(e.candidate.doc == "compare" for e in cited))):
+        codes.append("SOURCE")
+    texts = [card.headline, *(t for t, _ in facts), card.memo_link]
+    if _banned_hit(texts, banned, cfg):
+        codes.append("BANNED")
+    # 숫자: 문장마다 그 근거 하나에만. 제목·memo_link는 쓴 근거 전체 안에서
+    union = set()
+    for e in cited:
+        union |= evidence_numbers(_ev_text(e))
+    bad = any(eid in ids and not numbers(t) <= evidence_numbers(_ev_text(ids[eid])) for t, eid in facts)
+    if bad or not numbers(card.headline) <= union or not numbers(card.memo_link) <= union:
+        codes.append("NUMBER")
+    if cfg["prediction_terms"] and prediction_text(texts, cfg):
+        codes.append("PREDICTION")
+    # 자료 범위 밖을 전제로 한 말 ("처음", "줄곧" …): 그 말이 쓴 근거에 그대로 있을 때만 (2026-11-11, 범위 밖 원인·추이를 단정하지 않게)
+    def outside(text: str, hay: str) -> bool:
+        return any(term in text and term not in hay for term in cfg["coverage_terms"])
+    all_ev = " ".join(_ev_text(e) for e in cited)
+    if (any(eid in ids and outside(t, _ev_text(ids[eid])) for t, eid in facts)
+            or outside(card.headline, all_ev) or outside(card.memo_link, all_ev)):
+        codes.append("COVERAGE")
+    # 비교 판단·선택 권유 ("KB가 더 나아요", "갈아타는 게 좋아요"): 두 대상의 사실만 나란히 보여 주고 판단은 하지 않는다 (2026-11-10)
+    judges = [re.compile(p) for p in cfg["judgment_patterns"]]
+    if any(p.search(t) for p in judges for t in texts):
+        codes.append("JUDGMENT")
+    if card.confidence < cfg["min_confidence"]:
+        codes.append("LOW_CONF")
+    return list(dict.fromkeys(codes))
+
+
+def check_no_update_v2(card) -> list[str]:
+    ok = not card.headline and not card.when and not card.memo_link and not card.facts and not card.sources
+    return [] if ok else ["FORMAT_STATE"]
 
 
 def check_no_update(card: Card) -> list[str]:

@@ -14,6 +14,7 @@ from .schemas import (
     BoardItemPatch,
     BoardResponse,
     ChecklistCreate,
+    ConfirmationAnswer,
     ChecklistItemPatch,
     MemoCreate,
     ReferenceCreate,
@@ -22,6 +23,7 @@ from .service import (
     BoardItemNotFoundError,
     BoardService,
     InvalidBoardPatchError,
+    StaleConfirmationError,
     StockBoardNotFoundError,
 )
 
@@ -51,6 +53,8 @@ def _not_found() -> HTTPException:
 def _handle_error(exc: Exception) -> None:
     if isinstance(exc, (BoardItemNotFoundError, StockBoardNotFoundError)):
         raise _not_found() from exc
+    if isinstance(exc, StaleConfirmationError):
+        raise HTTPException(409, detail=str(exc)) from exc
     if isinstance(exc, InvalidBoardPatchError):
         raise HTTPException(422, detail=str(exc)) from exc
     raise exc
@@ -165,6 +169,20 @@ def set_ai_link(
     try:
         return service.set_ai_link(_user_id(current), memo_id, payload.enabled)
     except (BoardItemNotFoundError, InvalidBoardPatchError) as exc:
+        _handle_error(exc)
+
+
+@router.post("/memos/{memo_id}/confirmations", response_model=BoardResponse)
+def answer_confirmation(
+    memo_id: int,
+    payload: ConfirmationAnswer,
+    current: dict = Depends(get_current_user),
+    service: BoardService = Depends(get_command_service),
+):
+    """메모 분석의 확인 질문에서 고른 선택지(option_id)로 가격 항목을 만든다. 메모가 바뀌었으면 409."""
+    try:
+        return service.confirm(_user_id(current), memo_id, payload.option_id)
+    except (BoardItemNotFoundError, InvalidBoardPatchError, StaleConfirmationError) as exc:
         _handle_error(exc)
 
 

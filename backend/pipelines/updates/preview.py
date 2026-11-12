@@ -60,6 +60,7 @@ details.card>summary::-webkit-details-marker{display:none}
 .empty{background:var(--card);border:1px dashed var(--line);border-radius:12px;padding:10px 14px;margin:0 0 8px}
 .empty b{display:block}.empty span{color:var(--sub);font-size:13px}
 footer{margin-top:28px;color:var(--sub);font-size:12px}
+ul.facts{margin:4px 0 0;padding-left:20px}ul.facts li{margin:2px 0}.fsrc{font-size:11px;color:var(--sub)}
 """
 
 JS = """
@@ -81,6 +82,9 @@ def _safe_url(url: str | None) -> str | None:
 
 
 def _source_line(ref: str, quote: str | None, refs: dict[str, dict]) -> str:
+    if ref.startswith("cmp:"):                      # compare_prior: DB에서 찾은 직전 같은 기간 값
+        fact = f'<span class="fact">근거: {escape(quote)}</span>' if quote else ""
+        return f'<div class="src">금융감독원 DART · 직전 같은 기간 비교(memo\'s 정리값){fact}</div>'
     info = refs.get(ref, {})
     title = escape(info.get("title") or ref)
     url = _safe_url(info.get("url"))
@@ -108,7 +112,11 @@ def _card_html(c: dict, refs: dict[str, dict]) -> str:
     related = "".join(_source_line(r["ref"], None, {**refs, r["ref"]: {**refs.get(r["ref"], {}), "title": r.get("title") or ""}})
                       for r in c.get("related_news", []))
     related_html = f'<div class="label">관련 기사</div>{related}' if related else ""
+    same = "".join(_source_line(r["ref"], None, {r["ref"]: {"kind": "news", **r}}) for r in c.get("supporting_news") or [])
+    related_html = (f'<div class="label">같은 사건 기사</div>{same}' if same else "") + related_html
     reason = f'<div class="note">{escape(c["reason"])}</div>' if c.get("reason") and utype != "price_condition" else ""
+    if c.get("card_schema") == "v2":
+        return _card_v2_html(c, refs, label, name, dev, src_lines, related_html)
     return (
         f'<details class="card" data-type="{escape(utype)}"><summary>'
         f'<div class="row"><span class="chip {escape(utype)}">{label}</span><span>{name}</span>'
@@ -117,6 +125,38 @@ def _card_html(c: dict, refs: dict[str, dict]) -> str:
         f'<div class="body"><div class="label">AI 요약</div><div>{escape(c.get("summary") or "")}</div>{reason}'
         f'<div class="label">연결된 내 메모</div><div class="memo">{escape(c.get("memo_text") or "")}</div>'
         f'<div class="label">출처</div>{src_lines}{related_html}'
+        f'<div class="note">AI가 요약했어요. 자세히에서 메모와 출처를 볼 수 있어요.</div></div></details>'
+    )
+
+
+def _fact_source(ref: str, refs: dict[str, dict]) -> str:
+    if not ref:
+        return ""
+    if ref.startswith("cmp:"):
+        return "DART 직전 같은 기간 값"
+    info = refs.get(ref, {})
+    who = "DART" if info.get("kind") == "disclosure" else (info.get("source") or "뉴스")
+    return f"{who} · {info.get('date') or ''}"
+
+
+def _card_v2_html(c: dict, refs: dict[str, dict], label: str, name: str, dev: str, src_lines: str, related_html: str) -> str:
+    """v2 카드: 제목(headline) · 사건 날짜(when) · 사실 문장마다 출처 · 메모와의 연결(memo_link)."""
+    utype = c.get("update_type") or "news"
+    facts = "".join(f'<li>{escape(f["text"])}'
+                    + (f' <span class="fsrc">{escape(_fact_source(f.get("ref") or "", refs))}</span>' if f.get("ref") else "")
+                    + "</li>" for f in c.get("facts") or [])
+    merged = "".join(f"<li>{escape(m.get('description') or m.get('item_id') or '')}</li>" for m in c.get("merged_items") or [])
+    merged_html = f'<div class="label">같은 근거라 함께 묶은 관심사</div><ul class="facts">{merged}</ul>' if merged else ""
+    link = f'<div class="label">내 메모와의 연결</div><div>{escape(c.get("memo_link") or "")}</div>' if c.get("memo_link") else ""
+    cov = f'<div class="note">자료 범위: {escape(c["coverage"])}</div>' if c.get("coverage") else ""
+    return (
+        f'<details class="card" data-type="{escape(utype)}"><summary>'
+        f'<div class="row"><span class="chip {escape(utype)}">{label}</span><span>{name}</span>'
+        f'<span>{escape(c.get("when") or "")}</span>{dev}</div>'
+        f'<div class="title">{escape(c.get("headline") or c.get("title") or "")}</div></summary>'
+        f'<div class="body"><div class="label">확인된 사실</div><ul class="facts">{facts}</ul>{link}'
+        f'<div class="label">연결된 내 메모</div><div class="memo">{escape(c.get("memo_text") or "")}</div>{merged_html}'
+        f'<div class="label">출처</div>{src_lines}{related_html}{cov}'
         f'<div class="note">AI가 요약했어요. 자세히에서 메모와 출처를 볼 수 있어요.</div></div></details>'
     )
 

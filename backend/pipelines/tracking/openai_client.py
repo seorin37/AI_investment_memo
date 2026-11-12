@@ -6,6 +6,9 @@ API 키는 저장소 루트 `.env`의 `LLM_API_KEY`를 프로그램 안에서만
 - JSON 모드(`response_format=json_object`)는 메시지에 "JSON"이라는 말이 있어야 하므로 system 메시지를 항상 붙인다.
 - 일부 모델(추론 계열)은 temperature를 받지 않는다. 그런 400 오류가 오면 temperature 없이 한 번 다시 보낸다.
 - 429 중 `insufficient_quota`(크레딧 소진)는 다시 시도해도 소용없으므로 재시도하지 않고 바로 오류로 올린다.
+- 추론 강도: 환경변수 `LLM_REASONING_EFFORT`가 있을 때만 요청에 `reasoning_effort`를 넣는다 (없으면 모델 기본값).
+- 토큰: `output_tokens`는 usage.completion_tokens(추론 토큰 포함, 과금 기준). 그중 추론 토큰은
+  usage.completion_tokens_details.reasoning_tokens를 `reasoning_tokens`에 따로 적는다 (없으면 None).
 """
 
 from __future__ import annotations
@@ -36,6 +39,7 @@ class CallRecord:
     prompt_tokens: int | None
     output_tokens: int | None
     ok: bool
+    reasoning_tokens: int | None = None         # output_tokens에 이미 포함된 추론 토큰 (따로 더하지 않는다)
 
 
 def _error_info(res) -> tuple[str, str]:
@@ -45,6 +49,13 @@ def _error_info(res) -> tuple[str, str]:
     except (ValueError, AttributeError):
         return "", ""
     return str(err.get("code") or err.get("type") or ""), str(err.get("message") or "")
+
+
+def usage_totals(calls: list[CallRecord]) -> dict:
+    """호출 기록 합계. reasoning_tokens는 output_tokens의 일부다."""
+    return {"llm_calls": len(calls), "prompt_tokens": sum(c.prompt_tokens or 0 for c in calls),
+            "output_tokens": sum(c.output_tokens or 0 for c in calls),
+            "reasoning_tokens": sum(c.reasoning_tokens or 0 for c in calls)}
 
 
 @dataclass
@@ -57,6 +68,7 @@ class OpenAIClient:
     calls: list[CallRecord] = field(default_factory=list)
     temperature: float | None = 0.0
     response_format: dict = field(default_factory=lambda: dict(JSON_OBJECT_FORMAT))
+    reasoning_effort: str | None = field(default_factory=lambda: os.getenv("LLM_REASONING_EFFORT") or None)
 
     @classmethod
     def from_env(cls, model: str | None = None) -> "OpenAIClient":
@@ -74,6 +86,8 @@ class OpenAIClient:
                 "response_format": self.response_format}
         if self.temperature is not None:
             body["temperature"] = self.temperature
+        if self.reasoning_effort:
+            body["reasoning_effort"] = self.reasoning_effort
         return body
 
     def _send(self, prompt: str):
@@ -107,7 +121,8 @@ class OpenAIClient:
             self.calls.append(CallRecord((time.perf_counter() - start) * 1000, None, None, False))
             raise
         usage = data.get("usage") or {}
+        details = usage.get("completion_tokens_details") or {}
         self.calls.append(CallRecord((time.perf_counter() - start) * 1000, usage.get("prompt_tokens"),
-                                     usage.get("completion_tokens"), True))
+                                     usage.get("completion_tokens"), True, details.get("reasoning_tokens")))
         choices = data.get("choices") or []
         return ((choices[0].get("message") or {}).get("content") or "") if choices else ""

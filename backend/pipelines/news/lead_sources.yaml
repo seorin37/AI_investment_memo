@@ -39,6 +39,7 @@ common_skip_title_patterns: ['^\[포토\]']
 #   나머지 최소 901자
 min_body_chars: 100
 max_attempts: 3               # 일시 오류(5xx·타임아웃·검색 결과 없음) 재시도 횟수. 넘으면 failed
+fulltext_max_runs: 3          # 원문 수집: failed(본문 비어 있음·5xx 등)로 끝난 실행이 이만큼이면 포기. 1시간마다면 약 3시간
 lead_max_chars: 300
 lead_min_chars: 40            # 이보다 짧게 뽑히면 추출 실패로 본다 (선택자 깨짐·사진 기사)
 enqueue_days: 3               # 최근 며칠 발행분만 보충 대상으로 올린다

@@ -3,6 +3,7 @@
   python -m backend.pipelines.news.fulltext --dry-run              # 대상 건수만 (DB 읽기만, 요청 없음)
   python -m backend.pipelines.news.fulltext                        # 어제(KST) 발행분
   python -m backend.pipelines.news.fulltext --date 2026-11-05 --limit 20 --sources mk,yonhap
+  python -m backend.pipelines.news.fulltext --recent-hours 6 --yes   # 최근 6시간 발행분 중 아직 안 받은 기사
 
 - DB에는 쓰지 않는다 (읽기 전용 접속 + read_only 세션, SELECT만). 결과는 data/news_raw/<발행일>.jsonl.
 - 매체별 설정은 lead_sources.yaml 그대로다 (선택자·drop·유료/모음/포토 제외·본문 최소 글자 수·URL 패턴).
@@ -11,8 +12,9 @@
   타임아웃 REQUEST_TIMEOUT. 매체마다 스레드 하나로 동시에 돌린다 (같은 호스트에는 한 번에 하나).
 - 재시도: 타임아웃·연결 오류·5xx는 같은 실행 안에서 max_attempts회까지 (간격을 늘려 가며). 403·429를 받으면
   그 매체는 이번 실행에서 멈춘다.
-- 이미 받은 기사는 건너뛴다: data/news_raw/*.jsonl에 status ok/skipped로 남은 URL(정규화 기준). failed는 다음 실행에서
-  max_attempts까지 다시 시도한다.
+- 이미 받은 기사는 건너뛴다: data/news_raw/<발행일>.jsonl에 status ok/skipped로 남은 URL(정규화 기준). failed는 다음
+  실행에서 다시 시도하고, failed로 끝난 실행이 fulltext_max_runs번이 되면 포기한다(gave_up). 1시간마다 돌리면 그 시간 수만큼
+  다시 시도하는 셈이다 (속보는 본문이 나중에 채워진다).
 - 한 줄 = 기사 1건. 필드는 나중에 0015 news_article_bodies로 옮길 수 있게 맞춘다 (news_id, source_code, fetch_method,
   subtitle, body, body_hash, extractor_version, fetched_at) + 수집 기록(status, reason, http_status, attempts).
 """
@@ -29,7 +31,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import Callable, Iterable, NamedTuple
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
@@ -92,25 +94,37 @@ def sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def load_done(out_dir: Path) -> dict[str, tuple[str, int]]:
-    """이미 남긴 기록: 정규화 URL → (마지막 status, 지금까지 시도 횟수 합)."""
-    done: dict[str, tuple[str, int]] = {}
-    for path in sorted(out_dir.glob("*.jsonl")):
+class Seen(NamedTuple):
+    status: str            # 마지막 status (ok / skipped / failed, 이번 실행 목록에 올리면 queued)
+    attempts: int = 0      # 지금까지 요청 횟수 합 (기록용)
+    failed_runs: int = 0   # failed로 끝난 실행 수. fulltext_max_runs가 되면 포기한다
+
+
+def load_done(out_dir: Path, days: Iterable[date] | None = None) -> dict[str, Seen]:
+    """이미 남긴 기록: 정규화 URL → Seen. days를 주면 그 발행일 파일만 읽는다 (파일이 발행일 기준이라 충분하다)."""
+    paths = (sorted(out_dir.glob("*.jsonl")) if days is None
+             else [out_dir / f"{d.isoformat()}.jsonl" for d in sorted(set(days))])
+    done: dict[str, Seen] = {}
+    for path in paths:
+        if not path.is_file():
+            continue
         for line in path.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
             row = json.loads(line)
             key = normalize_url(row["url"])
-            attempts = done.get(key, ("", 0))[1] + int(row.get("attempts") or 0)
-            done[key] = (row["status"], attempts)
+            prev = done.get(key, Seen(""))
+            done[key] = Seen(row["status"], prev.attempts + int(row.get("attempts") or 0),
+                             prev.failed_runs + (row["status"] == "failed"))
     return done
 
 
 def fetch_one(row: ArticleRow, src: lf.SourceConfig, config: lf.LeadConfig, http_get: lf.HttpGet,
-              robots: lf.RobotsCache, throttle: lf.Throttle, version: str, prior_attempts: int = 0,
+              robots: lf.RobotsCache, throttle: lf.Throttle, version: str,
               sleep: Callable[[float], None] = time.sleep, now: Callable[[], datetime] = lambda: datetime.now(KST)
               ) -> BodyRecord:
-    """기사 1건. 요청하지 않고 끝낼 수 있는 것(URL·제목 규칙, robots)은 먼저 거른다."""
+    """기사 1건. 요청하지 않고 끝낼 수 있는 것(URL·제목 규칙, robots)은 먼저 거른다.
+    일시 오류는 이번 실행 안에서 max_attempts번까지 (실행을 넘긴 포기는 collect가 fulltext_max_runs로 정한다)."""
     rec = BodyRecord(row.news_id, row.url, row.source_code, FETCH_METHOD, row.title, row.published_at, "skipped",
                      extractor_version=version)
 
@@ -134,7 +148,7 @@ def fetch_one(row: ArticleRow, src: lf.SourceConfig, config: lf.LeadConfig, http
     host = urlsplit(row.url).netloc.lower()
     resp, error = None, None
     attempts = 0
-    for attempt in range(1, max(1, config.max_attempts - prior_attempts) + 1):
+    for attempt in range(1, config.max_attempts + 1):
         attempts = attempt
         throttle.wait(host)
         try:
@@ -145,7 +159,7 @@ def fetch_one(row: ArticleRow, src: lf.SourceConfig, config: lf.LeadConfig, http
             if resp.status_code in lf.STOP_STATUSES or resp.status_code < 500:
                 break
             error = f"HTTP {resp.status_code}"
-        if attempt < config.max_attempts - prior_attempts:
+        if attempt < config.max_attempts:
             sleep(config.interval * attempt)
     if resp is None or resp.status_code >= 500:
         return done("failed", error, http_status=getattr(resp, "status_code", None), attempts=attempts)
@@ -169,7 +183,7 @@ def fetch_one(row: ArticleRow, src: lf.SourceConfig, config: lf.LeadConfig, http
 
 
 def collect(rows: Iterable[ArticleRow], config: lf.LeadConfig, http_get: lf.HttpGet, out_dir: Path,
-            done: dict[str, tuple[str, int]] | None = None, sleep=time.sleep, clock=time.monotonic,
+            done: dict[str, Seen] | None = None, sleep=time.sleep, clock=time.monotonic,
             workers: int = 4) -> dict[str, Counter]:
     """매체별로 받아 data/news_raw/<발행일 KST>.jsonl에 덧붙인다. 매체별 집계를 돌려준다."""
     done = done if done is not None else load_done(out_dir)
@@ -180,17 +194,17 @@ def collect(rows: Iterable[ArticleRow], config: lf.LeadConfig, http_get: lf.Http
     for row in rows:
         stat = stats.setdefault(row.source_code, Counter())
         key = normalize_url(row.url)
-        status, prior = done.get(key, ("", 0))
-        if status in DONE:
+        seen = done.get(key, Seen(""))
+        if seen.status in DONE:
             stat["already"] += 1
             continue
-        if status == "queued":                            # 이번 목록 안에서 같은 링크(정규화 기준)가 또 나옴
+        if seen.status == "queued":                            # 이번 목록 안에서 같은 링크(정규화 기준)가 또 나옴
             stat["dup_link"] += 1
             continue
-        if status == "failed" and prior >= config.max_attempts:
+        if seen.status == "failed" and seen.failed_runs >= config.fulltext_max_runs:
             stat["gave_up"] += 1
             continue
-        done[key] = ("queued", prior)                     # 같은 실행 안의 같은 링크 중복 제거
+        done[key] = seen._replace(status="queued")        # 같은 실행 안의 같은 링크 중복 제거
         by_source.setdefault(row.source_code, []).append(row)
 
     def write(rec: BodyRecord) -> None:
@@ -209,8 +223,7 @@ def collect(rows: Iterable[ArticleRow], config: lf.LeadConfig, http_get: lf.Http
         robots = lf.RobotsCache(http_get, config.user_agent, throttle)
         version = extractor_version(src)
         for i, row in enumerate(items, 1):
-            rec = fetch_one(row, src, config, http_get, robots, throttle, version,
-                            done.get(normalize_url(row.url), ("", 0))[1], sleep)
+            rec = fetch_one(row, src, config, http_get, robots, throttle, version, sleep)
             write(rec)
             stat[rec.status] += 1
             if rec.status == "ok":
@@ -232,6 +245,23 @@ def collect(rows: Iterable[ArticleRow], config: lf.LeadConfig, http_get: lf.Http
 def day_window(day: date) -> tuple[datetime, datetime]:
     start = datetime.combine(day, datetime.min.time(), tzinfo=KST)
     return start.astimezone(timezone.utc), (start + timedelta(days=1)).astimezone(timezone.utc)
+
+
+def recent_window(hours: float, now: datetime | None = None) -> tuple[datetime, datetime]:
+    """지금부터 hours시간 전까지 (UTC)."""
+    end = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    return end - timedelta(hours=hours), end
+
+
+def window_days(start: datetime, end: datetime) -> list[date]:
+    """[start, end)에 걸친 발행일(KST) 목록 = 읽어야 할 data/news_raw/<날짜>.jsonl."""
+    first, last = start.astimezone(KST).date(), (end - timedelta(microseconds=1)).astimezone(KST).date()
+    return [first + timedelta(days=i) for i in range((last - first).days + 1)]
+
+
+def blocked_sources(stats: dict[str, Counter]) -> list[str]:
+    """이번 실행에서 403·429를 받은 매체."""
+    return sorted(code for code, s in stats.items() if any(s[f"reason:HTTP {c}"] for c in lf.STOP_STATUSES))
 
 
 def read_rows(dsn: str, start: datetime, end: datetime, codes: list[str], limit: int | None) -> list[ArticleRow]:
@@ -267,7 +297,9 @@ def main(argv=None) -> int:
     from ..common.db import get_read_dsn, load_env
 
     ap = argparse.ArgumentParser(description="뉴스 원문 수집 → data/news_raw/*.jsonl (DB 읽기만)")
-    ap.add_argument("--date", help="발행일 YYYY-MM-DD (KST, 기본: 어제)")
+    when = ap.add_mutually_exclusive_group()
+    when.add_argument("--date", help="발행일 YYYY-MM-DD (KST, 기본: 어제)")
+    when.add_argument("--recent-hours", type=float, help="날짜 대신 최근 N시간 발행분 (아직 안 받은 기사만)")
     ap.add_argument("--sources", default="sedaily,hankyung,mk,yonhap")
     ap.add_argument("--limit", type=int, help="매체당 최대 건수 (시험용)")
     ap.add_argument("--out", type=Path, default=OUT_DIR)
@@ -281,14 +313,20 @@ def main(argv=None) -> int:
         log.error("DB 접속 정보가 없습니다. .env의 READONLY_DATABASE_URL 또는 DATABASE_URL을 확인하세요.")
         return 1
     config = lf.load_config()
-    day = date.fromisoformat(args.date) if args.date else datetime.now(KST).date() - timedelta(days=1)
-    start, end = day_window(day)
+    if args.recent_hours:
+        start, end = recent_window(args.recent_hours)
+        label = f"최근 {args.recent_hours:g}시간({start.astimezone(KST):%m-%d %H:%M}~) 발행분"
+    else:
+        day = date.fromisoformat(args.date) if args.date else datetime.now(KST).date() - timedelta(days=1)
+        start, end = day_window(day)
+        label = f"{day} 발행분"
+    days = window_days(start, end)
     codes = [c.strip() for c in args.sources.split(",") if c.strip()]
     rows = read_rows(dsn, start, end, codes, args.limit)
-    done = load_done(args.out)
-    pending = Counter(r.source_code for r in rows if done.get(normalize_url(r.url), ("", 0))[0] not in DONE)
+    done = load_done(args.out, days)
+    pending = Counter(r.source_code for r in rows if done.get(normalize_url(r.url), Seen("")).status not in DONE)
     per_host = max(pending.values(), default=0)
-    print(f"{day} 발행분 {len(rows)}건, 새로 받을 대상 {dict(pending)} — 매체별 동시, 같은 호스트 {config.interval:g}초 간격 "
+    print(f"{label} {len(rows)}건, 새로 받을 대상 {dict(pending)} — 매체별 동시, 같은 호스트 {config.interval:g}초 간격 "
           f"(가장 많은 매체 기준 최소 약 {per_host * config.interval / 60:.0f}분). User-Agent: {config.user_agent}")
     if args.dry_run:
         return 0
@@ -298,7 +336,8 @@ def main(argv=None) -> int:
     started = time.monotonic()
     stats = collect(rows, config, lf._requests_get(config.user_agent), args.out, done)
     print(report(stats))
-    print(f"\n{(time.monotonic() - started) / 60:.1f}분, 결과: {args.out}/{day}.jsonl — DB에는 아무것도 쓰지 않았습니다.")
+    files = ", ".join(f"{d}.jsonl" for d in days)
+    print(f"\n{(time.monotonic() - started) / 60:.1f}분, 결과: {args.out}/{files} — DB에는 아무것도 쓰지 않았습니다.")
     return 0
 
 
