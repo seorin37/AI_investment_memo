@@ -4,6 +4,7 @@
 
 뉴스: collected_at - published_at, 제목+요약 임베딩 embedded_at - collected_at, 원문 청크 embedded_at - collected_at.
 공시: created_at - 접수일 0시(한국 시간), 청크 embedded_at - created_at. 분위수는 시간 단위.
+뉴스는 수집이 발행보다 3일 넘게 늦은 기사(사이트맵 백필로 나중에 받은 과거 기사)를 빼고 센다 (2026-11-12). 뺀 건수는 따로 보여 준다.
 """
 
 from __future__ import annotations
@@ -13,20 +14,24 @@ from datetime import date
 
 Q = "percentile_cont(ARRAY[0.5, 0.9, 0.99]) WITHIN GROUP (ORDER BY {x})"
 HOURS = "extract(epoch FROM ({a} - {b})) / 3600"
+BACKFILL = "a.collected_at - a.published_at > interval '3 days'"   # 백필 기사: 실시간 수집 시차 통계에서 뺀다
 
-NEWS_SQL = f"""SELECT count(*),
-  {Q.format(x=HOURS.format(a="a.collected_at", b="a.published_at"))},
-  max({HOURS.format(a="a.collected_at", b="a.published_at")}),
-  count(*) FILTER (WHERE a.collected_at - a.published_at > interval '3 days'),
-  {Q.format(x=HOURS.format(a="v.embedded_at", b="a.collected_at"))},
-  count(*) FILTER (WHERE v.news_id IS NULL)
+NEWS_SQL = f"""SELECT count(*) FILTER (WHERE NOT ({BACKFILL})),
+  percentile_cont(ARRAY[0.5, 0.9, 0.99]) WITHIN GROUP (ORDER BY {HOURS.format(a="a.collected_at", b="a.published_at")})
+    FILTER (WHERE NOT ({BACKFILL})),
+  max({HOURS.format(a="a.collected_at", b="a.published_at")}) FILTER (WHERE NOT ({BACKFILL})),
+  count(*) FILTER (WHERE {BACKFILL}),
+  percentile_cont(ARRAY[0.5, 0.9, 0.99]) WITHIN GROUP (ORDER BY {HOURS.format(a="v.embedded_at", b="a.collected_at")})
+    FILTER (WHERE NOT ({BACKFILL})),
+  count(*) FILTER (WHERE v.news_id IS NULL AND NOT ({BACKFILL}))
 FROM news_articles a LEFT JOIN news_embedding_variants v ON v.news_id = a.id AND v.variant = %(variant)s
 WHERE a.published_at >= %(since)s"""
 CHUNK_SQL = f"""SELECT count(*), {Q.format(x=HOURS.format(a="c.done", b="a.collected_at"))}
 FROM (SELECT news_id, max(embedded_at) AS done FROM news_chunks GROUP BY news_id) c
-JOIN news_articles a ON a.id = c.news_id WHERE a.published_at >= %(since)s AND c.done IS NOT NULL"""
-LATE_NEWS_SQL = """SELECT count(*) FROM (SELECT news_id, max(embedded_at) AS done FROM news_chunks GROUP BY news_id) c
-JOIN news_articles a ON a.id = c.news_id WHERE a.published_at >= %(since)s AND c.done - a.published_at > interval '3 days'"""
+JOIN news_articles a ON a.id = c.news_id WHERE a.published_at >= %(since)s AND c.done IS NOT NULL AND NOT ({BACKFILL})"""
+LATE_NEWS_SQL = f"""SELECT count(*) FROM (SELECT news_id, max(embedded_at) AS done FROM news_chunks GROUP BY news_id) c
+JOIN news_articles a ON a.id = c.news_id WHERE a.published_at >= %(since)s AND c.done - a.published_at > interval '3 days'
+  AND NOT ({BACKFILL})"""
 DISC_SQL = f"""SELECT count(*),
   {Q.format(x=HOURS.format(a="d.created_at", b="(d.rcept_dt::timestamp AT TIME ZONE 'Asia/Seoul')"))},
   count(*) FILTER (WHERE d.created_at - (d.rcept_dt::timestamp AT TIME ZONE 'Asia/Seoul') > interval '3 days'),
@@ -53,12 +58,14 @@ def main(argv: list[str] | None = None) -> int:
     with psycopg.connect(get_read_dsn()) as conn:
         conn.read_only = True
         p = {"since": f"{day} 00:00+09", "since_d": day, "variant": args.variant}
-        n, pub, pub_max, late, emb, no_emb = conn.execute(NEWS_SQL, p).fetchone()
+        n, pub, pub_max, backfill, emb, no_emb = conn.execute(NEWS_SQL, p).fetchone()
         cn, chunk = conn.execute(CHUNK_SQL, p).fetchone()
         dn, dcr, dlate, dmiss, demb, dno = conn.execute(DISC_SQL, p).fetchone()
         late_news = conn.execute(LATE_NEWS_SQL, p).fetchone()[0]
         conn.rollback()
-    print(f"뉴스 {n}건 ({day}~ 발행) · 발행→적재 중앙/90%/99% {fmt(pub)} · 최대 {pub_max:.1f}h · 3일 넘게 늦게 적재 {late}건")
+    top = "-" if pub_max is None else f"{pub_max:.1f}h"
+    print(f"뉴스 {n}건 ({day}~ 발행) · 발행→적재 중앙/90%/99% {fmt(pub)} · 최대 {top}"
+          f" · 뺀 백필 기사(수집이 발행보다 3일 넘게 늦음) {backfill}건")
     print(f"  적재→제목+요약 임베딩({args.variant}) {fmt(emb)} · 임베딩 없음 {no_emb}건")
     print(f"  적재→원문 청크 임베딩(기사별 마지막) {fmt(chunk)} · 청크 임베딩 있는 기사 {cn}건")
     print(f"  원문 청크가 발행 3일 뒤에야 임베딩된 기사 {late_news}건 (chunks 모드에서 새 자료로 못 받는다)")
