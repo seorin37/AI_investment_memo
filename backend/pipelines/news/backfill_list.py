@@ -16,6 +16,8 @@
 - 06:00~07:30 KST에는 요청을 멈추고 기다린다 (06:30 AI 업데이트와 겹치지 않게).
 - 페이지 50건마다 실시간 원문 임베딩 지연을 확인한다 (backfill_check.realtime_lag, 공용 DB 읽기만):
   최근 2일 발행분 중 원문을 받은 지 2시간 넘었는데 청크가 없는 기사가 있으면 멈춘다(종료 코드 4).
+- 원문(2026-11-12): 받은 기사 페이지로 원문 기록도 <raw-dir>/<발행일>.jsonl에 fulltext와 같은 형식·판정(record_from_page)으로
+  쓴다 (공용 DB 저장일 때만, --no-body로 끔). 그래서 뒤의 fulltext --date는 '본문 비어 있음' 같은 실패분만 다시 받는다.
 - 진행 기록: <state-dir>/progress.json (매체·날짜별 상태와 건수), 실패 URL: <state-dir>/failures_<날짜>.jsonl.
   status done인 날짜는 다시 돌려도 건너뛴다 (--force면 다시). --dry-run은 진행 기록·실패 파일을 쓰지 않는다.
 - 2026-10-28 이후 날짜는 실시간 수집 구간이라 기본 거부, --allow-recent를 줘야 한다.
@@ -40,6 +42,7 @@ from pathlib import Path
 from typing import Callable
 from urllib.parse import urlsplit
 
+from . import fulltext as ft
 from . import lead_fetcher as lf
 from .repository import content_hash
 from .rss import KST, SUMMARY_MAX_CHARS, UTC, Article, clean_text, normalize_url, parse_published
@@ -268,6 +271,52 @@ class Env:
     lag_lock: threading.Lock = field(default_factory=threading.Lock)
     pages_since_lag: list = field(default_factory=lambda: [0])
     lag_result: dict = field(default_factory=dict)
+    bodies: "BodyWriter | None" = None                    # 받은 페이지로 원문 기록도 쓴다 (None이면 목록만)
+
+
+class BodyWriter:
+    """목록 단계에서 이미 받은 기사 페이지로 원문 기록을 data/news_raw/<발행일>.jsonl에 쓴다 (fulltext와 같은 형식·판정).
+    news_id가 필요해 저장(save_to_db) 직후 URL로 id를 찾는다. 저장 안 된 기사(content_hash 중복)는 쓰지 않는다.
+    이미 ok/skipped 기록이 있는 URL은 다시 쓰지 않는다. failed(본문 비어 있음 등)는 뒤의 fulltext 단계가 다시 받는다."""
+
+    def __init__(self, raw_dir: Path, config: lf.LeadConfig, rows_for: Callable[[list[str]], dict[str, "ft.ArticleRow"]],
+                 now: Callable[[], datetime] = lambda: datetime.now(KST)):
+        self.raw_dir, self.config, self.rows_for, self.now = raw_dir, config, rows_for, now
+        self.lock = threading.Lock()
+
+    def write(self, code: str, items: list[tuple[Article, str]], stat: Counter) -> None:
+        src = self.config.sources.get(code)
+        if src is None or not src.can_probe or not src.selector:
+            stat["body_not_ready"] += len(items)          # 원문을 받지 않는 매체 설정이면 fulltext 단계와 같이 건너뜀
+            return
+        version = ft.extractor_version(src)
+        rows = self.rows_for([a.url_norm for a, _ in items])
+        records = []
+        for art, page_html in items:
+            row = rows.get(art.url_norm)
+            if row is None:
+                stat["body_no_id"] += 1
+                continue
+            reason = ft.precheck_reason(row, src)
+            if reason:
+                rec = ft.BodyRecord(row.news_id, row.url, row.source_code, ft.FETCH_METHOD, row.title, row.published_at,
+                                    "skipped", reason=reason, extractor_version=version,
+                                    fetched_at=self.now().isoformat(timespec="seconds"))
+            else:
+                rec = ft.record_from_page(row, src, self.config, version, 200, page_html, 1, self.now)
+            records.append(rec)
+        with self.lock:
+            self.raw_dir.mkdir(parents=True, exist_ok=True)
+            days = {datetime.fromisoformat(r.published_at).astimezone(KST).date() for r in records}
+            done = ft.load_done(self.raw_dir, days)
+            for rec in records:
+                if done.get(normalize_url(rec.url), ft.Seen("")).status in ft.DONE:
+                    stat["body_already"] += 1
+                    continue
+                day = datetime.fromisoformat(rec.published_at).astimezone(KST).date().isoformat()
+                with (self.raw_dir / f"{day}.jsonl").open("a", encoding="utf-8") as fh:
+                    fh.write(json.dumps(asdict(rec), ensure_ascii=False) + "\n")
+                stat[f"body_{rec.status}"] += 1
 
 
 def wait_pause(env: Env) -> None:
@@ -358,11 +407,17 @@ def run_source(code: str, day: date, env: Env, *, limit: int | None = None, sect
     log.info("%s %s: 사이트맵 %d건, 기사 URL %d건, DB에 이미 있음 %d건, 이번에 받을 페이지 %d건",
              code, day, len(locs), len(urls), stat["already_in_db"], len(todo))
 
-    pending: list[Article] = []
+    pending: list[tuple[Article, str]] = []          # (기사, 받은 페이지 HTML) — 저장 뒤 원문 기록에 쓴다
 
     def flush() -> None:
         if pending and env.save is not None:
-            stat["inserted"] += env.save(list(pending))
+            stat["inserted"] += env.save([a for a, _ in pending])
+            if env.bodies is not None:
+                try:
+                    env.bodies.write(code, list(pending), stat)
+                except Exception:                     # 원문 기록 실패는 목록을 멈추지 않는다 (fulltext 단계가 다시 받음)
+                    log.exception("%s: 원문 기록 쓰기 실패 — fulltext 단계에서 다시 받습니다", code)
+                    stat["body_write_error"] += len(pending)
         pending.clear()
 
     status = "done"
@@ -413,7 +468,7 @@ def run_source(code: str, day: date, env: Env, *, limit: int | None = None, sect
             stat["other_date"] += 1
             continue
         stat["matched"] += 1
-        pending.append(to_article(code, url, meta))
+        pending.append((to_article(code, url, meta), resp.text))
         if len(pending) >= SAVE_EVERY:
             flush()
         if i % 100 == 0:
@@ -481,6 +536,10 @@ def summary_lines(day: date, results: dict[str, tuple[str, Counter]]) -> list[st
                      f"페이지 {pages}/{s['fetched']} 제목 {rate('has_title')} 발행시각 {rate('has_published')} "
                      f"요약 {rate('has_summary')} 섹션 {rate('has_section')} | 해당날짜 {s['matched']} "
                      f"다른날짜 {s['other_date']} 저장 {s['inserted']} 중복 {s['duplicate']} 실패 {s['failed']}")
+        if any(k.startswith("body_") for k in s):
+            lines.append(f"  {'':9} 원문 기록 ok {s['body_ok']} 제외 {s['body_skipped']} 실패 {s['body_failed']} "
+                         f"이미 있음 {s['body_already']} id 없음(중복) {s['body_no_id']}"
+                         + (f" 쓰기 오류 {s['body_write_error']}" if s["body_write_error"] else ""))
     return lines
 
 
@@ -535,6 +594,22 @@ def make_db_env(dsn: str | None, dry_run: bool):
     return existing, (None if dry_run else save)
 
 
+def make_rows_for(dsn: str):
+    """정규화 URL → fulltext.ArticleRow (fulltext.read_rows와 같은 값·형식)."""
+    import psycopg
+
+    def rows_for(urls: list[str]) -> dict[str, ft.ArticleRow]:
+        with psycopg.connect(dsn) as conn:
+            conn.read_only = True
+            with conn.cursor() as cur:
+                cur.execute("""SELECT a.id, s.code, a.url, a.title, a.published_at
+                               FROM news_articles a JOIN news_sources s ON s.id = a.source_id
+                               WHERE a.url = ANY(%s)""", (urls,))
+                return {url: ft.ArticleRow(nid, code, url, title, published.isoformat())
+                        for nid, code, url, title, published in cur.fetchall()}
+    return rows_for
+
+
 def make_lag_check(raw_dir: Path):
     """공용 DB(DATABASE_URL)에서 실시간 원문 임베딩 지연을 본다 (읽기만)."""
     from ..common.db import get_dsn
@@ -568,6 +643,8 @@ def main(argv=None) -> int:
     ap.add_argument("--raw-dir", type=Path, default=Path(os.getenv("BACKFILL_RAW_DIR", "data/news_raw")),
                     help="실시간 원문 jsonl 폴더 (지연 확인용, 실시간 수집이 쓰는 폴더)")
     ap.add_argument("--no-lag-check", action="store_true", help="지연 확인을 끈다 (테스트 DB 시험용)")
+    ap.add_argument("--no-body", action="store_true",
+                    help="원문 기록을 쓰지 않는다 (예전 방식: 원문은 fulltext 단계가 페이지를 다시 받는다)")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
@@ -599,8 +676,12 @@ def main(argv=None) -> int:
     config = lf.load_config()
     existing, save = make_db_env(dsn, args.dry_run)
     lag = None if args.no_lag_check else make_lag_check(args.raw_dir)
+    # 원문 기록은 공용 DB에 저장할 때만 (테스트 DB id가 실시간 원문 폴더에 섞이면 공용 원문 수집이 그 URL을 건너뛴다)
+    bodies = (BodyWriter(args.raw_dir, config, make_rows_for(dsn))
+              if dsn and save is not None and args.dsn_env == "DATABASE_URL" and not args.no_body else None)
     env = Env(http_get=lf._requests_get(config.user_agent), config=config, existing_urls=existing, save=save,
-              lag_check=lag)
+              lag_check=lag, bodies=bodies)
+    log.info("원문 기록: %s", f"{args.raw_dir} (같은 페이지로 함께 저장)" if bodies else "쓰지 않음")
     suffix = "" if args.dsn_env == "DATABASE_URL" else f".{args.dsn_env}"
     write_state = not args.dry_run
     progress = Progress(args.state_dir / f"progress{suffix}.json", enabled=write_state)

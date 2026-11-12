@@ -262,3 +262,54 @@ def test_raw_counts_uses_last_status(tmp_path):
     (tmp_path / "2026-10-27.jsonl").write_text("\n".join(json.dumps(l) for l in lines), encoding="utf-8")
     out = bc.raw_counts(tmp_path, DAY, ["hankyung", "mk"])
     assert out["mk"] == {"ok": 1, "skipped": 1, "failed": 0} and out["hankyung"]["failed"] == 1
+
+
+# ---------------------------------------------------------------- 원문 기록 (목록 단계에서 받은 페이지 재사용)
+
+def test_list_pages_also_write_fulltext_records(tmp_path):
+    from backend.pipelines.news import fulltext as ft
+    from backend.pipelines.news.lead_fetcher import SourceConfig
+
+    body = "삼성전자가 엔비디아에 6세대 고대역폭메모리(HBM4)를 공급한다. " * 4
+
+    def page(title, pub):
+        return (f"<html><head><meta property=og:title content={title} />"
+                f"<meta property=article:published_time content={pub}></head>"
+                f"<body><div id=b>{body}</div></body></html>")
+
+    base = "https://www.hankyung.com/article/"
+    smap = "".join(f"<url><loc>{base}{i}</loc></url>" for i in ("2026102700001", "2026102700002", "2026102700003"))
+    routes = {"https://www.hankyung.com/sitemap/daily-article/20261027.xml": Resp(200, f"<urlset>{smap}</urlset>"),
+              base + "2026102700001": Resp(200, page("삼성 HBM4 공급", "2026-10-27T09:00:00+09:00")),
+              base + "2026102700002": Resp(200, page("[포토] 코스피", "2026-10-27T10:00:00+09:00")),
+              base + "2026102700003": Resp(200, page("같은 제목이라 저장 안 됨", "2026-10-27T11:00:00+09:00"))}
+    env = make_env(routes)
+    src = SourceConfig("hankyung", "link", True, ("hankyung.com",), "#b", skip_title_patterns=(r"^\[포토\]",))
+    env.config = LeadConfig(sources={"hankyung": src}, interval=4.0, max_attempts=2, min_body_chars=100)
+    ids = {}
+
+    def rows_for(urls):            # 저장된 기사만 id가 있다 (3번은 content_hash 중복으로 저장 안 된 것으로)
+        out = {}
+        for a in env.saved:
+            if a.url_norm in urls and not a.url_norm.endswith("3"):
+                nid = ids.setdefault(a.url_norm, len(ids) + 1)
+                out[a.url_norm] = ft.ArticleRow(nid, "hankyung", a.url_norm, a.title, a.published_at.isoformat())
+        return out
+
+    env.bodies = bl.BodyWriter(tmp_path, env.config, rows_for)
+    status, stat = bl.run_source("hankyung", DAY, env)
+    assert status == "done" and stat["inserted"] == 3
+    assert stat["body_ok"] == 1 and stat["body_skipped"] == 1 and stat["body_no_id"] == 1
+    recs = [json.loads(l) for l in (tmp_path / "2026-10-27.jsonl").read_text(encoding="utf-8").splitlines()]
+    ok = next(r for r in recs if r["status"] == "ok")
+    # fulltext가 같은 페이지를 받았을 때와 같은 형식·판정 (fetch_method·extractor_version·body_hash·attempts)
+    assert ok["fetch_method"] == "link" and ok["extractor_version"] == ft.extractor_version(src)
+    assert ok["body"].startswith("삼성전자가") and ok["body_hash"] == ft.sha256_text(ok["body"]) and ok["attempts"] == 1
+    assert next(r for r in recs if r["status"] == "skipped")["reason"].startswith("포토 기사")
+    # fulltext 단계는 이 기록을 이미 받은 것으로 보고 다시 요청하지 않는다
+    done = ft.load_done(tmp_path, [DAY])
+    assert {s.status for s in done.values()} == {"ok", "skipped"}
+    # 다시 돌려도(--force) 같은 기사의 원문 기록은 한 번만
+    stat2 = Counter()
+    env.bodies.write("hankyung", [(a, routes[a.url].text) for a in env.saved], stat2)
+    assert stat2["body_already"] == 2 and len((tmp_path / "2026-10-27.jsonl").read_text(encoding="utf-8").splitlines()) == 2
