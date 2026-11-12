@@ -82,6 +82,11 @@ def main() -> int:
                     request_interval=args.krx_request_interval,
                     check_schema=False,
                 )
+            result["kis_request_metrics"] = {
+                **client.request_metrics(),
+                "request_interval_seconds": client.request_interval,
+                "rate_limit_cooldown_seconds": client.rate_limit_cooldown,
+            }
     print(json.dumps(result, ensure_ascii=False, indent=2))
     failed = bool(
         result["failed_symbols"]

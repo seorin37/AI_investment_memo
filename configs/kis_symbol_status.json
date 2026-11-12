@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "symbols": [
+    {
+      "symbol": "002785",
+      "status": "converted",
+      "effective_date": "2026-11-10",
+      "reason": "진흥기업 1우선주 전량의 보통주 전환으로 별도 상장 종목 종료",
+      "source": "DART 2026-09-15 종류주식의보통주식으로전환 안내 및 KRX 2026-11-05 상장폐지 안내"
+    },
+    {
+      "symbol": "002787",
+      "status": "converted",
+      "effective_date": "2026-11-10",
+      "reason": "진흥기업 2우선주 전량의 보통주 전환으로 별도 상장 종목 종료",
+      "source": "DART 2026-09-15 종류주식의보통주식으로전환 안내 및 KRX 2026-11-05 상장폐지 안내"
+    },
+    {
+      "symbol": "004415",
+      "status": "delisted",
+      "effective_date": null,
+      "reason": "기존 운영 정책에서 상장폐지가 확인된 서울식품우",
+      "source": "기존 KIS 자동 수집 제외 정책"
+    },
+    {
+      "symbol": "011155",
+      "status": "delisted",
+      "effective_date": null,
+      "reason": "기존 운영 정책에서 상장폐지가 확인된 CJ씨푸드1우",
+      "source": "기존 KIS 자동 수집 제외 정책"
+    }
+  ]
+}

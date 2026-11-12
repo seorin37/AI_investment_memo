@@ -1,5 +1,5 @@
 
-from datetime import date
+from datetime import date, timedelta
 
 import exchange_calendars as xc
 
@@ -40,3 +40,15 @@ def is_krx_trading_day(target_date: date) -> bool:
     return bool(
         XKRX_CALENDAR.is_session(target_date.isoformat())
     )
+
+
+def previous_krx_trading_day(reference_date: date) -> date:
+    """Return the latest KRX session strictly before ``reference_date``."""
+
+    candidate = reference_date - timedelta(days=1)
+    first_session = XKRX_CALENDAR.first_session.date()
+    while candidate >= first_session:
+        if is_krx_trading_day(candidate):
+            return candidate
+        candidate -= timedelta(days=1)
+    raise ValueError(f"이전 KRX 거래일을 찾을 수 없습니다: {reference_date}")

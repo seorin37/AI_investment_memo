@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import random
 import time
@@ -44,6 +45,9 @@ STATE_ROOT = Path(__file__).resolve().parents[3] / "logs" / "market"
 KOSPI_BACKFILL_STATE_ROOT = STATE_ROOT / "kospi_all_v1"
 TOKEN_CACHE_PATH = STATE_ROOT / "kis_token_cache.json"
 RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
+RATE_LIMIT_MESSAGE_CODE = "EGW00201"
+DEFAULT_REQUEST_INTERVAL = 1.05
+DEFAULT_RATE_LIMIT_COOLDOWN = 61.0
 SEOUL = ZoneInfo("Asia/Seoul")
 REGULAR_MARKET_CLOSE = datetime_time(15, 30)
 
@@ -106,6 +110,19 @@ def _safe_error(response: requests.Response, payload: object = None) -> str:
     return f"KIS HTTP {response.status_code}, code={code}, message={message[:200]}"
 
 
+def _positive_float_setting(name: str, default: float) -> float:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise KisConfigError(f"{name}은 양수 실수여야 합니다.") from exc
+    if not math.isfinite(value) or value <= 0:
+        raise KisConfigError(f"{name}은 양수 실수여야 합니다.")
+    return value
+
+
 class KisClient:
     """KIS quotation client with secure cross-process token reuse."""
 
@@ -114,7 +131,8 @@ class KisClient:
         credentials: KisCredentials | None = None,
         *,
         session: requests.Session | None = None,
-        request_interval: float = 1.05,
+        request_interval: float | None = None,
+        rate_limit_cooldown: float | None = None,
         timeout: float = 20.0,
         max_attempts: int = 2,
         sleep: Callable[[float], None] = time.sleep,
@@ -122,8 +140,18 @@ class KisClient:
         now: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
         token_cache_path: Path | None = None,
     ) -> None:
-        if request_interval < 1.05:
-            raise ValueError("KIS 요청 간격은 최소 1.05초여야 합니다.")
+        if request_interval is None:
+            request_interval = _positive_float_setting(
+                "KIS_REQUEST_INTERVAL", DEFAULT_REQUEST_INTERVAL
+            )
+        if rate_limit_cooldown is None:
+            rate_limit_cooldown = _positive_float_setting(
+                "KIS_RATE_LIMIT_COOLDOWN_SECONDS", DEFAULT_RATE_LIMIT_COOLDOWN
+            )
+        if not math.isfinite(request_interval) or request_interval <= 0:
+            raise ValueError("KIS 요청 간격은 양수 실수여야 합니다.")
+        if not math.isfinite(rate_limit_cooldown) or rate_limit_cooldown <= 0:
+            raise ValueError("KIS 호출 제한 cooldown은 양수 실수여야 합니다.")
         if timeout <= 0 or max_attempts < 1:
             raise ValueError("timeout과 max_attempts 설정이 올바르지 않습니다.")
         supplied_credentials = credentials is not None
@@ -131,6 +159,7 @@ class KisClient:
         self.session = session or requests.Session()
         self._owns_session = session is None
         self.request_interval = request_interval
+        self.rate_limit_cooldown = rate_limit_cooldown
         self.timeout = timeout
         self.max_attempts = max_attempts
         self.sleep = sleep
@@ -150,6 +179,7 @@ class KisClient:
         self.token_request_count = 0
         self.quotation_request_count = 0
         self.retry_count = 0
+        self.rate_limit_error_count = 0
 
     def close(self) -> None:
         if self._owns_session:
@@ -292,6 +322,7 @@ class KisClient:
             "token": self.token_request_count,
             "quotation": self.quotation_request_count,
             "retries": self.retry_count,
+            "rate_limit_errors": self.rate_limit_error_count,
         }
 
     def _issue_token(self) -> str:
@@ -334,6 +365,17 @@ class KisClient:
                 if response.status_code == 200 and payload.get("rt_cd") == "0":
                     return payload
                 error = KisApiError(_safe_error(response, payload))
+                if (
+                    response.status_code == 200
+                    and str(payload.get("msg_cd") or "") == RATE_LIMIT_MESSAGE_CODE
+                ):
+                    self.rate_limit_error_count += 1
+                    last_error = error
+                    if attempt < self.max_attempts:
+                        self.retry_count += 1
+                        self.sleep(self.rate_limit_cooldown)
+                        continue
+                    raise error
                 if response.status_code == 401 and attempt < self.max_attempts:
                     self._invalidate_token(token)
                     last_error = error
@@ -1195,6 +1237,12 @@ def refresh_kis_market_data(
         key: metrics_after[key] - metrics_before[key]
         for key in metrics_after
     }
+    request_metrics.update(
+        {
+            "request_interval_seconds": client.request_interval,
+            "rate_limit_cooldown_seconds": client.rate_limit_cooldown,
+        }
+    )
     incomplete_dates = sorted(
         day for day, result in date_results.items() if result["failed_symbols"]
     )

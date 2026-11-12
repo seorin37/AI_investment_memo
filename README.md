@@ -123,18 +123,23 @@ ECOS 및 FRED API를 이용해 경제지표를 수집합니다.
 
 서울 기준 09:00에는 최신 확정 거래일 KRX 종목 마스터를 먼저 동기화한 뒤,
 같은 KOSPI 대상 목록으로 시가총액·상장주식수를 결합하고 지수·금, ECOS,
-FRED를 실행합니다. 18:30에는 KIS 원시·수정 OHLCV와 투자지표를 실행합니다.
+FRED를 실행합니다. KIS는 별도 2단계로 운영합니다. 거래일 20:00에는 현재가
+API 투자지표 원본을 로컬 JSON으로 보존하고, 화~금 08:00에는 직전 거래일의
+원시·수정 OHLCV를 KRX 정규장 OHLCV와 검증한 뒤 가격과 투자지표를 저장합니다.
 
 ```bash
 PYTHONPATH=backend python -m pipelines.daily_refresh --profile morning --print-plan
-PYTHONPATH=backend python -m pipelines.daily_refresh --profile evening --print-plan
+PYTHONPATH=backend python scripts/collect_kis_fundamentals_snapshots.py capture-auto
+PYTHONPATH=backend python scripts/collect_kis_fundamentals_snapshots.py finalize-auto
 ```
 
 운영 안전장치:
 
 - KIS와 KRX 종목 메타데이터는 실행 시작 시 `stocks.market='KOSPI'` 대상을 한 번 확정
-- KIS는 `DAILY_REFRESH_KIS_ENABLED=true`이고 `0011` 스키마가 준비된 경우에만 실행
-- Evening 작업은 해당 실행일과 최근 10일 범위의 누락·미완료 거래일을 복구하며, 전체 과거 백필·전체 재동기화는 자동 실행하지 않음
+- 신규 KIS 자동 수집은 `KIS_TWO_STAGE_ENABLED=true`인 경우에만 실행
+- 20:00 Capture는 KRX 휴장일에 API를 호출하지 않고 기존 정상 JSON을 덮어쓰지 않음
+- 08:00 Finalize는 최근 10일의 미완료 날짜를 다시 검증하며 완료 marker가 있는 종목은 건너뜀
+- KRX 공식 데이터가 없거나 KIS 원시 일봉과 불일치하면 경고를 기록하되 구조적으로 유효한 KIS 데이터 저장은 계속함
 - PostgreSQL advisory lock으로 동일 DB 대상 중복 실행 방지
 - 기존 소스별 완료/실패 JSON과 `logs/daily_refresh/` 통합 단계 로그로 재개 가능
 - 한 소스가 실패해도 나머지 소스는 계속 실행하며, 하나라도 실패하면 종료 코드 1
@@ -165,12 +170,19 @@ PYTHONPATH=backend python scripts/collect_kis_market_data.py \
 ```bash
 bash scripts/install_daily_market_refresh_timer.sh
 systemctl --user status memos-market-refresh-morning.timer
-systemctl --user status memos-market-refresh-evening.timer
+systemctl --user status memos-kis-two-stage-finalize.timer
+systemctl --user status memos-kis-two-stage-capture.timer
 ```
 
-두 타이머는 `Asia/Seoul` 시간대와 `Persistent=true`를 사용합니다. 설치
-스크립트는 신규 타이머를 활성화하고 상태를 검증한 뒤 기존 통합 09:00
-타이머를 비활성화합니다.
+WSL이 20:00에 종료되어 Capture를 놓친 경우 현재 KIS 응답을 과거 거래일
+자료로 소급 저장하지 않습니다. 08:00 Finalize를 놓친 경우 다음 예약 실행이
+최근 미완료 날짜를 복구합니다. 10일보다 오래 중단된 경우 다음처럼 복구 범위를
+명시해 수동 실행합니다.
+
+```bash
+KIS_TWO_STAGE_ENABLED=true PYTHONPATH=backend .venv/bin/python \
+  scripts/collect_kis_fundamentals_snapshots.py finalize-auto --recovery-days 30
+```
 
 ### 뉴스
 
