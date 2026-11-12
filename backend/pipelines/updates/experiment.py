@@ -599,7 +599,8 @@ def main(argv: list[str] | None = None) -> int:
               f"{json.dumps({k: v['calls'] for k, v in uline['stages'].items()}, ensure_ascii=False)} → {run_dir / 'usage_by_item.csv'}")
     print("\n".join(head))
     print(f"결과 폴더: {run_dir}  (cards.jsonl, report.md, summary.json, candidates.csv, outcomes.jsonl) — "
-          + (f"카드·판정·확인 시각은 {store_target}에 썼습니다 (공용 DB에는 쓰지 않음)." if wconn is not None
+          + (f"카드·판정·확인 시각은 {store_target}에 썼습니다 ({'공용 DB, --allow-shared-write' if shared else '테스트 DB, 공용 DB에는 쓰지 않음'})."
+             if wconn is not None
              else "DB에는 아무것도 쓰지 않았습니다."))
     print(f"미리보기(사용자 화면처럼): {preview_path}")
     print(f"임계값 정하기: {csv_path} 의 마지막 열 '관련(O/X)'을 채운 뒤 python -m pipelines.updates.calibrate --labels {csv_path}")
