@@ -181,6 +181,47 @@ class FlowTest(unittest.TestCase):
         self.assertEqual(out.kind, "not_called")
 
 
+class ExplanationTest(unittest.TestCase):
+    """설명 문단 시험 (topic.explanation, 2026-11-12). 기본은 꺼져 있어 기존 카드와 같다."""
+    ON = {**CFG, "explanation": {"enabled": True, "max_sentences": 3, "max_chars": 200}}
+    EXP = "SK하이닉스는 보통주 1주당 20,000원을 분기배당으로 주기로 했어요. 배당기준일은 2026-11-30이에요."
+
+    def _payload(self, **kw):
+        base = {"status": "update", "headline": "SK하이닉스 분기배당 결정", "when": "2026-10-28",
+                "facts": [{"text": "보통주 1주당 20,000원 분기배당을 결정했어요.", "evidence_id": "E1"}],
+                "explanation": self.EXP, "memo_link": "메모의 '배당' 관심사와 연결돼요.", "sources": ["E1"], "confidence": 0.9}
+        base.update(kw)
+        return json.dumps(base, ensure_ascii=False)
+
+    def test_off_by_default(self):
+        self.assertEqual(check_card_v2(card(), ev(disc()), [], CFG), [])
+        self.assertNotIn("explanation", build_prompt(ITEM, ev(disc()), schema="v2"))
+        out = check_topic(ITEM, [disc()], lambda p: self._payload(), [], CFG)
+        self.assertEqual(out.draft.explanation, "")                 # 꺼져 있으면 응답에 있어도 쓰지 않는다
+
+    def test_checked_when_on(self):
+        self.assertEqual(check_card_v2(card(explanation=self.EXP), ev(disc()), [], self.ON), [])
+        self.assertIn("FORMAT_EXPLANATION", check_card_v2(card(), ev(disc()), [], self.ON))       # 비었다
+        self.assertIn("FORMAT_EXPLANATION", check_card_v2(card(explanation=self.EXP + " [E1]"), ev(disc()), [], self.ON))
+        self.assertIn("NUMBER", check_card_v2(card(explanation="1주당 30,000원으로 정했어요. 기준일은 2026-11-30이에요."),
+                                              ev(disc()), [], self.ON))                           # 근거에 없는 숫자
+        self.assertIn("BANNED", check_card_v2(card(explanation="배당을 정한 호재예요. 기준일은 2026-11-30이에요."),
+                                              ev(disc()), ["호재"], self.ON))
+
+    def test_prompt_parse_and_draft(self):
+        self.assertIn("JSON 키: status, headline, when, facts, explanation, memo_link",
+                      build_prompt(ITEM, ev(disc()), schema="v2", explain=True))
+        seen = []
+
+        def call(prompt):
+            seen.append(prompt)
+            return self._payload()
+        out = check_topic(ITEM, [disc()], call, [], {**self.ON, "prompt_path_v2": "configs/update_judge_prompt_v2_explain.md"})
+        self.assertEqual(out.kind, "update")
+        self.assertEqual(out.draft.explanation, self.EXP)
+        self.assertIn("explanation: 2~3문장, 200자 이내", seen[0])  # 시험용 프롬프트 파일에 설정값이 채워진다
+
+
 class MergeTest(unittest.TestCase):
     def test_merge_same_memo_same_source(self):
         mk = lambda iid, refs, origin="llm": UpdateDraft(TrackingItem(iid, "000660", "topic", f"항목 {iid}"), "news", "t", "s",

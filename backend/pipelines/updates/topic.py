@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Callable
 
 from .checks import check_card, check_no_update
@@ -21,7 +22,7 @@ from .judge import build_prompt, build_verify_prompt, parse_card, parse_verify
 from .models import Candidate, CreditsExhausted, TopicOutcome, TrackingItem, UpdateDraft
 
 
-_FORMAT_CODES = {"FORMAT_TITLE", "FORMAT_SUMMARY"}
+_FORMAT_CODES = {"FORMAT_TITLE", "FORMAT_SUMMARY", "FORMAT_EXPLANATION"}
 _REPAIR_REASON = {"FORMAT_TITLE": "title이 {title_max}자(공백 포함)를 넘었어요",
                   "FORMAT_SUMMARY": "summary가 {max_sentences}문장을 넘었거나, 한 문장이 [E#]를 뺀 {sentence_max_chars}자를 넘었거나, 문장 끝에 [E#]가 없어요"}
 
@@ -29,7 +30,9 @@ _REPAIR_REASON = {"FORMAT_TITLE": "title이 {title_max}자(공백 포함)를 넘
 def _limits(cfg: dict) -> dict:
     """카드 규격 설정값. 프롬프트({title_max} 등)와 형식 재시도 안내 문구가 같은 값을 쓴다."""
     return {"title_max": cfg.get("title_max", 20), "max_sentences": cfg.get("max_sentences", 3),
-            "sentence_max_chars": cfg.get("sentence_max_chars", 60), "reason_max": cfg.get("reason_max", 80)}
+            "sentence_max_chars": cfg.get("sentence_max_chars", 60), "reason_max": cfg.get("reason_max", 80),
+            "explanation_max_sentences": (cfg.get("explanation") or {}).get("max_sentences", 4),
+            "explanation_max_chars": (cfg.get("explanation") or {}).get("max_chars", 400)}
 
 
 def _repair_prompt(prompt: str, raw: str, codes: list[str], cfg: dict) -> str:
@@ -170,7 +173,8 @@ def _judge(item: TrackingItem, evidence, call: Callable[[str], str] | None, bann
 
 
 _REPAIR_REASON_V2 = {"FORMAT_TITLE": "headline이 {title_max}자(공백 포함)를 넘었거나 비었어요",
-                     "FORMAT_SUMMARY": "facts가 1~{max_sentences}개가 아니거나, 한 문장이 {sentence_max_chars}자를 넘었거나, text에 [E#] 표시가 있어요"}
+                     "FORMAT_SUMMARY": "facts가 1~{max_sentences}개가 아니거나, 한 문장이 {sentence_max_chars}자를 넘었거나, text에 [E#] 표시가 있어요",
+                     "FORMAT_EXPLANATION": "explanation이 비었거나, {explanation_max_sentences}문장·{explanation_max_chars}자를 넘었거나, [E#] 표시가 있어요"}
 _COMPARE_WORDS = ("대비", "보다", "비교", "전년", "작년", "직전", "지난", "전기")
 
 
@@ -206,8 +210,11 @@ def _judge_v2(item: TrackingItem, evidence, call: Callable[[str], str] | None, b
             draft.related_news = related_news(real, set(), cfg.get("related_news_min_similarity", 0.6))
         return TopicOutcome("fixed_card", evidence, card, codes, draft, raw, retried)
 
-    prompt = build_prompt(item, evidence, limits=_limits(cfg), rules=cfg.get("extra_rules"), schema="v2",
-                          coverage=cfg.get("coverage"))
+    explain = bool((cfg.get("explanation") or {}).get("enabled"))
+    from .judge import load_guide
+    guide = load_guide(cfg["prompt_path_v2"]) if cfg.get("prompt_path_v2") else None   # 시험용 프롬프트 파일 (기본: v2 파일)
+    prompt = build_prompt(item, evidence, guide=guide, limits=_limits(cfg), rules=cfg.get("extra_rules"), schema="v2",
+                          coverage=cfg.get("coverage"), explain=explain)
     try:
         raw = call(prompt)
     except CreditsExhausted:
@@ -242,7 +249,9 @@ def _judge_v2(item: TrackingItem, evidence, call: Callable[[str], str] | None, b
         return replace(codes, card, retried=retried)
     facts = [(t, eid) for t, eid in card.facts if eid]          # "비교 자료 없음"은 검수하지 않는다
     if cfg.get("verify_call"):
-        vcard = Card("update", card.headline, [t for t, _ in facts], card.memo_link, [(e, t) for t, e in facts], card.confidence)
+        extra = [s.strip() for s in re.split(r"(?<=[.!?])\s+", card.explanation) if s.strip()] if explain else []
+        vcard = Card("update", card.headline, [t for t, _ in facts] + extra, card.memo_link, [(e, t) for t, e in facts],
+                     card.confidence)   # 설명 문단 문장도 근거와 대조한다
         vcodes, notes = _verify(vcard, evidence, call, item.company_name or item.symbol, item.description)
         if vcodes:
             out = replace(vcodes, card, retried=retried)
@@ -269,7 +278,7 @@ def _judge_v2(item: TrackingItem, evidence, call: Callable[[str], str] | None, b
         if utype == "disclosure" else []
     draft = UpdateDraft(item=item, type=utype, title=card.headline, summary=" ".join(r["text"] for r in fact_rows),
                         reason=card.memo_link, sources=sources, related_news=related,
-                        card_schema="v2", when=card.when, facts=fact_rows,
+                        card_schema="v2", when=card.when, facts=fact_rows, explanation=card.explanation if explain else "",
                         coverage=coverage_text(cfg.get("coverage"), any(by_id[eid].candidate.kind == "news" for _, eid in facts)))
     return TopicOutcome("update", evidence, card, [], draft, raw, retried)
 

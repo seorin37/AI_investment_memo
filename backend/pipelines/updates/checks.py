@@ -257,7 +257,12 @@ def check_card_v2(card, evidence: list[Evidence], banned: list[str], cfg: dict |
     if (any(eid not in ids for eid in used) or {s for s in card.sources if s} != set(used)
             or (cited and all(e.candidate.doc == "compare" for e in cited))):
         codes.append("SOURCE")
-    texts = [card.headline, *(t for t, _ in facts), card.memo_link]
+    exp_cfg = cfg.get("explanation") or {}
+    exp = (getattr(card, "explanation", "") or "") if exp_cfg.get("enabled") else ""
+    if exp_cfg.get("enabled") and (not exp or len(exp) > exp_cfg.get("max_chars", 400) or _TAG.search(exp)
+                                   or len(_SENT_END.findall(exp.strip())) > exp_cfg.get("max_sentences", 4)):
+        codes.append("FORMAT_EXPLANATION")
+    texts = [card.headline, *(t for t, _ in facts), card.memo_link] + ([exp] if exp else [])
     if _banned_hit(texts, banned, cfg):
         codes.append("BANNED")
     # 숫자: 문장마다 그 근거 하나에만. 제목·memo_link는 쓴 근거 전체 안에서
@@ -265,7 +270,7 @@ def check_card_v2(card, evidence: list[Evidence], banned: list[str], cfg: dict |
     for e in cited:
         union |= evidence_numbers(_ev_text(e))
     bad = any(eid in ids and not numbers(t) <= evidence_numbers(_ev_text(ids[eid])) for t, eid in facts)
-    if bad or not numbers(card.headline) <= union or not numbers(card.memo_link) <= union:
+    if bad or not numbers(card.headline) <= union or not numbers(card.memo_link) <= union or not numbers(exp) <= union:
         codes.append("NUMBER")
     if cfg["prediction_terms"] and prediction_text(texts, cfg):
         codes.append("PREDICTION")
@@ -274,7 +279,7 @@ def check_card_v2(card, evidence: list[Evidence], banned: list[str], cfg: dict |
         return any(term in text and term not in hay for term in cfg["coverage_terms"])
     all_ev = " ".join(_ev_text(e) for e in cited)
     if (any(eid in ids and outside(t, _ev_text(ids[eid])) for t, eid in facts)
-            or outside(card.headline, all_ev) or outside(card.memo_link, all_ev)):
+            or outside(card.headline, all_ev) or outside(card.memo_link, all_ev) or outside(exp, all_ev)):
         codes.append("COVERAGE")
     # 비교 판단·선택 권유 ("KB가 더 나아요", "갈아타는 게 좋아요"): 두 대상의 사실만 나란히 보여 주고 판단은 하지 않는다 (2026-11-10)
     judges = [re.compile(p) for p in cfg["judgment_patterns"]]

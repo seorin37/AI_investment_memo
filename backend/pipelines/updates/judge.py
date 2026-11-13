@@ -119,6 +119,10 @@ V2_OUTPUT = """# 출력 요청
 추적 항목과 새 근거의 직접 관련성을 판단하고, 지정된 JSON 구조로만 반환하세요.
 facts는 {"text": 문장, "evidence_id": "E1"} 객체의 배열이고(예: [{"text": "첫 문장이에요.", "evidence_id": "E1"}]),
 sources는 facts에서 쓴 근거 번호 배열입니다(예: ["E1"]). JSON 키: status, headline, when, facts, memo_link, sources, confidence."""
+# 설명 문단을 받는 시험 (topic.explanation.enabled, 2026-11-12)
+V2_OUTPUT_EXPLAIN = V2_OUTPUT.replace("JSON 키: status, headline, when, facts, memo_link, sources, confidence.",
+                                      "explanation은 근거의 사실을 풀어 쓴 설명 문단(문자열)입니다. "
+                                      "JSON 키: status, headline, when, facts, explanation, memo_link, sources, confidence.")
 
 # 메모 성격 (코드가 메모 문장 표현으로 판단해 v2 입력에 적는다)
 # 2026-11-10 "나음?"·"뭐가 낫"·"어디가 좋"처럼 어느 쪽인지 묻는 표현도 비교로 본다 (판단은 하지 않고 두 대상의 사실만 나란히)
@@ -182,7 +186,7 @@ def fill_limits(guide: str, limits: dict | None = None) -> str:
 
 def build_prompt(item: TrackingItem, evidence: list[Evidence], guide: str | None = None,
                  limits: dict | None = None, rules: list[str] | None = None, schema: str = "v1",
-                 coverage: dict | None = None) -> str:
+                 coverage: dict | None = None, explain: bool = False) -> str:
     """rules(topic.extra_rules): 지침서 프롬프트 파일은 그대로 두고 입력 끝에 붙이는 추가 규칙 (2026-11-09 공시 숫자 우선, 예측 기사).
     schema="v2": v2 프롬프트 파일, [메모 성격](비교를 원함·이유를 물음, 코드 판단)과 v2 출력 요청을 쓴다."""
     if schema not in PROMPT_PATHS:
@@ -195,7 +199,7 @@ def build_prompt(item: TrackingItem, evidence: list[Evidence], guide: str | None
                        if coverage and coverage.get("news_since") else "")
                     + f"# 메모 성격 (코드 판단)\n- 비교를 원함: {yes(wants_comparison(item.memo_text))}\n"
                       f"- 이유를 물음: {yes(asks_why(item.memo_text))}\n\n"
-                    + V2_OUTPUT.replace("{", "{{").replace("}", "}}"))
+                    + (V2_OUTPUT_EXPLAIN if explain else V2_OUTPUT).replace("{", "{{").replace("}", "}}"))
     body = template.format(
         tracking_item_id=item.item_id, company_name=item.company_name or item.symbol, stock_code=item.symbol,
         tracking_item_title=item.description, tracking_keywords=", ".join(item.keywords) or "없음",
@@ -276,7 +280,8 @@ def parse_card_v2(raw: str) -> CardV2 | None:
         return None
     return CardV2(data["status"], data["headline"].strip(), data["when"].strip(),
                   [(f["text"].strip(), str(f.get("evidence_id") or "").strip()) for f in facts],
-                  data["memo_link"].strip(), [s.strip() for s in sources], conf)
+                  data["memo_link"].strip(), [s.strip() for s in sources], conf,
+                  data["explanation"].strip() if isinstance(data.get("explanation"), str) else "")
 
 
 def parse_verify(raw: str, n: int) -> list[tuple[bool, str]] | None:
