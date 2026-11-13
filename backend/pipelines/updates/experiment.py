@@ -102,6 +102,7 @@ def _outcome(item, out) -> dict:
             "fail_codes": out.fail_codes, "evidence": ev,
             "grouped": [{"ref": c.ref, "rcept_no": r, "title": c.title} for c, r in out.grouped],
             "card": None if d is None else {"type": d.type, "origin": d.origin, "title": d.title, "summary": d.summary,
+                                            "explanation": d.explanation, "memo_link": d.reason, "when": d.when,
                                             "sources": [r for r, _ in d.sources], "supporting_news": d.supporting_news,
                                             "related_news": [r for r, _ in d.related_news]}}
 
@@ -144,7 +145,10 @@ def main(argv: list[str] | None = None) -> int:
                                         "이번 카드가 쓴 근거를 더해 적는다. 기본: 쓰지 않음")
     ap.add_argument("--used-refs-match", choices=["ref", "doc"], default="ref",
                     help="ref: 같은 ref만 뺀다 (기본) · doc: 같은 공시의 다른 청크도 뺀다")
-    ap.add_argument("--item-state", help="항목 상태 파일 (item_state.FileItemStateStore). 주면 항목별 마지막 확인 시각·응답 유형을 적는다")
+    ap.add_argument("--item-ids", help="이 tracking_items id(쉼표 구분)만 처리한다. --store db: 다른 항목의 확인 시각·카드를 건드리지 않는다. "
+                                       "--store file: 공용 DB에서 그 활성 항목을 읽기만 하고(첫 확인으로) 결과는 파일로")
+    ap.add_argument("--save-llm-io", action="store_true", help="LLM 프롬프트·응답 원문을 실행 폴더 llm_io.jsonl에 남긴다")
+    ap.add_argument("--item-state",help="항목 상태 파일 (item_state.FileItemStateStore). 주면 항목별 마지막 확인 시각·응답 유형을 적는다")
     args = ap.parse_args(argv)
 
     import psycopg
@@ -190,8 +194,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"DB 저장 대상: {store_target}" + (" (공용 DB 쓰기 허용)" if shared else ""))
         wconn = _pg.connect(dsn)
         items = db_items(wconn, None if args.symbols.upper() == "ALL" else tuple(args.symbols.split(",")))
+        if args.item_ids:                                       # 이 항목만 (다른 사용자 항목의 확인 시각·카드를 건드리지 않게)
+            keep = {s.strip() for s in args.item_ids.split(",") if s.strip()}
+            items = [i for i in items if i.item_id in keep]
         from .db_store import item_memos
         memo_by_item = item_memos(wconn, [i.item_id for i in items])
+    elif args.item_ids:                                         # 파일 저장 + DB 항목 (읽기 전용, 확인 시각 없이 = 첫 확인으로)
+        from .db_store import load_items as db_items
+        keep = {s.strip() for s in args.item_ids.split(",") if s.strip()}
+        with psycopg.connect(get_read_dsn()) as rconn:
+            rconn.read_only = True
+            items = [i for i in db_items(rconn, tuple(args.symbols.split(","))) if i.item_id in keep]
+            rconn.rollback()
     else:
         items = load_items(resolve_path(args.gold), tuple(args.symbols.split(",")))
     if args.limit:
@@ -248,7 +262,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             client = OpenAIClient.from_env()
     from .usage import UsageTracker
-    tracker = UsageTracker()                                    # LLM 호출을 항목·단계별로 센다 (usage_by_item.csv, usage_log.jsonl)
+    tracker = UsageTracker(keep_io=args.save_llm_io)            # LLM 호출을 항목·단계별로 센다 (usage_by_item.csv, usage_log.jsonl)
     rel_cfg = None
     rel_client = None
     if client is not None:
@@ -586,6 +600,10 @@ def main(argv: list[str] | None = None) -> int:
     with (run_dir / "responses.jsonl").open("w", encoding="utf-8") as f:
         for r in responses:
             f.write(json.dumps(to_dict(r), ensure_ascii=False, default=str) + "\n")
+    if tracker.io is not None:                                  # --save-llm-io: 프롬프트·응답 원문
+        with (run_dir / "llm_io.jsonl").open("w", encoding="utf-8") as f:
+            for row in tracker.io:
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
     preview_path = write_preview(run_dir, drafts, cand_rows, empties, f"{run_dir.name} · LLM {args.llm}")
     if client is not None:                                      # 사용량 기록 (결정 (다): DB가 아니라 파일)
         from .usage import LOG_PATH, write_usage
