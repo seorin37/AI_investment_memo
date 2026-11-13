@@ -13,6 +13,7 @@ from pathlib import Path
 from sqlalchemy import bindparam, text
 from sqlalchemy.engine import Connection
 
+from . import financials_quarterly
 from .financials import MappedPeriod
 
 
@@ -117,7 +118,12 @@ def upsert_financials(conn: Connection, period: MappedPeriod, *, keep_direct: bo
         {**_key(period), **{c: period.values.get(c) for c in FINANCIALS_VALUES}, "fs_div": period.fs_div,
          "null_reasons": _reasons(period.null_reasons, period.values)},
     )
-    return result.rowcount == 1
+    wrote = result.rowcount == 1
+    if wrote:  # 누적 원본이 바뀌었으니 그 회계연도의 분기 단독값을 다시 계산 (0016)
+        financials_quarterly.recompute_for_period(conn, "general", period.symbol, period.period_end, period.period_type)
+        # 금융 표의 연결·별도 판정도 financials.fs_div를 쓰므로 함께 (금융사가 아니면 대상 행이 없어 바로 끝남)
+        financials_quarterly.recompute_for_period(conn, "fin", period.symbol, period.period_end, period.period_type)
+    return wrote
 
 
 def upsert_financials_fin(conn: Connection, period: MappedPeriod, *, keep_direct: bool = False) -> bool:
@@ -141,7 +147,10 @@ def upsert_financials_fin(conn: Connection, period: MappedPeriod, *, keep_direct
         {**_key(period), **{c: period.fin_values.get(c) for c in FIN_VALUES},
          "null_reasons": _reasons(period.fin_null_reasons, period.fin_values)},
     )
-    return result.rowcount == 1
+    wrote = result.rowcount == 1
+    if wrote:
+        financials_quarterly.recompute_for_period(conn, "fin", period.symbol, period.period_end, period.period_type)
+    return wrote
 
 
 def set_ratio(conn: Connection, symbol: str, period_end: str, ptype: str, column: str, value, null_code: str | None) -> int:
@@ -168,3 +177,4 @@ def update_stock_sector(conn: Connection, symbol: str, fin_type: str | None) -> 
     )
     if fin_type is None:
         conn.execute(text("DELETE FROM financials_fin WHERE symbol = :s"), {"s": symbol})
+        conn.execute(text("DELETE FROM financials_fin_quarterly WHERE symbol = :s"), {"s": symbol})  # 0016 분기값도 함께
