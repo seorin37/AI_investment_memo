@@ -211,13 +211,13 @@ class Clock:
         self.value += seconds
 
 
-def test_token_is_reused_and_requests_are_rate_limited():
+def test_token_is_reused_and_requests_are_rate_limited(monkeypatch):
+    monkeypatch.delenv("KIS_REQUEST_INTERVAL", raising=False)
     session = Session()
     clock = Clock()
     client = kis.KisClient(
         kis.KisCredentials("app", "secret"),
         session=session,
-        request_interval=1.05,
         sleep=clock.sleep,
         monotonic=clock.monotonic,
     )
@@ -228,6 +228,7 @@ def test_token_is_reused_and_requests_are_rate_limited():
     assert session.post_calls == 1
     assert len(session.get_calls) == 2
     assert sum(clock.sleeps) >= 2.10
+    assert client.request_interval == 1.05
     assert all(call[1]["headers"]["authorization"] == "Bearer secret-token" for call in session.get_calls)
 
 
@@ -266,8 +267,115 @@ def test_rate_limit_covers_token_raw_adjusted_and_fundamentals():
         for (_, earlier), (_, later) in zip(request_times, request_times[1:])
     )
     assert client.request_metrics() == {
-        "total": 4, "token": 1, "quotation": 3, "retries": 0
+        "total": 4,
+        "token": 1,
+        "quotation": 3,
+        "retries": 0,
+        "rate_limit_errors": 0,
     }
+
+
+@pytest.mark.parametrize("interval", [0.5, 0.2])
+def test_configurable_request_interval_is_applied(interval):
+    clock = Clock()
+    request_times = []
+
+    class TimedSession(Session):
+        def post(self, *args, **kwargs):
+            request_times.append(clock.monotonic())
+            return super().post(*args, **kwargs)
+
+        def get(self, *args, **kwargs):
+            request_times.append(clock.monotonic())
+            return super().get(*args, **kwargs)
+
+    client = kis.KisClient(
+        kis.KisCredentials("app", "secret"),
+        session=TimedSession(),
+        request_interval=interval,
+        sleep=clock.sleep,
+        monotonic=clock.monotonic,
+    )
+
+    client.current_price("005930")
+    client.current_price("000660")
+
+    assert client.request_interval == interval
+    assert all(
+        later - earlier >= interval
+        for earlier, later in zip(request_times, request_times[1:])
+    )
+
+
+def test_request_interval_can_be_selected_from_environment(monkeypatch):
+    monkeypatch.setenv("KIS_REQUEST_INTERVAL", "0.5")
+
+    client = kis.KisClient(
+        kis.KisCredentials("app", "secret"),
+        session=Session(),
+    )
+
+    assert client.request_interval == 0.5
+
+
+def test_egw00201_uses_cooldown_and_bounded_retry():
+    clock = Clock()
+
+    class LimitedSession(Session):
+        def get(self, *args, **kwargs):
+            self.get_calls.append((args, kwargs))
+            if len(self.get_calls) == 1:
+                return Response(
+                    200,
+                    {"rt_cd": "1", "msg_cd": "EGW00201", "msg1": "rate limited"},
+                )
+            return Response(200, {"rt_cd": "0", "output": {"stck_prpr": "100"}})
+
+    session = LimitedSession()
+    client = kis.KisClient(
+        kis.KisCredentials("app", "secret"),
+        session=session,
+        request_interval=0.5,
+        rate_limit_cooldown=7.0,
+        sleep=clock.sleep,
+        monotonic=clock.monotonic,
+    )
+
+    assert client.current_price("005930")["stck_prpr"] == "100"
+    assert len(session.get_calls) == 2
+    assert 7.0 in clock.sleeps
+    assert client.request_metrics()["rate_limit_errors"] == 1
+    assert client.request_metrics()["retries"] == 1
+
+
+def test_egw00201_exhaustion_raises_without_infinite_retry():
+    clock = Clock()
+
+    class AlwaysLimitedSession(Session):
+        def get(self, *args, **kwargs):
+            self.get_calls.append((args, kwargs))
+            return Response(
+                200,
+                {"rt_cd": "1", "msg_cd": "EGW00201", "msg1": "rate limited"},
+            )
+
+    session = AlwaysLimitedSession()
+    client = kis.KisClient(
+        kis.KisCredentials("app", "secret"),
+        session=session,
+        request_interval=0.5,
+        rate_limit_cooldown=7.0,
+        max_attempts=2,
+        sleep=clock.sleep,
+        monotonic=clock.monotonic,
+    )
+
+    with pytest.raises(kis.KisApiError, match="EGW00201"):
+        client.current_price("005930")
+
+    assert len(session.get_calls) == 2
+    assert client.request_metrics()["rate_limit_errors"] == 2
+    assert client.request_metrics()["retries"] == 1
 
 
 def test_expired_long_run_token_cache_is_replaced(tmp_path):
@@ -1046,7 +1154,16 @@ def test_refresh_freezes_one_target_snapshot_for_prices_and_fundamentals(
             return False
 
         def request_metrics(self):
-            return {"total": 0, "token": 0, "quotation": 0, "retries": 0}
+            return {
+                "total": 0,
+                "token": 0,
+                "quotation": 0,
+                "retries": 0,
+                "rate_limit_errors": 0,
+            }
+
+        request_interval = 1.05
+        rate_limit_cooldown = 61.0
 
     def backfill(start_date, end_date, symbols, **kwargs):
         symbol_count = len(tuple(symbols))
@@ -1113,7 +1230,13 @@ def test_refresh_freezes_one_target_snapshot_for_prices_and_fundamentals(
     assert result["skipped_symbol_dates"] == 0
     assert result["failed_symbol_dates"] == 0
     assert result["request_metrics"] == {
-        "total": 0, "token": 0, "quotation": 0, "retries": 0
+        "total": 0,
+        "token": 0,
+        "quotation": 0,
+        "retries": 0,
+        "rate_limit_errors": 0,
+        "request_interval_seconds": 1.05,
+        "rate_limit_cooldown_seconds": 61.0,
     }
     persisted = json.loads(
         (tmp_path / "daily" / "2026-10-28" / "kis_run_summary.json").read_text(

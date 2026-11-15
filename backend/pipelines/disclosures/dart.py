@@ -170,8 +170,18 @@ def select_disclosure_candidates(
     return {key: candidates for key, candidates in grouped.items() if candidates}, missing
 
 
-def fiscal_period_label(kind: str, period_end: str, fy_end_month: int) -> str | None:
-    """결산월 기준으로 몇 번째 분기인지 정한다. 12월 결산이면 월 기준 라벨과 같다. 유형과 안 맞으면 None."""
+def fiscal_period_label(kind: str, period_end: str, fy_end_month: int, cycle: int = 12) -> str | None:
+    """결산월 기준으로 몇 번째 분기인지 정한다. 12월 결산이면 월 기준 라벨과 같다. 유형과 안 맞으면 None.
+
+    cycle: 결산 주기(개월). 리츠는 6개월(사업보고서 6개월마다 + 그 사이 반기보고서)이나
+    3개월(사업보고서만 3개월마다)인 곳이 많다. fiscal_cycle로 정한다.
+    """
+    if cycle == 3:
+        return "사업보고서" if kind == "annual" and (int(period_end[5:7]) - fy_end_month) % 3 == 0 else None
+    if cycle == 6:
+        offset = (int(period_end[5:7]) - fy_end_month) % 6
+        label = {0: "사업보고서", 3: "반기"}.get(offset)
+        return label if {"사업보고서": "annual", "반기": "half"}.get(label or "") == kind else None
     offset = (int(period_end[5:7]) - fy_end_month) % 12
     label = {3: "1분기", 6: "반기", 9: "3분기", 0: "사업보고서"}.get(offset)
     expected = {"1분기": "quarterly", "3분기": "quarterly", "반기": "half", "사업보고서": "annual"}.get(label or "")
@@ -189,6 +199,24 @@ def _any_period_end(report_nm: str) -> str:
     return date(year, month, calendar.monthrange(year, month)[1]).isoformat()
 
 
+def fiscal_cycle(annual: list[str], half: list[str]) -> int:
+    """결산 주기(개월): 12(보통), 6 또는 3(리츠). 사업보고서 기간 월의 간격으로 정한다.
+
+    예) 롯데리츠 6개월: 사업보고서 2025.06·2025.12, 반기보고서 2025.03·2025.09.
+        SK리츠·삼성FN리츠 3개월: 사업보고서만 3개월마다.
+    사업보고서가 하나뿐이면 반기보고서가 그와 3개월 어긋날 때 6개월로 본다 (12개월 결산의 반기는 6개월 차이).
+    """
+    months = {int(p[5:7]) for p in annual}
+    gaps = {(a - b) % 12 for a in months for b in months} - {0}
+    if gaps & {3, 9}:
+        return 3
+    if 6 in gaps:
+        return 6
+    if annual and any((int(h[5:7]) - int(annual[-1][5:7])) % 6 == 3 for h in half):
+        return 6
+    return 12
+
+
 def select_window_candidates(
     symbol: str,
     corp_code: str,
@@ -200,6 +228,7 @@ def select_window_candidates(
     """결산월과 무관하게 대상 기간(start~end) 안의 정기보고서 슬롯을 최근 max_slots개까지 고른다.
 
     결산월은 목록에 있는 가장 최근 사업보고서의 기간 월로 정한다 (없으면 반기보고서 월 + 6, 그것도 없으면 12월).
+    리츠처럼 6개월·3개월마다 결산하는 회사는 fiscal_cycle로 주기를 정해 사업보고서를 1년에 여러 건 받는다.
     누락 슬롯 개념이 없으므로 두 번째 반환값은 항상 빈 목록이다.
     """
     entries: list[tuple[str, str, dict]] = []  # (kind, period_end, item)
@@ -228,13 +257,14 @@ def select_window_candidates(
         fy_end_month = (int(half[-1][5:7]) + 6 - 1) % 12 + 1
     else:
         fy_end_month = 12
+    cycle = fiscal_cycle(annual, half)
 
     grouped: dict[CandidateKey, list[ReportRef]] = {}
     for kind, period_end, item in entries:
         if not start <= period_end <= end:
             continue
         title = str(item.get("report_nm", "")).strip()
-        label = fiscal_period_label(kind, period_end, fy_end_month)
+        label = fiscal_period_label(kind, period_end, fy_end_month, cycle)
         if label is None:
             log.warning("결산월(%d월)과 유형이 맞지 않는 항목 건너뜀: %s %s %s", fy_end_month, symbol, item["rcept_no"], title)
             continue

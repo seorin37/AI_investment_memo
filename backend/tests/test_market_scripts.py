@@ -2,13 +2,133 @@ from __future__ import annotations
 
 from argparse import Namespace
 from contextlib import contextmanager
-from datetime import date
+from datetime import date, datetime, timezone
 
 from scripts import (
     backfill_missing_market_metadata,
+    collect_kis_fundamentals_snapshots,
     collect_kis_market_data,
     sync_kospi_stocks,
 )
+
+
+def test_two_stage_auto_requires_explicit_operational_enable(monkeypatch, capsys):
+    monkeypatch.setattr(
+        collect_kis_fundamentals_snapshots,
+        "parse_args",
+        lambda _argv=None: Namespace(command="capture-auto"),
+    )
+    monkeypatch.setattr(
+        collect_kis_fundamentals_snapshots,
+        "_two_stage_enabled",
+        lambda: False,
+    )
+    monkeypatch.setattr(
+        collect_kis_fundamentals_snapshots,
+        "daily_refresh_lock",
+        lambda: (_ for _ in ()).throw(AssertionError("lock must not run")),
+    )
+
+    assert collect_kis_fundamentals_snapshots.main() == 3
+    assert '"status": "disabled"' in capsys.readouterr().out
+
+
+def test_capture_auto_holiday_skips_before_target_or_api(monkeypatch, tmp_path):
+    args = Namespace(
+        symbols=None,
+        symbol_limit=None,
+        state_root=tmp_path,
+    )
+    monkeypatch.setattr(
+        collect_kis_fundamentals_snapshots,
+        "_targets",
+        lambda _args: (_ for _ in ()).throw(
+            AssertionError("holiday must not load targets")
+        ),
+    )
+
+    result, status = collect_kis_fundamentals_snapshots._run_capture_auto(
+        args,
+        datetime(2026, 11, 8, 11, 0, tzinfo=timezone.utc),
+    )
+
+    assert status == 0
+    assert result["status"] == "skipped_non_trading_day"
+
+
+def test_finalize_auto_missing_capture_defers_without_api(monkeypatch, tmp_path):
+    args = Namespace(
+        symbols=("005930",),
+        symbol_limit=None,
+        state_root=tmp_path,
+        recovery_days=10,
+    )
+    monkeypatch.setattr(
+        collect_kis_fundamentals_snapshots,
+        "_targets",
+        lambda _args: (("005930",), ()),
+    )
+    monkeypatch.setattr(
+        collect_kis_fundamentals_snapshots,
+        "KisClient",
+        lambda: (_ for _ in ()).throw(AssertionError("KIS API must not run")),
+    )
+    monkeypatch.setattr(
+        collect_kis_fundamentals_snapshots,
+        "fetch_kospi_daily",
+        lambda _date: (_ for _ in ()).throw(AssertionError("KRX API must not run")),
+    )
+
+    result, status = collect_kis_fundamentals_snapshots._run_finalize_auto(
+        args,
+        datetime(2026, 11, 6, 0, 0, tzinfo=timezone.utc),
+    )
+
+    assert status == 1
+    assert result["failed_dates"] == ["2026-11-05"]
+    assert result["date_results"]["2026-11-05"]["status"] == "missing_capture"
+
+
+def test_finalize_auto_never_processes_friday_session(monkeypatch, tmp_path):
+    friday = date(2026, 11, 6)
+    args = Namespace(
+        symbols=None,
+        symbol_limit=None,
+        state_root=tmp_path,
+        recovery_days=10,
+        krx_warning_only=True,
+    )
+    monkeypatch.setattr(
+        collect_kis_fundamentals_snapshots,
+        "automatic_finalize_date",
+        lambda _now: friday,
+    )
+    monkeypatch.setattr(
+        collect_kis_fundamentals_snapshots,
+        "pending_snapshot_dates",
+        lambda *_args, **_kwargs: (friday,),
+    )
+    monkeypatch.setattr(
+        collect_kis_fundamentals_snapshots,
+        "capture_target_symbols",
+        lambda *_args: (_ for _ in ()).throw(
+            AssertionError("Friday must stay staged")
+        ),
+    )
+    monkeypatch.setattr(
+        collect_kis_fundamentals_snapshots,
+        "KisClient",
+        lambda: (_ for _ in ()).throw(AssertionError("KIS API must not run")),
+    )
+
+    result, status = collect_kis_fundamentals_snapshots._run_finalize_auto(
+        args,
+        datetime(2026, 11, 10, 23, 0, tzinfo=timezone.utc),
+    )
+
+    assert status == 0
+    assert result["processed_dates"] == []
+    assert result["failed_dates"] == []
 
 
 def test_manual_stock_master_uses_full_snapshot_safety_defaults(monkeypatch):
@@ -108,6 +228,9 @@ def test_manual_backfill_never_calls_fundamentals_api(monkeypatch):
         yield True
 
     class Client:
+        request_interval = 1.05
+        rate_limit_cooldown = 61.0
+
         def __enter__(self):
             return self
 
@@ -116,6 +239,15 @@ def test_manual_backfill_never_calls_fundamentals_api(monkeypatch):
 
         def current_price(self, _symbol):
             raise AssertionError("과거 백필에서 투자지표 API를 호출하면 안 됩니다.")
+
+        def request_metrics(self):
+            return {
+                "total": 0,
+                "token": 0,
+                "quotation": 0,
+                "retries": 0,
+                "rate_limit_errors": 0,
+            }
 
     monkeypatch.setattr(collect_kis_market_data, "daily_refresh_lock", acquired_lock)
     monkeypatch.setattr(
