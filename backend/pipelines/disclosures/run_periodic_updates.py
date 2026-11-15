@@ -194,7 +194,7 @@ def run_bodies(args, config: dict, plan: Plan, names: dict[str, str], state: Upd
 def run_financials(args, config: dict, engine, api_key: str, session, state: UpdateState, corp_codes: dict[str, str],
                    state_dir: Path, summary: dict) -> list[str]:
     """대기 중인 (종목, 기준일) 재무를 받는다. 반환: 재무를 갱신한 종목."""
-    from .run_financials_all import Context, fy_end_month, process_company
+    from .run_financials_all import Context, disclosure_reports, fiscal_basis, process_company
 
     ctx = Context(Namespace(mapping=args.mapping, no_prior=False), config, state_dir, engine, api_key, session)
     today = datetime.now(KST).date()
@@ -212,7 +212,14 @@ def run_financials(args, config: dict, engine, api_key: str, session, state: Upd
             continue
         try:
             info, _ = financials_dart.fetch_company(corp_code, api_key, ctx.company_dir, session=session)
-            fy = fy_end_month(info)
+            basis = fiscal_basis(info, disclosure_reports(ctx, symbol))
+            if basis.excluded:  # 6·3개월 결산 리츠: 재무를 저장하지 않으므로 대기 목록에서 뺀다
+                for period_end in periods:
+                    state.pending_financials.pop(f"{symbol}|{period_end}", None)
+                summary["financials"].setdefault("excluded", []).append({"symbol": symbol, "reason": basis.excluded})
+                state.save()
+                continue
+            fy = basis.fy_end_month
             ready = []
             for period_end in periods:
                 entry = state.pending_financials[f"{symbol}|{period_end}"]

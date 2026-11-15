@@ -5,7 +5,10 @@
 
 흐름 (기업 1곳씩):
   1. 대상: run_all과 같은 universe(data/run_all/universe.json). 없으면 KRX·corpCode로 만들고 stocks에 INSERT.
-  2. 기업개황(company.json) → 결산월·업종코드. 대상 기간은 configs periods 범위 안에서 결산월 기준 최근 len(periods)개.
+  2. 결산월: 공시 목록(DB disclosures + reports.json)의 최근 사업보고서 기간 월 (없으면 기업개황 acc_mt). 업종코드는 기업개황.
+     대상 기간은 configs periods 범위 안에서 결산월 기준 최근 len(periods)개.
+     결산 주기가 6·3개월인 리츠는 q1·half·q3·annual 모델에 맞지 않아 저장하지 않는다 (state에 excluded=fiscal_cycle_N).
+     재무 API 응답의 접수번호가 공시 목록상 다른 기간이면 그 기간은 버리고 failed.csv(검증)에 남긴다.
   3. 재무제표(CFS, 없으면 OFS)·주식 총수 원본 수집. 저장본이 있으면 다시 호출하지 않는다.
   4. 금융 세부 업종 판별(fin_classify) → stocks.sector·fin_type 갱신.
   5. 매핑·적재: financials(+금융사는 financials_fin). NULL은 null_reasons에 사유 코드를 남긴다.
@@ -33,6 +36,7 @@ import sys
 import time
 from argparse import Namespace
 from collections import Counter
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
@@ -42,6 +46,7 @@ from ..common.config import data_path, load_config, resolve_path
 from ..common.file_lock import LockUnavailable, acquire_file_lock
 from ..common.logging import REDACTOR, get_logger, setup_logging
 from . import financials, financials_dart
+from .dart import fiscal_cycle, load_reports
 from .fin_classify import classify
 from .loader import KST
 from .run_all import State, seconds_until_reset, window
@@ -65,6 +70,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     ap.add_argument("--symbols", default="", help="쉼표 구분 종목코드만 처리 (시험용, universe 안에서만)")
     ap.add_argument("--max-companies", type=int, default=None, help="시가총액 상위 N개까지만 처리 (시험용)")
     ap.add_argument("--retry-failed", action="store_true", help="partial·error 상태 기업도 다시 처리")
+    ap.add_argument("--through", default="", help="대상 기간 끝을 이 날짜(YYYY-MM-DD)까지 늘리고 개수 제한 없이 받는다 (정기 수집이 받은 최신 분기 재적재용)")
+    ap.add_argument("--force", action="store_true", help="done 상태 기업도 다시 처리 (결산월 수정 후 재적재용, --symbols와 함께)")
     ap.add_argument("--no-prior", action="store_true", help="전기(1년 전) 비교값을 채우지 않는다")
     ap.add_argument("--no-wait", action="store_true", help="DART 한도(020)면 기다리지 않고 종료 (종료 코드 3)")
     ap.add_argument("--status", action="store_true", help="진행 상황만 출력하고 종료")
@@ -87,8 +94,97 @@ def fiscal_slots(fy_end_month: int, start: str, end: str, count: int) -> list[st
 
 
 def fy_end_month(company_info: dict) -> int:
+    """기업개황 acc_mt (이상한 값이면 12). 결산월 변경·리츠 6개월 결산을 반영하지 못하므로 fiscal_basis의 마지막 대안으로만 쓴다."""
     value = str(company_info.get("acc_mt") or "").strip()
     return int(value) if value.isdigit() and 1 <= int(value) <= 12 else 12
+
+
+# ── 결산월 판정 ──────────────────────────────────────
+@dataclass(frozen=True)
+class FiscalBasis:
+    """결산월·결산 주기와 그 근거.
+
+    cycle: 12(보통) · 6 · 3(리츠). 12가 아니면 q1·half·q3·annual 누적 모델에 맞지 않고, DART 재무 API도
+    사업연도·보고서 코드마다 한 건만 돌려줘 보고서 절반을 받을 수 없으므로 재무를 저장하지 않는다(2026-11-13 결정).
+    rcept_periods: 공시 목록의 접수번호 → 기간 말. 재무 API 응답이 다른 기간 보고서면 걸러 내는 데 쓴다.
+    """
+
+    fy_end_month: int
+    cycle: int = 12
+    source: str = "acc_mt"  # disclosures(공시 목록) · acc_mt(기업개황)
+    acc_mt: int | None = None
+    rcept_periods: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def excluded(self) -> str | None:
+        return f"fiscal_cycle_{self.cycle}" if self.cycle != 12 else None
+
+    @property
+    def note(self) -> str:
+        if self.source == "disclosures" and self.acc_mt is not None and self.acc_mt != self.fy_end_month:
+            return f"공시 목록 결산월 {self.fy_end_month}월 ≠ 기업개황 acc_mt {self.acc_mt}월 → 공시 목록 사용"
+        return ""
+
+
+def fiscal_basis(company_info: dict, reports: list[tuple[str, str, str]]) -> FiscalBasis:
+    """결산월을 공시 목록으로 정한다. reports: (kind, period_end, rcept_no), kind는 annual·half·quarterly.
+
+    run_all의 select_window_candidates와 같은 규칙: 가장 최근 사업보고서 기간 월, 없으면 반기보고서 월 + 6,
+    목록이 비면 기업개황 acc_mt. 기업개황 acc_mt는 결산월을 바꾼 회사(MH머트리얼즈 12→6월)나
+    6개월마다 결산하는 리츠(5·11월 중 하나만 표시)에서 틀린다.
+    """
+    raw = str(company_info.get("acc_mt") or "").strip()
+    acc = int(raw) if raw.isdigit() and 1 <= int(raw) <= 12 else None
+    annual = sorted({p for kind, p, _ in reports if kind == "annual"})
+    half = sorted({p for kind, p, _ in reports if kind == "half"})
+    rcepts = {r: p for _, p, r in reports if r}
+    if annual:
+        fy, source = int(annual[-1][5:7]), "disclosures"
+    elif half:
+        fy, source = (int(half[-1][5:7]) + 6 - 1) % 12 + 1, "disclosures"
+    else:
+        fy, source = acc or 12, "acc_mt"
+    cycle = fiscal_cycle(annual, half) if annual else 12
+    return FiscalBasis(fy, cycle, source, acc, rcepts)
+
+
+def disclosure_reports(ctx: "Context", symbol: str) -> list[tuple[str, str, str]]:
+    """(kind, period_end, rcept_no): DB disclosures와 run_all의 reports.json을 합친 정기보고서 목록."""
+    found: set[tuple[str, str, str]] = set()
+    if ctx.engine is not None:
+        from sqlalchemy import text
+
+        with ctx.engine.connect() as conn:
+            rows = conn.execute(text("SELECT kind::text, period_end, rcept_no FROM disclosures"
+                                     " WHERE symbol = :s AND kind::text IN ('annual', 'half', 'quarterly')"), {"s": symbol}).all()
+        found.update((k, p.isoformat(), r) for k, p, r in rows)
+    found.update(ctx.reports_index().get(symbol, ()))
+    return sorted(found, key=lambda x: (x[1], x[0], x[2]))
+
+
+def statement_rcept_no(statement: dict) -> str:
+    rows = statement.get("list") or []
+    return str(rows[0].get("rcept_no") or "") if rows else ""
+
+
+def pick_shares(shares_dir: Path, target: "financials_dart.Target", basis: FiscalBasis) -> tuple[dict | None, str | None]:
+    """대상 기간의 주식 총수 원본 (데이터, 파일명).
+
+    주식 총수 API는 DART 기업개황의 옛 결산월로 보고서를 고르는지, 결산월을 바꾼 MH머트리얼즈에서는
+    2024 11013 요청에 2024.09 보고서가 온다(재무 API는 2024.03). 기본 파일의 접수번호가 공시 목록상 다른 기간이면
+    같은 종목의 다른 캐시 파일 중 대상 기간 보고서를 쓰고, 없으면 쓰지 않는다(None).
+    """
+    path = financials_dart.shares_path(shares_dir, target)
+    data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+    actual = basis.rcept_periods.get(statement_rcept_no(data or {}))
+    if data is None or actual is None or actual == target.period_end:
+        return data, (path.name if data is not None else None)
+    for other in sorted(shares_dir.glob(f"{target.symbol}_*.json")):
+        candidate = json.loads(other.read_text(encoding="utf-8"))
+        if basis.rcept_periods.get(statement_rcept_no(candidate)) == target.period_end:
+            return candidate, other.name
+    log.warning("%s %s 주식 총수 원본이 다른 기간(%s) 보고서라 쓰지 않음: %s", target.symbol, target.period_end, actual, path.name)
+    return None, None
 
 
 # ── 기업 1곳 처리 ────────────────────────────────────
@@ -104,7 +200,19 @@ class Context:
         self.statements_dir = data_path(config, "financials_raw_dir")
         self.shares_dir = data_path(config, "shares_raw_dir")
         self.company_dir = data_path(config, "raw_dir") / "company"
+        self.reports_path = data_path(config, "raw_dir") / "reports.json"
         self.start, self.end, self.slots = window(config)
+        self._reports_index: dict[str, list[tuple[str, str, str]]] | None = None
+
+    def reports_index(self) -> dict[str, list[tuple[str, str, str]]]:
+        """run_all이 남긴 reports.json (없으면 빈 목록). 처음 한 번만 읽는다."""
+        if self._reports_index is None:
+            index: dict[str, list[tuple[str, str, str]]] = {}
+            if self.reports_path.exists():
+                for ref in load_reports(self.reports_path):
+                    index.setdefault(ref.symbol, []).append((ref.kind, ref.period_end, ref.rcept_no))
+            self._reports_index = index
+        return self._reports_index
 
 
 def _item(stage: str, reason: str, period_end: str = "") -> dict:
@@ -139,9 +247,18 @@ def process_company(ctx: Context, symbol: str, corp_code: str) -> tuple[dict, li
         raise
     except DartError as exc:
         return {**row, "status": "error", "failed_items": [_item("company", exc)]}, []
-    fy = fy_end_month(info)
+    basis = fiscal_basis(info, disclosure_reports(ctx, symbol))
+    fy = basis.fy_end_month
+    row.update({"fy_end_month": fy, "fiscal_cycle": basis.cycle, "fiscal_source": basis.source, "induty_code": info.get("induty_code")})
+    if basis.note:
+        row["fiscal_note"] = basis.note
+    if basis.excluded:
+        log.info("%s 결산 주기 %d개월 → 재무 저장 제외", symbol, basis.cycle)
+        row.update({"status": "done", "excluded": basis.excluded, "targets": [], "no_data": [], "periods": 0,
+                    "prior_periods": 0, "review_count": 0, "failed_items": []})
+        return row, []
     targets = [financials_dart.Target(symbol, corp_code, p, fy) for p in fiscal_slots(fy, ctx.start, ctx.end, ctx.slots)]
-    row.update({"fy_end_month": fy, "induty_code": info.get("induty_code"), "targets": [t.period_end for t in targets]})
+    row["targets"] = [t.period_end for t in targets]
 
     report = financials_dart.collect(targets, ctx.api_key, ctx.statements_dir, ctx.shares_dir, session=ctx.session)
     row["calls"] += report.calls
@@ -160,6 +277,12 @@ def process_company(ctx: Context, symbol: str, corp_code: str) -> tuple[dict, li
     row["no_data"] = no_data
 
     statements = {p: json.loads(path.read_text(encoding="utf-8")) for p, (_, path) in chosen.items()}
+    for period_end in sorted(statements):  # 응답 보고서가 공시 목록상 다른 기간이면 그 기간을 쓰지 않는다
+        rcept = statement_rcept_no(statements[period_end])
+        actual = basis.rcept_periods.get(rcept)
+        if actual and actual != period_end:
+            items.append(_item("validate", f"재무 API 응답 보고서({rcept})의 기간은 {actual} (결산월 {fy}월 기준 대상과 다름)", period_end))
+            del statements[period_end], chosen[period_end]
     if not statements:
         row.update({"status": "done" if not items else "error", "fin_type": None, "basis": "재무제표 없음", "failed_items": items})
         return row, []
@@ -174,8 +297,7 @@ def process_company(ctx: Context, symbol: str, corp_code: str) -> tuple[dict, li
         if target.period_end not in chosen:
             continue
         fs_div, path = chosen[target.period_end]
-        shares_file = financials_dart.shares_path(ctx.shares_dir, target)
-        shares_data = json.loads(shares_file.read_text(encoding="utf-8")) if shares_file.exists() else None
+        shares_data, shares_name = pick_shares(ctx.shares_dir, target, basis)
         variants = [False]
         if not ctx.args.no_prior and financials.prior_period_end(target.period_end) not in slot_set:
             variants.append(True)
@@ -183,7 +305,7 @@ def process_company(ctx: Context, symbol: str, corp_code: str) -> tuple[dict, li
             try:
                 mapped.append(financials.map_period(
                     symbol, target.period_end, fs_div, statements[target.period_end], path.name, shares_data,
-                    shares_file.name if shares_data is not None else None, ctx.mapping,
+                    shares_name, ctx.mapping,
                     fin_type=cls.fin_type, fy_end_month=fy, prior=prior,
                 ))
             except Exception as exc:  # 한 기간 매핑 오류는 그 기간만 실패로 남긴다
@@ -287,6 +409,8 @@ def write_summary(state: State, symbols: list[str], state_dir: Path) -> dict:
         "review_rows": sum(row.get("review_count", 0) for row in rows.values()),
         "classification_review": sorted(s for s, row in rows.items() if row.get("classification_review")),
         "null_reasons": {k: dict(v) for k, v in sorted(nulls.items())},
+        "excluded": {s: row["excluded"] for s, row in sorted(rows.items()) if row.get("excluded")},
+        "fiscal_notes": {s: row["fiscal_note"] for s, row in sorted(rows.items()) if row.get("fiscal_note")},
         "not_started": [s for s in symbols if s not in rows],
     }
     (state_dir / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
@@ -352,7 +476,10 @@ def main(argv: list[str] | None = None) -> int:
         base_delay=float(dart_cfg.get("backoff_base_sec", 1.0)),
     )
     ctx = Context(args, config, state_dir, engine, api_key, session)
-    pending = [c for c in companies if c.symbol in set(state.pending(symbols, args.retry_failed))]
+    if args.through:
+        ctx.end, ctx.slots = max(ctx.end, args.through), 10_000  # run_periodic_updates와 같은 방식
+    wanted_now = set(symbols) if args.force else set(state.pending(symbols, args.retry_failed))
+    pending = [c for c in companies if c.symbol in wanted_now]
     log.info("대상 %d개사, 남은 %d개사, 기간 %s ~ %s (기업당 %d개, 전기 %s)", len(symbols), len(pending), ctx.start, ctx.end, ctx.slots,
              "제외" if args.no_prior else "포함")
 
