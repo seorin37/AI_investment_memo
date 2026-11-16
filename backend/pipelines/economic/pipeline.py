@@ -213,6 +213,7 @@ from .ecos import (
     normalize_ecos_rows,
     extract_policy_rate_events,
 )
+from .redaction import error_message, redact_value
 
 
 ECOS_STATE_DIR = Path("logs/economic")
@@ -253,8 +254,9 @@ def save_ecos_state(state_type: str, state: dict) -> None:
 
     temporary = path.with_suffix(".tmp")
 
+    # 저장 직전에 한 번 더 키를 가린다
     with temporary.open("w", encoding="utf-8") as f:
-        json.dump(state, f, ensure_ascii=False, indent=2)
+        json.dump(redact_value(state), f, ensure_ascii=False, indent=2)
 
     temporary.replace(path)
 
@@ -363,11 +365,11 @@ def backfill_ecos(
 
             failed[state_key] = {
                 "error_type": type(exc).__name__,
-                "error": str(exc),
+                "error": error_message(exc),
             }
 
             results["failed"].append(state_key)
-            print(f"  수집 실패: {exc}")
+            print(f"  수집 실패: {error_message(exc)}")
 
         finally:
             save_ecos_state("completed", completed)
@@ -426,8 +428,9 @@ def save_fred_state(state_type: str, state: dict) -> None:
 
     temporary = path.with_suffix(".tmp")
 
+    # 저장 직전에 한 번 더 키를 가린다
     with temporary.open("w", encoding="utf-8") as f:
-        json.dump(state, f, ensure_ascii=False, indent=2)
+        json.dump(redact_value(state), f, ensure_ascii=False, indent=2)
 
     temporary.replace(path)
 
@@ -517,11 +520,11 @@ def backfill_fred(
 
             failed[state_key] = {
                 "error_type": type(exc).__name__,
-                "error": str(exc),
+                "error": error_message(exc),
             }
 
             results["failed"].append(state_key)
-            print(f"  수집 실패: {exc}")
+            print(f"  수집 실패: {error_message(exc)}")
 
         finally:
             save_fred_state("completed", completed)
