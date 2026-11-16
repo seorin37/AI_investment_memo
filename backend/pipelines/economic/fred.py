@@ -6,6 +6,8 @@ from decimal import Decimal, InvalidOperation
 
 import requests
 
+from .redaction import scrub_exception
+
 
 FRED_BASE_URL = (
     "https://api.stlouisfed.org/fred/series/observations"
@@ -81,6 +83,8 @@ def fetch_fred_series(
                 }
 
             if not retryable or attempt == max_attempts:
+                # api_key 쿼리 파라미터가 예외 메시지의 URL에 남지 않게 가린다
+                scrub_exception(exc)
                 raise
 
             delay = min(2 ** (attempt - 1), 30)

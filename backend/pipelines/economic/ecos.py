@@ -6,6 +6,8 @@ from decimal import Decimal, InvalidOperation
 
 import requests
 
+from .redaction import scrub_exception
+
 
 ECOS_BASE_URL = "https://ecos.bok.or.kr/api/StatisticSearch"
 
@@ -82,6 +84,8 @@ def fetch_ecos_series(
                     retryable = status in {429, 500, 502, 503, 504}
 
                 if not retryable or attempt == max_attempts:
+                    # 요청 URL 경로에 키가 들어 있어 예외 메시지에서 가린다
+                    scrub_exception(exc)
                     raise
 
                 delay = min(2 ** (attempt - 1), 30)
