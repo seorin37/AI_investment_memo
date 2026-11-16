@@ -3,6 +3,8 @@
 import json
 import tempfile
 import unittest
+from types import SimpleNamespace
+from unittest import mock
 from decimal import Decimal
 from pathlib import Path
 
@@ -11,7 +13,9 @@ from pipelines.disclosures import financials_dart as fd
 from pipelines.disclosures import financials_loader as fl
 from pipelines.disclosures.fin_classify import classify
 from pipelines.disclosures.run_all import State
-from pipelines.disclosures.run_financials_all import fiscal_slots, fy_end_month, null_counts, unexplained_nulls, write_outputs
+from pipelines.disclosures.run_financials_all import (
+    fiscal_basis, fiscal_slots, fy_end_month, null_counts, pick_shares, process_company, unexplained_nulls, write_outputs,
+)
 
 
 MAPPING_PATH = Path(__file__).resolve().parents[2] / "configs" / "financials_mapping.yaml"
@@ -68,6 +72,110 @@ class FiscalPeriodTest(unittest.TestCase):
         self.assertEqual(fy_end_month({"acc_mt": ""}), 12)
 
 
+def reports(*items):
+    """(kind, 'YYYY.MM', rcept_no) → fiscal_basis 입력."""
+    return [(kind, fm.month_end(int(ym[:4]), int(ym[5:7])), rcept) for kind, ym, rcept in items]
+
+
+class FiscalBasisTest(unittest.TestCase):
+    """결산월은 공시 목록 우선 (2026-11-13: acc_mt가 틀린 8곳)."""
+
+    def test_changed_fiscal_year_uses_disclosures(self):
+        # MH머트리얼즈(001080): acc_mt 12인데 사업보고서는 2024.06·2025.06·2026.06
+        mh = reports(("quarterly", "2024.03", "20240516000239"), ("annual", "2024.06", "20250930000631"),
+                     ("quarterly", "2024.09", "20250805000315"), ("half", "2024.12", "20250805000321"),
+                     ("annual", "2025.06", "20250918000340"), ("half", "2025.12", "20260219002720"),
+                     ("annual", "2026.06", "20260910000496"))
+        basis = fiscal_basis({"acc_mt": "12"}, mh)
+        self.assertEqual((basis.fy_end_month, basis.cycle, basis.source, basis.excluded), (6, 12, "disclosures", None))
+        self.assertIn("acc_mt 12월", basis.note)
+        self.assertEqual(basis.rcept_periods["20250805000321"], "2024-12-31")
+
+    def test_june_fiscal_year_report_codes_match_cached_responses(self):
+        # 실제 캐시: 2024_11011=제72기(2024.06), 2024_11013=제73기 1분기(2024.09), 2024_11012=반기(2024.12), 2025_11014=3분기(2025.03)
+        slots = fiscal_slots(6, "2024-01-01", "2026-06-30", 10)
+        self.assertEqual((slots[0], slots[-1], len(slots)), ("2024-03-31", "2026-06-30", 10))
+        codes = {p: (fd.Target("001080", "c", p, 6).bsns_year, fd.Target("001080", "c", p, 6).reprt_code)
+                 for p in ("2024-06-30", "2024-09-30", "2024-12-31", "2025-03-31")}
+        self.assertEqual(codes, {"2024-06-30": ("2024", "11011"), "2024-09-30": ("2024", "11013"),
+                                 "2024-12-31": ("2024", "11012"), "2025-03-31": ("2025", "11014")})
+
+    def test_six_month_reit_is_excluded(self):
+        # 코람코라이프인프라리츠(357120): 사업보고서 5·11월, 반기 2·8월, acc_mt 11
+        reit = reports(("half", "2025.02", "a"), ("annual", "2025.05", "b"), ("half", "2025.08", "c"), ("annual", "2025.11", "d"),
+                       ("half", "2026.02", "e"), ("annual", "2026.05", "f"), ("half", "2026.08", "g"))
+        basis = fiscal_basis({"acc_mt": "11"}, reit)
+        self.assertEqual((basis.fy_end_month, basis.cycle, basis.excluded), (5, 6, "fiscal_cycle_6"))
+        # NH올원리츠(400760)처럼 acc_mt와 최근 사업보고서 월이 같아도 6개월 주기면 제외
+        same = reports(("annual", "2025.06", "a"), ("half", "2025.09", "b"), ("annual", "2025.12", "c"))
+        self.assertEqual(fiscal_basis({"acc_mt": "12"}, same).excluded, "fiscal_cycle_6")
+
+    def test_three_month_reit_is_excluded(self):
+        # 대신밸류리츠(0030R0): 사업보고서만 3개월마다
+        reit = reports(*[("annual", ym, str(i)) for i, ym in enumerate(["2025.05", "2025.08", "2025.11", "2026.02"])])
+        self.assertEqual(fiscal_basis({"acc_mt": "08"}, reit).excluded, "fiscal_cycle_3")
+
+    def test_fallbacks(self):
+        self.assertEqual(fiscal_basis({"acc_mt": "12"}, reports(("half", "2025.09", "a"))).fy_end_month, 3)  # 반기 + 6
+        empty = fiscal_basis({"acc_mt": "03"}, [])
+        self.assertEqual((empty.fy_end_month, empty.source, empty.cycle, empty.note), (3, "acc_mt", 12, ""))
+        self.assertEqual(fiscal_basis({"acc_mt": "x"}, []).fy_end_month, 12)
+        normal = fiscal_basis({"acc_mt": "12"}, reports(("annual", "2024.12", "a"), ("half", "2025.06", "b"), ("annual", "2025.12", "c")))
+        self.assertEqual((normal.fy_end_month, normal.cycle, normal.note), (12, 12, ""))
+
+
+class PickSharesTest(unittest.TestCase):
+    def test_shares_file_for_other_period_is_swapped(self):
+        # MH머트리얼즈 실제 캐시: shares 2024_11014 = 2024.09 보고서, 2024_11013 = 2024.03 보고서 (재무 API와 반대)
+        basis = fiscal_basis({"acc_mt": "12"}, reports(("quarterly", "2024.03", "R0331"), ("annual", "2024.06", "R0630"),
+                                                       ("quarterly", "2024.09", "R0930")))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for code, rcept in (("11013", "R0331"), ("11014", "R0930")):
+                (root / f"001080_2024_{code}.json").write_text(json.dumps({"status": "000", "list": [{"rcept_no": rcept}]}), encoding="utf-8")
+            data, name = pick_shares(root, fd.Target("001080", "c", "2024-03-31", 6), basis)  # q3 → 11014
+            self.assertEqual((data["list"][0]["rcept_no"], name), ("R0331", "001080_2024_11013.json"))
+            self.assertEqual(pick_shares(root, fd.Target("001080", "c", "2024-09-30", 6), basis)[1], "001080_2024_11014.json")
+            self.assertEqual(pick_shares(root, fd.Target("001080", "c", "2024-06-30", 6), basis), (None, None))  # 파일 없음
+            (root / "001080_2024_11011.json").write_text(json.dumps({"status": "000", "list": [{"rcept_no": "R0930"}]}), encoding="utf-8")
+            self.assertEqual(pick_shares(root, fd.Target("001080", "c", "2024-06-30", 6), basis), (None, None))  # 다른 기간뿐
+
+
+class ProcessCompanyFiscalTest(unittest.TestCase):
+    """process_company: 리츠 제외, 응답 접수번호 기간 교차 검증 (DART·DB 호출 없음)."""
+
+    def ctx(self, root: Path, report_list):
+        return SimpleNamespace(
+            engine=None, reports_index=lambda: {"999990": report_list}, api_key="k", session=None,
+            company_dir=root, statements_dir=root, shares_dir=root, start="2024-01-01", end="2024-12-31", slots=4,
+            args=SimpleNamespace(no_prior=True), mapping=None, state_dir=root,
+        )
+
+    def test_reit_returns_excluded_without_collecting(self):
+        reit = [("annual", "2024-05-31", "a"), ("half", "2024-08-31", "b"), ("annual", "2024-11-30", "c")]
+        with tempfile.TemporaryDirectory() as tmp,                 mock.patch.object(fd, "fetch_company", return_value=({"acc_mt": "11", "induty_code": "68112"}, 0)),                 mock.patch.object(fd, "collect") as collect:
+            row, review = process_company(self.ctx(Path(tmp), reit), "999990", "c")
+        collect.assert_not_called()
+        self.assertEqual((row["status"], row["excluded"], row["targets"], row["periods"], review), ("done", "fiscal_cycle_6", [], 0, []))
+        self.assertNotIn("fin_type", row)  # classification.csv에 general로 잡히지 않게
+
+    def test_response_for_other_period_is_dropped(self):
+        # 결산월을 잘못 알면 2024 11012(반기) 요청에 다른 기간 보고서가 온다 → 그 기간은 버리고 검증 실패로 남긴다
+        listing = [("half", "2024-06-30", "20240814000001"), ("quarterly", "2024-09-30", "20241114000001"),
+                   ("annual", "2023-12-31", "20240314000001")]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "999990_2024_11012_CFS.json"
+            path.write_text(json.dumps(statement({**GENERAL[0], "rcept_no": "20241114000001"})), encoding="utf-8")
+            with mock.patch.object(fd, "fetch_company", return_value=({"acc_mt": "12"}, 0)),                     mock.patch.object(fd, "collect", return_value=fd.CollectReport()),                     mock.patch.object(fd, "cached_statement",
+                                      side_effect=lambda d, t: ("CFS", path) if t.period_end == "2024-06-30" else None):
+                row, _ = process_company(self.ctx(root, listing), "999990", "c")
+        self.assertEqual(row["status"], "error")
+        item = row["failed_items"][0]
+        self.assertEqual((item["stage"], item["period_end"]), ("validate", "2024-06-30"))
+        self.assertIn("2024-09-30", item["reason"])
+
+
 class ClassifyTest(unittest.TestCase):
     DEPOSITS = [{"account_id": "ifrs-full_DepositsFromCustomers"}]
     INSURANCE = [{"account_id": "ifrs-full_InsuranceRevenue"}]
@@ -76,6 +184,14 @@ class ClassifyTest(unittest.TestCase):
         self.assertIsNone(classify("64992", [{"account_id": "ifrs-full_Revenue"}]).fin_type)  # LG·SK
         self.assertEqual(classify("64992", self.DEPOSITS).fin_type, "holding")  # KB금융
         self.assertEqual(classify("64992", self.INSURANCE).fin_type, "holding")  # 보험 지주
+        self.assertIsNone(classify("649", [{"account_id": "ifrs-full_Revenue"}]).fin_type)  # 효성·HDC (3자리 코드)
+        self.assertEqual(classify("649", self.DEPOSITS).fin_type, "holding")
+
+    def test_symbol_overrides(self):
+        self.assertEqual(classify("661", [], "030210").fin_type, "securities")  # 다올투자증권
+        self.assertEqual(classify("661", []).fin_type, "other")  # 고정 없으면 코드 규칙 그대로
+        self.assertIsNone(classify("64999", [], "487570").fin_type)  # HS효성
+        self.assertIn("종목 고정", classify("64999", [], "487570").basis)
 
     def test_industry_codes(self):
         self.assertEqual(classify("64121", self.DEPOSITS), classify("64121", self.DEPOSITS))
