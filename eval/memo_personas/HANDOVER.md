@@ -38,7 +38,7 @@ conda activate ai_memo
 레포 맨 위 폴더의 `.env` 파일을 엽니다(없으면 `cp .env.example .env`로 먼저 만듭니다). 아래 항목을 확인합니다. 이미 있는 줄은 그대로 두세요.
 
 ```
-LLM_API_KEY=여기에_Gemini_API_키
+LLM_API_KEY=여기에_OpenAI_API_키
 LLM_MODEL=여기에_모델_이름
 READONLY_DATABASE_URL=postgresql+psycopg://조회사용자:비밀번호@호스트:포트/DB이름
 ```
@@ -81,7 +81,7 @@ python -m eval.memo_personas.preflight
 ✅ 필요한 테이블·컬럼 — 10개 테이블 확인
 ✅ 데이터 삼성전자(005930) — 주가 …건(…~…) · 공시 …건 · 공시 청크 …건 · 뉴스 …건 · 재무 …건
    (SK하이닉스·NAVER·KB금융·거시도 같은 형식)
-✅ Gemini 테스트 호출 — 모델 … · 토큰 입력 … / 출력 … / thinking …
+✅ OpenAI 테스트 호출 — 모델 … · 토큰 입력 … / 출력 … / thinking …
 
 ✅ 모두 준비됐습니다.
 다음 명령: python -m eval.memo_personas.export_evidence
@@ -89,7 +89,7 @@ python -m eval.memo_personas.preflight
 
 - ⚠️(노란 경고)는 진행해도 됩니다. 예: 어떤 기업의 뉴스가 0건이면 메모 생성 때 다른 근거로 자동 조정됩니다.
 - ❌가 있으면 맨 아래 'preflight ❌ 해결표'를 보고 고친 뒤 같은 명령을 다시 실행합니다.
-- Gemini 테스트 호출은 하루 한도에서 1회를 씁니다.
+- OpenAI 테스트 호출은 하루 한도에서 1회를 씁니다.
 
 ## 2. 근거 자료 내보내기 — export_evidence
 
@@ -188,11 +188,12 @@ git commit·push는 하지 않아도 됩니다. 상규가 돌아와서 확인한
 | 화면에 나온 말 | 뜻 | 할 일 |
 |---|---|---|
 | `⚠️ 중간에 멈췄습니다` (Ctrl+C, 창 닫힘, PC 꺼짐 포함) | 그 사람까지만 저장됨 | **같은 명령을 다시 실행**. 완료한 사람은 건너뜁니다 |
-| `⚠️ … 일일 … 한도 …` / `내일 같은 명령을 다시 실행하세요` | 오늘 쓸 수 있는 Gemini 요청을 다 씀 | **내일 같은 명령을 다시 실행** |
+| `⚠️ … 일일 … 한도 …` / `내일 같은 명령을 다시 실행하세요` | 오늘 쓸 수 있는 OpenAI 요청을 다 씀 | **내일 같은 명령을 다시 실행** |
 | `⚠️ … 여러 번 기다려도 풀리지 않았습니다` | 분당 한도(429)가 계속 걸림 | 10분쯤 뒤 같은 명령 다시 실행 |
-| `❌ Gemini 인증 실패 (HTTP 401/403)` | API 키가 틀림 | `.env`의 `LLM_API_KEY` 다시 확인(상규에게 다시 받기) |
-| `❌ Gemini 모델을 찾을 수 없음 (HTTP 404)` | 모델 이름이 틀림 | `.env`의 `LLM_MODEL` 오타·공백 확인 |
-| `↻ … 응답이 중간에 끊김 (finishReason=MAX_TOKENS)`가 반복 | 응답이 너무 길어 잘림 | `eval/memo_personas/config.yaml`의 `max_output_tokens: 16384`를 `32768`로 바꾸고 다시 실행 |
+| `❌ OpenAI 크레딧(쿼터) 부족 (HTTP 429 insufficient_quota)` | OpenAI 결제·크레딧 잔액 부족 | OpenAI 대시보드에서 잔액 확인·충전 후 같은 명령 다시 실행 |
+| `❌ OpenAI 인증 실패 (HTTP 401/403)` | API 키가 틀림 | `.env`의 `LLM_API_KEY` 다시 확인(상규에게 다시 받기) |
+| `❌ OpenAI 모델을 찾을 수 없음 (HTTP 404)` | 모델 이름이 틀림 | `.env`의 `LLM_MODEL` 오타·공백 확인 |
+| `↻ … 응답이 중간에 끊김 (finish_reason=length)`가 반복 | 응답이 너무 길어 잘림 | `eval/memo_personas/config.yaml`의 `max_output_tokens: 16384`를 `32768`로 바꾸고 다시 실행 |
 | `❌ 처음 생성할 때와 입력이 달라졌습니다` | 파일럿 뒤에 export_evidence를 다시 돌렸거나 설정이 바뀜 | 상규에게 화면을 보내 주세요. 급하면 안내대로 `results/memo_personas/memos` 폴더 이름을 `memos_old`로 바꾸고 3단계부터 다시 |
 | `❌ 근거 자료가 없습니다` | 2단계를 아직 안 함 | `python -m eval.memo_personas.export_evidence` |
 | `실패 N명 … failed.jsonl` | 자동 검사를 3번 다 통과 못한 사람 | 같은 명령을 한 번 더 실행. 그래도 남으면 `failed.jsonl`을 상규에게 전달 |
@@ -210,7 +211,7 @@ git commit·push는 하지 않아도 됩니다. 상규가 돌아와서 확인한
 | DB 연결 | DB 상태 이상 또는 호스트·포트·인증정보·DB 이름 오류 | `READONLY_DATABASE_URL`(없으면 `DATABASE_URL`) 설정을 확인. 비밀값은 화면에 공유하지 않음 |
 | 필요한 테이블·컬럼 | 팀 DB에 최신 마이그레이션이 안 됨 | DB 담당자에게 `alembic current` 확인 요청 (직접 `alembic upgrade`는 담당자와 상의 후) |
 | 데이터 ○○ (주가 0건) | 그 기업 주가가 DB에 없음 | 진행 불가. 화면을 상규에게 보내 주세요 |
-| Gemini 테스트 호출 | 키·모델 이름·한도 | ↳ 안내대로. 429면 1~2분 뒤 다시, 일일 한도면 내일 |
+| OpenAI 테스트 호출 | 키·모델 이름·한도·크레딧 | ↳ 안내대로. 429면 1~2분 뒤 다시, 일일 한도면 내일 |
 
 ## 하지 말아야 할 것
 - `config.yaml`의 `mock: false`를 `true`로 바꾸지 않습니다(테스트용 가짜 응답이 됩니다).

@@ -105,6 +105,34 @@ class PriceTest(unittest.TestCase):
             self.assertEqual(parse_price(text, LEX).kind, "unsupported", text)
         self.assertIsNone(parse_price("PER 5배는 너무 싼 거 아닌가 싶음", LEX))
 
+    def test_unsupported_relative_and_technical(self):
+        """평가 메모 1,000개에서 규칙을 빠져나가 LLM으로 간 가격 조건들 (거래량 배수·신저가·전저점·이동평균선·기준어 없는 %)."""
+        for text in ["삼성 거래량 평소 두 배 넘으면 다시 볼 생각", "naver 전저점 깨지면 알려줘...", "NAVER 신저가 깨지면 알려줘",
+                     "네이버 10% 오르면 체크해야지", "하이닉스 60일선 넘으면 알려줘"]:
+            self.assertEqual(parse_price(text, LEX).kind, "unsupported", text)
+        # 사업 수치의 변화나 일반 문장은 가격 조건이 아니다
+        for text in ["영업이익 10% 늘면 좋겠다", "배당 5% 오르면 좋겠다", "거래량 많은 종목 보기", "60일 동안 지켜보기"]:
+            self.assertIsNone(parse_price(text, LEX), text)
+
+    def test_relative_with_base_words_and_fillers(self):
+        """2026-11-09 memos_long: 기준어(여기서·바닥·최근 저점)와 %·동사 사이 '더·넘게'. 상대 조건은 계속 확인 필요."""
+        for text in ["여기서 10% 더 빠지면 알려줘.", "네이버 지금 바닥 근처 같은데 여기서 5% 더 빠지면 한 번 더 물타볼게요.",
+                     "최근 바닥에서 10% 넘게 오르면 알려주세요.", "네이버 최근 저점 다시 깨면 알려줘...",
+                     "5% 넘게 빠지면 알려줘", "10% 더 오르면 일부 팔기", "10% 이상 빠지면 알려줘", "20% 이상 더 오르면 팔기"]:
+            self.assertEqual(parse_price(text, LEX).kind, "unsupported", text)
+            self.assertEqual(judge_one(text).decision, "needs_confirmation", text)
+        self.assertIsNone(parse_price("영업이익 10% 넘게 늘면 좋겠다", LEX))          # 사업 수치는 그대로 제외
+        self.assertIsNone(parse_price("매출 10% 이상 늘면 좋겠다", LEX))
+
+    def test_si_inside_words_is_not_condition(self):
+        """'다시·역시·혹시'의 '시'는 조건 표지가 아니다 (예측 문장이 미지원 조건으로 잡히던 오탐)."""
+        for text in ["이대로면 지금보다 15%는 다시 갈 거요.", "지금보다 10%는 역시 비싸다", "고점 대비 20% 혹시 모르니까"]:
+            self.assertIsNone(parse_price(text, LEX), text)
+        self.assertEqual(parse_price("7만 돌파 시 알림", LEX).direction, "above")      # 띄어 쓴 '시'는 그대로 조건
+        self.assertEqual(parse_price("7만 돌파시 알림", LEX).direction, "above")
+        self.assertEqual(parse_price("고점 대비 30% 하락 시 알림", LEX).kind, "unsupported")
+        self.assertEqual(parse_price("다시 7만 깨지면 알려줘", LEX).price, 70000)
+
 
 class JudgeTest(unittest.TestCase):
     def test_c1_price_with_action(self):
@@ -204,6 +232,19 @@ class LLMInterfaceTest(unittest.TestCase):
         out = llm.apply_llm(js, rows)[0]
         self.assertEqual(sorted(it["type"] for it in out.items), ["price_below", "topic"])
 
+    def test_price_item_without_threshold_becomes_confirmation(self):
+        """LLM이 상대 조건을 가격 항목으로 내면서 조건가를 비우면 카드 단계로 넘기지 않는다."""
+        for threshold in (None, "30%", 0, True):
+            js = judge_memo("HBM 실적 보기\nㅋㅋ\n그거 4분기에 확인", "005930", LEX)
+            rows = [{"sentence_index": 0, "decision": "normal", "category": "A2", "confidence": 0.9,
+                     "items": [{"type": "price_below", "description": "고점 대비 30% 하락", "price_threshold": threshold}]}]
+            out = llm.apply_llm(js, rows)[0]
+            self.assertEqual((out.decision, out.reason_code), ("needs_confirmation", "PRICE_THRESHOLD_MISSING"), threshold)
+        js = judge_memo("HBM 실적 보기", "005930", LEX)
+        ok = [{"sentence_index": 0, "decision": "normal", "category": "A2", "confidence": 0.9,
+               "items": [{"type": "price_below", "description": "7만 아래", "price_threshold": 70000}]}]
+        self.assertEqual(llm.apply_llm(js, ok)[0].decision, "normal")
+
     def test_single_call_only_when_pending(self):
         calls = []
         llm.judge_with_llm(judge_memo("ㅋㅋ", "005930", LEX), "005930", "삼성전자", lambda p: calls.append(p) or "[]")
@@ -225,11 +266,35 @@ class EvaluateTest(unittest.TestCase):
         self.assertEqual(s["price_extra"], 0)
 
 
+
+class RelativeParseTest(unittest.TestCase):
+    """상대 가격 조건 풀어 보기 (확인 질문 선택지용, 판정은 그대로)."""
+
+    def test_cases(self):
+        from pipelines.tracking.price import RelativeCondition, parse_relative
+        cases = {
+            "삼성전자 고점에서 30% 넘게 빠지면 바로 알려주세요.": RelativeCondition("high", 30.0, "below", "고점"),
+            "최근 바닥에서 10% 넘게 오르면 알려줘": RelativeCondition("low", 10.0, "above", "최근 바닥"),
+            "여기서 10% 더 빠지면 추가 매수": RelativeCondition("current", 10.0, "below", "여기"),
+            "지금 고점 대비 20% 내려오면": RelativeCondition("high", 20.0, "below", "고점"),
+            "10% 오르면 체크": RelativeCondition("current", 10.0, "above", ""),
+            "평단에서 15프로 떨어지면 손절": RelativeCondition("cost", 15.0, "below", "평단"),
+            "전고점 뚫으면 알려줘": RelativeCondition("high", 0.0, "above", "전고점"),
+            "52주 신저가 찍으면": RelativeCondition("low", 0.0, "below", "52주 신저가"),
+            "신고가 찍으면 알려줘": RelativeCondition("high", 0.0, "above", "신고가"),
+            "삼전 고점 대비 20% 넘넘게 빠지면 알림.": RelativeCondition("high", 20.0, "below", "고점"),   # 오타 '넘넘게'
+            "전고점 다시 넘어서면 알려주세요": RelativeCondition("high", 0.0, "above", "전고점"),
+        }
+        for text, want in cases.items():
+            self.assertEqual(parse_relative(text), want, text)
+        self.assertIsNone(parse_relative("HBM 실적 계속 볼게요"))
+
+
 if __name__ == "__main__":
     unittest.main()
 
 
-class GeminiClientTest(unittest.TestCase):
+class OpenAIClientTest(unittest.TestCase):
     """HTTP는 가짜로 바꾼다 — 네트워크·API 키 없음 (WO-022)."""
 
     class FakeResponse:
@@ -240,7 +305,7 @@ class GeminiClientTest(unittest.TestCase):
             return self._body
 
     def make(self, responses):
-        from pipelines.tracking.gemini import GeminiClient
+        from pipelines.tracking.openai_client import OpenAIClient
 
         sent = []
 
@@ -249,24 +314,26 @@ class GeminiClientTest(unittest.TestCase):
                 sent.append((url, headers, json))
                 return responses.pop(0)
 
-        client = GeminiClient(api_key="TEST-KEY", model="m", session=Session())
+        client = OpenAIClient(api_key="TEST-KEY", model="m", session=Session())
         return client, sent
 
     def ok_body(self, text):
-        return {"candidates": [{"content": {"parts": [{"text": text}]}}],
-                "usageMetadata": {"promptTokenCount": 120, "candidatesTokenCount": 30}}
+        return {"choices": [{"message": {"content": text}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 120, "completion_tokens": 30}}
 
     def test_success_records_usage_and_json_mode(self):
         client, sent = self.make([self.FakeResponse(200, self.ok_body("[]"))])
         self.assertEqual(client("p"), "[]")
         url, headers, body = sent[0]
-        self.assertIn("/models/m:generateContent", url)
-        self.assertEqual(headers["x-goog-api-key"], "TEST-KEY")
-        self.assertEqual(body["generationConfig"]["responseMimeType"], "application/json")
+        self.assertIn("api.openai.com/v1/chat/completions", url)
+        self.assertEqual(headers["Authorization"], "Bearer TEST-KEY")
+        self.assertEqual(body["model"], "m")
+        self.assertEqual(body["response_format"], {"type": "json_object"})
+        self.assertEqual(body["temperature"], 0)
+        self.assertIn("JSON", body["messages"][0]["content"])      # json_object 모드는 메시지에 JSON이라는 말이 필요하다
         self.assertEqual((client.calls[0].prompt_tokens, client.calls[0].output_tokens, client.calls[0].ok), (120, 30, True))
 
     def test_retry_on_quota_then_success(self):
-        from pipelines.tracking import gemini
         from unittest import mock
 
         client, sent = self.make([self.FakeResponse(429), self.FakeResponse(200, self.ok_body("[1]"))])
@@ -277,6 +344,48 @@ class GeminiClientTest(unittest.TestCase):
     def test_key_not_in_repr(self):
         client, _ = self.make([])
         self.assertNotIn("TEST-KEY", repr(client))
+
+    def test_temperature_dropped_when_model_rejects_it(self):
+        reject = self.FakeResponse(400, {"error": {"message": "Unsupported value: 'temperature' does not support 0 with this model."}})
+        client, sent = self.make([reject, self.FakeResponse(200, self.ok_body("[2]"))])
+        self.assertEqual(client("p"), "[2]")
+        self.assertIn("temperature", sent[0][2])
+        self.assertNotIn("temperature", sent[1][2])
+
+    def test_out_of_credit_is_not_retried(self):
+        credit = self.FakeResponse(429, {"error": {"code": "insufficient_quota", "message": "quota"}})
+        client, sent = self.make([credit])
+        with self.assertRaises(RuntimeError):
+            client("p")
+        self.assertEqual(len(sent), 1)
+        self.assertFalse(client.calls[0].ok)
+
+    def test_reasoning_tokens_recorded_separately(self):
+        body = self.ok_body("[]")
+        body["usage"] = {"prompt_tokens": 100, "completion_tokens": 250,
+                         "completion_tokens_details": {"reasoning_tokens": 200}}
+        client, _ = self.make([self.FakeResponse(200, body), self.FakeResponse(200, self.ok_body("[]"))])
+        client("p")
+        client("q")
+        self.assertEqual((client.calls[0].output_tokens, client.calls[0].reasoning_tokens), (250, 200))
+        self.assertIsNone(client.calls[1].reasoning_tokens)                  # 세부 내역이 없는 응답
+        from pipelines.tracking.openai_client import usage_totals
+
+        self.assertEqual(usage_totals(client.calls),
+                         {"llm_calls": 2, "prompt_tokens": 220, "output_tokens": 280, "reasoning_tokens": 200})
+
+    def test_reasoning_effort_only_when_env_set(self):
+        from unittest import mock
+
+        with mock.patch.dict("os.environ", {}, clear=False) as env:
+            env.pop("LLM_REASONING_EFFORT", None)
+            client, sent = self.make([self.FakeResponse(200, self.ok_body("[]"))])
+            client("p")
+            self.assertNotIn("reasoning_effort", sent[0][2])
+            env["LLM_REASONING_EFFORT"] = "low"
+            client, sent = self.make([self.FakeResponse(200, self.ok_body("[]"))])
+            client("p")
+            self.assertEqual(sent[0][2]["reasoning_effort"], "low")
 
 
 class EvaluateLLMTest(unittest.TestCase):

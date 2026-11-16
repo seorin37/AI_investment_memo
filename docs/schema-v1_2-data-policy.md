@@ -12,7 +12,8 @@
 - 연결재무제표가 있으면 연결만 저장한다.
 - 연결재무제표가 없으면 별도재무제표만 저장한다.
 - 실제 선택 결과는 `financials.fs_div`에 `consolidated` 또는 `separate`로 기록한다.
-- 손익 항목은 연초부터 보고기간 말까지의 누적값을 저장한다. 분기 단독값은 같은 회계연도의 누적값 차이로 코드에서 계산한다.
+- 손익 항목은 연초부터 보고기간 말까지의 누적값을 저장한다(`financials`·`financials_fin`, 원본 그대로 보존).
+- 분기 단독값은 같은 회계연도(결산월 기준)의 누적값 차이로 계산해 `financials_quarterly`·`financials_fin_quarterly`(0016)에 따로 저장한다. Q1=q1, Q2=half−q1, Q3=q3−half, Q4=annual−q3. 재무 적재가 원본 한 기간을 쓸 때마다 그 회계연도를 다시 계산한다. 못 구한 값은 NULL과 `null_reasons`(missing_prev_period·source_null·fs_div_mismatch·needs_review)로 남긴다. EPS·재무상태표 항목은 대상이 아니다. (2026-11-13 팀 결정으로 "코드에서 계산"에서 변경)
 - 기본 수집 범위는 2024년 이후다. 2024년 전년 동기 대비 계산에 필요한 2023년 대응 기간 값만 비교 데이터로 추가 수집할 수 있다.
 - 유보율은 `(capital_surplus + retained_earnings) / capital_stock * 100`으로 계산한다. 분모가 0이거나 필요한 값이 NULL이면 계산하지 않는다.
 

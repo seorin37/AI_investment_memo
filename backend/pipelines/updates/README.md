@@ -18,6 +18,19 @@
 | 고정 문구 | `fixed.py` | 검사에 걸린 카드를 "새 공시가 올라왔어요" 같은 고정 카드로 대체 (설정으로 `drop` 가능) |
 | 가격 | `price.py` | 종가와 조건가를 코드로 비교. 상태가 바뀌어 "가까워짐/도달"이 될 때만 카드 (LLM 없음) |
 | 즉시 답변 | `instant.py` | 지침 2장: 규칙으로 분기(투자판단·예측→고정 문구, 현재가→코드 답, 단순 재무→코드 답(DB 조회 미구현)), 공시·뉴스 정리 질문은 `update_instant_prompt.md`로 LLM 답변 + 검사. 저장 위치는 미정 |
+| 응답 유형 | `response.py`, `confirm.py`, `item_state.py` | 코드가 6개 유형(update_card·price_card·no_new_info·no_data·needs_confirmation·out_of_scope)을 정한다. 카드 실패는 no_new_info(reason에 이유), 확인 필요는 질문+선택지(52주·20거래일 고점·저점, 최근 종가), 범위 밖 문장은 내부 기록만. 항목 상태(마지막 확인 시각·유형)는 파일 저장소. `responses.jsonl` |
+| 새 자료만 받기 | `candidates.py`(FRESH_DISCLOSURE, drop_not_ready), `item_state.py`(last_checked), `fresh_check.py` | `--item-state`에 마지막 확인 시각이 있으면 그 이후 검색 가능해진 자료(뉴스는 기사가 처음 검색 가능해진 시각 = 제목+요약 임베딩, 없으면 적재 / 공시 max(적재, 청크 임베딩)) 중 발행(공시 접수일) 3일 안만 후보로. 나중에 원문 청크가 붙어도 다시 새 자료로 보지 않지만, 원문 청크로 찾은 기사가 청크 임베딩이 마지막 확인 뒤에 붙었고 발행 3일 안이며 그 항목 카드에 아직 안 쓴 기사면 한 번 남긴다(late chunk, `--used-refs`가 있을 때만). 원본이 확인 전에 적재돼 있던 정정 공시는 제외. 첫 확인은 조회 기간 전체 |
+| 카드 v2 | `judge.py`(RESPONSE_SCHEMA_V2, parse_card_v2), `configs/update_judge_prompt_v2.md`, `checks.py`(check_card_v2), `topic.py`(_judge_v2, merge_same_source), `compare_prior.py`, `preview_compare.py` | `topic.card_schema: v2`(2026-11-10부터 기본) \| `v1`(`--card-schema v1`). "나음?"·"뭐가 낫" 같은 메모도 비교로 보고, 두 대상의 사실만 나란히 쓰며 어느 쪽이 낫다는 판단·선택 권유는 `topic.judgment_patterns`로 막는다(JUDGMENT). v2: headline·when·facts[{text, evidence_id}]·memo_link·sources. 숫자·날짜는 문장마다 그 근거 하나와 대조, 같은 메모·같은 근거 카드는 하나로 합침, 비교를 원하는 메모에 비교 문장이 없으면 "비교 자료 없음". 잠정실적·배당·정기보고서 근거에는 직전 같은 기간 값(DB 읽기 전용)을 [직전 같은 기간 비교] 근거로 넣는다(ref `cmp:<접수번호>`, 쓴 근거 기록에서는 뺀다). `preview_compare run_A run_B`로 나란히 비교 |
+| 관련성 판정 | `relevance.py`, `configs/candidate_relevance_prompt.md` | 2026-11-10 기본 켬(`relevance.enabled`, `--no-relevance`). 최소 유사도를 넘은 뉴스 후보를 항목별로 묶어 sol로 1회 판정(범위 company/industry, 이유 코드) → O인 뉴스만 카드 생성. 남은 후보가 없으면 카드 생성 없이 no_new_info(no_relevant_candidates). 판정은 candidates.csv(판정(O/X)·판정코드·판정범위)와 responses.jsonl(relevance)에 남는다. 공시는 판정하지 않는다. `relevance --estimate <run>`으로 비용 어림 |
+| 검수 표본 만들기 | `sample_memos.py`, `review_sample.py`, `experiment --no-cards` | 페르소나 메모에서 산업 주제·우선 회사 메모 고르기(select) → `tracking.evaluate_long run`으로 메모 분석 → 항목 파일(items) → 예산 안에서 항목 고르기(pick, `--llm none` 실행의 candidates.csv로 판정 비용 어림) → `experiment --llm openai --no-cards --gold <항목 파일>`(검색·관련성 판정만) → `review_sample --min-industry --min-prefer`(이전 검수 세트 제외). 검수 뒤 `relevance_compare`가 key 파일의 판정 열로 파이프라인 판정을 LLM 없이 채점한다 |
+| 자료 범위 (v2) | `candidates.news_coverage`, `topic.coverage_text`, `checks.check_card_v2`(COVERAGE) | 뉴스를 쓴 v2 카드에 DB의 가장 오래된 발행일 기준 "○월 ○일 이후 기사 기준"(`coverage`)을 붙이고, 프롬프트에 [자료 범위]를 준다. 그 전 기간을 전제로 한 말(`topic.coverage_terms`: 처음·줄곧·계속 …)은 근거에 그대로 있을 때만 |
+| 기준값 보정 | `calibrate_reviews.py` | 사람 검수 표본(32·42·40건)을 합쳐 종류별 추천값과 실행 결과의 후보 수 변화를 보여 준다 (설정은 바꾸지 않음) |
+| DB 저장 | `db_store.py`, `experiment --store db`, `response.memo_analysis_responses` | 카드 → tracking_updates(+update_sources), 관련성 판정 → tracking_matches, 확인 시각 → tracking_items.last_checked_at. 이미 쓴 근거·확인 시각 저장소의 DB 구현(파일 구현은 `store: file`로 그대로). 가격 카드는 0005 트리거 때문에 update_sources·price_events 없이 저장. 쓰기는 로컬 테스트 DB(TEST_DATABASE_URL, 127.0.0.1:5433, 이름에 test)만 — 주소와 연결 정보로 두 번 확인. ReadOnlyGuardTest의 예외는 db_store.py 하나 |
+| 주가 등락 카드 세기 | `price_move_cards.py` | 주가 등락률 카드와 그 근거 기사에 원인 표현이 있는지 (확인용, 파일만 읽음) |
+| 뉴스 검색 기본값 | `configs/updates.yaml` news.search, `news_search.py` | 2026-11-10부터 `chunks`(원문 청크, 청크 없는 기사는 제목+요약 벡터로 보충). `min_similarity_news_chunks` 보정 전에는 `min_similarity_news` 값을 임시로 쓰고 경고·summary `uncalibrated`에 남긴다. 기존 방식은 `--news-search article`. 이미 쓴 근거는 뉴스면 기사 단위(ref `news:<id>`)라 같은 기사의 청크·제목요약이 함께 빠진다 |
+| 우선주 | `preferred.py` | 우선주 항목의 공시·뉴스는 보통주 코드로 조회, 가격은 우선주 종가. DB(dart_corp_code) → 종목코드 규칙(끝자리 0) 순으로 매핑 |
+| 점검 도구 | `response_dist.py`, `compare_runs.py`, `nodata_check.py`, `fresh_check.py`, `preferred.py`, `ingest_lag.py` | 응답 유형 분포(LLM 없음), 연속 실행 비교(같은 근거 재사용·새 자료), no_data·오래된 종가, 정정 공시 처리, 우선주 매핑, 발행·적재·임베딩 시차. 모두 DB 읽기 전용 |
+| 쓴 근거 건너뛰기 | `used_refs.py` | 항목별로 카드 문장이 쓴 근거 ref를 기록하고 다음 실행에서 후보에서 뺀다. 저장소 인터페이스 + 파일 구현(DB 테이블 없음). `experiment --used-refs <파일>`로만 켠다 |
 | 결과 저장 | `results.py` | 결과를 DB가 아니라 `results/updates/run_<시각>/` 파일로 저장 |
 | 임계값 보정 | `calibrate.py`, `autolabel.py`, `noise_floor.py` | 후보 O/X 표시(사람 또는 LLM)로 구간별 정밀도·재현율과 추천 임계값 계산, 다른 종목 자료로 하한선 계산 |
 | 실험 | `experiment.py` | 위 전체를 4개 기업(005930·000660·035420·105560)으로 돌려 보고서를 만든다 |
@@ -29,7 +42,7 @@
 - **주가는 근거로 쓰지 않는다.** 주가는 결과이므로 공시·뉴스 카드에 섞지 않고, 사용자가 정한 가격 조건이 있을 때만 별도 "가격 카드"로 낸다.
 
 ## 4. 예상 결과물
-`PYTHONPATH=backend python -m pipelines.updates.experiment --llm none|gemini` 를 실행하면 `results/updates/run_<시각>/` 에 다음이 생긴다.
+`PYTHONPATH=backend python -m pipelines.updates.experiment --llm none|openai` 를 실행하면 `results/updates/run_<시각>/` 에 다음이 생긴다.
 
 | 파일 | 내용 |
 |---|---|
@@ -54,13 +67,13 @@
 - `INSERT/UPDATE/DELETE`, `commit`, `get_dsn`/`get_engine`(쓰기용) 호출이 패키지에 없는지 테스트(`ReadOnlyGuardTest`)가 소스를 검사한다.
 - `alembic/`, `alembic/sql/`, `db/` 는 한 글자도 수정하지 않았다. 새 테이블·컬럼·마이그레이션도 만들지 않았다.
 - 결과 파일은 `results/` 아래에만 쓴다. (`.gitignore`에 `results/`를 추가할지는 팀 결정)
-- 외부로 나가는 건 `--llm gemini`일 때의 Gemini API 호출뿐이다 (토큰 비용 발생). `--llm none`은 비용이 없다.
+- 외부로 나가는 건 `--llm openai`일 때의 OpenAI API 호출뿐이다 (토큰 비용 발생). `--llm none`은 비용이 없다.
 
 ## 6. 아직 없는 것 / 확인되지 않은 것
 - 카드를 DB(`tracking_updates`, `update_sources`)에 쓰는 코드, 하루 한 번 도는 실행기, 크레딧 장부·차감
 - 재무 근거, "공시와 숫자가 다르면 공시 우선" 로직, 뉴스 묶음 기준의 정식 값(지금은 제목 글자 유사도 임시값)
 - 즉답 결과를 저장할 테이블 (팀 질문 Q3)
-- 실제 DB·Gemini에 대한 실행: 후보 검색 SQL, 가격 조회 SQL, `experiment` CLI는 이 환경에서 돌려 보지 못했다. 테스트는 가짜 LLM·가짜 후보로만 통과했다.
+- 실제 DB·OpenAI에 대한 실행: 후보 검색 SQL, 가격 조회 SQL, `experiment` CLI는 이 환경에서 돌려 보지 못했다. 테스트는 가짜 LLM·가짜 후보로만 통과했다.
 - 임계값(`min_similarity` 0.5, `related_news_min_similarity` 0.6, `near_pct` 3.0)은 모두 임시값이다. 첫 실험의 유사도 분포를 보고 정한다.
 
 ## 7. 임계값 정하는 순서 (사람 표시를 최소화하는 방법)
@@ -68,13 +81,13 @@
 ```bash
 # 1) 후보 전체를 뽑는다 (비용 없음). 표본은 후보 100건 이상(주제 항목 10개 이상)
 PYTHONPATH=backend python -m pipelines.updates.experiment --llm none --limit 30
-# 2) LLM이 후보마다 O/X를 자동 표시한다 (Gemini 호출: 항목 수만큼). 사람 표시 열은 그대로, 'LLM관련(O/X)' 열이 채워진 candidates_auto.csv가 생긴다
+# 2) LLM이 후보마다 O/X를 자동 표시한다 (OpenAI 호출: 항목 수만큼). 사람 표시 열은 그대로, 'LLM관련(O/X)' 열이 채워진 candidates_auto_<모델>.csv가 생긴다 (모델: LABELER_MODEL, 없으면 LLM_MODEL)
 PYTHONPATH=backend python -m pipelines.updates.autolabel --labels results/updates/run_*/candidates.csv
-# 3) (선택, 권장) 사람이 candidates_auto.csv의 '관련(O/X)' 열에 30~50건만 표시한다 → LLM 표시와의 일치율이 나온다
+# 3) (선택, 권장) 사람이 candidates_auto_<모델>.csv의 '관련(O/X)' 열에 30~50건만 표시한다 → LLM 표시와의 일치율이 나온다
 # 4) 다른 종목 자료로 하한선을 구한다 (비용 없음, DB 읽기 전용)
 PYTHONPATH=backend python -m pipelines.updates.noise_floor --limit 30
 # 5) 합쳐서 계산한다
-PYTHONPATH=backend python -m pipelines.updates.calibrate --labels results/updates/run_*/candidates_auto.csv \
+PYTHONPATH=backend python -m pipelines.updates.calibrate --labels results/updates/run_*/candidates_auto_<모델>.csv \
     --noise-floor results/updates/run_*/noise_floor.json --min-precision 0.8
 ```
 - 표시 우선순위(`--source merged`, 기본): 사람 표시가 있으면 사람, 없으면 LLM. `human`/`llm`으로 하나만 쓸 수도 있다.
@@ -85,7 +98,7 @@ PYTHONPATH=backend python -m pipelines.updates.calibrate --labels results/update
   - LLM 표시는 정답이 아니다. 같은 계열 모델이 서비스 단계에서도 판정하므로 편향이 겹칠 수 있다. 3)의 일치율로 확인한다.
   - noise floor는 같은 종목 안의 관련 없는 자료를 못 거르고, 재현율은 알 수 없다. 업종이 다른 종목만 쓰는 게 기본이다 (stocks.sector는 general/financial 두 가지뿐이라 거칠다).
   - 표시한 후보는 검색 상위 k건 안에서만 정해진다. 검색에서 빠진 자료는 알 수 없다.
-  - `autolabel`, `noise_floor`의 DB·Gemini 실행은 아직 실제 환경에서 돌려 보지 못했다 (테스트는 가짜 호출로만).
+  - `autolabel`, `noise_floor`의 DB·OpenAI 실행은 아직 실제 환경에서 돌려 보지 못했다 (테스트는 가짜 호출로만).
 
 ## 8. 팀 LLM 프롬프트 지침 v1.0 반영 내용 (2026-10-27)
 - `configs/update_judge_prompt.md`, `configs/update_instant_prompt.md`는 지침서의 시스템 프롬프트를 그대로 옮겼다. 지침이 바뀌면 이 파일만 교체한다.
@@ -94,5 +107,5 @@ PYTHONPATH=backend python -m pipelines.updates.calibrate --labels results/update
 - `no_update`는 6개 키가 모두 있고 title·reason이 비며 summary·evidence가 빈 배열이어야 한다. 아니면 형식 실패로 본다.
 - 금지 표현 사전은 지침 3-3 초기 사전 21개다. "매수"·"매도" 단독은 넣지 않았다 (자기주식 매수 같은 공시 사실을 막기 때문). 시제 패턴(`topic.banned_patterns`)은 예측·단정 표현을 막되, "~라고 밝혔어요"처럼 회사 발언을 전달하는 문장에는 적용하지 않는다.
 - 구현하지 않은 것: 검사 10(뉴스·공시 충돌 시 공시 사용 확인), 검사 11(연결·별도 섞임 확인), 재무 근거([재무]) 카드와 재무 고정 문구. 근거 DB에 연결/별도 구분이 없어 입력 템플릿에서도 그 줄을 뺐다.
-- Gemini `responseSchema`는 지침서 스키마에서 `additionalProperties`·`maxLength`를 뺀 형태로 만들었다 (API 수용 여부 미확인). 길이·형식은 코드가 검사한다. 기본은 꺼 둔다.
+- `--response-schema`는 OpenAI Structured Outputs(`json_schema`, strict)로 보낸다. `judge.py`의 스키마를 `openai_schema.to_json_schema`가 변환하며 `maxItems` 같은 길이 제한은 뺀다 (실제 API 수용 여부 미확인). 길이·형식은 코드가 검사한다. 기본은 꺼 둔다.
 - 지침 5장의 미정 값(near 비율, 조건가 도달 후 처리, 즉시 답변 저장 구조, 뉴스 묶음 기준, 계산 지표 포함 여부)은 여전히 임시값이다.

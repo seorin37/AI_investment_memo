@@ -1,4 +1,4 @@
-"""1) 사전 점검 — 메모 생성 전에 환경·데이터·DB·Gemini가 준비됐는지 항목마다 ✅/❌로 알려 준다.
+"""1) 사전 점검 — 메모 생성 전에 환경·데이터·DB·OpenAI가 준비됐는지 항목마다 ✅/❌로 알려 준다.
 
     python -m eval.memo_personas.preflight
 
@@ -123,7 +123,7 @@ def check_env(r: Result) -> dict:
         if ok:
             r.ok(f".env {k}", "있음 (값은 표시하지 않음)")
         else:
-            hint = {"LLM_API_KEY": "Gemini API 키를 LLM_API_KEY=... 한 줄로 넣으세요 (따옴표·공백 없이).",
+            hint = {"LLM_API_KEY": "OpenAI API 키를 LLM_API_KEY=... 한 줄로 넣으세요 (따옴표·공백 없이).",
                     "LLM_MODEL": "모델 이름을 LLM_MODEL=... 한 줄로 넣으세요. 상규가 카톡으로 알려 준 이름을 그대로 씁니다."}[k]
             r.fail(f".env {k}", "없음", hint)
     if readonly_set:
@@ -180,7 +180,7 @@ def check_db(r: Result, cfg: dict):
         conn.rollback()
 
 
-def check_gemini(r: Result, cfg: dict):
+def check_llm(r: Result, cfg: dict):
     from .llm import PING_SCHEMA, APIError, BadResponse, DailyQuotaExceeded, RateLimited, make_client, parse_json
 
     try:
@@ -188,16 +188,16 @@ def check_gemini(r: Result, cfg: dict):
         res = client.generate('다음 JSON만 출력: {"ok": true}', PING_SCHEMA, max_output_tokens=1024)
         parse_json(res.text, PING_SCHEMA)
     except DailyQuotaExceeded as exc:
-        r.fail("Gemini 테스트 호출", str(exc), "오늘 한도를 다 썼습니다. 내일 다시 preflight를 실행하세요.")
+        r.fail("OpenAI 테스트 호출", str(exc), "오늘 한도를 다 썼습니다. 내일 다시 preflight를 실행하세요.")
         return
     except RateLimited as exc:
-        r.fail("Gemini 테스트 호출", str(exc), "1~2분 뒤 다시 실행하세요. 계속 429가 나면 상규에게 알려 주세요.")
+        r.fail("OpenAI 테스트 호출", str(exc), "1~2분 뒤 다시 실행하세요. 계속 429가 나면 상규에게 알려 주세요.")
         return
     except (APIError, BadResponse) as exc:
-        r.fail("Gemini 테스트 호출", str(exc), getattr(exc, "guide", "") or "상규에게 이 화면을 보내 주세요.")
+        r.fail("OpenAI 테스트 호출", str(exc), getattr(exc, "guide", "") or "상규에게 이 화면을 보내 주세요.")
         return
-    mode = " (목업 모드 — 실제 Gemini 아님)" if cfg["llm"].get("mock") else ""
-    r.ok("Gemini 테스트 호출", f"모델 {res.model}{mode} · 토큰 입력 {res.usage.prompt_tokens} / 출력 {res.usage.output_tokens}"
+    mode = " (목업 모드 — 실제 OpenAI 아님)" if cfg["llm"].get("mock") else ""
+    r.ok("OpenAI 테스트 호출", f"모델 {res.model}{mode} · 토큰 입력 {res.usage.prompt_tokens} / 출력 {res.usage.output_tokens}"
          f" / thinking {res.usage.thinking_tokens}")
 
 
@@ -218,9 +218,9 @@ def main(argv=None) -> int:
     else:
         r.fail("DB 연결", "READONLY_DATABASE_URL과 DATABASE_URL이 모두 없어 건너뜀")
     if present["LLM_API_KEY"] and present["LLM_MODEL"] or cfg["llm"].get("mock"):
-        check_gemini(r, cfg)
+        check_llm(r, cfg)
     else:
-        r.fail("Gemini 테스트 호출", "LLM_API_KEY·LLM_MODEL이 없어 건너뜀")
+        r.fail("OpenAI 테스트 호출", "LLM_API_KEY·LLM_MODEL이 없어 건너뜀")
     print()
     if r.fails:
         print(f"❌ {r.fails}개 항목을 고친 뒤 다시 실행하세요: python -m eval.memo_personas.preflight")

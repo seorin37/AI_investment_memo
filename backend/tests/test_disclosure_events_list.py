@@ -1,6 +1,7 @@
+import os
 import tempfile
 import unittest
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from app import dart_reports
@@ -89,6 +90,8 @@ class ClassifyTest(unittest.TestCase):
         "생산재개(자율공시)": "operation_disruption",
         "중대재해발생": "operation_disruption",
         "감사보고서제출": "audit_report",
+        # 2026-11-05 자동 실행 dry-run에서 미분류로 나와 추가한 것
+        "기술도입ㆍ이전ㆍ제휴계약체결(자율공시)": "tech_alliance",
     }
     EXCLUDED = [
         "최대주주등소유주식변동신고서",
@@ -100,6 +103,7 @@ class ClassifyTest(unittest.TestCase):
         "자기전환사채만기전취득결정",
         "자기주식취득결과보고서",
         "유상증자또는주식관련사채등의발행결과(자율공시)",
+        "유상증자또는주식관련사채등의청약결과(자율공시)",
     ]
 
     def test_known_titles(self):
@@ -161,6 +165,19 @@ class SelectEventsTest(unittest.TestCase):
         self.assertEqual(refs, [])
         self.assertEqual(report.skipped_subsidiary, 1)
 
+    def test_attachment_only_corrections_are_skipped(self):
+        # [첨부정정]은 본문이 없어 DART가 014를 준다 → 목록 단계에서 뺀다.
+        # [첨부추가]는 본문이 있고 그 사건의 유일한 공시일 수 있어 받는다(정정본 아님). [기재정정]은 받는다.
+        items = [
+            item("[첨부정정]주요사항보고서(회사합병결정)", "1", ty="B"),
+            item("[첨부추가]주요사항보고서(회사합병결정)", "2", ty="B"),
+            item("[기재정정]주요사항보고서(회사합병결정)", "3", ty="B"),
+        ]
+        refs, report = select_events(items, RULES, KINDS)
+        self.assertEqual([r.rcept_no for r in refs], ["2", "3"])
+        self.assertEqual([r.is_correction for r in refs], [False, True])
+        self.assertEqual(report.to_dict()["skipped_prefix"], {"[첨부정정]": 1})
+
     def test_report_accumulates_across_days(self):
         _, report = select_events([item("주식소각결정", "1")], RULES, KINDS)
         _, report = select_events([item("주식소각결정", "2", rcept_dt="20261030")], RULES, KINDS, report=report)
@@ -193,6 +210,48 @@ class FetchDayTest(unittest.TestCase):
         self.assertEqual((first["bgn_de"], first["end_de"], first["corp_cls"], first["last_reprt_at"]), ("20261029", "20261029", "Y", "N"))
         self.assertNotIn("corp_code", first)
         self.assertNotIn("pblntf_detail_ty", first)
+
+    def one_type_response(self, rcept_no):
+        return [FakeResponse(json_data={"status": "000", "total_page": 1, "list": [item("유상증자결정", rcept_no)]}),
+                FakeResponse(json_data={"status": "013", "message": "없음"}),
+                FakeResponse(json_data={"status": "013", "message": "없음"})]
+
+    def test_today_is_not_cached_so_late_filings_are_fetched_next_day(self):
+        day = date(2026, 11, 5)
+        evening = datetime(2026, 11, 5, 19, 30, tzinfo=events_list.KST)
+        next_morning = datetime(2026, 11, 6, 12, 30, tzinfo=events_list.KST)
+        with tempfile.TemporaryDirectory() as directory:
+            raw = Path(directory)
+            first = events_list.fetch_day(API_KEY, day, self.LIST_CONFIG, raw,
+                                          session=FakeSession(self.one_type_response("1")), now=evening)
+            self.assertEqual([i["rcept_no"] for i in first], ["1"])
+            self.assertFalse((raw / "lists" / "20261105.json").exists())  # 오늘 목록은 쓰지 않는다
+            # 다음 날 다시 받으면 19:30 뒤에 나온 공시(2)까지 들어온다. 이제 지난 날짜라 캐시에 쓴다.
+            later = events_list.fetch_day(API_KEY, day, self.LIST_CONFIG, raw,
+                                          session=FakeSession(self.one_type_response("2")), now=next_morning)
+            self.assertEqual([i["rcept_no"] for i in later], ["2"])
+            self.assertTrue((raw / "lists" / "20261105.json").exists())
+
+    def test_cache_written_on_the_same_day_is_not_trusted(self):
+        # 예전 코드가 그날 쓴 캐시: 그날 마지막 실행 뒤 공시가 빠져 있을 수 있어 다시 받는다
+        day = date(2026, 11, 5)
+        with tempfile.TemporaryDirectory() as directory:
+            raw = Path(directory)
+            cache = raw / "lists" / "20261105.json"
+            cache.parent.mkdir(parents=True)
+            cache.write_text('[{"rcept_no": "old"}]\n', encoding="utf-8")
+            same_day = datetime(2026, 11, 5, 19, 30, tzinfo=events_list.KST).timestamp()
+            os.utime(cache, (same_day, same_day))
+            items = events_list.fetch_day(API_KEY, day, self.LIST_CONFIG, raw,
+                                          session=FakeSession(self.one_type_response("new")),
+                                          now=datetime(2026, 11, 6, 12, 30, tzinfo=events_list.KST))
+            self.assertEqual([i["rcept_no"] for i in items], ["new"])
+            # 다시 쓴 캐시는 다음 날 쓴 것이라 완성본으로 믿는다 (실제 시계 대신 다음 날 12:30에 쓴 것으로 맞춘다)
+            next_day = datetime(2026, 11, 6, 12, 30, tzinfo=events_list.KST).timestamp()
+            os.utime(cache, (next_day, next_day))
+            again = events_list.fetch_day(API_KEY, day, self.LIST_CONFIG, raw, session=FakeSession([]),
+                                          now=datetime(2026, 11, 7, 12, 30, tzinfo=events_list.KST))
+            self.assertEqual(again, items)
 
     def test_rate_limit_propagates(self):
         session = FakeSession([FakeResponse(json_data={"status": "020", "message": "limit"})])

@@ -262,14 +262,14 @@ def test_loop_rejects_skip_rss(monkeypatch):
     assert pipeline.main(["hourly", "--loop", "60", "--skip-rss"]) == 1
 
 
-def test_cluster_llm_needs_cluster_and_gemini_key(monkeypatch):
+def test_cluster_llm_needs_cluster_and_openai_key(monkeypatch):
     monkeypatch.setattr(pipeline, "load_env", lambda: None)
     monkeypatch.setattr(pipeline, "get_dsn", lambda: "dsn")
     monkeypatch.setattr(pipeline, "run_hourly", lambda *a, **k: 0)
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     assert pipeline.main(["hourly", "--cluster-llm"]) == 1                     # --cluster 없이
     assert pipeline.main(["hourly", "--cluster", "--cluster-llm"]) == 1        # 키 없음
-    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     assert pipeline.main(["hourly", "--cluster", "--cluster-llm"]) == 0
 
 

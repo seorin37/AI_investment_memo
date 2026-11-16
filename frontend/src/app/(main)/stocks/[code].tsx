@@ -3,21 +3,31 @@ import { View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Page } from '@/components/layout/Page';
 import { Loading, PillTabs } from '@/components/ui/primitives';
+import { T } from '@/components/ui/Text';
 import { BoardScreen } from '@/features/board/BoardScreen';
 import { CompanyInfo } from '@/features/company/CompanyInfo';
 import { StockHeader } from '@/features/stock/StockHeader';
-import { useMyStocks, useProfile } from '@/hooks/queries';
+import { useMyStocks, useProfile, useStock } from '@/hooks/queries';
+import { colors } from '@/theme/tokens';
 
 /** 6. 기업 메모장(보드) · 7. 기업정보 — /stocks/000660?tab=info */
 export default function StockScreen() {
   const { code, tab } = useLocalSearchParams<{ code: string; tab?: 'board' | 'info' }>();
   const router = useRouter();
   const { data: mine } = useMyStocks();
+  const { data: master, isError: masterFailed, error: masterError } = useStock(code);
   const { data: profile } = useProfile(code);
   const my = mine?.find((s) => s.code === code);
-  const stock = my ?? (profile ? { code: profile.code, name: profile.name, market: profile.market } : null);
+  const stock = my ?? master ?? (profile ? { code: profile.code, name: profile.name, market: profile.market } : null);
   const active = tab === 'info' ? 'info' : 'board';
 
+  if (!stock && masterFailed) {
+    return (
+      <Page>
+        <T color={colors.danger}>{masterError instanceof Error ? masterError.message : '종목 정보를 불러오지 못했어요.'}</T>
+      </Page>
+    );
+  }
   if (!stock) return <Loading height={400} />;
 
   return (

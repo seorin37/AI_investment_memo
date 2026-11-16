@@ -1,7 +1,7 @@
-"""애매한 묶음의 같은 사건 여부를 LLM(Gemini)에 묻는다. clustering.choose_cluster의 judge로 쓴다.
+"""애매한 묶음의 같은 사건 여부를 LLM(OpenAI)에 묻는다. clustering.choose_cluster의 judge로 쓴다.
 
-API 키는 환경변수 `GEMINI_API_KEY`에서만 읽는다 (저장소 루트 .env 또는 수집기 컨테이너 환경변수).
-키는 프로그램 안에서만 쓰고 출력·저장하지 않는다. 모델은 `GEMINI_MODEL`(기본 gemini-3.1-flash-lite).
+API 키는 환경변수 `OPENAI_API_KEY`에서만 읽는다 (저장소 루트 .env 또는 수집기 컨테이너 환경변수).
+키는 프로그램 안에서만 쓰고 출력·저장하지 않는다. 모델은 `OPENAI_MODEL`(기본 gpt-4.1-mini).
 외부 API를 부르므로 배정 명령에 --llm을 붙였을 때만 쓴다.
 
 판정 기준은 "같은 사건(엄격)": 누가·무엇을·언제가 모두 같아야 같은 사건이다.
@@ -19,7 +19,7 @@ from .clustering import KST, Member, cosine_similarity
 
 log = logging.getLogger("same_event_judge")
 
-DEFAULT_MODEL = "gemini-3.1-flash-lite"
+DEFAULT_MODEL = "gpt-4.1-mini"
 MAX_MEMBERS_IN_PROMPT = 5     # 묶음이 커도 이만큼만 보여 준다 (새 기사와 덜 비슷한 기사부터)
 SUMMARY_CHARS = 200
 
@@ -116,17 +116,17 @@ class SameEventJudge:
         return verdict
 
 
-def gemini_from_env(model: str | None = None) -> Callable[[str], str]:
-    """GEMINI_API_KEY로 Gemini 호출기를 만든다 (호출 방식은 tracking.gemini와 같음: REST, JSON 응답, temperature 0)."""
+def llm_from_env(model: str | None = None) -> Callable[[str], str]:
+    """OPENAI_API_KEY로 OpenAI 호출기를 만든다 (호출 방식은 tracking.openai_client와 같음: REST, JSON 응답, temperature 0)."""
     from ..common.db import load_env
-    from ..tracking.gemini import GeminiClient
+    from ..tracking.openai_client import OpenAIClient
 
     load_env()
-    key = os.getenv("GEMINI_API_KEY")
+    key = os.getenv("OPENAI_API_KEY")
     if not key:
-        raise RuntimeError("환경변수 GEMINI_API_KEY가 없습니다. .env 또는 컨테이너 환경변수에 넣어 주세요.")
-    return GeminiClient(api_key=key, model=model or os.getenv("GEMINI_MODEL") or DEFAULT_MODEL)
+        raise RuntimeError("환경변수 OPENAI_API_KEY가 없습니다. .env 또는 컨테이너 환경변수에 넣어 주세요.")
+    return OpenAIClient(api_key=key, model=model or os.getenv("OPENAI_MODEL") or DEFAULT_MODEL)
 
 
 def judge_from_env(max_calls: int = 300, model: str | None = None) -> SameEventJudge:
-    return SameEventJudge(gemini_from_env(model), max_calls=max_calls)
+    return SameEventJudge(llm_from_env(model), max_calls=max_calls)

@@ -74,6 +74,35 @@ class WindowSelectionTest(unittest.TestCase):
         self.assertEqual(sorted(p for _, p in grouped), ["2025-12-31", "2026-03-31", "2026-06-30"])
         self.assertEqual(len(grouped[("half", "2026-06-30")]), 2)
 
+    def test_six_month_fiscal_reit_keeps_all_reports(self):
+        # 롯데리츠(2026-11-09 DART 목록): 6·12월 사업보고서, 3·9월 반기보고서
+        reit = [item(f"2024{i:02d}000001", t, "20240101") for i, t in enumerate([
+            "사업보고서 (2023.12)", "반기보고서 (2024.03)", "사업보고서 (2024.06)", "반기보고서 (2024.09)",
+            "사업보고서 (2024.12)", "반기보고서 (2025.03)", "사업보고서 (2025.06)", "반기보고서 (2025.09)",
+            "사업보고서 (2025.12)", "반기보고서 (2026.03)", "사업보고서 (2026.06)"], start=1)]
+        grouped, _ = select_window_candidates("330590", "x", {"A001": reit, "A002": reit}, "2024-01-01", "2026-06-30", 10)
+        self.assertEqual(len(grouped), 10)
+        self.assertIn(("annual", "2025-12-31"), grouped)
+        self.assertEqual(grouped[("half", "2025-09-30")][0].period_label, "반기")
+        self.assertEqual(grouped[("annual", "2026-06-30")][0].period_label, "사업보고서")
+
+    def test_three_month_fiscal_reit_keeps_every_annual(self):
+        # SK리츠: 사업보고서만 3개월마다
+        reit = [item(f"2025{i:02d}000001", f"사업보고서 ({y}.{m:02d})", "20250101")
+                for i, (y, m) in enumerate([(2024, 3), (2024, 6), (2024, 9), (2024, 12), (2025, 3), (2025, 6)], start=1)]
+        grouped, _ = select_window_candidates("395400", "x", {"A001": reit}, "2024-01-01", "2026-06-30", 10)
+        self.assertEqual(len(grouped), 6)
+        self.assertTrue(all(refs[0].period_label == "사업보고서" for refs in grouped.values()))
+
+    def test_fiscal_cycle(self):
+        from pipelines.disclosures.dart import fiscal_cycle
+        self.assertEqual(fiscal_cycle(["2024-12-31", "2025-12-31"], ["2025-06-30"]), 12)
+        self.assertEqual(fiscal_cycle(["2025-03-31"], ["2024-09-30", "2025-09-30"]), 12)  # 3월 결산
+        self.assertEqual(fiscal_cycle(["2025-06-30", "2025-12-31"], []), 6)
+        self.assertEqual(fiscal_cycle(["2025-06-30"], ["2025-09-30"]), 6)
+        self.assertEqual(fiscal_cycle(["2025-01-31", "2025-04-30", "2025-07-31"], []), 3)
+        self.assertIsNone(fiscal_period_label("quarterly", "2025-09-30", 6, cycle=6))
+
     def test_kind_inconsistent_with_fiscal_month_is_skipped(self):
         self.assertIsNone(fiscal_period_label("half", "2024-03-31", 12))
         self.assertEqual(fiscal_period_label("quarterly", "2024-09-30", 12), "3분기")

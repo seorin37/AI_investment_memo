@@ -17,7 +17,7 @@ export function Sidebar({ collapsed, onNavigate }: { collapsed: boolean; onNavig
   const user = useAuth((s) => s.user);
   const signOut = useAuth((s) => s.signOut);
   const { toggleSidebar, openModal } = useUI();
-  const { data: stocks = [] } = useMyStocks();
+  const { data: stocks = [], isError: stocksFailed, error: stocksError } = useMyStocks();
   const [open, setOpen] = useState({ mine: true, holding: true, watching: true });
   const [supportOpen, setSupportOpen] = useState(false);
 
@@ -64,6 +64,7 @@ export function Sidebar({ collapsed, onNavigate }: { collapsed: boolean; onNavig
         />
         {!collapsed && open.mine && (
           <View style={{ gap: 8 }}>
+            {stocksFailed && <Hint text={stocksError instanceof Error ? stocksError.message : '내 종목을 불러오지 못했어요'} />}
             <Group label="보유" open={open.holding} onToggle={() => setOpen((o) => ({ ...o, holding: !o.holding }))} />
             {open.holding &&
               holding.map((s) => <StockItem key={s.code} name={s.name} active={pathname === `/stocks/${s.code}`} onPress={() => go(`/stocks/${s.code}`)} />)}
@@ -121,7 +122,7 @@ export function Sidebar({ collapsed, onNavigate }: { collapsed: boolean; onNavig
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingTop: 2 }}>
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#F5A524' }} />
             <T size={11} color={colors.textMuted}>
-              목업 데이터로 실행 중
+              {env.useRealStocks ? '종목 API만 실서버 연결 중' : '목업 데이터로 실행 중'}
             </T>
           </View>
         )}
