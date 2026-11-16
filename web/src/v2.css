@@ -1,0 +1,76 @@
+/* ============================================================
+   MEMO'S 웹 시연 v2 — 11.14 멘토링 반영 (소개 · 코치마크 · 넛지)
+   모양·움직임 값은 Lucian 원본 그대로, 색은 MEMO'S 검정으로, 크기는 글자 규격 A안(최소 13)에 맞춰 키움.
+   모든 시간은 시연 도구의 속도(--k)를 따름.
+   ============================================================ */
+
+/* Lucian UX/UI Prompt #042 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#042 — 단계 진행 마법사
+   소개 3장: 본문이 나아가는 방향으로 밀려 바뀜 (±40%, .55s / .35s) · 버튼 눌림 */
+.u042-view { position: relative; overflow: hidden; }
+.u042-pane { position: absolute; inset: 0; transition: transform calc(.55s * var(--k, 1)) cubic-bezier(.2,.8,.2,1), opacity calc(.35s * var(--k, 1)) cubic-bezier(.2,.8,.2,1); }
+.u042-b { transition: transform calc(.35s * var(--k, 1)) cubic-bezier(.34,1.45,.64,1), opacity .3s, background-color .3s; }
+.u042-b:active { transform: scale(.96); }
+.u042-b[aria-disabled="true"] { opacity: .35; }
+/* 소개 그림: 그 장이 보일 때만 차례로 올라옴 */
+.u042-pane.on .v2-rise { animation: m-up var(--t-slow) var(--ease) both; animation-delay: calc(var(--i, 0) * var(--stagger) + .18s * var(--k, 1)); }
+.v2-flow { animation: v2-flow var(--d, 16s) linear infinite; }
+@keyframes v2-flow { to { transform: translateY(-50%); } }
+.v2-dotrun { animation: v2-dotrun calc(1.6s * max(var(--k, 1), 1)) cubic-bezier(.2,.8,.2,1) infinite; }
+@keyframes v2-dotrun { 0% { left: 0; opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } 100% { left: calc(100% - 6px); opacity: 0; } }
+
+/* Lucian UX/UI Prompt #197 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#197 — 화면 안내 스포트라이트
+   첫 진입 코치마크: 어두운 막의 둥근 구멍이 다음 대상으로 옮겨 가고, 말풍선이 꼬리와 함께 따라옴 */
+.u197 { position: fixed; inset: 0; z-index: 200; }
+.u197-ov { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity calc(.35s * var(--k, 1)); }
+.u197-ov path { fill: rgba(10,12,22,.66); pointer-events: visiblePainted; }
+.u197.is-tour .u197-ov { opacity: 1; }
+.u197-block { position: absolute; inset: 0; }
+.u197-ring { position: absolute; left: 0; top: 0; border-radius: 14px; box-shadow: 0 0 0 2px #fff; pointer-events: none; opacity: 0; transition: opacity calc(.3s * var(--k, 1)); }
+.u197.is-tour .u197-ring.on { opacity: 1; }
+/* 원본은 scale(1.25)로 퍼짐 — 대상이 클 때(메모 창·스튜디오) 고리가 지나치게 커져서, 작은 버튼에서와 같은 폭(약 10px)만큼만 퍼지게 함 */
+.u197-ring::after { content: ""; position: absolute; inset: -2px; border-radius: inherit; box-shadow: 0 0 0 2px #fff; animation: u197-pulse 1.5s ease-out infinite; }
+@keyframes u197-pulse { 0% { opacity: .9; inset: -2px; } 100% { opacity: 0; inset: -12px; } }
+.u197-tip { position: absolute; left: 0; top: 0; width: 320px; max-width: calc(100vw - 32px); padding: 18px 20px 16px; border-radius: 18px; background: #fff; color: #15171a; box-shadow: 0 14px 30px -10px rgba(0,0,0,.45);
+  opacity: 0; visibility: hidden; transform: translateY(6px) scale(.97);
+  transition: left calc(.45s * var(--k, 1)) cubic-bezier(.3,1.15,.4,1), top calc(.45s * var(--k, 1)) cubic-bezier(.3,1.15,.4,1), opacity calc(.25s * var(--k, 1)), transform calc(.35s * var(--k, 1)) cubic-bezier(.34,1.45,.64,1), visibility 0s calc(.3s * var(--k, 1)); }
+.u197.is-tour .u197-tip.on { opacity: 1; visibility: visible; transform: none;
+  transition: left calc(.45s * var(--k, 1)) cubic-bezier(.3,1.15,.4,1), top calc(.45s * var(--k, 1)) cubic-bezier(.3,1.15,.4,1), opacity calc(.25s * var(--k, 1)), transform calc(.35s * var(--k, 1)) cubic-bezier(.34,1.45,.64,1); }
+.u197-tip.first { transition: opacity calc(.25s * var(--k, 1)), transform calc(.35s * var(--k, 1)) cubic-bezier(.34,1.45,.64,1) !important; }
+.u197-tip::before { content: ""; position: absolute; left: var(--ax, 30px); width: 14px; height: 14px; margin-left: -7px; background: inherit; transform: rotate(45deg); border-radius: 2px; transition: left calc(.45s * var(--k, 1)) cubic-bezier(.3,1.15,.4,1); }
+.u197-tip.dn::before { top: -6px; }
+.u197-tip.up::before { bottom: -6px; }
+.u197-tip.rt::before { left: -6px; top: var(--ay, 30px); margin: -7px 0 0; }
+.u197-tip.lt::before { left: auto; right: -6px; top: var(--ay, 30px); margin: -7px 0 0; }
+.u197-tip.no::before { display: none; }
+.u197-tip small { display: block; font-size: 13px; line-height: 20px; font-weight: 700; color: #8e8a97; }
+.u197-tip b { display: block; margin-top: 2px; font-size: 20px; line-height: 29px; font-weight: 700; word-break: keep-all; }
+.u197-tip p { margin: 4px 0 14px; font-size: 15px; line-height: 23px; color: #575b63; word-break: keep-all; }
+.u197-tip .ct { animation: u197-fade calc(.35s * var(--k, 1)) ease; }
+@keyframes u197-fade { from { opacity: 0; transform: translateY(4px); } }
+.u197-tf { display: flex; align-items: center; gap: 8px; }
+.u197-dots { display: flex; gap: 5px; margin-right: auto; }
+.u197-dots i { width: 6px; height: 6px; border-radius: 3px; background: #d5d8dd; transition: width calc(.3s * var(--k, 1)) cubic-bezier(.34,1.45,.64,1), background-color .3s; }
+.u197-dots i.on { width: 18px; background: #111; }
+.u197-tf button { height: 40px; padding: 0 16px; border: 0; border-radius: 12px; background: #f2f3f4; color: #15171a; font-size: 15px; line-height: 23px; font-weight: 700; }
+.u197-tf button:hover { background: #e9eaec; }
+.u197-tf .u197-nx { background: #111; color: #fff; }
+.u197-tf .u197-nx:hover { background: #2a2a2a; }
+.u197-x { position: absolute; right: 12px; top: 12px; height: 28px; padding: 0 8px; border: 0; border-radius: 8px; background: none; color: #8e8a97; font-size: 13px; line-height: 20px; font-weight: 700; }
+.u197-x:hover { color: #15171a; background: #f2f3f4; }
+.u197-tip button:focus-visible { outline: 2px solid #15171a; outline-offset: 2px; }
+/* 다크 모드: 화면 전체가 반전되므로 어두운 막과 고리는 원래 색으로 되돌림 */
+html.dark .u197-ov, html.dark .u197-ring { filter: contrast(1.1364) invert(1) hue-rotate(180deg); }
+
+/* Lucian UX/UI Prompt #252 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#252 — 반짝 지나가며 펼쳐지는 공지 알약
+   스튜디오 넛지: 4초마다 빛줄기가 훑고 지나감(.9s), 올리면 화살표가 앞으로 밀림 */
+.u252-pl { overflow: hidden; transition: box-shadow calc(.25s * var(--k, 1)); }
+.u252-pl::after { content: ""; position: absolute; top: 0; bottom: 0; width: 60px; left: -80px; background: linear-gradient(100deg, transparent, rgba(255,255,255,.32), transparent); transform: skewX(-18deg); pointer-events: none; animation: u252-sh 4s ease-in-out 1.6s infinite; }
+@keyframes u252-sh { 0% { left: -80px; } 22.5% { left: 120%; } 100% { left: 120%; } }
+.u252-ar { flex: none; transition: transform calc(.3s * var(--k, 1)) cubic-bezier(.3,1.6,.5,1); }
+.u252-pl:hover .u252-ar, .u252-go:hover .u252-ar, .u252-go:focus-visible .u252-ar { transform: translateX(3px); }
+.u252-pl:hover { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.35), 0 12px 30px 0 rgba(20,23,26,.25); }
+/* 넛지 등장: 스낵과 같은 반동으로 아래에서 올라옴. 스낵(토스트)이 떠 있는 동안은 그 위로 비켜 섬 */
+.v2-nudge { transform: translate(-50%, 26px) scale(.95); opacity: 0; pointer-events: none; transition: transform var(--t-slow) var(--spring), opacity var(--t-fast), bottom var(--t-base) var(--ease); }
+.v2-nudge.on { transform: translate(-50%, 0); opacity: 1; pointer-events: auto; }
+html[data-snack="1"] .v2-nudge { bottom: 92px !important; }
+@media (prefers-reduced-motion: reduce) { .u252-pl::after { animation: none; } .u197-ring::after { animation: none; } }
