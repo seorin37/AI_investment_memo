@@ -178,3 +178,110 @@ def test_service_status_check_fails_closed_on_systemctl_error():
         assert "안전하게 확인" in str(exc)
     else:
         raise AssertionError("systemctl 오류를 허용했습니다.")
+
+
+def test_raw_krx_experiment_uses_one_raw_call_per_explicit_symbol(tmp_path, capsys):
+    client = FakeClient()
+    symbols = ("000020", "000080", "000660")
+
+    def krx_fetcher(trade_date):
+        assert trade_date == date(2026, 11, 3)
+        return [
+            {
+                "BAS_DD": "20261103",
+                "ISU_CD": symbol,
+                "TDD_OPNPRC": "100",
+                "TDD_HGPRC": "120",
+                "TDD_LWPRC": "90",
+                "TDD_CLSPRC": "110",
+                "ACC_TRDVOL": "7",
+            }
+            for symbol in symbols
+        ]
+
+    result = diagnostic.main(
+        [
+            "--trade-date", "2026-11-03",
+            "--slot", "fri2000",
+            "--symbols", *symbols,
+            "--raw-krx-only",
+            "--log-dir", str(tmp_path),
+        ],
+        client_factory=lambda: client,
+        krx_fetcher=krx_fetcher,
+        service_checker=lambda: [],
+        now=fixed_now,
+    )
+
+    assert result == 0
+    assert client.calls == [
+        ("daily", symbol, date(2026, 11, 3), date(2026, 11, 3), False)
+        for symbol in symbols
+    ]
+    records = [
+        json.loads(line)
+        for line in (tmp_path / "20261103.jsonl").read_text().splitlines()
+    ]
+    assert len(records) == 3
+    assert records[0]["raw_daily"]["request_params"] == {
+        "FID_COND_MRKT_DIV_CODE": "J",
+        "FID_INPUT_ISCD": "000020",
+        "FID_INPUT_DATE_1": "20261103",
+        "FID_INPUT_DATE_2": "20261103",
+        "FID_PERIOD_DIV_CODE": "D",
+        "FID_ORG_ADJ_PRC": "1",
+    }
+    assert records[0]["adjusted_daily"]["status"] == "not_requested"
+    assert records[0]["current_quote"]["status"] == "not_requested"
+    assert records[0]["krx_comparison"]["status"] == "matched"
+    assert records[0]["krx_comparison"]["close_matches"] is True
+    assert json.loads(capsys.readouterr().out)["symbols"] == list(symbols)
+
+
+def test_experiment_summary_keeps_distinct_calendar_slots_and_changes():
+    symbol = "000020"
+    records = []
+    for slot, close in (("sat0800", "110"), ("sun0800", "111")):
+        records.append(
+            {
+                "requested_trade_date": "2026-11-13",
+                "run_started_at_kst": "2026-11-14T08:00:00+09:00",
+                "run_finished_at_kst": "2026-11-14T08:00:01+09:00",
+                "slot": slot,
+                "symbol": symbol,
+                "raw_daily": {
+                    "status": "ok",
+                    "open": "100",
+                    "high": "120",
+                    "low": "90",
+                    "close": close,
+                    "volume": "7",
+                },
+                "adjusted_daily": {"status": "not_requested"},
+                "current_quote": {"status": "not_requested"},
+                "comparisons": {},
+                "krx_daily": {"status": "ok", "close": "111"},
+                "krx_comparison": {
+                    "status": "matched" if close == "111" else "mismatched",
+                    "close_matches": close == "111",
+                },
+            }
+        )
+
+    summary = diagnostic.build_summary(records, date(2026, 11, 13), (symbol,))
+
+    assert summary["symbols"][symbol]["observed_slots"] == [
+        "sat0800", "sun0800"
+    ]
+    second = summary["symbols"][symbol]["timeline"][1]
+    assert second["changes_from_previous"] == {
+        "changed_fields": ["close"],
+        "deltas": {"close": "1"},
+    }
+    assert summary["slot_summary"][0]["close_match"] == 0
+    assert summary["slot_summary"][1]["close_match"] == 1
+
+
+def test_regular_two_stage_services_are_part_of_collision_guard():
+    assert "memos-kis-two-stage-capture.service" in diagnostic.MARKET_SERVICES
+    assert "memos-kis-two-stage-finalize.service" in diagnostic.MARKET_SERVICES
