@@ -297,6 +297,7 @@ def main(argv: list[str] | None = None) -> int:
                 if rel_cfg.get("model"):
                     rel_client.model = rel_cfg["model"]
     relevance_rows: dict[tuple[str, str], tuple[str, str, str]] = {}   # (항목, ref) → (O/X, 이유 코드, 범위): candidates.csv
+    verify_client = None                                        # topic.verify_model이 있을 때 처음 쓸 때 만든다 (실험 2026-11-17)
     relevance_items: list[dict] = []
 
     names: dict[str, str] = {}
@@ -437,7 +438,16 @@ def main(argv: list[str] | None = None) -> int:
                     from .models import TopicOutcome
                     out = TopicOutcome(stop)                    # 실패 이유는 responses의 relevance.failed에 남는다
                 else:
-                    out = check_topic(item, cands, None if args.no_cards else tracker.caller(client, item), banned, tcfg, links,
+                    card_call = None if args.no_cards else tracker.caller(client, item)
+                    if card_call is not None and tcfg.get("verify_model") and tcfg["verify_model"] != client.model:
+                        # 실험(2026-11-17 비용): 검수 프롬프트만 더 싼 모델로 보낸다 (카드 생성은 그대로)
+                        from .usage import stage_of
+                        if verify_client is None:
+                            verify_client = OpenAIClient.from_env()
+                            verify_client.model = tcfg["verify_model"]
+                        ver_call = tracker.caller(verify_client, item, "verify")
+                        card_call = (lambda p, _c=card_call, _v=ver_call: _v(p) if stage_of(p) == "verify" else _c(p))
+                    out = check_topic(item, cands, card_call, banned, tcfg, links,
                                       extra_evidence=extra)          # --no-cards: 근거 준비까지만 (not_called)
                 if used_store is not None:
                     from .used_refs import card_refs

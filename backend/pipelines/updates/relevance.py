@@ -90,7 +90,10 @@ def filter_candidates(item: TrackingItem, cands: list[Candidate], floor: dict[st
     공시는 그대로, 뉴스는 최소 유사도를 넘고 판정이 O인 것만 남긴다."""
     limit = lambda c: floor.get(threshold_key(c), floor[c.kind])
     # 실험(2026-11-16): include_disclosures면 공시도 뉴스와 같이 판정해 O인 것만 남긴다 (기본 꺼짐: 공시는 그대로)
-    judged_kinds = ("news", "disclosure") if rcfg.get("include_disclosures") else ("news",)
+    # 2026-11-17 비용: "ask"면 질문(category ask)만 공시를 판정한다. 알림 항목은 매일 돌아 공시 판정 비용이 쌓인다 (운영처럼 뉴스만)
+    inc = rcfg.get("include_disclosures")
+    judge_disc = inc == "ask" and item.category == "ask" or (inc is True or inc == "all")
+    judged_kinds = ("news", "disclosure") if judge_disc else ("news",)
     passes = lambda c: bypasses_floor(c) or candidate_score(c) >= limit(c)
     over = [c for c in cands if c.kind in judged_kinds and passes(c)]
     below = sum(1 for c in cands if c.kind in judged_kinds and not passes(c))

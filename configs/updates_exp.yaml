@@ -27,14 +27,14 @@ disclosure:
     weights:
       dense: 0.6
       sparse: 0.4
-    k: 15
+    k: 8                     # 2026-11-17 비용: 15 → 8 (질문 목차 가산점·낱말 청크 자리 보장은 그대로)
     max_chunks_per_document: 3
 relevance:
   enabled: true
   prompt: configs/candidate_relevance_prompt.md
-  model: gpt-6.1-sol
-  max_text: 1200
-  include_disclosures: true
+  model: gpt-6.1-terra       # 2026-11-17 비용: 관련성 판정은 terra (sol의 절반 값). 답 생성은 sol 그대로
+  max_text: 600              # 2026-11-17 비용: 1200 → 600
+  include_disclosures: true   # 2026-11-17: 모든 항목 공시 판정 (ask만으로 줄였더니 알림 카드 13→6, terra·600자라 비용 작음)
   prompt_ask: configs/ask_relevance_prompt.md   # 실험(2026-11-17): ask 항목 전용 관련성 판정
 same_event:
   enabled: false
@@ -106,7 +106,7 @@ topic:
   evidence_mode: all
   max_disclosure_docs: 5
   max_chunks_per_disclosure: 3
-  max_total: 15
+  max_total: 8               # 2026-11-17 비용: 답 생성 근거 상한 15 → 8
   extra_rules:
   - 같은 내용이 공시와 뉴스에 있으면 공시 숫자를 쓴다.
   - 전망·예상·추정을 다룬 기사는 사실 근거로 쓰지 않는다.
@@ -135,6 +135,7 @@ topic:
   format_retry: 1
   on_check_fail: drop
   verify_call: true
+  verify_model: gpt-6.1-terra   # 2026-11-17 비용: 검수 호출은 terra (experiment가 검수 프롬프트만 이 모델로 보냄)
   title_max: 30
   max_sentences: 5
   sentence_max_chars: 90
