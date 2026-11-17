@@ -179,3 +179,17 @@ class UpdateDisclosureSearchTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SectionHintsTest(unittest.TestCase):
+    """질문 종류 → 정기보고서 목차 힌트 (실험 2026-11-17)."""
+
+    def test_hints(self):
+        from pipelines.updates.disclosure_search import section_hints
+        self.assertEqual(section_hints("유상증자 규모가 작년 영업이익이랑 비교하면?")[:1], ["증권의 발행을 통한 자금조달"])
+        self.assertIn("사업의 개요", section_hints("46시리즈 배터리가 기존이랑 뭐가 달라?"))
+        self.assertIn("매출 및 수주상황", section_hints("수출 계약이 매출로 언제 잡혀?"))
+        self.assertIn("부문", section_hints("양극재 사업 적자가 얼마나 돼?"))
+        self.assertEqual(section_hints("오늘 기분이 좋다"), [])
+        hints = section_hints("유상증자 하는 이유가 뭐야? 자금 조달 계획도")
+        self.assertEqual(len(hints), len(set(hints)))             # 겹치지 않게

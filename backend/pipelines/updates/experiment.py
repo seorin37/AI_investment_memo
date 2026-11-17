@@ -374,8 +374,10 @@ def main(argv: list[str] | None = None) -> int:
                         news_lead)
                     no_company_news += [(item, c) for c in dropped]
                 if dsearch is not None and fresh is None:       # 하이브리드는 첫 확인(조회 기간 전체)에만. 새 자료만 받기는 기존 함수
+                    from .disclosure_search import section_hints
                     discs = dsearch.recent(src, item.query_text, d_from or d_since, filters=filters,
-                                           include_subsidiary=rcfg.get("include_subsidiary", False))
+                                           include_subsidiary=rcfg.get("include_subsidiary", False),
+                                           hints=section_hints(item.memo_text) if item.category == "ask" else None)
                 else:
                     discs = recent_disclosure_candidates(conn, src, vec, d_from or d_since, fetch_k, floor["disclosure"],
                                                          floor["event"], rcfg.get("include_subsidiary", False), filters,

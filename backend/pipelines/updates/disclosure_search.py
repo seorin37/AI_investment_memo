@@ -21,7 +21,33 @@ from .candidates import (EVENT_KINDS, NEWER_VERSION, NOT_CORRECTED, PERIOD_DATE,
                          vector_literal)
 from .models import Candidate
 
-DEFAULTS = {"weights": {"dense": 0.6, "sparse": 0.4}, "k": 30, "max_chunks_per_document": 3}
+DEFAULTS = {"weights": {"dense": 0.6, "sparse": 0.4}, "k": 30, "max_chunks_per_document": 3, "section_boost": 0.25}
+
+# 실험(2026-11-17) 질문 종류 → 정기보고서 목차 힌트. 질문 문장 그대로 검색하면 답이 있는 절(예: 유상증자 내역은
+# 'III. 재무에 관한 사항 > 7. 증권의 발행을 통한 자금조달')보다 낱말만 겹치는 다른 절(대주주 거래 등)이 위에 왔다.
+# 질문(category ask)에서만, 목차가 힌트와 맞는 청크에 점수를 더한다 (LLM 호출 없음). 패턴은 질문 문장에, 힌트는 청크 section에 건다.
+SECTION_HINTS: list[tuple[str, tuple[str, ...]]] = [
+    (r"유상증자|무상증자|증자|자금\s*조달|조달한|공모|IPO|상장.*(자금|돈)|사채|CB|전환사채", ("증권의 발행을 통한 자금조달", "자금의 사용")),
+    (r"뭐야|무엇|무슨\s*사업|뭐가\s*달라|어떻게\s*달라|차이|설명해|어떤\s*사업|정확히", ("사업의 개요", "주요 제품", "사업의 내용 > 1", "사업의 내용 > 2")),
+    (r"매출.{0,6}(잡히|인식|반영)|수주|수주잔고|계약|일감", ("매출 및 수주상황",)),
+    (r"배당", ("배당에 관한 사항",)),
+    (r"인적분할|물적분할|분할|합병|자회사|종속|계열|지분|상장(한|된)?\s*(법인|자회사)", ("회사의 개요", "계열회사", "일반사항", "타법인출자")),
+    (r"소송|과징금|제재|해킹|사고|조사", ("우발", "제재", "그 밖에 투자자 보호", "소송")),
+    (r"연구|개발|기술|특허|신약|임상", ("연구개발",)),
+    (r"가입자|판매량|생산|가동|공장|설비|증설", ("생산 및 설비", "매출 및 수주상황", "주요 제품")),
+    (r"대주주|최대주주|지분율|임원|경영진", ("주주에 관한 사항", "임원")),
+    (r"(사업|부문).{0,6}(적자|흑자|손익|이익|손실|매출)|부문별", ("부문", "영업부문", "사업부문")),
+]
+
+
+def section_hints(question: str) -> list[str]:
+    """질문 문장 → 목차 힌트(겹치지 않게, 순서 유지). 맞는 규칙이 없으면 빈 목록 (점수 그대로)."""
+    import re
+    out: list[str] = []
+    for pattern, hints in SECTION_HINTS:
+        if re.search(pattern, question or ""):
+            out += [h for h in hints if h not in out]
+    return out
 
 
 def _scope_sql(latest_version_only: bool) -> str:
@@ -76,7 +102,7 @@ class DisclosureHybridSearch:
         return self._sparse[key]
 
     def recent(self, symbol: str, query: str, since: date, k: int | None = None, *, filters: dict | None = None,
-               include_subsidiary: bool = False) -> list[Candidate]:
+               include_subsidiary: bool = False, hints: list[str] | None = None) -> list[Candidate]:
         """하이브리드 점수 상위 k 청크 → Candidate. 날짜 최신순 정렬은 호출 쪽 pick_recent가 한다."""
         f = filters or {}
         latest = bool(f.get("latest_version_only"))
@@ -88,16 +114,21 @@ class DisclosureHybridSearch:
         with self.conn.cursor() as cur:
             cur.execute("SET LOCAL enable_indexscan = off")          # 종목 조건 + HNSW는 결과가 덜 나올 수 있다 (정확 계산)
             try:
-                cur.execute(f"SELECT c.rcept_no, c.chunk_index, 1 - (c.dense_embedding <=> %(q)s::vector) {_scope_sql(latest)}",
-                            params)
-                dense = {(r, int(i)): float(s) for r, i, s in cur.fetchall()}
+                cur.execute(f"SELECT c.rcept_no, c.chunk_index, 1 - (c.dense_embedding <=> %(q)s::vector), c.section"
+                            f" {_scope_sql(latest)}", params)
+                rows = cur.fetchall()
             finally:
                 cur.execute("SET LOCAL enable_indexscan TO DEFAULT")
+        dense = {(r, int(i)): float(s) for r, i, s, _ in rows}
+        sections = {(r, int(i)): sec or "" for r, i, _, sec in rows}
         sparse_rows = self._sparse_rows(symbol, since, latest, include_subsidiary)
         sparse = {key: sum(qsparse.get(str(t), 0.0) * float(w) for t, w in sparse_rows.get(key, {}).items())
                   for key in dense}
         nd, ns = _minmax(dense), _minmax(sparse)
         score = {key: self.w_dense * nd[key] + self.w_sparse * ns.get(key, 0.0) for key in dense}
+        if hints:                                              # 질문 종류에 맞는 목차의 청크에 점수를 더한다 (실험)
+            boost = float(self.cfg.get("section_boost", 0.25))
+            score = {key: s + (boost if any(h in sections[key] for h in hints) else 0.0) for key, s in score.items()}
         top = _select_top(score, k, int(self.cfg["max_chunks_per_document"]))
         if not top:
             return []
