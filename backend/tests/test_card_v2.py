@@ -301,6 +301,61 @@ class CompareTest(unittest.TestCase):
         self.assertEqual(conn.sqls, [])
 
 
+class NumberUnitTest(unittest.TestCase):
+    """숫자 단위 (2026-11-17): 십억·백억·천억·백만·천만을 읽고, 표 머리 "(단위 : 백만원)"의 맨숫자에 카드가 "원"이나 다른 단위를
+    붙이면 NUMBER. v1 카드(_check_body)·v2 카드·즉시 답변이 같은 규칙인지 셋 다 본다."""
+
+    PASS = [("706,565백만원", "706,565백만원"), ("706,565백만원", "7,065억 6,500만원"),
+            ("(단위 : 백만원) 706,565", "7,065억 6,500만원"), ("12십억원", "120억원"),
+            ("(단위 : 백만원) 706,565", "706,565"),                                   # 맨숫자는 지금처럼 원래 값으로 인정
+            ("배당금총액 14조 1034억 6648만 8000원", "14조 1034억 6648만 8000원"),       # 한국식 나눠 쓴 금액
+            ("순이익 5조7천921억원", "5조7천921억원"), ("순이익 1조9075억원", "9075억원"),
+            ("2026.11.03 매출 12.5% 늘었다", "2026년 11월 3일 매출이 12.5% 늘었어요"),     # 날짜·%
+            ("3분기 매출 706,565백만원", "3분기 매출이 706,565백만원이에요"),             # 한 자리 숫자는 비교에서 뺀다
+            ("(단위 : 백만원) 배당금총액(원): 1,500 매출 706,565", "1주당 1,500원이에요")]  # "(원)" 이름표 숫자는 원 금액
+    FAIL = [("706,565백만원", "706,565원"), ("706,565백만원", "706,565천원"),
+            ("(단위 : 백만원) 706,565", "706,565원"), ("1,234억원", "1,234원"),
+            ("(단위 : 백만원) 706,565", "706,565억원")]
+
+    @staticmethod
+    def _v2(src, said):
+        c = card(headline="SK하이닉스 실적", when="2026-10-28", facts=[(f"매출은 {said}이에요.", "E1")])
+        return "NUMBER" in check_card_v2(c, ev(disc(text=src)), [], CFG)
+
+    @staticmethod
+    def _v1(src, said):
+        from pipelines.updates.checks import check_card
+        from pipelines.updates.models import Card
+        c = Card("update", "SK하이닉스 실적", [f"매출은 {said}이에요. [E1]"], "메모의 실적 관심사와 연결돼요.",
+                 [("E1", "실적 공시")], 0.9)
+        return "NUMBER" in check_card(c, ev(disc(text=src)), [], {"min_fact_overlap": 0})
+
+    @staticmethod
+    def _answer(src, said):
+        from pipelines.updates.checks import check_answer
+        from pipelines.updates.models import Answer
+        a = Answer("answer", "none", [f"매출은 {said}이에요. [E1]"], [("E1", "실적 공시")], 0.9)
+        return "NUMBER" in check_answer(a, ev(disc(text=src)), [], {"min_fact_overlap": 0})
+
+    def test_same_rule_in_v1_v2_answer(self):
+        for name, fn in (("v2", self._v2), ("v1", self._v1), ("answer", self._answer)):
+            for src, said in self.PASS:
+                self.assertFalse(fn(src, said), f"{name} 통과해야 함: {src} ↔ {said}")
+            for src, said in self.FAIL:
+                self.assertTrue(fn(src, said), f"{name} 실패해야 함: {src} ↔ {said}")
+
+    def test_units_and_kinds(self):
+        from pipelines.updates.checks import evidence_number_sets, evidence_numbers, numbers
+        self.assertEqual(numbers("706,565백만원"), {706565000000.0})
+        self.assertEqual(numbers("5천억원 3천만원 2백억원 12십억원"), {5e11, 3e7, 2e10, 1.2e10})
+        self.assertEqual(numbers("14조 1034억 6648만 8000원"), {14103466488000.0})
+        self.assertEqual(numbers("3분기"), set())
+        ev_sets = evidence_number_sets("(단위 : 백만원) 706,565")
+        self.assertEqual(ev_sets.plain, {706565.0, 706565000000.0})
+        self.assertEqual(ev_sets.unit, {706565000000.0})
+        self.assertEqual(evidence_numbers("(단위 : 백만원) 706,565"), ev_sets.plain)   # 값만 쓰는 곳은 이전과 같다
+
+
 class PreviewTest(unittest.TestCase):
     def test_v2_card_and_compare_page(self):
         from pipelines.updates.preview import build_preview

@@ -12,8 +12,11 @@ from .models import Answer, Card, Evidence
 
 _TAG = re.compile(r"\[E\d+\]")
 _DATE = re.compile(r"(\d{4})[.\-/](\d{1,2})(?:[.\-/](\d{1,2}))?")
-_NUM = re.compile(r"(\d[\d,]*(?:\.\d+)?)\s*(조|억|만|천)?\s*(%|퍼센트)?")
-_UNIT = {"조": 1e12, "억": 1e8, "만": 1e4, "천": 1e3}
+# 단위는 긴 것부터 맞춘다 ("706,565백만원"을 706,565로, "5천억"을 5천으로 읽지 않게). 뒤의 "원"은 단위가 붙은 금액인지 가리는 데만 쓴다
+_UNIT = {"조": 1e12, "천억": 1e11, "백억": 1e10, "십억": 1e9, "억": 1e8, "천만": 1e7, "백만": 1e6, "만": 1e4, "천": 1e3}
+_NUM = re.compile(r"(\d[\d,]*(?:\.\d+)?)\s*(" + "|".join(sorted(_UNIT, key=len, reverse=True)) + r")?\s*(%|퍼센트)?(\s*원)?")
+# 표의 "배당금총액(원): 14,103,466,480,000"처럼 바로 앞 이름표가 "(원)"인 숫자는 원 단위 금액으로 본다
+_WON_LABEL = re.compile(r"\(원\)\s*[:：]?\s*$")
 # 한국식으로 나눠 쓴 금액 ("14조 1034억 6648만 8000원", "5조7천921억원", "21만7천500원")은 한 값으로 읽는다.
 # 단위 없는 마지막 숫자는 뒤에 "원"이 올 때만 붙인다 ("1,000억 2026년"의 2026을 붙이지 않게)
 _NUMK = r"\d[\d,]*(?:\.\d+)?(?:\s*천(?:\s*\d{1,3}(?!\d))?)?"
@@ -46,25 +49,36 @@ def _compound(run: str) -> list[float]:
     return [sum(v * f for v, f in parts)]
 
 
-def _scan(text: str, combine: bool) -> list[tuple[float, bool]]:
-    """(값, 단위나 %가 붙었나). combine이면 나눠 쓴 금액을 먼저 한 값으로 읽고 그 자리는 지운다."""
+UNIT, PCT, BARE = "unit", "pct", "bare"   # 숫자 종류: 단위(조·억·만·백만…)나 "원"이 붙은 금액 / % / 맨숫자
+
+
+def _scan(text: str, combine: bool) -> list[tuple[float, str]]:
+    """(값, 종류). combine이면 나눠 쓴 금액을 먼저 한 값으로 읽고 그 자리는 지운다."""
     text = _TAG.sub(" ", text or "")
     text = _DATE.sub(lambda m: " ".join(g for g in m.groups() if g), text)
     out = []
     if combine:
         def take(m):
-            out.extend((v, True) for v in _compound(m.group(0)))
+            out.extend((v, UNIT) for v in _compound(m.group(0)))
             return " "
         text = _RUN.sub(take, text)
-    for raw, unit, pct in _NUM.findall(text):
-        out.append((float(raw.replace(",", "")) * _UNIT.get(unit, 1), bool(unit or pct)))
+    for m in _NUM.finditer(text):
+        raw, unit, pct, won = m.groups()
+        kind = (UNIT if unit or won or _WON_LABEL.search(text[max(0, m.start() - 12):m.start()])
+                else PCT if pct else BARE)
+        out.append((float(raw.replace(",", "")) * _UNIT.get(unit, 1), kind))
     return out
 
 
+def _card_scan(text: str) -> list[tuple[float, str]]:
+    """답변 쪽 숫자 (값, 종류). 한 자리 맨숫자(3분기 등)는 비교에서 뺀다."""
+    return [(round(v, 6), kind) for v, kind in _scan(text, True) if v >= 10 or kind != BARE]
+
+
 def numbers(text: str) -> set[float]:
-    """글 속 숫자를 단위를 맞춰 값으로 바꾼다 (7만 = 70,000, 1.5조 = 1.5e12, 14조 1034억 = 14,103,400,000,000).
-    한 자리 일반 숫자(3분기 등)는 비교에서 뺀다."""
-    return {round(v, 6) for v, has_unit in _scan(text, True) if v >= 10 or has_unit}
+    """글 속 숫자를 단위를 맞춰 값으로 바꾼다 (7만 = 70,000, 1.5조 = 1.5e12, 14조 1034억 = 14,103,400,000,000,
+    706,565백만원 = 706,565,000,000). 한 자리 일반 숫자(3분기 등)는 비교에서 뺀다."""
+    return {v for v, _ in _card_scan(text)}
 
 
 def all_numbers(text: str) -> set[float]:
@@ -77,15 +91,46 @@ _UNIT_HEADER = re.compile(r"단위\s*[:：]?\s*(천원|백만원|억원|조원)"
 _HEADER_FACTOR = {"천원": 1e3, "백만원": 1e6, "억원": 1e8, "조원": 1e12}
 
 
-def evidence_numbers(text: str) -> set[float]:
-    """근거 글의 숫자. 표 머리에 "(단위: 천원)"이 있으면 표 안 숫자는 원 단위로 환산한 값도 함께 인정한다 (DART 재무 표).
+class EvidenceNumbers:
+    """근거 숫자 두 묶음.
+    - plain: 답변의 맨숫자·%와 대조. 근거의 모든 값 + 표 머리 환산값 (이전 evidence_numbers와 같다)
+    - unit: 답변에서 단위·"원"이 붙은 금액과 대조. 표 머리("(단위 : 백만원)")가 있으면 근거에 단위·원과 함께 적힌 값과
+      표 숫자를 머리 단위로 환산한 값만 (표의 706,565를 "706,565원"으로 쓰면 걸리게). 머리가 없으면 plain과 같다."""
+
+    __slots__ = ("plain", "unit")
+
+    def __init__(self, plain: set[float] | None = None, unit: set[float] | None = None):
+        self.plain = set(plain or ())
+        self.unit = set(unit or ())
+
+    def __ior__(self, other: "EvidenceNumbers") -> "EvidenceNumbers":
+        self.plain |= other.plain
+        self.unit |= other.unit
+        return self
+
+    def supports(self, text: str) -> bool:
+        """답변 글의 숫자가 모두 근거에 있나. 단위·원이 붙은 숫자는 unit, 나머지는 plain과 대조한다."""
+        return all(v in (self.unit if kind == UNIT else self.plain) for v, kind in _card_scan(text))
+
+
+def evidence_number_sets(text: str) -> EvidenceNumbers:
+    """근거 글의 숫자 (EvidenceNumbers). 표 머리에 "(단위: 천원)"이 있으면 표 안 숫자를 원 단위로 환산한 값도 인정한다 (DART 재무 표).
     머리가 글에 없으면 환산하지 않으므로, 모델이 근거에 없는 단위를 붙이면 그대로 걸린다."""
-    out = all_numbers(text)
+    pairs = _scan(text, True) + _scan(text, False)
+    values = {round(v, 6) for v, _ in pairs}
     m = _UNIT_HEADER.search(text or "")
-    if m:
-        factor = _HEADER_FACTOR[m.group(1)]
-        out |= {round(v * factor, 6) for v in out}
-    return out
+    if not m:
+        return EvidenceNumbers(values, values)
+    factor = _HEADER_FACTOR[m.group(1)]
+    return EvidenceNumbers(values | {round(v * factor, 6) for v in values},
+                           {round(v, 6) for v, kind in pairs if kind == UNIT}
+                           | {round(v * factor, 6) for v, kind in pairs if kind == BARE})
+
+
+def evidence_numbers(text: str) -> set[float]:
+    """근거 글의 모든 숫자 값 (표 머리 환산값 포함). 단위 구분 없이 값만 필요한 곳(compare_prior·same_event)이 쓴다.
+    답변 숫자 검사는 evidence_number_sets(...).supports를 쓴다."""
+    return evidence_number_sets(text).plain
 
 
 # 문장 끝 해요체·합니다체 어미 ("결정했어요." → "결정", "1,167원이에요" → "1,167원")
@@ -139,10 +184,10 @@ def _check_body(lines: list[str], ev_pairs: list[tuple[str, str]], extra: list[s
                 break
 
     # 숫자 대조: 답변의 모든 숫자가 넣어 준 근거에 있어야 한다
-    seen = set()
+    seen = EvidenceNumbers()
     for e in evidence:
-        seen |= evidence_numbers(f"{e.candidate.title} {e.shown_text} {e.candidate.date}")
-    if not numbers(body) <= seen:
+        seen |= evidence_number_sets(f"{e.candidate.title} {e.shown_text} {e.candidate.date}")
+    if not seen.supports(body):
         codes.append("NUMBER")
 
     # fact가 해당 근거 글과 비슷한가 (추가 검사). 해요체 어미는 근거 글에 없으니 빼고 비교하고,
@@ -266,11 +311,11 @@ def check_card_v2(card, evidence: list[Evidence], banned: list[str], cfg: dict |
     if _banned_hit(texts, banned, cfg):
         codes.append("BANNED")
     # 숫자: 문장마다 그 근거 하나에만. 제목·memo_link는 쓴 근거 전체 안에서
-    union = set()
+    union = EvidenceNumbers()
     for e in cited:
-        union |= evidence_numbers(_ev_text(e))
-    bad = any(eid in ids and not numbers(t) <= evidence_numbers(_ev_text(ids[eid])) for t, eid in facts)
-    if bad or not numbers(card.headline) <= union or not numbers(card.memo_link) <= union or not numbers(exp) <= union:
+        union |= evidence_number_sets(_ev_text(e))
+    bad = any(eid in ids and not evidence_number_sets(_ev_text(ids[eid])).supports(t) for t, eid in facts)
+    if bad or not all(union.supports(t) for t in (card.headline, card.memo_link, exp)):
         codes.append("NUMBER")
     if cfg["prediction_terms"] and prediction_text(texts, cfg):
         codes.append("PREDICTION")
