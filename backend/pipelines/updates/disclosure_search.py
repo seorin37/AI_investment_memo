@@ -21,14 +21,15 @@ from .candidates import (EVENT_KINDS, NEWER_VERSION, NOT_CORRECTED, PERIOD_DATE,
                          vector_literal)
 from .models import Candidate
 
-DEFAULTS = {"weights": {"dense": 0.6, "sparse": 0.4}, "k": 30, "max_chunks_per_document": 3, "section_boost": 0.25}
+DEFAULTS = {"weights": {"dense": 0.6, "sparse": 0.4}, "k": 30, "max_chunks_per_document": 3, "section_boost": 0.25,
+            "sparse_reserve": 3}
 
 # 실험(2026-11-17) 질문 종류 → 정기보고서 목차 힌트. 질문 문장 그대로 검색하면 답이 있는 절(예: 유상증자 내역은
 # 'III. 재무에 관한 사항 > 7. 증권의 발행을 통한 자금조달')보다 낱말만 겹치는 다른 절(대주주 거래 등)이 위에 왔다.
 # 질문(category ask)에서만, 목차가 힌트와 맞는 청크에 점수를 더한다 (LLM 호출 없음). 패턴은 질문 문장에, 힌트는 청크 section에 건다.
 SECTION_HINTS: list[tuple[str, tuple[str, ...]]] = [
     (r"유상증자|무상증자|증자|자금\s*조달|조달한|공모|IPO|상장.*(자금|돈)|사채|CB|전환사채", ("증권의 발행을 통한 자금조달", "자금의 사용")),
-    (r"뭐야|무엇|무슨\s*사업|뭐가\s*달라|어떻게\s*달라|차이|설명해|어떤\s*사업|정확히", ("사업의 개요", "주요 제품", "사업의 내용 > 1", "사업의 내용 > 2")),
+    (r"뭐야|무엇|무슨\s*사업|뭐가\s*달라|어떻게\s*달라|차이|설명해|어떤\s*사업|정확히", ("사업의 개요", "주요 제품", "사업의 내용 > 1", "사업의 내용 > 2", "기타 참고사항", "경영진단")),   # 업계·기술 설명은 7. 기타 참고사항·IV. 경영진단에 많다 (N25 MRO 정의는 경영진단)
     (r"매출.{0,6}(잡히|인식|반영)|수주|수주잔고|계약|일감", ("매출 및 수주상황",)),
     (r"배당", ("배당에 관한 사항",)),
     (r"인적분할|물적분할|분할|합병|자회사|종속|계열|지분|상장(한|된)?\s*(법인|자회사)", ("회사의 개요", "계열회사", "일반사항", "타법인출자")),
@@ -129,6 +130,12 @@ class DisclosureHybridSearch:
         if hints:                                              # 질문 종류에 맞는 목차의 청크에 점수를 더한다 (실험)
             boost = float(self.cfg.get("section_boost", 0.25))
             score = {key: s + (boost if any(h in sections[key] for h in hints) else 0.0) for key, s in score.items()}
+            # 질문 낱말이 그대로 든 청크(sparse 상위)는 자리를 보장한다 (2026-11-17 N25: 'MRO' 설명 청크가
+            # 가산점을 받은 '사업의 개요' 일반 청크들에 밀려 후보에서 빠졌다)
+            reserve = int(self.cfg.get("sparse_reserve", 3))
+            top_score = max(score.values()) if score else 0.0
+            for key in sorted((k for k, v in sparse.items() if v > 0), key=lambda k: -sparse[k])[:reserve]:
+                score[key] = max(score[key], top_score)
         top = _select_top(score, k, int(self.cfg["max_chunks_per_document"]))
         if not top:
             return []
