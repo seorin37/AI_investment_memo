@@ -17,7 +17,7 @@ import re
 from dataclasses import dataclass, field
 
 from . import autolabel
-from .evidence import threshold_key
+from .evidence import bypasses_floor, candidate_score, threshold_key
 from .models import Candidate, CreditsExhausted, TrackingItem
 
 DEFAULTS = {"enabled": True, "prompt": "configs/candidate_relevance_prompt.md", "model": None,
@@ -63,7 +63,8 @@ def judge_news(item: TrackingItem, news: list[Candidate], call, prompt: str, max
         return Relevance()
     order = list(news)
     random.Random(f"{seed}:{item.item_id}").shuffle(order)
-    cands = [{"cid": f"C{k + 1}", "kind": "news_chunks" if c.doc == "chunk" else "news", "date": c.date,
+    cands = [{"cid": f"C{k + 1}", "kind": ("공시" if c.kind == "disclosure" else "news_chunks" if c.doc == "chunk" else "news"),
+              "date": c.date,
               "title": c.title, "text": c.text} for k, c in enumerate(order)]
     meta = {"symbol": item.symbol, "description": item.description, "memo": item.memo_text}
     try:
@@ -88,16 +89,19 @@ def filter_candidates(item: TrackingItem, cands: list[Candidate], floor: dict[st
     """(카드 생성에 넘길 후보, 판정 결과, 멈출 이유). 멈출 이유: no_relevant_candidates | relevance_failed | None.
     공시는 그대로, 뉴스는 최소 유사도를 넘고 판정이 O인 것만 남긴다."""
     limit = lambda c: floor.get(threshold_key(c), floor[c.kind])
-    over = [c for c in cands if c.kind == "news" and c.similarity >= limit(c)]
-    below = sum(1 for c in cands if c.kind == "news" and c.similarity < limit(c))
+    # 실험(2026-11-16): include_disclosures면 공시도 뉴스와 같이 판정해 O인 것만 남긴다 (기본 꺼짐: 공시는 그대로)
+    judged_kinds = ("news", "disclosure") if rcfg.get("include_disclosures") else ("news",)
+    passes = lambda c: bypasses_floor(c) or candidate_score(c) >= limit(c)
+    over = [c for c in cands if c.kind in judged_kinds and passes(c)]
+    below = sum(1 for c in cands if c.kind in judged_kinds and not passes(c))
     if not over:
         return list(cands), Relevance(below_floor=below), None             # 판정할 뉴스가 없다 (공시·임계값 아래 뉴스는 그대로)
     rel = judge_news(item, over, call, prompt, rcfg.get("max_text", autolabel.MAX_TEXT), rcfg.get("seed", 7))
     rel.below_floor = below
     if rel.failed:
         return [], rel, "relevance_failed"
-    kept = [c for c in cands if c.kind != "news" or rel.labels.get(c.ref, (False, ""))[0]]
-    usable = [c for c in kept if c.similarity >= limit(c)]
+    kept = [c for c in cands if c.kind not in judged_kinds or rel.labels.get(c.ref, (False, ""))[0]]
+    usable = [c for c in kept if passes(c)]
     return kept, rel, (None if usable else "no_relevant_candidates")
 
 

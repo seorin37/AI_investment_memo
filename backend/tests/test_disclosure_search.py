@@ -9,6 +9,7 @@ import numpy as np
 from pipelines.disclosures import search, sparse_store
 from pipelines.disclosures.embedder import Encoded
 from pipelines.disclosures.search import Filters, Hit
+from pipelines.updates.disclosure_search import _minmax, _select_top
 
 
 class CombineTest(unittest.TestCase):
@@ -160,6 +161,20 @@ class HybridSearchTest(unittest.TestCase):
         with mock.patch.object(search, "dense_candidates", return_value=[]):
             search.dense_search(engine, FakeEncoder(), "q", Filters(), {"exact": False, "ef_search": 200})
         self.assertIn("SET LOCAL hnsw.ef_search = 200", engine.conn.statements)
+
+
+class UpdateDisclosureSearchTest(unittest.TestCase):
+    def test_minmax(self):
+        self.assertEqual(_minmax({"a": 2.0, "b": 4.0}), {"a": 0.0, "b": 1.0})
+        self.assertEqual(_minmax({"a": 2.0}), {"a": 0.0})
+
+    def test_top_limits_chunks_from_one_document(self):
+        scores = {("old", i): 1.0 - i / 100 for i in range(8)}
+        scores.update({("current", 0): 0.8, ("current", 1): 0.79, ("other", 0): 0.78})
+        top = _select_top(scores, 6, 3)
+        self.assertEqual(sum(r == "old" for r, _ in top), 3)
+        self.assertIn(("current", 0), top)
+        self.assertIn(("current", 1), top)
 
 
 if __name__ == "__main__":

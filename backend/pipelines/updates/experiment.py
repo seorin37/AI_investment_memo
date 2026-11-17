@@ -289,6 +289,8 @@ def main(argv: list[str] | None = None) -> int:
         else:
             from .autolabel import load_prompt
             rel_prompt = load_prompt(rel_cfg["prompt"])
+            # 실험(2026-11-17): 한 번 답하기(ask) 질문은 "질문에 답이 되는 자료인가"로 판정 (configs/ask_relevance_prompt.md)
+            rel_prompt_ask = load_prompt(rel_cfg["prompt_ask"]) if rel_cfg.get("prompt_ask") else None
             rel_client = client
             if args.response_schema or (rel_cfg.get("model") and rel_cfg["model"] != client.model):
                 rel_client = OpenAIClient.from_env()            # 카드 응답 형식을 강제하지 않는 판정용 클라이언트
@@ -335,6 +337,10 @@ def main(argv: list[str] | None = None) -> int:
         if chunk_encoder is not None:
             from .news_search import NewsChunkSearch
             searcher = NewsChunkSearch(conn, chunk_encoder, cfg["news"].get("chunks"))
+        dsearch = None                                          # 공시 하이브리드 검색 (실험, disclosure.search: hybrid, 기본 dense)
+        if chunk_encoder is not None and (cfg.get("disclosure") or {}).get("search") == "hybrid":
+            from .disclosure_search import DisclosureHybridSearch
+            dsearch = DisclosureHybridSearch(conn, chunk_encoder, (cfg.get("disclosure") or {}).get("hybrid"))
         from datetime import datetime
 
         from .candidates import drop_not_ready, fresh_window
@@ -367,9 +373,14 @@ def main(argv: list[str] | None = None) -> int:
                         news, company_terms(src_name, src, rcfg, symbol_aliases),
                         news_lead)
                     no_company_news += [(item, c) for c in dropped]
-                cands = (news + recent_disclosure_candidates(conn, src, vec, d_from or d_since, fetch_k, floor["disclosure"],
-                                                        floor["event"], rcfg.get("include_subsidiary", False), filters,
-                                                        fresh_since=fresh, pub_since=d_from))
+                if dsearch is not None and fresh is None:       # 하이브리드는 첫 확인(조회 기간 전체)에만. 새 자료만 받기는 기존 함수
+                    discs = dsearch.recent(src, item.query_text, d_from or d_since, filters=filters,
+                                           include_subsidiary=rcfg.get("include_subsidiary", False))
+                else:
+                    discs = recent_disclosure_candidates(conn, src, vec, d_from or d_since, fetch_k, floor["disclosure"],
+                                                         floor["event"], rcfg.get("include_subsidiary", False), filters,
+                                                         fresh_since=fresh, pub_since=d_from)
+                cands = news + discs
                 if fresh is not None:
                     cands, late, late_chunk = drop_not_ready(
                         conn, cands, fresh, cfg["news"]["variant"], late_chunk_since=n_since,
@@ -395,7 +406,7 @@ def main(argv: list[str] | None = None) -> int:
                     from .relevance import filter_candidates
                     sim_before = {c.ref: c.similarity for c in cands}
                     cands, rel, stop = filter_candidates(item, cands, floor, tracker.caller(rel_client, item, "relevance"),
-                                                         rel_cfg, rel_prompt)
+                                                         rel_cfg, rel_prompt_ask if (item.category == "ask" and rel_prompt_ask) else rel_prompt)
                     if writer is not None:                      # 판정한 후보 전체 → tracking_matches
                         writer.write_matches(item, rel.labels, sim_before)
                     for ref, (ok, code) in rel.labels.items():
@@ -410,6 +421,16 @@ def main(argv: list[str] | None = None) -> int:
                 if card_schema == "v2" and tcfg.get("compare_prior", True):
                     from .compare_prior import prior_evidence
                     extra = lambda ev: prior_evidence(conn, ev)          # 실적·배당 공시의 직전 같은 기간 값 (DB 읽기 전용)
+                if item.category == "ask" and tcfg.get("ask_fin_table"):   # 실험(2026-11-16): ask 질문에 재무 표 근거 (fin_table.py)
+                    from .fin_table import fin_evidence
+
+                    def extra(ev, _item=item, _base=extra):
+                        out = _base(ev) if _base else []
+                        return out + fin_evidence(conn, _item.symbol, _item.company_name or _item.symbol,
+                                                  f"{_item.memo_text} {_item.description}", len(ev) + len(out),
+                                                  rcfg.get("company_aliases"))
+                    if stop == "no_relevant_candidates":       # 관련 후보가 없어도 재무 표로 답해 본다
+                        stop, cands = None, []
                 if stop is not None:                            # 관련 후보가 없거나 판정 실패: 카드 생성 호출 없이
                     from .models import TopicOutcome
                     out = TopicOutcome(stop)                    # 실패 이유는 responses의 relevance.failed에 남는다

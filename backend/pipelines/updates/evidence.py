@@ -36,8 +36,18 @@ def shown_text(c: Candidate, max_chars: int) -> str:
     return (c.text or "")[:max_chars]
 
 
+def candidate_score(c: Candidate) -> float:
+    """검색 방식이 제공한 순위 점수. 기존 후보는 dense similarity와 같다."""
+    return c.retrieval_score if c.retrieval_score is not None else c.similarity
+
+
+def bypasses_floor(c: Candidate) -> bool:
+    """하이브리드 상위 공시는 관련성 LLM을 통과한 뒤이므로 dense 기준으로 다시 버리지 않는다."""
+    return c.kind == "disclosure" and c.retrieval == "hybrid"
+
+
 def _recent_first(c: Candidate) -> tuple[str, float]:
-    return c.date, c.similarity
+    return c.date, candidate_score(c)
 
 
 def threshold_key(c: Candidate) -> str:
@@ -54,11 +64,11 @@ def pick_recent(candidates: list[Candidate], floor: dict[str, float], strong: di
     """최신 날짜부터 하루씩 거슬러 올라가며 종류별 임계값(floor)을 넘은 후보를 모은다.
     강한 후보(종류별 strong 이상)가 처음 나온 날에서 멈춘다. 그날까지 모은 더 최신의 약한 후보도 함께 돌려주고,
     멈춘 날부터 window_days일 전까지의 후보도 더한다. 끝까지 강한 후보가 없으면 모은 것을 모두 돌려준다 (없으면 빈 목록)."""
-    passed = [c for c in candidates if c.similarity >= _limit(floor, c)]
+    passed = [c for c in candidates if bypasses_floor(c) or candidate_score(c) >= _limit(floor, c)]
     picked: list[Candidate] = []
     for day in sorted({c.date for c in passed}, reverse=True):
         picked += [c for c in passed if c.date == day]
-        if any(c.similarity >= _limit(strong, c) for c in picked):
+        if any(candidate_score(c) >= _limit(strong, c) for c in picked):
             edge = (date.fromisoformat(day) - timedelta(days=window_days)).isoformat()
             picked += [c for c in passed if edge <= c.date < day]
             break
@@ -80,8 +90,8 @@ def pick_disclosures(candidates: list[Candidate], max_disclosure: int = 2,
     legacy: 청크 max_disclosure개. all: 접수번호마다 최고 청크 max_chunks_per_disclosure개, 공시 max_disclosure_docs건."""
     if mode not in MODES:
         raise ValueError(f"evidence_mode는 {MODES} 중 하나여야 합니다: {mode}")
-    ordered = sorted(candidates, key=lambda c: -c.similarity)
-    margin = (lambda c: c.similarity - _limit(floor, c)) if floor else (lambda c: c.similarity)
+    ordered = sorted(candidates, key=lambda c: -candidate_score(c))
+    margin = (lambda c: candidate_score(c) - _limit(floor, c)) if floor else candidate_score
     discs = sorted((c for c in ordered if c.kind == "disclosure"), key=margin, reverse=True)
     if mode == "legacy":
         return discs[:max_disclosure]
@@ -120,7 +130,7 @@ def build_evidence(candidates: list[Candidate], max_disclosure: int = 2, max_new
                    max_chars_disclosure: int = 800, floor: dict[str, float] | None = None, mode: str = "legacy",
                    max_disclosure_docs: int = 5, max_chunks_per_disclosure: int = 2, max_total: int = 15) -> list[Evidence]:
     """floor가 있으면 공시는 '유사도 - 자기 최소 기준'이 큰 순으로 고른다 (없으면 유사도순). mode는 모듈 설명 2)."""
-    ordered = sorted(candidates, key=lambda c: -c.similarity)
+    ordered = sorted(candidates, key=lambda c: -candidate_score(c))
     disclosures = pick_disclosures(candidates, max_disclosure, floor, mode, max_disclosure_docs, max_chunks_per_disclosure)
     news: list[Candidate] = []
     news_cap = max_news if mode == "legacy" else max(0, max_total - len(disclosures))   # all: 공시는 자르지 않고 뉴스부터

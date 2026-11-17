@@ -82,6 +82,10 @@ def check_topic(item: TrackingItem, candidates: list[Candidate], call: Callable[
     """extra_evidence(근거 목록) → 덧붙일 근거 (v2 compare_prior.prior_evidence, DB 연결은 호출자가 가진다)."""
     cfg = cfg or {}
     floor, strong = thresholds(cfg)
+    if item.category == "ask" and cfg.get("prompt_path_ask"):
+        # 실험(2026-11-16): 한 번 답하기 질문은 '최신 강한 후보에서 멈추기'를 하지 않는다. 답이 오래된 공시(3분기 잠정실적 등)에
+        # 있어도 최근 기사에서 멈춰 빠지던 문제 (N03). 기간 전체에서 유사도 순으로 고른다 (build_evidence 상한은 그대로)
+        strong = {k: 1.01 for k in strong}
     passed = pick_recent(candidates, floor, strong, cfg.get("stop_window_days", 0))
     grouped: list[tuple[Candidate, str]] = []
     options = evidence_options(cfg)
@@ -90,7 +94,7 @@ def check_topic(item: TrackingItem, candidates: list[Candidate], call: Callable[
     evidence = build_evidence(passed, cfg.get("max_disclosure_evidence", 2), cfg.get("max_news_evidence", 3),
                               cfg.get("news_dup_similarity", 0.7), cfg.get("max_text_chars_news", 600),
                               cfg.get("max_text_chars_disclosure", 800), floor, **options)
-    if extra_evidence is not None and evidence:
+    if extra_evidence is not None and (evidence or item.category == "ask"):   # ask: 재무 표만으로도 답할 수 있다
         evidence = evidence + extra_evidence(evidence)
     schema = cfg.get("card_schema", "v1")
     out = _judge_v2(item, evidence, call, banned, cfg) if schema == "v2" else _judge(item, evidence, call, banned, cfg)
@@ -182,6 +186,11 @@ _REPAIR_REASON_V2 = {"FORMAT_TITLE": "headline이 {title_max}자(공백 포함)�
 _COMPARE_WORDS = ("대비", "보다", "비교", "전년", "작년", "직전", "지난", "전기")
 
 
+def _sentences(text: str) -> list[str]:
+    """검수용 문장 분리. `2026.05.` 같은 숫자 날짜의 마침표는 문장 끝으로 보지 않는다."""
+    return [s.strip() for s in re.split(r"(?<!\d\.)(?<=[.!?])\s+", text or "") if s.strip()]
+
+
 def _repair_prompt_v2(prompt: str, raw: str, codes: list[str], cfg: dict) -> str:
     limits = _limits(cfg)
     reasons = "\n".join("- " + _REPAIR_REASON_V2[c].format(**limits) for c in dict.fromkeys(codes))
@@ -241,6 +250,8 @@ def _judge_v2_run(item: TrackingItem, evidence, call: Callable[[str], str] | Non
     explain = bool((cfg.get("explanation") or {}).get("enabled"))
     from .judge import load_guide
     guide = load_guide(cfg["prompt_path_v2"]) if cfg.get("prompt_path_v2") else None   # 시험용 프롬프트 파일 (기본: v2 파일)
+    if item.category == "ask" and cfg.get("prompt_path_ask"):   # 실험(2026-11-16): 한 번 답하기 질문은 전용 답변 지시문
+        guide = load_guide(cfg["prompt_path_ask"])
     prompt = build_prompt(item, evidence, guide=guide, limits=_limits(cfg), rules=cfg.get("extra_rules"), schema="v2",
                           coverage=cfg.get("coverage"), explain=explain)
     try:
@@ -283,7 +294,7 @@ def _judge_v2_run(item: TrackingItem, evidence, call: Callable[[str], str] | Non
         return replace(codes, card, retried=retried)
     facts = [(t, eid) for t, eid in card.facts if eid]          # "비교 자료 없음"은 검수하지 않는다
     if cfg.get("verify_call"):
-        extra = [s.strip() for s in re.split(r"(?<=[.!?])\s+", card.explanation) if s.strip()] if explain else []
+        extra = _sentences(card.explanation) if explain else []
         vcard = Card("update", card.headline, [t for t, _ in facts] + extra, card.memo_link, [(e, t) for t, e in facts],
                      card.confidence)   # 설명 문단 문장도 근거와 대조한다
         vcodes, notes = _verify(vcard, evidence, call, item.company_name or item.symbol, item.description)
@@ -315,6 +326,9 @@ def _judge_v2_run(item: TrackingItem, evidence, call: Callable[[str], str] | Non
                         reason=card.memo_link, sources=sources, related_news=related,
                         card_schema="v2", when=card.when, facts=fact_rows, explanation=card.explanation if explain else "",
                         coverage=coverage_text(cfg.get("coverage"), any(by_id[eid].candidate.kind == "news" for _, eid in facts)))
+    if item.category == "ask" and card.calc:                  # 실험(2026-11-17): 코드가 값을 근거와 대조한 뒤 계산 (calc.py)
+        from .calc import compute
+        draft.calculations = compute(card.calc, evidence)
     return TopicOutcome("update", evidence, card, [], draft, raw, retried)
 
 

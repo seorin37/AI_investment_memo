@@ -483,6 +483,29 @@ def _ev_text(e: Evidence) -> str:
     return f"{e.candidate.title} {e.shown_text} {e.candidate.date}"
 
 
+_EARNINGS_METRIC = re.compile(r"(매출(?:액)?|영업이익|순이익|세전이익|법인세비용차감전)")
+
+
+def _earnings_basis(e: Evidence) -> str:
+    """DART 잠정실적 보고서명의 연결/별도 기준.
+
+    DART는 연결 공시 제목에 '연결재무제표기준'을 붙이고, 같은 날의
+    '영업(잠정)실적(공정공시)'은 별도 재무제표 수치다.
+    """
+    title = re.sub(r"\s+", "", e.candidate.title)
+    if e.candidate.kind == "disclosure" and e.candidate.doc == "event" and "연결재무제표기준영업" in title:
+        return "연결"
+    if e.candidate.kind == "disclosure" and e.candidate.doc == "event" and "영업(잠정)실적(공정공시)" in title:
+        return "별도"
+    # 뉴스·정기보고서는 근거에 기준이 명시된 경우에만 검사한다.
+    hay = re.sub(r"\s+", "", _ev_text(e))
+    connected = "연결기준" in hay or "연결재무제표" in hay
+    separate = "별도기준" in hay or "별도재무제표" in hay
+    if connected != separate:
+        return "연결" if connected else "별도"
+    return ""
+
+
 def check_card_v2(card, evidence: list[Evidence], banned: list[str], cfg: dict | None = None,
                   memo_text: str = "") -> list[str]:
     """v2 카드(CardV2) 검사. v1과 같은 이유 코드를 쓰고, 숫자·날짜는 facts 문장마다 그 문장의 evidence_id 근거 하나와 대조한다
@@ -534,6 +557,20 @@ def check_card_v2(card, evidence: list[Evidence], banned: list[str], cfg: dict |
     bad = any(eid in ids and not evidence_number_sets(_ev_text(ids[eid])).supports(t) for t, eid in facts)
     if bad or not (union.supports(card.headline) and union.supports(exp) and link.supports(card.memo_link)):
         codes.append("NUMBER")
+    if cfg.get("require_financial_basis"):
+        # 잠정실적 숫자는 문장마다 기준을 쓰고, 한 카드에서는 한 기준만 쓴다.
+        fact_bases: list[str] = []
+        for text, eid in facts:
+            basis = _earnings_basis(ids[eid]) if eid in ids else ""
+            if basis and _EARNINGS_METRIC.search(text) and numbers(text):
+                fact_bases.append(basis)
+                if basis not in text:
+                    codes.append("FINANCIAL_BASIS")
+        if len(set(fact_bases)) > 1:
+            codes.append("FINANCIAL_BASIS")
+        if exp and _EARNINGS_METRIC.search(exp) and numbers(exp) and len(set(fact_bases)) == 1:
+            if fact_bases[0] not in exp:
+                codes.append("FINANCIAL_BASIS")
     if cfg["prediction_terms"] and prediction_text(texts, cfg, names):
         codes.append("PREDICTION")
     # 자료 범위 밖을 전제로 한 말 ("처음", "줄곧" …): 그 말이 쓴 근거에 그대로 있을 때만 (2026-11-11, 범위 밖 원인·추이를 단정하지 않게)

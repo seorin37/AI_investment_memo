@@ -33,6 +33,8 @@ def draft_to_dict(d: UpdateDraft) -> dict:
                    merged_items=d.merged_items, coverage=d.coverage)
         if d.explanation:
             out["explanation"] = d.explanation
+        if d.calculations:                          # 실험(2026-11-17) ask 즉석 계산 (calc.py). ok인 것만 화면에 보인다
+            out["calculations"] = d.calculations
     return out
 
 

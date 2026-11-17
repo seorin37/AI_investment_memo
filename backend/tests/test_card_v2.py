@@ -10,7 +10,7 @@ from pipelines.updates.checks import check_card_v2, text_dates
 from pipelines.updates.compare_prior import korean_won, period_type, prior_evidence
 from pipelines.updates.judge import asks_why, build_prompt, parse_card_v2, wants_comparison
 from pipelines.updates.models import Candidate, CardV2, Evidence, TrackingItem, UpdateDraft
-from pipelines.updates.topic import check_topic, merge_same_source
+from pipelines.updates.topic import _sentences, check_topic, merge_same_source
 
 ITEM = TrackingItem("M01:0:0", "000660", "topic", "SK하이닉스 배당", memo_text="작년보다 배당 늘었나?",
                     company_name="SK하이닉스")
@@ -76,6 +76,27 @@ class CheckTest(unittest.TestCase):
         ok = card(facts=[("보통주 1주당 20,000원 배당을 결정했어요.", "E1"), ("주가는 2.62% 올랐어요.", "E2")],
                   sources=["E1", "E2"])
         self.assertEqual(check_card_v2(ok, e, [], CFG), [])
+
+    def test_preliminary_earnings_require_consolidated_or_separate_basis(self):
+        connected = disc(text="매출액 34,724억원 영업이익 4,513억원")
+        connected = Candidate(**{**connected.__dict__, "title": "[수시공시] 연결재무제표기준영업(잠정)실적(공정공시)"})
+        separate = disc("disc:R2#0", text="매출액 19,720억원 영업이익 3,226억원")
+        separate = Candidate(**{**separate.__dict__, "title": "[수시공시] 영업(잠정)실적(공정공시)"})
+        cfg = {**CFG, "require_financial_basis": True}
+        unlabeled = card(facts=[("3분기 매출액은 34,724억원이에요.", "E1")])
+        self.assertIn("FINANCIAL_BASIS", check_card_v2(unlabeled, ev(connected), [], cfg))
+        labeled = card(facts=[("3분기 연결 기준 매출액은 34,724억원이에요.", "E1")])
+        self.assertEqual(check_card_v2(labeled, ev(connected), [], cfg), [])
+        mixed = card(facts=[("연결 기준 매출액은 34,724억원이에요.", "E1"),
+                            ("별도 기준 영업이익은 3,226억원이에요.", "E2")], sources=["E1", "E2"])
+        self.assertIn("FINANCIAL_BASIS", check_card_v2(mixed, ev(connected, separate), [], cfg))
+        explained = card(facts=[("별도 기준 매출액은 19,720억원이에요.", "E1")],
+                         explanation="매출액은 19,720억원이에요.")
+        self.assertIn("FINANCIAL_BASIS", check_card_v2(explained, ev(separate), [],
+                                                        {**cfg, "explanation": {"enabled": True}}))
+        connected_news = news(text="연결 기준 매출액은 34,724억원이다.")
+        unlabeled_news = card(when="2026-10-29", facts=[("매출액은 34,724억원이에요.", "E1")])
+        self.assertIn("FINANCIAL_BASIS", check_card_v2(unlabeled_news, ev(connected_news), [], cfg))
 
     def test_when_and_sources(self):
         e = ev(disc())
@@ -144,6 +165,10 @@ class CheckTest(unittest.TestCase):
 
     def test_text_dates(self):
         self.assertEqual(text_dates("2026.10.28 및 2026년 11월 3일"), {"2026-10-28", "2026-11-03"})
+
+    def test_verify_sentence_split_does_not_break_numeric_date(self):
+        text = "회사는 2026.05. HBM 샘플을 출하했어요. 속도도 공개했어요."
+        self.assertEqual(_sentences(text), ["회사는 2026.05. HBM 샘플을 출하했어요.", "속도도 공개했어요."])
 
 
 class FlowTest(unittest.TestCase):

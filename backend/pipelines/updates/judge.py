@@ -165,6 +165,8 @@ def evidence_block(evidence: list[Evidence]) -> str:
         c = e.candidate
         if c.doc == "compare":                       # compare_prior: 코드가 DB에서 찾아 넣은 비교값 (v2)
             parts.append(f"{e.eid} [직전 같은 기간 비교]\n{e.shown_text}")
+        elif c.doc == "fintable":                    # 실험(2026-11-16) fin_table: ask 질문용 재무 표 (코드가 DB에서 꺼내고 비율 계산)
+            parts.append(f"{e.eid} [재무 표]\n{e.shown_text}")
         elif c.kind == "disclosure":
             parts.append(f"{e.eid} [공시]\n- 보고서명: {c.title}\n- 접수일: {c.date}\n- 원문 발췌: {e.shown_text}")
         else:
@@ -279,10 +281,12 @@ def parse_card_v2(raw: str) -> CardV2 | None:
         conf = float(data["confidence"])
     except (TypeError, ValueError):
         return None
+    calc = data.get("calc")
     return CardV2(data["status"], data["headline"].strip(), data["when"].strip(),
                   [(f["text"].strip(), str(f.get("evidence_id") or "").strip()) for f in facts],
                   data["memo_link"].strip(), [s.strip() for s in sources], conf,
-                  data["explanation"].strip() if isinstance(data.get("explanation"), str) else "")
+                  data["explanation"].strip() if isinstance(data.get("explanation"), str) else "",
+                  [c for c in calc if isinstance(c, dict)] if isinstance(calc, list) else [])
 
 
 def parse_verify(raw: str, n: int) -> list[tuple[bool, str]] | None:

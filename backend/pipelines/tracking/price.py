@@ -90,7 +90,9 @@ def _condition_after(text: str, pos: int, words: tuple[str, ...]) -> tuple[int, 
         after = pos + idx + len(word)
         if word.endswith("면"):
             return pos + idx, after
-        tail = re.match(rf"\s*(?:원\s*)?(?:으로\s*)?(?:가|내려가|올라가|떨어지|오|되|하)?\s*(?:면|{_SI}|때|언제)", text[after:])
+        # 2026-11-16 '아래로 내려오면'·'위로 올라오면'·'밑으로 빠지면'이 조건으로 잡히지 않아 가격 항목이 빠졌다 (memo_intent_eval_v1 I07)
+        tail = re.match(rf"\s*(?:원\s*)?(?:으로\s*)?(?:가|내려가|올라가|내려오|올라오|떨어지|빠지|오|되|하)?\s*(?:면|{_SI}|때|언제)",
+                        text[after:])
         if tail:
             return pos + idx, after + tail.end()
     return None
