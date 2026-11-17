@@ -4,6 +4,7 @@ import unittest
 from datetime import date
 from decimal import Decimal as D
 
+from pipelines.common.config import REPO_ROOT
 from pipelines.disclosures import financial_metrics as fmx
 from pipelines.disclosures import financials as fm
 
@@ -132,7 +133,8 @@ class InterestChainTest(unittest.TestCase):
 
 class CapitalSurplusTest(unittest.TestCase):
     def setUp(self):
-        self.rule = next(r for r in fm.load_mapping("../configs/financials_mapping.yaml").financials if r.column == "capital_surplus")
+        mapping = fm.load_mapping(REPO_ROOT / "configs" / "financials_mapping.yaml")   # 실행 위치와 무관하게 (레포 루트 기준)
+        self.rule = next(r for r in mapping.financials if r.column == "capital_surplus")
 
     def pick(self, *items):
         return fm.pick(rows_of(*items), self.rule, "000001", "2025-12-31", "f.json", ptype="annual")
