@@ -68,6 +68,44 @@ def _metrics(conn, symbol: str) -> dict:
     return {r[0]: dict(zip(METRIC_COLS, r[1:])) for r in conn.execute(METRICS_SQL, {"s": symbol}).fetchall()}
 
 
+# 사건 공시 표준 비율 (0018 disclosure_event_metrics, 2026-11-17 배포). 정정된 원본은 빼고 최근 1년 사건만
+EVENT_METRICS_SQL = """SELECT m.event_type, m.base_date, m.metrics, m.inputs FROM disclosure_event_metrics m
+WHERE m.symbol = %(s)s AND m.base_date >= CURRENT_DATE - 365 AND m.metrics <> '{}'::jsonb
+  AND NOT EXISTS (SELECT 1 FROM disclosure_events c WHERE c.corrects = m.rcept_no)
+ORDER BY m.base_date DESC, m.rcept_no DESC LIMIT %(n)s"""
+EVENT_NAMES = {"rights_offering": "유상증자", "treasury_buy": "자사주 취득", "treasury_sell": "자사주 처분",
+               "share_cancel": "주식 소각", "dividend": "배당"}
+EVENT_METRIC_LABELS = (  # (키, 이름, 단위) 단위: krw 금액 | % | 배
+    ("raise_krw", "조달 금액", "krw"), ("dilution_pct", "희석률(신주 ÷ 기존 주식)", "%"),
+    ("raise_to_prev_op_income_x", "직전 사업연도 영업이익 대비", "배"), ("raise_to_equity_pct", "자본총계 대비", "%"),
+    ("raise_to_market_cap_pct", "시가총액 대비", "%"), ("amount_krw", "금액", "krw"),
+    ("amount_to_market_cap_pct", "시가총액 대비", "%"), ("shares_pct", "상장주식 수 대비", "%"),
+    ("cancel_pct", "발행주식 대비 소각 비율", "%"), ("total_krw", "배당금 총액", "krw"),
+    ("payout_ratio_pct", "배당성향(직전 사업연도 지배주주 순이익 대비)", "%"))
+
+
+def event_lines(conn, symbol: str, limit: int = 5) -> list[str]:
+    """최근 1년 사건 공시의 표준 비율 줄. 표가 없거나(0018 전 DB) 사건이 없으면 빈 목록."""
+    if conn.execute("SELECT to_regclass('public.disclosure_event_metrics')").fetchone()[0] is None:
+        return []
+    out = []
+    for etype, base, m, inputs in conn.execute(EVENT_METRICS_SQL, {"s": symbol, "n": limit}).fetchall():
+        parts = []
+        for key, label, unit in EVENT_METRIC_LABELS:
+            if m.get(key) is None:
+                continue
+            v = m[key]
+            parts.append(f"{label} {korean_won(v) if unit == 'krw' else _num(v, unit)}")
+        basis = []
+        if "prev_op_income" in inputs and "raise_to_prev_op_income_x" in m:
+            basis.append(f"영업이익은 {inputs['prev_op_income'].get('period_end', '')[:4]}년 연간")
+        if "market_cap" in inputs and any(k.endswith("market_cap_pct") for k in m):
+            basis.append(f"시가총액은 {inputs['market_cap'].get('trade_date')} 기준")
+        out.append(f"- {base} {EVENT_NAMES.get(etype, etype)} 공시 (사건 비율 표): " + " · ".join(parts)
+                   + (f" ({', '.join(basis)})" if basis else ""))
+    return out
+
+
 def _qlabel(period_end, quarter) -> str:
     return f"{period_end.year}년 {quarter}분기" if quarter else str(period_end)
 
@@ -122,6 +160,7 @@ def company_table(conn, symbol: str, name: str, max_quarters: int = 6, max_years
         lines.append(f"- {end.year}년 연간 (사업보고서 확정치, 회계연도 끝 {end}, {_FS.get(fs, fs or '-')}): "
                      f"매출액 {korean_won(rev)} · 영업이익 {korean_won(op)} · 지배주주 순이익 {korean_won(ni)}"
                      + ("" if fin_co else f" · 연간 영업이익률 {_pct(op, rev)}") + growth)
+    lines += event_lines(conn, symbol)                     # 사건 공시 표준 비율 (0018)
     bs = conn.execute(BS_SQL, {"s": symbol}).fetchone()
     if bs:
         end, ptype, fs, ta, tl, te = bs
@@ -171,7 +210,8 @@ def fin_evidence(conn, symbol: str, name: str, question: str, start_index: int, 
     if not body:
         return []
     body = ("코드가 재무 DB에서 꺼낸 값이에요. 분기 이익률·ROE·부채비율·유동비율·당좌비율·이자보상배율·유보율은 재무 지표 표"
-            "(기업정보 페이지와 같은 값)이고, 전년 대비 증감률·연간 영업이익률·잠정 영업이익률은 코드가 계산했어요.\n" + body)
+            "(기업정보 페이지와 같은 값)이고, 전년 대비 증감률·연간 영업이익률·잠정 영업이익률은 코드가 계산했어요. "
+            "사건 공시 줄의 비율(희석률·시가총액 대비 등)은 사건 비율 표 값이에요.\n" + body)
     dates = re.findall(r"\d{4}-\d{2}-\d{2}", body)
     c = Candidate(ref=f"{FIN_PREFIX}{symbol}", kind="disclosure", symbol=symbol, date=max(dates) if dates else "",
                   title="재무 표", text=body,
