@@ -13,7 +13,7 @@ from pathlib import Path
 from sqlalchemy import bindparam, text
 from sqlalchemy.engine import Connection
 
-from . import financials_quarterly
+from . import event_metrics, financial_metrics, financials_quarterly
 from .financials import MappedPeriod
 
 
@@ -123,6 +123,11 @@ def upsert_financials(conn: Connection, period: MappedPeriod, *, keep_direct: bo
         financials_quarterly.recompute_for_period(conn, "general", period.symbol, period.period_end, period.period_type)
         # 금융 표의 연결·별도 판정도 financials.fs_div를 쓰므로 함께 (금융사가 아니면 대상 행이 없어 바로 끝남)
         financials_quarterly.recompute_for_period(conn, "fin", period.symbol, period.period_end, period.period_type)
+        # 계산 지표 (0017): 이 기간의 이자비용 원천값을 남기고 회사 전체 지표를 다시 계산
+        financial_metrics.set_interest(conn, period.symbol, period.period_end, period.period_type, period.fs_div, period.interest_cost)
+        financial_metrics.recompute_symbol(conn, period.symbol)
+        # 사건 표준 비율 (0018): 분모(직전 연도 영업이익·자본총계)가 바뀌었을 수 있어 그 회사 사건을 다시 계산
+        event_metrics.refresh(conn, symbol=period.symbol)
     return wrote
 
 
@@ -150,6 +155,7 @@ def upsert_financials_fin(conn: Connection, period: MappedPeriod, *, keep_direct
     wrote = result.rowcount == 1
     if wrote:
         financials_quarterly.recompute_for_period(conn, "fin", period.symbol, period.period_end, period.period_type)
+        financial_metrics.recompute_symbol(conn, period.symbol)  # 금융사 영업수익 대용값·이익률 (0017)
     return wrote
 
 
@@ -178,3 +184,5 @@ def update_stock_sector(conn: Connection, symbol: str, fin_type: str | None) -> 
     if fin_type is None:
         conn.execute(text("DELETE FROM financials_fin WHERE symbol = :s"), {"s": symbol})
         conn.execute(text("DELETE FROM financials_fin_quarterly WHERE symbol = :s"), {"s": symbol})  # 0016 분기값도 함께
+    if conn.execute(text("SELECT 1 FROM financial_metrics WHERE symbol = :s LIMIT 1"), {"s": symbol}).first():
+        financial_metrics.recompute_symbol(conn, symbol)  # 업종이 바뀌면 금융사 전용 값·사유가 달라진다 (0017)

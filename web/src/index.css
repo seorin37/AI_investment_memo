@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
+    --primary: 0 0% 9%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+    --accent: 0 0% 96.1%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 0 0% 3.9%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 9%;
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 0 0% 14.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 0 0% 83.1%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* 11.13 글자 규격 A안(국내 핀테크형): Pretendard + 자간 -0.02em. 서체 파일은 main.tsx에서 불러옴, 못 불러오면 Noto Sans KR */
+html, body { font-family: 'Pretendard Variable', Pretendard, 'Noto Sans KR', system-ui, sans-serif; background: #f6f6f6; color: #15171a; }
+* { letter-spacing: -0.02em; }
+input, textarea, button, select { font-family: inherit; }
+.font-mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+html, body, #root { height: 100%; }
+@keyframes a-fade { from { opacity: 0 } to { opacity: 1 } }
+@keyframes a-pop { from { opacity: 0; transform: translateY(8px) scale(.97) } to { opacity: 1; transform: none } }
+@keyframes a-slide { from { transform: translateX(32px); opacity: .4 } to { transform: none; opacity: 1 } }
+@keyframes a-rise { from { opacity: 0; transform: translateY(14px) } to { opacity: 1; transform: none } }
+@keyframes a-shimmer { 0% { background-position: -320px 0 } 100% { background-position: 320px 0 } }
+@keyframes a-draw { from { stroke-dashoffset: 48 } to { stroke-dashoffset: 0 } }
+@keyframes a-ring { from { transform: scale(.6); opacity: 0 } 60% { transform: scale(1.06); opacity: 1 } to { transform: scale(1) } }
+@keyframes a-spin { to { transform: rotate(360deg) } }
+@keyframes a-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(21,23,26,.35) } 50% { box-shadow: 0 0 0 10px rgba(21,23,26,0) } }
+@keyframes a-bar { from { transform: scaleX(0) } to { transform: scaleX(1) } }
+.anim-fade { animation: a-fade .18s ease-out both }
+.anim-pop { animation: a-pop .24s cubic-bezier(.2,.9,.3,1.2) both }
+.anim-slide { animation: a-slide .26s cubic-bezier(.2,.8,.2,1) both }
+.anim-rise { animation: a-rise .3s cubic-bezier(.2,.8,.2,1) both }
+.anim-ring { animation: a-ring .5s cubic-bezier(.2,.9,.3,1.2) both }
+.anim-spin { animation: a-spin .8s linear infinite }
+.anim-pulse { animation: a-pulse 1.8s ease-in-out infinite }
+.anim-bar { transform-origin: left; animation: a-bar .7s cubic-bezier(.2,.8,.2,1) both }
+.skel { background: linear-gradient(90deg,#efefef 0,#f7f7f7 40px,#efefef 80px) #efefef; background-size: 640px 100%; animation: a-shimmer 1.3s linear infinite; border-radius: 8px }
+.check-draw { stroke-dasharray: 48; animation: a-draw .55s .25s ease-out both }
+.stagger > * { animation: a-rise .32s cubic-bezier(.2,.8,.2,1) both }
+.stagger > *:nth-child(2) { animation-delay: .04s } .stagger > *:nth-child(3) { animation-delay: .08s } .stagger > *:nth-child(4) { animation-delay: .12s } .stagger > *:nth-child(5) { animation-delay: .16s } .stagger > *:nth-child(6) { animation-delay: .2s } .stagger > *:nth-child(n+7) { animation-delay: .24s }
+.paper-tape { position:absolute; top:-9px; left:50%; width:56px; height:18px; transform:translateX(-50%) rotate(-2deg); background:rgba(255,255,255,.55); box-shadow:0 1px 2px rgba(0,0,0,.06) }
+.paper-fold { position:absolute; right:0; bottom:0; width:22px; height:22px; background:linear-gradient(135deg, transparent 50%, rgba(0,0,0,.08) 50%); border-top-left-radius:6px }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important } }
