@@ -29,6 +29,10 @@ class TrackingItem:
 
     @property
     def query_text(self) -> str:
+        if self.category == "ask" and self.memo_text:
+            # 실험(2026-11-17): 질문은 메모 원문 + 종목명으로 검색한다. 메모 분석이 질문을 실행마다 다르게 정리해
+            # ("실적에 회계상…" / "연결 재무제표와 실적에…") 검색 후보가 바뀌고 답이 나왔다 안 나왔다 했다 (N09)
+            return " ".join(x for x in (self.company_name, self.memo_text) if x).strip()
         return " ".join([self.description, *self.keywords]).strip()
 
 
