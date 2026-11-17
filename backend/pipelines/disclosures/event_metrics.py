@@ -18,7 +18,7 @@ LLM이 계산하지 않아도 "유상증자가 영업이익의 몇 배야?", "�
 |  | amount_to_market_cap_pct | 소각 금액 / 시가총액 x100 |
 | dividend | payout_ratio_pct | 배당금 총액 / 직전 사업연도 지배주주 순이익 x100 (결산 배당만) |
 
-- 분모는 공시 접수일 '전' 값만 쓴다: 재무는 기간 끝이 접수일 전인 최신 행(financials), 시가총액은 접수일 전 최근 거래일(prices_daily).
+- 분모는 공시 접수일에 공개돼 있던 값만 쓴다: 재무는 그 기간 정기보고서가 접수일 전에 접수된 최신 행(financials, 보고서 기록이 없으면 법정 기한 경과), 시가총액은 접수일 전 최근 거래일(prices_daily).
 - 자회사 공시(is_subsidiary)는 계산하지 않는다 (subsidiary_event). 분모가 0 이하이면 non_positive_base, 없으면 missing_*.
 - 분기·중간 배당은 연간 순이익과 견주면 배당성향이 낮게 나와 계산하지 않는다 (interim_dividend).
 """
@@ -34,7 +34,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
 log = logging.getLogger(__name__)
-CALC_VERSION = "2026-11-17.1"
+CALC_VERSION = "2026-11-17.2"   # .2: 분모를 접수일에 공개된 재무로 제한
 EVENT_TYPES = ("rights_offering", "treasury_buy", "treasury_sell", "share_cancel", "dividend")
 CENT = Decimal("0.01")
 
@@ -176,10 +176,19 @@ def _is_year_end(f: dict, pa: dict) -> bool:
 EVENTS_SQL = """SELECT e.rcept_no, btrim(d.symbol) AS symbol, d.rcept_dt, e.event_type, e.fields, e.is_subsidiary
 FROM disclosure_events e JOIN disclosures d ON d.rcept_no = e.rcept_no
 WHERE e.event_type = ANY(:types) AND d.symbol IS NOT NULL{where} ORDER BY d.rcept_dt"""
-PREV_ANNUAL_SQL = """SELECT period_end, operating_income, net_income FROM financials
-WHERE symbol = :s AND period_type = 'annual' AND period_end < :d ORDER BY period_end DESC LIMIT 1"""
-EQUITY_SQL = """SELECT period_end, total_equity FROM financials
-WHERE symbol = :s AND total_equity IS NOT NULL AND period_end < :d ORDER BY period_end DESC LIMIT 1"""
+# 공시 접수일에 '이미 공개된' 재무만 쓴다 (2026-11-17 수정: 기간 끝만 보면 10-22 사건에 11-16 접수된 3분기 자본총계가 들어갔다).
+# 그 기간 정기보고서가 접수일 전에 접수됐거나, 보고서 기록이 DB에 없으면 법정 제출 기한(분기·반기 45일, 사업보고서 90일)이 지났을 때.
+_PUBLISHED = """(EXISTS (SELECT 1 FROM disclosures r WHERE btrim(r.symbol) = f.symbol AND r.period_end = f.period_end
+      AND r.kind IN ('quarterly', 'half', 'annual') AND r.rcept_dt < :d)
+  OR (NOT EXISTS (SELECT 1 FROM disclosures r WHERE btrim(r.symbol) = f.symbol AND r.period_end = f.period_end
+      AND r.kind IN ('quarterly', 'half', 'annual'))
+      AND f.period_end + (CASE WHEN f.period_type = 'annual' THEN 90 ELSE 45 END) < :d))"""
+PREV_ANNUAL_SQL = f"""SELECT f.period_end, f.operating_income, f.net_income FROM financials f
+WHERE f.symbol = :s AND f.period_type = 'annual' AND f.period_end < :d AND {_PUBLISHED}
+ORDER BY f.period_end DESC LIMIT 1"""
+EQUITY_SQL = f"""SELECT f.period_end, f.total_equity FROM financials f
+WHERE f.symbol = :s AND f.total_equity IS NOT NULL AND f.period_end < :d AND {_PUBLISHED}
+ORDER BY f.period_end DESC LIMIT 1"""
 MARKET_SQL = """SELECT trade_date, market_cap, close, listed_shares FROM prices_daily
 WHERE symbol = :s AND trade_date < :d ORDER BY trade_date DESC LIMIT 1"""
 
