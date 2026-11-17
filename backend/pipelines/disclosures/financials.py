@@ -99,6 +99,9 @@ class ColumnRule:
     not_for_fin_types: tuple[str, ...] = ()  # 이 금융 세부 업종이면 not_applicable
     ofs_ids: tuple[str, ...] = ()  # 별도재무제표(OFS)일 때만 뒤에 붙이는 후보 (비지배지분이 없어 총액 = 지배주주분)
     name_hint: str | None = None  # 후보 ID가 없을 때 표준 ID 없는 행을 검토 목록에 올릴 계정명 정규식
+    # 후보 ID가 하나도 없을 때의 대체 (0017 작업, 2026-11-16):
+    name_pattern: str | None = None  # 계정명이 이 정규식에 맞는 행이 하나의 값이면 그 값 (ID는 무엇이든)
+    sum_ids: tuple[str, ...] = ()  # 첫 ID가 있으면, 있는 것끼리 합 (예: 주식발행초과금 + 기타자본잉여금)
 
     def applies_to(self, fin_type: str | None) -> bool:
         if fin_type in self.not_for_fin_types:
@@ -147,6 +150,8 @@ def _rule(column: str, spec: dict) -> ColumnRule:
         not_for_fin_types=not_for,
         ofs_ids=tuple(spec.get("ofs_ids") or ()),
         name_hint=spec.get("name_hint"),
+        name_pattern=spec.get("name_pattern"),
+        sum_ids=tuple(spec.get("sum_ids") or ()),
     )
 
 
@@ -208,6 +213,45 @@ def _unmapped_rows(rows: list[dict], rule: ColumnRule, value_key: str) -> list[d
     ]
 
 
+def _single_value(matches: list[dict], value_key: str) -> Decimal | None:
+    values = {v for v in (parse_amount(r.get(value_key)) for r in matches) if v is not None}
+    if len(values) != 1 or any((r.get("currency") or "KRW") != "KRW" for r in matches):
+        return None
+    return values.pop()
+
+
+def _alternate_pick(rows: list[dict], rule: ColumnRule, value_key: str, source_file: str) -> Picked | None:
+    """후보 ID가 없을 때: ① 계정명 정규식(name_pattern)에 맞는 행 하나 ② sum_ids 합. 못 고르면 None."""
+    in_sj = [r for r in rows if r.get("sj_div") in rule.sj_divs]
+    if rule.name_pattern:
+        pattern = re.compile(rule.name_pattern)
+        matches = [r for r in in_sj if pattern.search(str(r.get("account_nm", "")).strip())]
+        if matches:
+            value = _single_value(matches, value_key)
+            if value is not None:
+                value = _quantize(value * rule.sign, rule.scale)
+                if value is not None:
+                    return Picked(value, {"account_nm": str(matches[0].get("account_nm", "")).strip(),
+                                          "account_id": matches[0].get("account_id"), "sj_div": matches[0].get("sj_div"),
+                                          "field": value_key, "file": source_file, "fallback": "name_pattern"})
+    if rule.sum_ids and any(r.get("account_id") == rule.sum_ids[0] for r in in_sj):
+        total, used = Decimal(0), []
+        for account_id in rule.sum_ids:
+            matches = [r for r in in_sj if r.get("account_id") == account_id]
+            if not matches:
+                continue
+            value = _single_value(matches, value_key)
+            if value is None:
+                return None  # 구성 계정 값이 모호하면 합을 만들지 않는다
+            total += value
+            used.append(account_id)
+        value = _quantize(total * rule.sign, rule.scale)
+        if value is not None:
+            return Picked(value, {"account_id": "+".join(used), "sj_div": ",".join(rule.sj_divs), "field": value_key,
+                                  "file": source_file, "fallback": "sum_ids"})
+    return None
+
+
 def pick(
     rows: list[dict], rule: ColumnRule, symbol: str, period_end: str, source_file: str,
     *, ptype: str | None = None, prior: bool = False, fs_div: str = "CFS",
@@ -242,11 +286,57 @@ def pick(
         if value is None:
             return _null(f"{account_id} 원 단위 정수가 아님", "needs_review", **where)
         return Picked(value, where)
+    alt = _alternate_pick(rows, rule, value_key, source_file)
+    if alt is not None:
+        return alt
     reason = f"후보 account_id 없음 ({', '.join(ids)}; sj_div {'/'.join(rule.sj_divs)})"
     unmapped = _unmapped_rows(rows, rule, value_key)
     if unmapped:
         return _null(reason + " — 표준 ID 없는 같은 성격 계정 있음", "no_standard_id", unmapped=unmapped, field=value_key, file=source_file)
     return _null(reason, "not_reported")
+
+
+# ── 이자비용 (financial_metrics.interest_cost, 0017) ─────────────────
+# 대부분의 일반 기업은 손익계산서 본문에 이자비용을 따로 적지 않고(금융비용 합계만) 주석에만 적는다.
+# 금융비용 합계(ifrs-full_FinanceCosts)는 외환·파생 손실까지 섞여 쓰지 않는다(2026-10-22 결정).
+# 순서: 손익계산서 이자비용 → 현금흐름표 조정 '이자비용'(발생액) → 현금흐름표 '이자의 지급'(현금, 근사). 2026-11-16 결정.
+INTEREST_CHAIN = (
+    ("income_statement", ("IS", "CIS"), ("ifrs-full_InterestExpense", "dart_InterestExpenseFinanceExpense"), False),
+    ("cf_adjustment", ("CF",), ("dart_AdjustmentsForInterestExpenses", "ifrs-full_AdjustmentsForInterestExpense"), False),
+    ("cf_paid", ("CF",), ("ifrs-full_InterestPaidClassifiedAsOperatingActivities", "ifrs-full_InterestPaidClassifiedAsFinancingActivities"), True),
+)
+
+
+def _cf_field(ptype: str, prior: bool) -> str | None:
+    """현금흐름표는 분기·반기도 thstrm_amount가 누적값이다(누적 필드 add_amount 없음). 전기는 사업보고서만."""
+    if prior:
+        return "frmtrm_amount" if ptype == "annual" else None
+    return "thstrm_amount"
+
+
+def pick_interest_cost(rows: list[dict], ptype: str, *, prior: bool = False) -> tuple[Decimal | None, str | None, str | None]:
+    """(이자비용 누적값, 근거, NULL 사유). 값은 양수(비용 크기)로 저장한다.
+
+    한 단계 안에서 후보 ID가 여러 개면: 손익·조정은 앞 후보 하나, '이자의 지급'은 영업·재무활동 분류를 합한다.
+    """
+    for basis, sj_divs, ids, sum_all in INTEREST_CHAIN:
+        key = value_field("flow", ptype, prior) if basis == "income_statement" else _cf_field(ptype, prior)
+        if key is None:
+            continue
+        found: list[Decimal] = []
+        for account_id in ids:
+            matches = [r for r in rows if r.get("account_id") == account_id and r.get("sj_div") in sj_divs]
+            if not matches:
+                continue
+            value = _single_value(matches, key)
+            if value is None:
+                return None, None, "needs_review"
+            found.append(abs(value))
+            if not sum_all:
+                break
+        if found:
+            return sum(found, Decimal(0)), basis, None
+    return None, None, "not_reported"
 
 
 # ── 주식 수·BPS ─────────────────────────────────────
@@ -431,6 +521,8 @@ class MappedPeriod:
     fin_type: str | None = None
     prior: bool = False  # 다음 해 보고서의 전기 값으로 채운 기간
     review_items: list[dict] = field(default_factory=list)  # 검토 CSV용 (review와 같은 항목, 구조화)
+    # 이자비용 누적값·근거·NULL 사유 (financial_metrics.interest_cost, 0017). 기본값은 '계산 안 함'
+    interest_cost: tuple[Decimal | None, str | None, str | None] = (None, None, "not_reported")
 
 
 def map_period(
@@ -546,4 +638,5 @@ def map_period(
         fin_type=fin_type,
         prior=prior,
         review_items=review_items,
+        interest_cost=pick_interest_cost(rows, ptype, prior=prior),
     )

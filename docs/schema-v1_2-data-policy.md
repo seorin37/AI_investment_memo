@@ -16,6 +16,9 @@
 - 분기 단독값은 같은 회계연도(결산월 기준)의 누적값 차이로 계산해 `financials_quarterly`·`financials_fin_quarterly`(0016)에 따로 저장한다. Q1=q1, Q2=half−q1, Q3=q3−half, Q4=annual−q3. 재무 적재가 원본 한 기간을 쓸 때마다 그 회계연도를 다시 계산한다. 못 구한 값은 NULL과 `null_reasons`(missing_prev_period·source_null·fs_div_mismatch·needs_review)로 남긴다. EPS·재무상태표 항목은 대상이 아니다. (2026-11-13 팀 결정으로 "코드에서 계산"에서 변경)
 - 기본 수집 범위는 2024년 이후다. 2024년 전년 동기 대비 계산에 필요한 2023년 대응 기간 값만 비교 데이터로 추가 수집할 수 있다.
 - 유보율은 `(capital_surplus + retained_earnings) / capital_stock * 100`으로 계산한다. 분모가 0이거나 필요한 값이 NULL이면 계산하지 않는다.
+- `capital_surplus`는 `dart_CapitalSurplus`를 우선 쓴다. 없으면 계정명이 '자본잉여금'인 행, 그다음 주식발행초과금(+기타자본잉여금) 합을 쓴다. '기타불입자본'으로 묶어 표시한 회사는 정의가 달라 NULL이다. (2026-11-16)
+- 기업정보 페이지 지표(영업이익률·순이익률·ROE·부채비율·유동비율·당좌비율·이자보상배율·유보율)와 금융사 영업수익 대용값은 `financial_metrics`(0017)에 계산해 저장한다. 재무 적재가 원본을 쓸 때마다 그 회사 전체를 다시 계산한다. 공식은 `backend/pipelines/disclosures/financial_metrics.py` 맨 위 표가 기준이다. 화면 표시 여부와 상관없이 모든 회사의 지표를 저장한다. (2026-11-16 결정으로 "비율은 저장하지 않는다"에서 변경)
+- 이자비용(`financial_metrics.interest_cost`)은 손익계산서 이자비용 → 현금흐름표 조정 '이자비용' → 현금흐름표 '이자의 지급' 순으로 고르고 근거를 `interest_cost_basis`에 남긴다. 금융비용 합계는 쓰지 않는다. 이자보상배율은 최근 4분기(TTM) 영업이익 ÷ TTM 이자비용이다.
 
 ### 원천값 검증 필요
 

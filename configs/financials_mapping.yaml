@@ -90,6 +90,12 @@ financials:
     sj_div: [BS]
     kind: balance
     ids: [dart_CapitalSurplus]
+    # 2026-11-16 (docs/company-page-data-gaps-plan.md 2장 A안): dart_CapitalSurplus가 없을 때
+    #  ① 계정명이 '자본잉여금'(번호·'연결' 접두 허용)인 행 — 다른 ID로 표시한 회사 (예: ifrs-full_AdditionalPaidinCapital '자본잉여금')
+    #  ② 주식발행초과금이 있으면 + 기타자본잉여금 합 — 주식발행초과금만 표시하는 회사 (삼성전자와 같은 경우, 약 124곳)
+    # '기타불입자본'(자본잉여금+자본조정)·'기타자본구성요소'로 묶은 회사는 정의가 달라 NULL로 둔다.
+    name_pattern: '^(\(?[0-9IVXⅠ-Ⅻ]+\)?\.?\s*)?(연결)?자본잉여금$'
+    sum_ids: [ifrs-full_SharePremium, dart_OtherCapitalSurplus]
     overrides:
       # 삼성전자 재무상태표에는 자본잉여금(dart_CapitalSurplus) 행이 없고 자본잉여금 성격 계정은
       # 주식발행초과금(ifrs-full_SharePremium) 하나뿐이다 (10기간 모두 BS). 사용자 결정 2026-10-22
