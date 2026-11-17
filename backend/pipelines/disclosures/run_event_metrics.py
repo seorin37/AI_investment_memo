@@ -73,6 +73,13 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(check(get_engine(), only), ensure_ascii=False, indent=1, default=str))
         return 0
     engine = get_read_engine() if args.dry_run else get_engine()   # dry-run은 읽기 전용 연결 (중앙 DB에서도 안전)
+    if not args.dry_run:
+        with engine.connect() as conn:
+            if conn.execute(text("SELECT to_regclass('public.disclosure_event_metrics')")).scalar() is None:
+                # 2026-11-17 배포 때 alembic 전에 이 명령을 먼저 돌려 첫 저장에서 긴 오류가 났다
+                print("disclosure_event_metrics 표가 없습니다. 먼저 `python -m alembic upgrade head`(0018)를 실행하세요."
+                      " 계산만 보려면 --dry-run을 쓰세요.", file=sys.stderr)
+                return 2
     print(json.dumps(run(engine, only, write=not args.dry_run), ensure_ascii=False, indent=1, default=str))
     return 0
 
