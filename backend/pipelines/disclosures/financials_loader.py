@@ -13,7 +13,7 @@ from pathlib import Path
 from sqlalchemy import bindparam, text
 from sqlalchemy.engine import Connection
 
-from . import financial_metrics, financials_quarterly
+from . import event_metrics, financial_metrics, financials_quarterly
 from .financials import MappedPeriod
 
 
@@ -126,6 +126,8 @@ def upsert_financials(conn: Connection, period: MappedPeriod, *, keep_direct: bo
         # 계산 지표 (0017): 이 기간의 이자비용 원천값을 남기고 회사 전체 지표를 다시 계산
         financial_metrics.set_interest(conn, period.symbol, period.period_end, period.period_type, period.fs_div, period.interest_cost)
         financial_metrics.recompute_symbol(conn, period.symbol)
+        # 사건 표준 비율 (0018): 분모(직전 연도 영업이익·자본총계)가 바뀌었을 수 있어 그 회사 사건을 다시 계산
+        event_metrics.refresh(conn, symbol=period.symbol)
     return wrote
 
 

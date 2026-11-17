@@ -20,6 +20,7 @@ from .events_fields import ExtractResult
 from .events_list import EventRef
 from .events_parse import PARSER_VERSION, ParsedEvent
 from .loader import load_chunks
+from . import event_metrics
 
 
 CHUNK_MAX_CHARS = 1500  # BGE-M3 max_length 1024 토큰 안쪽 (한국어 1글자 ≈ 1토큰 이하)
@@ -207,4 +208,6 @@ def upsert_event(
         chunks = event_chunks(ref, parsed)
         if chunks:
             chunks_loaded = load_chunks(conn, ref.rcept_no, chunks)
+    if status != "failed":  # 사건 표준 비율 (0018): 유상증자·자사주·소각·배당이면 계산, 실패해도 저장은 그대로
+        event_metrics.refresh(conn, rcept_no=ref.rcept_no)
     return {"corrects": corrects, "chunks_loaded": chunks_loaded}
