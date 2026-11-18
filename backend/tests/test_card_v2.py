@@ -213,6 +213,29 @@ class FlowTest(unittest.TestCase):
         out = check_topic(ITEM, [disc()], lambda p: "JSON 아님", [], CFG)
         self.assertEqual(out.checks, [{"stage": "card", "card": None, "codes": ["FORMAT_PARSE"], "raw": "JSON 아님"}])
 
+    def test_number_compare_reads_outcomes_checks(self):
+        """number_check_compare가 새 형식(outcomes.jsonl 검사 기록)을 읽어 같은 검사를 다시 돌린다."""
+        from pipelines.updates import checks
+        from pipelines.updates.experiment import _outcome
+        from pipelines.updates.number_check_compare import _runs, compare
+        unit = disc(text="(단위 : 백만원) 매출 706,565")
+        good = {"status": "update", "headline": "SK하이닉스 실적", "when": "2026-10-28",
+                "facts": [{"text": "매출은 7,065억 6,500만원이에요.", "evidence_id": "E1"}],
+                "memo_link": "메모의 '배당' 관심사와 연결돼요.", "sources": ["E1"], "confidence": 0.9}
+        wrong = {**good, "facts": [{"text": "매출은 706,565원이에요.", "evidence_id": "E1"}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp) / "run_x"
+            run.mkdir()
+            with (run / "outcomes.jsonl").open("w", encoding="utf-8") as f:
+                for payload in (good, wrong):
+                    out = check_topic(ITEM, [unit], self._call(payload), [], CFG)
+                    f.write(json.dumps(_outcome(ITEM, out), ensure_ascii=False) + "\n")
+            self.assertEqual(_runs([tmp]), [run])
+            res = compare([run], checks)                                  # 전·후 모두 지금 코드: 바뀐 카드 없음
+        s = res["stats"]
+        self.assertEqual((s["unique_cards"], s["from_outcomes"], s["same_pass"], s["same_fail"], s["no_evidence"]),
+                         (2, 2, 1, 1, 0))
+
 
 class ExplanationTest(unittest.TestCase):
     """설명 문단 시험 (topic.explanation, 2026-11-12). 기본은 꺼져 있어 기존 카드와 같다."""

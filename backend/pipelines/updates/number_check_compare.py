@@ -1,10 +1,11 @@
 """숫자 검사(checks.py) 고치기 전·후를 지난 실행 결과로 비교 (결과 파일만 읽음, DB·LLM 없음) (2026-11-17).
 
-    PYTHONPATH=backend python -m pipelines.updates.number_check_compare <실행 폴더 또는 그 위 폴더> ... [--old-rev HEAD] [--out x.md]
+    PYTHONPATH=backend python -m pipelines.updates.number_check_compare <실행 폴더 또는 그 위 폴더> ... --old-rev <고치기 전 커밋> [--out x.md]
 
-llm_io.jsonl(experiment --save-llm-io)이 있는 실행만 쓸 수 있다: 카드 프롬프트의 "# 새 근거"에 LLM이 본 근거 원문이 있고,
-응답 원문에 검사에서 떨어진 카드까지 남아 있기 때문이다. 근거 블록을 Evidence로 되살려 check_card_v2를 고치기 전 코드
-(git --old-rev의 checks.py)와 지금 코드로 각각 돌리고 NUMBER가 바뀐 카드를 보여 준다.
+읽는 곳 (실행 폴더마다 앞의 것이 있으면 그것을 쓴다):
+- outcomes.jsonl의 검사 기록 checks (2026-11-17부터 모든 실행): 검사한 카드 JSON·걸린 코드, 카드가 쓴 근거의 원문 shown_text
+- llm_io.jsonl (experiment --save-llm-io): 카드 프롬프트의 "# 새 근거" 블록과 응답 원문
+근거를 Evidence로 되살려 check_card_v2를 고치기 전 코드(git --old-rev의 checks.py)와 지금 코드로 각각 돌리고 NUMBER가 바뀐 카드를 보여 준다.
 "근거엔 단위가 붙은 숫자를 카드가 맨숫자로 쓴" 경우는 바뀌었는지와 상관없이 따로 모은다.
 """
 
@@ -112,65 +113,111 @@ def bare_vs_unit(card, evidence: list[Evidence]) -> list[tuple[str, str, str]]:
     return out
 
 
+def _jsonl(path: Path) -> list[dict]:
+    return [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines() if x.strip()] if path.is_file() else []
+
+
+def _has_checks(run: Path) -> bool:
+    return any(o.get("checks") for o in _jsonl(run / "outcomes.jsonl"))
+
+
 def _runs(paths: list[str]) -> list[Path]:
+    """llm_io.jsonl이 있거나, outcomes.jsonl에 검사 기록(checks, 2026-11-17~)이 있는 실행 폴더."""
     out = []
     for p in map(Path, paths):
-        out += [p] if (p / "llm_io.jsonl").is_file() else sorted(x.parent for x in p.rglob("llm_io.jsonl"))
+        dirs = [p] if (p / "outcomes.jsonl").is_file() or (p / "llm_io.jsonl").is_file() else sorted(
+            {x.parent for x in [*p.rglob("llm_io.jsonl"), *p.rglob("outcomes.jsonl")]})
+        out += [d for d in dirs if (d / "llm_io.jsonl").is_file() or _has_checks(d)]
     return out
+
+
+def outcome_evidence(rows: list[dict]) -> list[Evidence]:
+    """outcomes.jsonl의 evidence → Evidence. 원문(shown_text)은 검사 기록의 카드가 쓴 근거에만 있다 (검사도 그 근거만 본다)."""
+    return [Evidence(e["eid"], Candidate(e.get("ref", ""), e.get("kind", ""), "", e.get("date", ""), e.get("title", ""),
+                                         e.get("shown_text", ""), None, "", e.get("similarity", 0.0), e.get("doc", "")),
+                     e.get("shown_text", "")) for e in rows]
+
+
+def checked_cards(run: Path):
+    """(항목, 단계, 카드 JSON 문자열, 근거, 근거 원문이 있는지). 새 형식(outcomes.jsonl checks)이 있으면 그것을, 없으면 llm_io.jsonl을 쓴다."""
+    outcomes = _jsonl(run / "outcomes.jsonl")
+    if any(o.get("checks") for o in outcomes):
+        for o in outcomes:
+            evidence = outcome_evidence(o.get("evidence") or [])
+            have = {e.eid for e in evidence if e.shown_text}
+            for row in o.get("checks") or []:
+                if row["stage"] in ("card", "format_retry") and row.get("card"):
+                    used = {f.get("evidence_id") for f in row["card"].get("facts") or []} - {""}
+                    yield (o["item_id"], row["stage"], json.dumps(row["card"], ensure_ascii=False), evidence,
+                           used <= have, "outcomes")
+        return
+    for c in _jsonl(run / "llm_io.jsonl"):
+        if c["stage"] in ("card", "format_retry"):
+            evidence = parse_evidence(c["prompt"])
+            yield c["item_id"], c["stage"], c.get("response") or "", evidence, bool(evidence), "llm_io"
 
 
 def compare(runs: list[Path], old) -> dict:
     rows, bare, seen = [], [], set()
     stats = {"runs": len(runs), "card_calls": 0, "update_cards": 0, "unique_cards": 0, "fail_to_pass": 0, "pass_to_fail": 0,
-             "same_fail": 0, "same_pass": 0, "no_evidence": 0}
+             "same_fail": 0, "same_pass": 0, "no_evidence": 0, "from_outcomes": 0, "from_llm_io": 0}
     for run in runs:
-        for line in (run / "llm_io.jsonl").read_text(encoding="utf-8").splitlines():
-            c = json.loads(line)
-            if c["stage"] not in ("card", "format_retry"):
-                continue
+        for item_id, stage, raw, evidence, has_text, source in checked_cards(run):
             stats["card_calls"] += 1
-            card = parse_card_v2(c.get("response") or "")
+            card = parse_card_v2(raw)
             if card is None or card.status != "update":
                 continue
-            evidence = parse_evidence(c["prompt"])
-            if not evidence:
+            if not has_text:
                 stats["no_evidence"] += 1
                 continue
             stats["update_cards"] += 1
-            key = (c["item_id"], c.get("response"))
+            key = (item_id, raw)
             if key in seen:
                 continue
             seen.add(key)
             stats["unique_cards"] += 1
+            stats["from_" + source] += 1
             cfg = {"explanation": {"enabled": bool(card.explanation)}}
             before = "NUMBER" in old.check_card_v2(card, evidence, [], cfg)
             after = "NUMBER" in new.check_card_v2(card, evidence, [], cfg)
             stats[{(True, False): "fail_to_pass", (False, True): "pass_to_fail",
                    (True, True): "same_fail", (False, False): "same_pass"}[(before, after)]] += 1
-            where = f"{run.parent.name}/{run.name} · 항목 {c['item_id']} · {c['stage']}"
+            where = f"{run.parent.name}/{run.name} · 항목 {item_id} · {stage}"
             if before != after:
                 rows.append({"where": where, "change": "실패→통과" if before else "통과→실패",
                              "lines": _changed_lines(card, evidence, old)})
+            elif after:
+                rows.append({"where": where, "change": "그대로 실패", "lines": _changed_lines(card, evidence, old, True)})
             for b in bare_vs_unit(card, evidence):
                 bare.append({"where": where, "place": b[0], "card": b[1], "evidence": b[2],
                              "before": "NUMBER" if before else "통과", "after": "NUMBER" if after else "통과"})
     return {"stats": stats, "changed": rows, "bare": bare}
 
 
-def _changed_lines(card, evidence, old) -> list[dict]:
-    """판정이 바뀐 문장: 카드 문장 · 그 문장의 숫자 · 근거에서 같은 숫자가 나온 곳."""
+def _supports(mod, pool: list[Evidence], text: str) -> bool:
+    """mod(checks 모듈)의 규칙으로 text의 숫자가 pool 근거에 있나. 단위 구분(EvidenceNumbers)이 없는 옛 코드는 값 묶음으로 본다."""
+    texts = [f"{e.candidate.title} {e.shown_text} {e.candidate.date}" for e in pool]
+    if hasattr(mod, "evidence_number_sets"):
+        seen = mod.EvidenceNumbers()
+        for t in texts:
+            seen |= mod.evidence_number_sets(t)
+        return seen.supports(text)
+    return mod.numbers(text) <= set().union(*(mod.evidence_numbers(t) for t in texts))
+
+
+def _changed_lines(card, evidence, old, keep_fail: bool = False) -> list[dict]:
+    """판정이 바뀐 문장 (keep_fail이면 지금 코드로 걸리는 문장): 카드 문장 · 그 문장의 숫자 · 근거에서 같은 숫자가 나온 곳."""
     ids = {e.eid: e for e in evidence}
+    cited = [ids[i] for i in dict.fromkeys([*(eid for _, eid in card.facts), *card.sources]) if i in ids]
     out = []
     for where, t in _texts(card):
         eid = where.split()[-1] if where.startswith("사실") else ""
-        pool = [ids[eid]] if eid in ids else evidence
-        ev_old = set().union(*(old.evidence_numbers(f"{e.candidate.title} {e.shown_text} {e.candidate.date}") for e in pool))
-        ok_old = old.numbers(t) <= ev_old
-        ev_new = new.EvidenceNumbers()
-        for e in pool:
-            ev_new |= new.evidence_number_sets(f"{e.candidate.title} {e.shown_text} {e.candidate.date}")
-        ok_new = ev_new.supports(t)
-        if ok_old == ok_new:
+        pool = [ids[eid]] if eid in ids else cited      # 제목·메모 연결·설명은 검사처럼 카드가 쓴 근거하고만 대조
+
+        ok_old, ok_new = _supports(old, pool, t), _supports(new, pool, t)
+        if ok_old == ok_new and not keep_fail:
+            continue
+        if keep_fail and ok_new:
             continue
         nums = _raw_numbers(t)
         hits = []
@@ -192,7 +239,8 @@ def to_markdown(res: dict, runs: list[Path], rev: str) -> str:
     lines = [f"# 숫자 검사 고치기 전({rev}) · 후 비교", "",
              f"- 실행 {s['runs']}개, 카드 호출 {s['card_calls']}회, update 카드 {s['update_cards']}장(같은 응답 중복 제외 {s['unique_cards']}장)",
              f"- 실패→통과 {s['fail_to_pass']} · 통과→실패 {s['pass_to_fail']} · 그대로 실패 {s['same_fail']} · 그대로 통과 {s['same_pass']}",
-             f"- 근거 블록을 못 찾은 카드 {s['no_evidence']}", "", "## 판정이 바뀐 카드", ""]
+             f"- 읽은 곳: outcomes.jsonl 검사 기록 {s['from_outcomes']}장 · llm_io.jsonl {s['from_llm_io']}장",
+             f"- 근거 원문이 없어 뺀 카드 {s['no_evidence']}", "", "## 판정이 바뀐 카드 · 지금 코드로 걸리는 카드", ""]
     if not res["changed"]:
         lines.append("(없음)")
     for r in res["changed"]:
@@ -214,7 +262,7 @@ def to_markdown(res: dict, runs: list[Path], rev: str) -> str:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="숫자 검사 고치기 전·후를 지난 실행(llm_io.jsonl)으로 비교")
     ap.add_argument("paths", nargs="+")
-    ap.add_argument("--old-rev", default="HEAD")
+    ap.add_argument("--old-rev", required=True, help="고치기 전 checks.py가 있는 git 커밋 (예: 36dd9dc~1)")
     ap.add_argument("--out")
     args = ap.parse_args(argv)
     runs = _runs(args.paths)
