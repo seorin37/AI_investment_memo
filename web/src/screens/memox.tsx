@@ -152,7 +152,7 @@ export function useMemoActions() {
     const ids = new Set(list.map((m) => m.id));
     let backup: Memo[] = [];
     setMemos((a) => { backup = a; return a.filter((m) => !ids.has(m.id)); });
-    setTrash((t) => [...list.map((m) => ({ icon: "memo", t: m.title, s: `${stocks.find((s) => s.code === m.code)?.name ?? ""} / 메모 · 방금 삭제`, type: "메모" })), ...t]);
+    setTrash((t) => [...list.map((m) => ({ icon: "memo", t: m.title, s: `${stocks.find((s) => s.code === m.code)?.name ?? ""} / 메모 · 방금 삭제`, type: "메모", memo: m })), ...t]);
     snack(list.length > 1 ? `메모 ${list.length}개를 휴지통으로 옮겼어요` : "메모를 휴지통으로 옮겼어요", { undo: () => { setMemos(backup); setTrash((t) => t.slice(list.length)); } });
   };
   const pin = (list: Memo[], on: boolean) => {
