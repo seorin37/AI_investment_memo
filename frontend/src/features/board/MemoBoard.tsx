@@ -282,9 +282,12 @@ function BoardItem({ it, box, visible, view, modeV, selected, selecting, flash, 
   const gridO = modeV.interpolate({ inputRange: [0, 0.35], outputRange: [1, 0], extrapolate: 'clamp' });
   const listO = modeV.interpolate({ inputRange: [0.4, 0.8], outputRange: [0, 1], extrapolate: 'clamp' });
   const label = it.kind === 'checklist' ? `${it.title}, ${it.items.filter((v) => v.done).length}/${it.items.length} 완료` : it.title;
+  /* 목록 보기 메모 줄: 누르기를 SwipeRow 안쪽 Pressable 이 받는다 (투자 기록 목록과 같은 구조).
+     바깥 Pressable 이 먼저 터치를 잡으면 RN 은 그 안쪽(SwipeRow)에 밀기를 넘기지 않아서, 옆으로 밀어도 눌림으로 처리됐음 (11.18 에뮬레이터) */
+  const pressInside = view === 'list' && it.kind === 'memo';
   return (
     <Animated.View pointerEvents={visible ? 'auto' : 'none'} style={{ position: 'absolute', left: x, top: y, width: w, height: h, opacity: o }}>
-      <Pressable style={StyleSheet.absoluteFill} onPress={onPress} onLongPress={onLongPress} delayLongPress={480} accessibilityLabel={label} accessibilityState={{ selected }}>
+      <Pressable style={StyleSheet.absoluteFill} disabled={pressInside} onPress={onPress} onLongPress={onLongPress} delayLongPress={480} accessibilityLabel={label} accessibilityState={{ selected }}>
         <Animated.View pointerEvents={view === 'grid' ? 'box-none' : 'none'} style={[StyleSheet.absoluteFill, { opacity: gridO }]}>
           <GridFace it={it} selected={selected} selecting={selecting} onToggleItem={onToggleItem} />
         </Animated.View>
@@ -296,7 +299,9 @@ function BoardItem({ it, box, visible, view, modeV, selected, selecting, flash, 
                 { key: 'ai', label: it.ai_linked ? 'AI 끄기' : 'AI 연결', icon: 'plug', color: C.accent, onPress: swipe.onAi },
                 { key: 'del', label: '휴지통', icon: 'trash', color: C.red, onPress: swipe.onDelete },
               ]}>
-              <ListFace it={it} selected={selected} selecting={selecting} />
+              <Pressable style={st.flex} onPress={onPress} onLongPress={onLongPress} delayLongPress={480} accessibilityLabel={label} accessibilityState={{ selected }}>
+                <ListFace it={it} selected={selected} selecting={selecting} />
+              </Pressable>
             </SwipeRow>
           ) : <ListFace it={it} selected={selected} selecting={selecting} />}
         </Animated.View>

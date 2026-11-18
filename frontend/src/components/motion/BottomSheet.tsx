@@ -54,6 +54,9 @@ export function BottomSheet({ open, onClose, children, drag = 'sheet', style, ac
   }, [open, mounted, h, y, scrim]);
 
   const pan = useRef(PanResponder.create({
+    /* 시트 빈 곳을 짚으면 처음부터 시트가 터치를 잡는다. 안 잡으면 시트 바깥(위쪽) 뷰가 먼저 잡아서 끌기가 시트까지 안 오고,
+       에뮬레이터에서 끌어도 안 움직였음 (11.18). 색 버튼 같은 안쪽 Pressable 은 먼저 물어보므로 누르기는 그대로 */
+    onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 4 && Math.abs(g.dy) > Math.abs(g.dx),
     onPanResponderMove: (_, g) => { y.setValue(g.dy > 0 ? g.dy : g.dy / 4); },
     onPanResponderRelease: (_, g) => {
