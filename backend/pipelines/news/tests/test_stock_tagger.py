@@ -16,7 +16,7 @@ CFG = {"aliases": {"035420": ["네이버"], "000660": ["하이닉스"], "093050"
        "sports_names": ["두산", "DB", "SK"], "sports_words": ["프로야구", "농구", "선수", "대표팀"],
        "prefix_check_max_len": 3, "title_only_words": ["증권"],
        "context_after_window": 10, "title_only_names": ["네이버", "NAVER"],
-       "skip_title_patterns": [r"\[(인사|부고|동정|게시판)\]"],
+       "skip_title_patterns": [r"\[(인사|부고|동정)\]"],
        "group_list_words": ["삼성", "현대차", "SK", "LG", "LS", "두산"], "group_list_tail": ["그룹", "대기업", "재계"]}
 RULES = st.build_rules(STOCKS, CFG, {"SK스퀘어", "SK하이닉스"})
 
@@ -149,6 +149,36 @@ def test_precision_round3_with_project_config():     # 2026-11-18 정밀도 표�
     assert t("DB證, 스피어 랩스와 STO 실증사업 맞손") == {"016610"}
     assert t("한양증권, 한국PR대상 IR 부문 우수상") == set()                                    # 낱말 안의 대상
     assert t("한화, 3분기 실적 발표") == {"000880"} and t("LG, 3분기 실적 발표") == {"003550"}
+
+
+def test_recall_fixes_with_project_config():         # 2026-11-18 재현율 개선 6개 (실제 설정)
+    cfg = yaml.safe_load(Path("configs/stock_aliases.yaml").read_text(encoding="utf-8"))
+    stocks = {"035420": "NAVER", "000670": "영풍", "003550": "LG", "024110": "기업은행", "000720": "현대건설",
+              "285130": "SK케미칼", "066570": "LG전자"}
+    r = st.build_rules(stocks, cfg, {"영풍제지"})
+    t = lambda title, body=None: {h.symbol for h in st.match_article(title, body, r)}   # noqa: E731
+    pad = "업계 소식이다. " * 2
+    # ① [게시판] 제목은 건너뛰지 않는다 ([인사]는 그대로)
+    assert t("[게시판] SK케미칼, KCGS ESG 평가서 5년 연속 A+ 등급") == {"285130"}
+    assert t("[인사] SK케미칼 ; LG전자") == set()
+    # ② 본문의 네이버는 바로 뒤 주식 낱말·종목코드가 있을 때만
+    assert t("주요공시", pad + "네이버(035420), 검색부터 예약·결제까지 AI가 대신") == {"035420"}
+    assert t("포털 동향", pad + "네이버 주가가 이틀 연속 올랐다. 네이버 실적 발표를 앞두고 있다.") == {"035420"}
+    assert t("이벤트", pad + "별도 네이버 폼을 통해 신청하면 된다. 네이버 스마트스토어도 있다.") == set()
+    # ③ 영풍은 문맥 없이도, 영풍문고는 아니다
+    assert t("고려아연 판결", pad + "영풍·MBK파트너스는 경영권 확보를 위해 소송을 냈다.") == {"000670"}
+    assert t("서점가", pad + "영풍문고는 연말 행사를 연다. 영풍문고 매장도 늘린다.") == set()
+    # ④ 그룹 이름 뒤 제품·매장 낱말
+    assert t("“홈시네마의 대중화”… 블룸즈베리랩, 전국 LG 베스트샵 공식 입점") == set()
+    assert t("LG 올레드 TV, 유럽 7개국 평가서 1위") == set()
+    assert t("LG, 3분기 실적 발표") == {"003550"}
+    # ⑤ 띄어 쓴 시설 이름
+    assert t("음악회", pad + "예술의전당 IBK기업은행 챔버홀에서 열린 음악회") == set()
+    assert t("연극", pad + "LG 시그니처홀에서 초연된다.") == set()
+    # ⑥ 스포츠 문맥이 한 번이라도 있으면 그 구단 이름은 기사 전체에서 뺀다
+    body = "V리그 여자부 현대건설과의 방문 경기를 앞두고 연승을 이어갔다. " + "선수 소식이다. " * 15 + "현대건설도 분위기가 좋다."
+    assert t("김영래 감독 인터뷰", body) == set()
+    assert t("현대건설, 한강변에 5000가구 대단지") == {"000720"}                       # 회사 기사는 그대로
 
 
 def test_project_config_loads():

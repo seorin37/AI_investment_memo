@@ -71,6 +71,9 @@ class Rules:
     group_list_tail: tuple[str, ...] = ()                    # 나열 끝에 오면 그룹 이야기 ("…LG그룹", "… 등 주요 대기업")
     sports_re: re.Pattern | None = None                      # sports_words (정규식)
     name_suffix_block: tuple[str, ...] = ()                  # 이름 바로 뒤에 붙으면 다른 기관 ("한국공항공사", "기업은행챔버홀")
+    spaced_suffix_re: re.Pattern | None = None               # 한 칸 띄고 오는 시설 이름 ("기업은행 챔버홀", "LG 시그니처홀")
+    group_product_re: re.Pattern | None = None               # 그룹 이름 뒤 제품·매장 낱말 ("LG 올레드", "LG 베스트샵")
+    body_with_stock_words: set[str] = field(default_factory=set)   # 제목 전용이지만 본문에서 바로 뒤 주식 낱말이면 붙이는 이름 (네이버)
 
 
 @dataclass(frozen=True)
@@ -132,7 +135,15 @@ def build_rules(stocks: dict[str, str], cfg: dict, dart_names: set[str] = frozen
                  group_list_words=tuple(sorted(set(cfg.get("group_list_words") or []), key=len, reverse=True)),
                  group_list_tail=tuple(cfg.get("group_list_tail") or ()),
                  sports_re=re.compile("|".join(f"(?:{w})" for w in (cfg.get("sports_words") or []))) if cfg.get("sports_words") else None,
-                 name_suffix_block=tuple(cfg.get("name_suffix_block") or ()))
+                 name_suffix_block=tuple(cfg.get("name_suffix_block") or ()),
+                 spaced_suffix_re=_words_re(cfg.get("spaced_suffix_block"), r"\s"),
+                 group_product_re=_words_re(cfg.get("group_product_words"), r"\s?"),
+                 body_with_stock_words=set(cfg.get("title_only_names") or []) & set(names))
+
+
+def _words_re(words, prefix: str) -> re.Pattern | None:
+    """prefix + (낱말 중 하나). 낱말이 없으면 None."""
+    return re.compile(prefix + "(?:" + "|".join(map(re.escape, sorted(words, key=len, reverse=True))) + ")") if words else None
 
 
 def _latin_ok(text: str, a: int, b: int, name: str) -> bool:
@@ -165,11 +176,25 @@ def find(text: str, rules: Rules) -> list[tuple[int, int, str]]:
 _CODE_AFTER = re.compile(r"\s*[(\[]\s*\d{6}\s*[)\]]")      # "대상(001680)"
 
 
+def _sports_at(text: str, a: int, b: int, rules: Rules) -> bool:
+    """이 자리 앞뒤 context_window자 안에 스포츠 낱말이 있는가."""
+    w = rules.context_window
+    around = text[max(0, a - w):a] + " " + text[b:b + w]
+    return bool(rules.sports_re.search(around)) if rules.sports_re else any(word in around for word in rules.sports_words)
+
+
+def _stock_after(text: str, b: int, rules: Rules) -> bool:
+    """이름 바로 뒤 context_after_window자 안에 주식 낱말이나 종목코드가 있는가 ("네이버 주가", "네이버(035420)")."""
+    return bool(_CODE_AFTER.match(text, b)) or any(w in text[b:b + rules.context_after_window] for w in rules.context_words)
+
+
 def _group_talk(text: str, a: int, b: int, name: str, rules: Rules) -> bool:
     """그룹 이름 자리가 그룹 이야기인가 (2026-11-18): 뒤에 영문 계열사 낱말 / 그룹 이름 나열 / 나열 끝의 그룹·대기업."""
     after = text[b:b + 30]
     if re.match(r"\s?[A-Za-z]", after):
         return True                                          # "LG CNS", "SK C&C", "SK AX", "SK u타워": 영문 계열사·시설
+    if rules.group_product_re and rules.group_product_re.match(after):
+        return True                                          # "LG 올레드 TV", "LG 베스트샵": 계열사 제품·매장 브랜드
     if text[max(0, a - 1):a] == "범":
         return True                                          # "범LG家": 그룹 일가
     words = "|".join(map(re.escape, rules.group_list_words))
@@ -187,13 +212,12 @@ def _valid(text: str, a: int, b: int, name: str, rules: Rules, in_title: bool = 
         return False                                         # "경영인대상", "평생학습대상": 다른 낱말의 뒷부분
     if any(text.startswith(s, b) for s in rules.name_suffix_block):
         return False                                         # "한국공항공사", "IBK기업은행챔버홀": 다른 기관·시설
+    if rules.spaced_suffix_re and rules.spaced_suffix_re.match(text, b):
+        return False                                         # "IBK기업은행 챔버홀", "LG 시그니처홀": 띄어 쓴 시설 이름
     if b < len(text) and text[b].isdigit() and not name[-1].isdigit():
         return False                                         # "이마트24": 숫자가 붙은 다른 회사 이름
-    if name in rules.sports_names:
-        w = rules.context_window
-        around = text[max(0, a - w):a] + " " + text[b:b + w]
-        if (rules.sports_re.search(around) if rules.sports_re else any(word in around for word in rules.sports_words)):
-            return False                                     # 프로야구·농구·배구 구단
+    if name in rules.sports_names and _sports_at(text, a, b, rules):
+        return False                                         # 프로야구·농구·배구 구단
     if name in rules.group_names:
         after = text[b:b + 6].lstrip()
         if any(after.startswith(s) for s in rules.group_suffixes):
@@ -225,15 +249,21 @@ def match_article(title: str, body: str | None, rules: Rules) -> list[Hit]:
     hits: dict[str, Hit] = {}
     if any(p.search(title or "") for p in rules.skip_title):
         return []                                            # [인사]·[부고]: 계열사를 여러 개 나열한다
+    # 스포츠 문맥이 한 자리라도 있는 구단 이름은 기사 전체에서 뺀다 (배구 기사 뒤쪽의 "현대건설도 분위기…")
+    sports = {name for text in (title or "", body or "") for a, b, name in find(text, rules)
+              if name in rules.sports_names and _sports_at(text, a, b, rules)}
     for a, b, name in find(title or "", rules):
         sym = rules.names[name]
-        if sym not in hits and _valid(title, a, b, name, rules):
+        if name not in sports and sym not in hits and _valid(title, a, b, name, rules):
             hits[sym] = Hit(sym, name, "title", 1, _snippet(title, a, b))
     if body:
         counts: Counter = Counter()
         first: dict[str, tuple[int, int, str]] = {}
         for a, b, name in find(body, rules):
-            if name in rules.title_only or not _valid(body, a, b, name, rules, in_title=False):
+            if name in sports or not _valid(body, a, b, name, rules, in_title=False):
+                continue
+            # 제목에서만 붙이는 이름: "증권"이 든 이름은 본문에서 빼고, 네이버는 바로 뒤 주식 낱말·종목코드가 있으면 붙인다
+            if name in rules.title_only and not (name in rules.body_with_stock_words and _stock_after(body, b, rules)):
                 continue
             sym = rules.names[name]
             counts[sym] += 1
