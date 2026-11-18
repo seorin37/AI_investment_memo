@@ -7,7 +7,7 @@
 
 - 입력: 실행 폴더 llm_io.jsonl의 카드 호출(stage card). 프롬프트의 항목·메모·근거는 그대로 두고 지시문 문장만 바꾼다
   (REWRITES: 고치기 전 문장 → configs/update_judge_prompt_v2*.md·updates.yaml extra_rules의 지금 문장). 변형마다 몇 개가 바뀌었는지 남긴다.
-- 형식 재요청(format_retry)은 하지 않는다. 형식만 어긋난 카드는 운영에서는 한 번 더 고쳐 달라고 한다.
+- 형식 재요청: 운영(topic._judge_v2_run)처럼 FORMAT_TITLE·FORMAT_SUMMARY·FORMAT_EXPLANATION만이면 한 번 고쳐 달라고 한다.
 - 반복(--repeat N): card_repeat_survey 묶음 중 호출이 2번 이상인 묶음마다 첫 실행(A 변형이 있으면 A) 프롬프트를 바꾼 지시문으로 N번 더.
 """
 
@@ -46,7 +46,9 @@ def rewrites() -> list[tuple[str, str]]:
     block = v2[v2.index("[전망 근거]"):v2.index("\n\n[관련성 판단]")]
     line = lambda text, head: next(l for l in text.splitlines() if l.startswith(head))          # noqa: E731
     alert = line(v2, "- 메모가 새 소식을 계속 알려 달라고 하면")
-    extra = next(r for r in load_config("configs/updates.yaml")["topic"]["extra_rules"] if r.startswith("전망·예상·추정 기사도"))
+    topic = load_config("configs/updates.yaml")["topic"]
+    extra = next(r for r in topic["extra_rules"] if r.startswith("전망·예상·추정 기사도"))
+    reason_max = topic.get("reason_max", 80)
     ex_new = ex[ex.index("전망·예상은 사실처럼 쓰지 않고, 쓸 때도"):ex.index("전망이 섞여 있다는 이유만으로")].rstrip()
     pairs = [("2. 매수·매도 권유, 종목 추천, 가격·실적 예측을 하지 않습니다.", line(v2, "2. 매수·매도 권유")),
              (_OLD_RULE_LINES, ""),
@@ -55,6 +57,8 @@ def rewrites() -> list[tuple[str, str]]:
               f"- 같은 종목의 자료라도 추적 관심사와 관계없으면 no_update입니다.\n{alert}"),
              ("사건 한 줄, 평가·전망 표현 금지", line(v2, "- headline:").split("이내, ", 1)[1]),
              ("전망·권유·평가 금지", "스스로 전망하는 말·권유·평가 금지"),
+             ("- memo_link: 이 사건이 메모의 어떤 관심사와 연결되는지 한 문장.",
+              line(v2, "- memo_link:").split(". ", 1)[0].replace("{reason_max}", str(reason_max)) + "."),
              ("- 예측: 오를 거예요, 상승할 가능성이 높아요, 회복될 전망이에요", line(v2, "- 예측(")),
              ("- 사실을 말하기에 근거가 부족함\n", v2[v2.index("- 사실을 말하기에"):v2.index("- 입력 근거끼리 충돌")]),
              (_OLD_EXPLAIN, ex_new)]
@@ -77,8 +81,8 @@ def _field(prompt: str, name: str) -> str:
 
 
 def judge(client, prompt: str, memo: str, cfg: dict, banned: list[str], verify: bool, spent: list[float]) -> dict:
-    """카드 호출 → 코드 검사 → (통과하면) 검수 호출. spent[0]에 비용을 더한다."""
-    from .topic import _verify
+    """카드 호출 → 코드 검사(형식만 어긋나면 한 번 재요청) → (통과하면) 검수 호출. spent[0]에 비용을 더한다."""
+    from .topic import _FORMAT_CODES, _repair_prompt_v2, _verify
 
     def call(p: str) -> str:
         before = len(client.calls)
@@ -97,6 +101,17 @@ def judge(client, prompt: str, memo: str, cfg: dict, banned: list[str], verify: 
     explain = bool(card.explanation)
     ccfg = {**cfg, "explanation": {**(cfg.get("explanation") or {}), "enabled": explain}}
     codes = check_card_v2(card, evidence, banned, ccfg, memo)
+    # 운영(topic._judge_v2_run)처럼 형식만 어긋나면 한 번 고쳐 달라고 한다
+    if codes and ccfg.get("format_retry", 0) and set(codes) <= _FORMAT_CODES:
+        row["retried"] = codes
+        raw = call(_repair_prompt_v2(prompt, raw, codes, ccfg))
+        card2 = parse_card_v2(raw or "")
+        if card2 is None or card2.status != "update":
+            row["status"] = "parse_fail" if card2 is None else card2.status
+            return row
+        card = card2
+        explain = bool(card.explanation)
+        codes = check_card_v2(card, evidence, banned, ccfg, memo)
     # 걸린 문장 표시: check_card_v2와 같게 문장 단위·사실 문장의 전망 주체(names)를 넘긴다
     texts = [card.headline, *(t for t, _ in card.facts), card.memo_link] + (
         [s for s in re.split(r"(?<=[.!?])\s+", card.explanation) if s.strip()] if explain else [])

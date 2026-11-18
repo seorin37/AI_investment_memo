@@ -49,7 +49,13 @@ _FORECAST_ACT = re.compile(r"(전망|예상|추정|관측|예측)(했|한다|하
 _SAY_ACT = re.compile(r"(제시|설명|분석|언급|강조)(했|한다고|하며|한)|밝혔|밝힌|찾았|짚었|봤어요|본다고|보고\s*있|"
                       r"(?<![가-힣])(들었|든\s)|전했|전한|꼽았|꼽은")
 # 소유격 주체 "머스크의 전망이에요"·"KB증권의 실적 전망을 다룬 기사예요"·"김동원 애널리스트의 예상치예요" (2026-11-18)
-_POSSESSIVE = re.compile(r"([가-힣A-Za-z0-9&·]+)의\s+(?:[가-힣A-Za-z0-9·]+\s+){0,3}?(전망치|예상치|추정치|전망|예상|추정|관측)"
+# 사이 낱말에 다른 소유격("○○의")이 끼면 넘어가지 않는다 ("빅테크의 투자 동향과 모건스탠리의 투자 전망" → 모건스탠리)
+_GAP = r"(?:(?![가-힣A-Za-z0-9&·]*의\s)[가-힣A-Za-z0-9·]+\s+){0,5}?"
+_POSSESSIVE = re.compile(rf"([가-힣A-Za-z0-9&·]+)의\s+{_GAP}(전망치|예상치|추정치|전망|예상|추정|관측)"
+                         r"(이에요|예요|입니다|이다|을|를|과|와|에|으로|은|는|이)?")
+# 관형절 주체 "김동원 애널리스트가 제시한 전망이에요"·"머스크가 제시한 공급 확대 전망이에요" (2026-11-18)
+_REL_CLAUSE = re.compile(r"([가-힣A-Za-z0-9&·]+)(?:이|가)\s+(?:제시한|밝힌|내놓은|내놨던|전한|언급한|예상한|전망한|추정한)\s+"
+                         rf"{_GAP}(전망치|예상치|추정치|전망|예상|추정)"
                          r"(이에요|예요|입니다|이다|을|를|과|와|에|으로|은|는|이)?")
 _PERSON_WORD = r"연구원|연구위원|애널리스트|이코노미스트|기자|대표|센터장|본부장|팀장|부장|사장|회장|위원장|총재|장관|교수"
 _SOURCE_WORD = re.compile(r"(증권|증권사|금융투자|리서치|연구소|은행|신문|일보|경제|뉴스|통신|방송|협회|기구|"
@@ -67,7 +73,9 @@ def _named_word(word: str, before: str) -> bool:
         return False
     if _PERSON_ONLY.match(word):
         prev = before.split()
-        return bool(prev) and prev[-1] not in _NOT_A_NAME and not _VAGUE_SUBJECT.search(prev[-1])
+        # 앞말이 조사로 끝나면("이는"·"자료에서는") 이름이 아니다
+        return (bool(prev) and prev[-1] not in _NOT_A_NAME and not _VAGUE_SUBJECT.search(prev[-1])
+                and not re.search(r"(은|는|이|가|을|를|에|의|와|과|도|서)$", prev[-1]))
     return True
 
 
@@ -108,6 +116,8 @@ def attributed_forecast(text: str, headline: bool = False, names=frozenset()) ->
         return False
     # 소유격 주체: "○○의 전망이에요"를 지운 나머지에 주체 없는 단정이 없으면 전달
     stripped = _POSSESSIVE.sub(lambda m: " " if _source_owner(m.group(1), t[:m.start()], names) else m.group(0), t)
+    stripped = _REL_CLAUSE.sub(lambda m: " " if _source_owner(m.group(1), stripped[:m.start()], names) else m.group(0),
+                               stripped)
     if stripped != t and not _UNATTRIBUTED.search(stripped):
         return True
     if _UNATTRIBUTED.search(t):

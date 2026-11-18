@@ -697,6 +697,14 @@ class ForecastAttributionTest(unittest.TestCase):
         self.assertTrue(attributed_forecast(link, names={"머스크"}))
         self.assertFalse(attributed_forecast(link))
         self.assertFalse(attributed_forecast("업계가 중국의 공급 확대 가능성을 언급한 기사예요.", names={"업계"}))   # 막연한 주어는 names여도 X
+        # 최종 재실행(2026-11-18) 문장: 소유격과 전망 사이 낱말 4개, 관형절 주체 "X가 제시한 … 전망이에요"
+        self.assertTrue(attributed_forecast("메모에서 우려한 중국 업체 증설과 관련해, 머스크의 중국 메모리 공급 확대 전망을 다룬 기사예요.",
+                                            names={"머스크"}))
+        self.assertTrue(attributed_forecast("이는 발표된 4분기 실적이 아니라 김동원 애널리스트가 제시한 전망이에요."))
+        self.assertTrue(attributed_forecast("이번 기사가 전한 내용은 중국 업체의 증설 확정 발표가 아니라 머스크가 제시한 공급 확대 전망이에요.",
+                                            names={"머스크"}))
+        self.assertFalse(attributed_forecast("이는 시장이 제시한 전망이에요."))                      # 막연한 주어
+        self.assertFalse(attributed_forecast("이는 애널리스트가 제시한 전망이에요."))                # 이름 없는 직함
 
 
 class MemoLinkNumberTest(unittest.TestCase):
