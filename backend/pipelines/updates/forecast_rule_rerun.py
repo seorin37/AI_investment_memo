@@ -56,7 +56,7 @@ def rewrites() -> list[tuple[str, str]]:
              ("사건 한 줄, 평가·전망 표현 금지", line(v2, "- headline:").split("이내, ", 1)[1]),
              ("전망·권유·평가 금지", "스스로 전망하는 말·권유·평가 금지"),
              ("- 예측: 오를 거예요, 상승할 가능성이 높아요, 회복될 전망이에요", line(v2, "- 예측(")),
-             ("- 사실을 말하기에 근거가 부족함\n", line(v2, "- 사실을 말하기에") + "\n"),
+             ("- 사실을 말하기에 근거가 부족함\n", v2[v2.index("- 사실을 말하기에"):v2.index("- 입력 근거끼리 충돌")]),
              (_OLD_EXPLAIN, ex_new)]
     pairs += [(old, f"- {extra}") for old in _OLD_EXTRA]
     return pairs
@@ -119,10 +119,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out-tokens", type=int, default=450, help="어림용 카드 호출당 출력 토큰 (추론 포함, 실측 284에 설명 문단 여유)")
     ap.add_argument("--repeat", type=int, default=0)
     ap.add_argument("--max-usd", type=float, default=1.0)
+    ap.add_argument("--only", nargs="*", default=[], help="이 호출만: 실행이름앞부분:항목 (예: C2_all:10 run_20261118:3)")
     ap.add_argument("--out")
     args = ap.parse_args(argv)
     pairs = rewrites()
     calls = [c for r in map(Path, args.runs) for c in card_calls(r)]
+    if args.only:
+        calls = [c for c in calls if any(c["run"].split("/")[0].startswith(o.rsplit(":", 1)[0]) and c["item_id"] == o.rsplit(":", 1)[1]
+                                         or c["run"].split("/")[1].startswith(o.rsplit(":", 1)[0]) and c["item_id"] == o.rsplit(":", 1)[1]
+                                         for o in args.only)]
     for c in calls:
         c["new_prompt"], c["applied"] = rewrite(c["prompt"], pairs)
     groups = [g for g in group(calls) if g["calls"] > 1]
