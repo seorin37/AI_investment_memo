@@ -316,13 +316,16 @@ def _ev_text(e: Evidence) -> str:
     return f"{e.candidate.title} {e.shown_text} {e.candidate.date}"
 
 
-def check_card_v2(card, evidence: list[Evidence], banned: list[str], cfg: dict | None = None) -> list[str]:
+def check_card_v2(card, evidence: list[Evidence], banned: list[str], cfg: dict | None = None,
+                  memo_text: str = "") -> list[str]:
     """v2 카드(CardV2) 검사. v1과 같은 이유 코드를 쓰고, 숫자·날짜는 facts 문장마다 그 문장의 evidence_id 근거 하나와 대조한다
     (다른 근거의 숫자를 섞으면 NUMBER). "비교 자료 없음"(evidence_id "")만 근거 없이 허용한다.
     - FORMAT_TITLE headline · FORMAT_WHEN when(YYYY-MM-DD, 쓴 근거의 날짜나 근거 본문에 적힌 날짜)
     - FORMAT_SUMMARY facts 개수(1~max_sentences, 비교 자료 없음 제외)·문장 길이·[E#] 표시
     - FORMAT_REASON memo_link(한 문장, reason_max자) · SOURCE 번호·sources 목록·비교용 근거만으로 만든 카드
-    - BANNED · PREDICTION(headline·facts·memo_link) · LOW_CONF. FACT_OVERLAP(v1의 evidence.fact 대조)는 v2에 없다."""
+    - BANNED · PREDICTION(headline·facts·memo_link) · LOW_CONF. FACT_OVERLAP(v1의 evidence.fact 대조)는 v2에 없다.
+    memo_text: 항목의 메모 문장. memo_link의 숫자만 쓴 근거나 메모 문장 중 하나에 있으면 인정한다
+    (memo_link는 메모 표현을 따옴표로 인용한다: "메모의 '13% 아래' …", 2026-11-18). headline·facts·설명은 근거만."""
     cfg = {**DEFAULTS, **(cfg or {})}
     ids = {e.eid: e for e in evidence}
     codes: list[str] = []
@@ -357,8 +360,10 @@ def check_card_v2(card, evidence: list[Evidence], banned: list[str], cfg: dict |
     union = EvidenceNumbers()
     for e in cited:
         union |= evidence_number_sets(_ev_text(e))
+    link = EvidenceNumbers(union.plain, union.unit)
+    link |= evidence_number_sets(memo_text)
     bad = any(eid in ids and not evidence_number_sets(_ev_text(ids[eid])).supports(t) for t, eid in facts)
-    if bad or not all(union.supports(t) for t in (card.headline, card.memo_link, exp)):
+    if bad or not (union.supports(card.headline) and union.supports(exp) and link.supports(card.memo_link)):
         codes.append("NUMBER")
     if cfg["prediction_terms"] and prediction_text(texts, cfg):
         codes.append("PREDICTION")

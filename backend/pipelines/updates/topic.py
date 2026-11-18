@@ -253,7 +253,7 @@ def _judge_v2_run(item: TrackingItem, evidence, call: Callable[[str], str] | Non
         codes = check_no_update_v2(card)
         rec("card", card, codes)
         return replace(codes, card) if codes else TopicOutcome("no_update", evidence, card, raw=raw)
-    codes = check_card_v2(card, evidence, banned, cfg)
+    codes = check_card_v2(card, evidence, banned, cfg, item.memo_text)
     rec("card", card, codes)
     retried = False
     if codes and cfg.get("format_retry", 0) and set(codes) <= _FORMAT_CODES:
@@ -273,7 +273,7 @@ def _judge_v2_run(item: TrackingItem, evidence, call: Callable[[str], str] | Non
             bad = check_no_update_v2(card)
             rec("format_retry", card, bad)
             return replace(bad, card, retried=True) if bad else TopicOutcome("no_update", evidence, card, raw=raw, retried=True)
-        codes = check_card_v2(card, evidence, banned, cfg)
+        codes = check_card_v2(card, evidence, banned, cfg, item.memo_text)
         rec("format_retry", card, codes)
     if codes:
         return replace(codes, card, retried=retried)

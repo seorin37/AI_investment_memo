@@ -463,6 +463,43 @@ class RowUnitTest(unittest.TestCase):
         self.assertNotIn("NUMBER", check_card_v2(c, ev(disc(text=KB_DIVIDEND)), [], CFG))
 
 
+class MemoLinkNumberTest(unittest.TestCase):
+    """memo_link 숫자는 쓴 근거나 메모 문장 중 하나에 있으면 인정 (2026-11-18). headline·facts는 근거만.
+    C2_gold run_20261113_124759 항목 M15:1:0 카드: memo_link가 메모의 "13% 아래"를 인용했는데 13%가 근거 E1에 없어 NUMBER였다."""
+
+    MEMO = "CET1 비율 13% 아래로 내려가면 주주환원 축소 가능성"
+    E1 = ("[KB금융 2025 사업보고서 | III. 재무에 관한 사항 > 6. 배당에 관한 사항]\n[표] - 2차 주주환원 결정 : 연중 축적되는 이익을 통해 "
+          "하반기 CET1비율 13.5%를 초과하는 자본에 상응하는 금액을 추가 주주환원 재원으로 활용(자사주 매입/소각)")
+    LINK = "메모의 '13% 아래' 하락이나 주주환원 축소를 확인하는 내용은 아니며, CET1과 추가 주주환원 재원을 연결하는 기준에 관한 공시예요."
+    HEAD = "하반기 CET1 13.5% 초과분, 추가 환원 재원"
+    FACT = "회사는 하반기 CET1비율 13.5% 초과 자본을 추가 환원 재원으로 활용한다고 밝혔어요."
+
+    def _card(self, **kw):
+        return card(**{"headline": self.HEAD, "when": "2026-03-10", "facts": [(self.FACT, "E1")], "memo_link": self.LINK, **kw})
+
+    def _number(self, c, memo=MEMO):
+        return "NUMBER" in check_card_v2(c, ev(disc(text=self.E1, day="2026-03-10")), [], CFG, memo)
+
+    def test_memo_number_in_memo_link(self):
+        self.assertFalse(self._number(self._card()))                                     # 실제 카드: 통과
+        self.assertTrue(self._number(self._card(), memo=""))                              # 메모 없이는 이전처럼 실패
+        self.assertTrue(self._number(self._card(memo_link="메모의 '14% 아래'와는 다른 기준이에요.")))   # 어디에도 없는 숫자
+        self.assertTrue(self._number(self._card(headline="CET1 13% 기준 공시")))           # 제목은 근거만
+        self.assertTrue(self._number(self._card(facts=[("CET1 13% 아래면 환원을 줄여요.", "E1")])))   # 사실 문장도 근거만
+
+    def test_topic_passes_memo_text(self):
+        from dataclasses import replace
+        payload = {"status": "update", "headline": self.HEAD, "when": "2026-03-10",
+                   "facts": [{"text": self.FACT, "evidence_id": "E1"}],
+                   "memo_link": self.LINK, "sources": ["E1"], "confidence": 0.9}
+        call = lambda p: json.dumps(payload, ensure_ascii=False)                        # noqa: E731
+        src = [disc(text=self.E1, day="2026-03-10")]
+        out = check_topic(replace(ITEM, memo_text=self.MEMO), src, call, [], CFG)
+        self.assertNotIn("NUMBER", out.checks[0]["codes"])
+        out = check_topic(ITEM, src, call, [], CFG)                                       # 메모에 13이 없는 항목
+        self.assertIn("NUMBER", out.checks[0]["codes"])
+
+
 class PreviewTest(unittest.TestCase):
     def test_v2_card_and_compare_page(self):
         from pipelines.updates.preview import build_preview
