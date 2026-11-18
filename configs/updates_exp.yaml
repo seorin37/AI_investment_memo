@@ -110,6 +110,7 @@ topic:
   min_news: 3                # 2026-11-18: 관련 뉴스가 있으면 근거 중 최소 3자리는 뉴스 (evidence.build_evidence)
   ask_overrides:              # 2026-11-18: 질문 답은 공시·뉴스·주가를 하나로 잇는 종합 답 (topic._judge_v2). 알림 카드는 위 값 그대로
     max_sentences: 8          #   facts(검증용, 화면에 안 보임) 최대 개수
+    verify_scope: explanation #   검수는 화면에 보이는 답 본문만 (facts와 같은 내용을 두 번 검수하지 않게)
     explanation:
       max_sentences: 7        #   화면에 보이는 답 본문
       max_chars: 700
@@ -142,6 +143,7 @@ topic:
   on_check_fail: drop
   verify_call: true
   verify_model: gpt-6.1-terra   # 2026-11-17 비용: 검수 호출은 terra (experiment가 검수 프롬프트만 이 모델로 보냄)
+  verify_retry: 1               # 2026-11-18: 검수에서 막히면 막힌 문장·이유를 주고 한 번 다시 쓴다 (topic._verify_repair_prompt)
   title_max: 30
   max_sentences: 5
   sentence_max_chars: 90

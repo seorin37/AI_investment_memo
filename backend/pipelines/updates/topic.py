@@ -205,6 +205,16 @@ def card_v2_json(card) -> dict:
             "memo_link": card.memo_link, "sources": list(card.sources), "confidence": card.confidence}
 
 
+def _verify_repair_prompt(prompt: str, raw: str, notes: list[str]) -> str:
+    """실험(2026-11-18) 검수에서 막힌 문장과 이유를 알려 주고 한 번 다시 쓰게 한다 (topic.verify_retry).
+    '# 수정 요청' 머리말이라 usage.stage_of가 format_retry로 세고, 검수 모델이 아니라 카드 모델로 간다."""
+    blocked = "\n".join(f"- {n}" for n in notes)
+    return (f"{prompt}\n\n# 수정 요청\n직전 답변의 아래 문장이 근거로 뒷받침되지 않는다고 검수에서 막혔어요 (문장 → 이유).\n{blocked}\n\n"
+            f"직전 답변:\n{raw}\n\n"
+            "막힌 문장은 근거에 적힌 표현 그대로(조건·범위·기준·단위를 빼지 말고) 고치거나, 근거로 확인되지 않으면 빼세요. "
+            "근거에 없는 짐작·해석을 덧붙이지 말고, 막히지 않은 문장은 그대로 두고, 같은 근거만 써서 JSON 하나로 다시 작성하세요.")
+
+
 def _judge_v2(item: TrackingItem, evidence, call: Callable[[str], str] | None, banned: list[str], cfg: dict) -> TopicOutcome:
     """v2 카드 판단 + 검사 기록. 코드 검사·검수 호출을 할 때마다 그때의 카드와 걸린 코드를 TopicOutcome.checks에 남긴다
     (2026-11-17, 형식 재요청 전 첫 카드·검사에서 떨어진 카드도 실행 결과에서 다시 볼 수 있게)."""
@@ -298,17 +308,58 @@ def _judge_v2_run(item: TrackingItem, evidence, call: Callable[[str], str] | Non
         rec("format_retry", card, codes)
     if codes:
         return replace(codes, card, retried=retried)
-    facts = [(t, eid) for t, eid in card.facts if eid]          # "비교 자료 없음"은 검수하지 않는다
-    if cfg.get("verify_call"):
+
+    def verify(card, stage="verify"):
+        facts = [(t, eid) for t, eid in card.facts if eid]      # "비교 자료 없음"은 검수하지 않는다
         extra = _sentences(card.explanation) if explain else []
-        vcard = Card("update", card.headline, [t for t, _ in facts] + extra, card.memo_link, [(e, t) for t, e in facts],
-                     card.confidence)   # 설명 문단 문장도 근거와 대조한다
+        if cfg.get("verify_scope") == "explanation" and extra:
+            sents = extra   # 실험(2026-11-18): 화면에 보이는 답 본문만 검수. facts는 같은 내용을 숨겨 둔 검증용이라 두 번 검수하지 않는다
+        else:
+            sents = [t for t, _ in facts] + extra               # 설명 문단 문장도 근거와 대조한다
+        vcard = Card("update", card.headline, sents, card.memo_link, [(e, t) for t, e in facts], card.confidence)
         vcodes, notes = _verify(vcard, evidence, call, item.company_name or item.symbol, item.description)
-        rec("verify", card, vcodes, notes=list(notes))
+        rec(stage, card, vcodes, notes=list(notes))
+        return vcodes, notes
+
+    if cfg.get("verify_call"):
+        vcodes, notes = verify(card)
+        if vcodes == ["VERIFY_UNSUPPORTED"] and cfg.get("verify_retry", 0):
+            # 실험(2026-11-18): 막힌 문장·이유를 주고 한 번 다시 쓴다. 다시 쓴 카드도 코드 검사·검수를 똑같이 거친다
+            retried = True
+            try:
+                raw = call(_verify_repair_prompt(prompt, raw, notes))
+            except CreditsExhausted:
+                raise
+            except Exception as exc:
+                out = replace([f"CALL_FAILED:{type(exc).__name__}"], card, retried=True)
+                out.verify_notes = notes
+                return out
+            card2 = parse_card_v2(raw)
+            if card2 is None:
+                rec("format_retry", None, ["FORMAT_PARSE"])
+                out = replace(["FORMAT_PARSE"], card, retried=True)
+                out.verify_notes = notes
+                return out
+            card = card2
+            if card.status == "no_update":
+                bad = check_no_update_v2(card)
+                rec("format_retry", card, bad)
+                out = replace(bad, card, retried=True) if bad else TopicOutcome("no_update", evidence, card, raw=raw, retried=True)
+                out.verify_notes = notes
+                return out
+            codes = check_card_v2(card, evidence, banned, cfg, item.memo_text)
+            rec("format_retry", card, codes)
+            if codes:
+                out = replace(codes, card, retried=True)
+                out.verify_notes = notes
+                return out
+            vcodes, notes2 = verify(card)
+            notes = notes + [f"(다시 쓴 뒤) {n}" for n in notes2]
         if vcodes:
             out = replace(vcodes, card, retried=retried)
             out.verify_notes = notes
             return out
+    facts = [(t, eid) for t, eid in card.facts if eid]
     by_id = {e.eid: e for e in evidence}
     fact_rows = [{"text": t, "ref": by_id[eid].candidate.ref} for t, eid in facts]
     has_no_cmp = any(t == NO_COMPARISON and not eid for t, eid in card.facts)

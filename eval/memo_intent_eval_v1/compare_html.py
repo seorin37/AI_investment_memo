@@ -39,6 +39,13 @@ def card_html(c: dict) -> str:
     calc = "".join(f"<div class='calc'>🧮 {esc(k['label'])} = <b>{esc(k['result'])}</b> <span class='muted'>(코드 계산)</span></div>"
                    for k in c.get("calculations") or [] if k.get("ok"))
     exp = f"<div class='exp'>{esc(c['explanation'])}</div>" if c.get("explanation") else ""
+    if c.get("source_list"):    # 2026-11-18 종합 답변: 답 본문 + 출처 목록, facts는 검증용이라 접어 둔다
+        src = "".join(f"<li>[{esc({'news': '뉴스', 'disclosure': '공시', 'data': '데이터'}.get(s.get('kind'), s.get('kind')))}] "
+                      f"{esc(s.get('title'))} <span class='muted'>({esc(s.get('source'))} {esc(s.get('date'))})</span></li>"
+                      for s in c["source_list"])
+        return (f"<div class='card'><div class='hl'>💬 {esc(c.get('headline') or c.get('title'))}</div>"
+                f"<div class='ans'>{esc(c.get('explanation'))}</div>{calc}<div class='muted'>출처</div><ul class='src'>{src}</ul>"
+                f"<details><summary class='muted'>검증용 사실 {len(c.get('facts') or [])}개</summary><ul>{facts}</ul></details></div>")
     return (f"<div class='card'><div class='hl'>{esc(c.get('headline') or c.get('title'))}"
             f" <span class='muted'>{esc(c.get('when'))}</span></div><ul>{facts}</ul>{calc}{exp}"
             f"<div class='link'>↳ {esc(c.get('memo_link') or c.get('reason'))}</div></div>")
@@ -117,7 +124,7 @@ body{{background:var(--bg);color:var(--fg);font:14px/1.6 system-ui,'Malgun Gothi
 .exp{{color:var(--muted);font-size:13px}} .link{{font-size:13px}} .calc{{font-size:13px}} .none{{color:var(--muted);margin:2px 0 8px}} .none.ask{{color:var(--ask)}}
 .tag{{display:inline-block;font-size:12px;border:1px solid var(--line);border-radius:10px;padding:0 6px;margin-right:4px}}
 .item{{margin-top:6px}} .muted{{color:var(--muted);font-size:12px}} .ok{{color:var(--ok)}} .bad{{color:var(--bad)}} .score{{font-size:13px;margin-bottom:4px}}
-.intents{{margin:2px 0 8px;padding-left:18px}}
+.intents{{margin:2px 0 8px;padding-left:18px}} .ans{{margin:4px 0 6px}} .src{{margin:2px 0;padding-left:18px;font-size:12.5px}}
 </style></head><body><div class="wrap"><h1>메모 답변 비교 — {esc(args.label_a)} vs {esc(args.label_b)}</h1>
 {summary}<div class="bar"><label><input type="checkbox" id="q"> 질문이 있는 메모만</label><label><input type="checkbox" id="d"> 결과가 다른 메모만</label>
 <span id="cnt" class="muted"></span></div>{''.join(rows)}</div>
