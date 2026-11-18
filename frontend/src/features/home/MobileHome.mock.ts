@@ -21,9 +21,9 @@ export const mockMobileHomeProps: MobileHomeProps = {
   ],
   news_total_today: 8,
   news: [
-    { id: 'n0', time: '13:12', title: '반도체 강세에 코스피 상승 출발', source: '연합뉴스' },
-    { id: 'n1', time: '12:48', title: 'SK하이닉스, HBM4 공급 확대 기대감에 강세', source: '한국경제' },
-    { id: 'n2', time: '11:30', title: '외국인, 이틀 연속 반도체 순매수', source: '매일경제' },
+    { id: 'n0', time: '13:12', title: '코스피, 반도체 업종 중심으로 오르며 출발', source: '연합뉴스' },
+    { id: 'n1', time: '12:48', title: 'SK하이닉스, HBM4 공급 확대 관련 보도', source: '한국경제' },
+    { id: 'n2', time: '11:30', title: '반도체 업종 외국인 거래 이틀째 늘어', source: '매일경제' },
     { id: 'n3', time: '10:05', title: '3분기 실적 시즌 개막…IT·반도체 주목', source: '서울경제' },
   ],
   onOpenUpdates: noop,

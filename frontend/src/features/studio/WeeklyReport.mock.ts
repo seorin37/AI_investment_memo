@@ -10,7 +10,7 @@ const sk: ReportStock = {
   narrative: '화요일(11.04) 신규 시설투자 공시[1]가 나왔고, 다음 날 11.05 종가 기준 3.1% 오르며 거래량이 이번 주 가장 많았어요. 목요일에는 HBM4 공급 확대 기사[3]가 이어졌고, 금요일 180,500원으로 마감했어요.',
   items: [
     { no: 1, kind: 'disclosure', date: '11.04', title: '신규 시설투자 결정', source: 'DART' },
-    { no: 3, kind: 'news', date: '11.06', title: 'HBM4 공급 확대 기대감', source: '한국경제' },
+    { no: 3, kind: 'news', date: '11.06', title: 'HBM4 공급 확대 관련 보도', source: '한국경제' },
     { no: 4, kind: 'news', date: '11.07', title: '반도체 장비 발주 증가', source: '매일경제' },
   ],
   memo_link: { title: 'HBM 수요 계속 확인', meta: '9.25 작성 · AI 연결 중', text: "메모의 추적 항목 'HBM 생산 능력'과 관련된 소식 2건([1], [3])이 이번 주에 붙었어요.", paper: '#FCEAAA' },
@@ -53,9 +53,9 @@ export const mockWeeklyReportProps: WeeklyReportProps = {
   market: {
     indices: [{ name: '코스피', value: '2,650.35', change: 2.0 }, { name: '코스닥', value: '862.10', change: 0.6 }, { name: '원/달러', value: '1,350.20', change: -1.6 }],
     headlines: [
-      { date: '11.04 화', text: '미국 반도체 지수 강세에 국내 반도체주 동반 상승', ref: '[5]' },
-      { date: '11.05 수', text: '외국인, 사흘 연속 코스피 순매수', ref: '[6]' },
-      { date: '11.07 금', text: '원/달러 환율 1,350원대로 내려 원화 강세', ref: '[7]' },
+      { date: '11.04 화', text: '미국 반도체 지수가 오른 뒤 국내 반도체주도 올라', ref: '[5]' },
+      { date: '11.05 수', text: '코스피 외국인 거래 사흘째 늘어', ref: '[6]' },
+      { date: '11.07 금', text: '원/달러 환율 1,350원대로 내려', ref: '[7]' },
     ],
   },
   sources: [
