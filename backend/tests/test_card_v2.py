@@ -570,6 +570,71 @@ class UnknownUnitTest(unittest.TestCase):
                 self.assertTrue(fn(src, said), f"{name} 실패해야 함: {said} ← {src!r}")
 
 
+class ForecastAttributionTest(unittest.TestCase):
+    """전망 근거 (2026-11-18 N08 결정): 증권사·회사·기관·언론의 전망은 "누가 무엇을 전망했다"로 전하면 통과,
+    주체 없는 미래 단정·판단은 실패 (PREDICTION·BANNED). 운영 설정(configs/updates.yaml)의 금지어·패턴으로 본다."""
+
+    EV = ("KB증권은 4분기 영업이익을 1조 2,000억원으로 전망했다. 김동원 KB증권 애널리스트는 4분기 영업이익을 104조원으로 예측했다. "
+          "모건스탠리는 데이터센터 투자가 3조달러에 이를 것으로 내다봤다. 회사는 4분기 출하량이 늘 것이라고 밝혔다.")
+    PASS = ["KB증권은 4분기 영업이익을 1조 2,000억원으로 전망했어요.",
+            "김동원 KB증권 애널리스트는 4분기 영업이익을 104조원으로 예측했어요.",
+            "모건스탠리는 데이터센터 투자가 3조달러에 이를 것으로 내다봤어요.",
+            "회사는 4분기 출하량이 늘 것이라고 밝혔어요.",
+            "SK하이닉스는 4분기 출하량이 늘 것으로 예상한다고 밝혔어요."]
+    FAIL = ["4분기 영업이익은 1조 2,000억원으로 전망돼요.",                 # 주체 없는 전망
+            "4분기 영업이익이 늘어날 전망이에요.", "주가가 오를 거예요.", "4분기 영업이익이 늘 것으로 보여요.",
+            "영업이익은 1조 2,000억원으로 전망했어요.",                     # 주어가 지표 (전망한 주체가 아님)
+            "KB증권은 1조 2,000억원으로 전망했고 주가도 오를 거예요.",       # 전달 문장 안의 주체 없는 단정
+            "KB증권은 영업이익 개선을 전망했어요. 호재예요.",              # 판단
+            # 막연한 주어 (2026-11-18): 시장·증권가·전문가들·업계 관계자·일각·이름 없는 직함
+            "시장은 4분기 영업이익을 1조 2,000억원으로 전망했어요.",
+            "증권가는 4분기 영업이익을 1조 2,000억원으로 내다봤어요.",
+            "전문가들은 4분기 영업이익을 1조 2,000억원으로 예상했어요.",
+            "업계 관계자는 4분기 영업이익을 1조 2,000억원으로 전망했어요.",
+            "일각에서는 4분기 영업이익을 1조 2,000억원으로 전망했어요.",
+            "투자자들은 4분기 영업이익을 1조 2,000억원으로 예상했어요.",
+            "애널리스트는 4분기 영업이익을 104조원으로 예측했어요.",
+            "한 연구원은 4분기 영업이익을 104조원으로 예측했어요."]
+
+    @classmethod
+    def setUpClass(cls):
+        from pipelines.common.config import load_config
+        real = load_config("configs/updates.yaml")
+        cls.cfg, cls.banned = {**CFG, **real["topic"], "verify_call": False}, list(real["banned"])
+
+    def _codes(self, fact="KB증권은 4분기 영업이익을 1조 2,000억원으로 전망했어요.", headline="KB증권 4분기 실적 보고서"):
+        c = card(headline=headline, when="2026-10-28", facts=[(fact, "E1")], memo_link="메모의 '4분기 실적' 관심사와 연결돼요.")
+        return set(check_card_v2(c, ev(news(text=self.EV, day="2026-10-28")), self.banned, self.cfg))
+
+    def test_attributed_pass_unattributed_fail(self):
+        for s in self.PASS:
+            self.assertFalse(self._codes(fact=s) & {"PREDICTION", "BANNED"}, s)
+        for s in self.FAIL:
+            self.assertTrue(self._codes(fact=s) & {"PREDICTION", "BANNED"}, s)
+
+    def test_headline(self):
+        self.assertFalse(self._codes(headline="KB증권, 4분기 영업이익 1조 2,000억원 전망") & {"PREDICTION", "BANNED"})
+        self.assertFalse(self._codes(headline="김동원 애널리스트, 4분기 영업이익 104조원 전망") & {"PREDICTION", "BANNED"})
+        for h in ("SK하이닉스 4분기 영업이익 1조 2,000억원 전망", "SK하이닉스, 4분기 영업이익 1조 2,000억원 전망",
+                  "4분기 영업이익 개선 전망", "증권가, 4분기 영업이익 1조 2,000억원 전망", "시장, 4분기 영업이익 개선 전망",
+                  "애널리스트, 4분기 영업이익 104조원 전망"):                                   # 맨 앞이 출처가 아니면 주체 없는 전망
+            self.assertIn("PREDICTION", self._codes(headline=h), h)
+
+    def test_attributed_forecast_unit(self):
+        from pipelines.updates.checks import attributed_forecast
+        self.assertTrue(attributed_forecast("HBM 매출이 8% 늘 것으로 KB증권은 전망했어요."))   # 앞 주어가 지표여도 출처 주어가 있으면
+        self.assertFalse(attributed_forecast("HBM 매출이 8% 늘 것으로 전망했어요."))
+        self.assertFalse(attributed_forecast("KB증권, 4분기 영업이익 1조 2,000억원 전망"))    # 제목 형식은 headline일 때만
+        self.assertTrue(attributed_forecast("KB증권, 4분기 영업이익 1조 2,000억원 전망", headline=True))
+        # 출처 주어의 전달 동사 (지난 C_all·C2_all 항목 3 카드 문장 그대로)
+        self.assertTrue(attributed_forecast("김 애널리스트는 이 과거 주가 통계를 반등 전망의 근거로 제시했어요."))
+        self.assertTrue(attributed_forecast("메모에서 궁금해한 친구의 '상승 전망' 근거와 관련해, 이번 자료는 KB증권이 반등 전망의 "
+                                            "근거로 제시한 과거 주가 통계예요."))
+        self.assertFalse(attributed_forecast("이 통계는 반등 전망의 근거로 제시됐어요."))            # 출처 주어 없음
+        self.assertFalse(attributed_forecast("KB증권은 보고서를 제시했고 주가는 오를 전망이에요."))  # 주체 없는 단정이 섞임
+        self.assertFalse(attributed_forecast("두 수치는 향후 1년간 예상 이익을 기준으로 제시된 것이에요."))
+
+
 class MemoLinkNumberTest(unittest.TestCase):
     """memo_link 숫자는 쓴 근거나 메모 문장 중 하나에 있으면 인정 (2026-11-18). headline·facts는 근거만.
     C2_gold run_20261113_124759 항목 M15:1:0 카드: memo_link가 메모의 "13% 아래"를 인용했는데 13%가 근거 E1에 없어 NUMBER였다."""

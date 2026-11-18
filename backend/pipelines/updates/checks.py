@@ -35,6 +35,63 @@ DEFAULTS = {"title_max": 20, "max_sentences": 3, "sentence_max_chars": 60, "min_
 # "로 전망했"·"로 예상했": 증권사·언론이 주어인 전망 문장 ("KB증권은 매출이 상승할 것으로 전망했어요")
 ATTRIBUTION = ("라고 밝혔", "고 밝혔", "고 발표", "고 전했", "고 설명", "예상한다고", "계획이라고", "로 전망했", "로 예상했")
 
+# 주체를 밝힌 전망 전달 (2026-11-18 N08 결정: 전망 기사도 근거로 쓰되 "누가 무엇을 전망했다"로만).
+# - 문장: 주어(은·는·이·가) + 전망한 동작("전망했어요"·"예상한다고"·"내다봤어요"·"추정했어요"…).
+#   주어가 지표·대상("영업이익은"·"주가가")이면 주체가 아니다. 앞 주어가 지표여도 뒤에 출처 주어("KB증권은")가 있으면 된다
+# - 출처 주어(증권·애널리스트·기관…) + 전달 동사("제시했어요"·"밝혔어요"·"찾았어요"…)도 전달이다
+#   ("김 애널리스트는 이 통계를 반등 전망의 근거로 제시했어요", 2026-11-12·13 C_all·C2_all 항목 3 카드)
+# - 제목: "KB증권, 4분기 영업이익 1조 2,000억원 전망"처럼 맨 앞이 출처(증권사·기관·언론·연구원…)이고 쉼표
+# - 같은 문장에 주체 없는 미래 단정("늘어날 전망이에요"·"~로 전망돼요"·"오를 거예요")이 있으면 아니다
+# - 막연한 주어는 주체가 아니다 (2026-11-18): 시장·업계·증권가·전문가(들)·투자자(들)·(업계) 관계자·일각·"○○들"·대명사.
+#   사람은 이름이 있어야 한다 ("김 애널리스트는" O, "애널리스트는"·"한 연구원은" X). 증권사·기관·회사·언론 이름은 그대로 주체
+_FORECAST_ACT = re.compile(r"(전망|예상|추정|관측|예측)(했|한다|하고|하며|해요|합니다|하는)|내다(봤|보|본)|(전망|예상|추정)치를?\s*(제시|내놓|내놨|발표|밝혔)")
+_SAY_ACT = re.compile(r"(제시|설명|분석|언급|강조)(했|한다고|하며|한)|밝혔|밝힌|찾았|짚었|봤어요|본다고|보고\s*있")
+_PERSON_WORD = r"연구원|연구위원|애널리스트|이코노미스트|기자|대표|센터장|본부장|팀장|부장|사장|회장|위원장|총재|장관|교수"
+_SOURCE_WORD = re.compile(r"(증권|증권사|금융투자|리서치|연구소|은행|신문|일보|경제|뉴스|통신|방송|협회|기구|"
+                          r"정부|당국|부처|회사|그룹|센터|운용|평가|IB|S&P|무디스|피치|모건스탠리|골드만삭스|"
+                          rf"JP모간|씨티|노무라|UBS|트렌드포스|가트너|IDC|옴디아|카운터포인트|WSTS|{_PERSON_WORD})$")
+_VAGUE_SUBJECT = re.compile(r"^(시장|업계|증권가|증권업계|금융권|전문가|투자자|관계자|일각|기관|외국인|개인|컨센서스|시장참여자|"
+                            r"그|그녀|이들|그들|누군가)(에서)?$|들(에서)?$")
+_PERSON_ONLY = re.compile(rf"^({_PERSON_WORD})$")
+_NOT_A_NAME = {"한", "어느", "일부", "다른", "많은", "여러", "몇몇", "업계", "시장", "증권가", "익명의", "해당"}
+
+
+def _named(m: re.Match, text: str) -> bool:
+    """주어 m이 막연하지 않은 주체인가. 직함만 있으면("애널리스트는") 바로 앞 낱말이 이름이어야 한다."""
+    word = m.group(1)
+    if _VAGUE_SUBJECT.search(word):
+        return False
+    if _PERSON_ONLY.match(word):
+        before = text[:m.start()].split()
+        return bool(before) and before[-1] not in _NOT_A_NAME and not _VAGUE_SUBJECT.search(before[-1])
+    return True
+_NOT_SUBJECT = re.compile(r"(이익|매출|매출액|주가|수요|공급|가격|실적|업황|비율|금액|규모|수익|출하|생산|투자|성장|전망|예상|배당|점유율)$")
+_SUBJECT = re.compile(r"([가-힣A-Za-z0-9&·]+)(?:은|는|이|가)\s")
+_UNATTRIBUTED = re.compile(r"(전망|예상|추정|관측|기대)(돼요|되어요|됩니다|돼|이에요|입니다|된다|이다)|(할|될)\s*전망|"
+                           r"것으로\s*(보여요|보입니다|보인다)|(거|것)(예요|이에요|입니다)|가능성이?\s*(높|큽|커)")
+
+
+def attributed_forecast(text: str, headline: bool = False) -> bool:
+    """주체를 밝힌 전망 전달 문장인가 (위 설명). headline이면 "출처, …" 제목 형식도 본다."""
+    t = _TAG.sub("", text or "").strip()
+    if not t or _UNATTRIBUTED.search(t):
+        return False
+    if headline:
+        head, sep, _ = t.partition(",")
+        words = head.split()
+        if sep and words and _SOURCE_WORD.search(words[-1]) and not _VAGUE_SUBJECT.search(words[-1]) and (
+                not _PERSON_ONLY.match(words[-1]) or (len(words) > 1 and words[-2] not in _NOT_A_NAME)):
+            return True
+    act = _FORECAST_ACT.search(t)
+    if act:
+        subjects = list(_SUBJECT.finditer(t[:act.start()]))
+        first_ok = bool(subjects) and _named(subjects[0], t) and not _NOT_SUBJECT.search(subjects[0].group(1))
+        if first_ok or any(_SOURCE_WORD.search(m.group(1)) and _named(m, t) for m in subjects):
+            return True
+    # 출처 주어의 전달 동사: "김 애널리스트는 … 반등 전망의 근거로 제시했어요", "KB증권이 … 전망의 근거로 제시한 통계예요"
+    say = _SAY_ACT.search(t)
+    return bool(say and any(_SOURCE_WORD.search(m.group(1)) and _named(m, t) for m in _SUBJECT.finditer(t[:say.start()])))
+
 
 def _korean(num: str) -> float:
     """"7천921" = 7,921, "7천" = 7,000, "1,034" = 1,034."""
@@ -280,7 +337,7 @@ def _check_body(lines: list[str], ev_pairs: list[tuple[str, str]], extra: list[s
     else:
         patterns = [re.compile(p) for p in cfg["banned_patterns"]]
         for t in texts:
-            if any(a in t for a in ATTRIBUTION):
+            if any(a in t for a in ATTRIBUTION) or attributed_forecast(t, headline=True):
                 continue
             if any(p.search(t) for p in patterns):
                 codes.append("BANNED")
@@ -312,18 +369,20 @@ def _check_body(lines: list[str], ev_pairs: list[tuple[str, str]], extra: list[s
     return codes
 
 
-# 회사가 스스로 밝힌 계획·발언을 전하는 문장 (공시·발표 내용 자체가 사실이다). ATTRIBUTION과 달리 "로 전망했"·"로 예상했"
-# (증권사·언론이 주어인 전망)는 넣지 않는다: 2026-11-09 결정으로 남의 전망은 주체를 써도 사실 근거로 쓰지 않는다
+# 회사가 스스로 밝힌 계획·발언을 전하는 문장 (공시·발표 내용 자체가 사실이다)
 COMPANY_STATEMENT = ("라고 밝혔", "고 밝혔", "고 발표", "고 설명", "계획이라고")
 
 
 def prediction_text(texts: list[str], cfg: dict) -> str | None:
-    """예측(전망·예상·추정·관측·가능성 …)을 핵심 사실로 쓴 글. 시제 패턴과 달리 "증권사는 ~로 전망했어요"처럼 주체를 쓴 문장도
-    잡는다 (2026-11-09 "네이버 3분기 매출 3조5천143억원 전망" 카드). 실제 실적을 예상치와 견준 표현(prediction_exempt)과
-    회사가 스스로 밝힌 계획·발언(COMPANY_STATEMENT)은 뺀다."""
+    """예측(전망·예상·추정·관측·가능성 …)을 핵심 사실로 쓴 글 (2026-11-09 "네이버 3분기 매출 3조5천143억원 전망" 카드).
+    2026-11-18 N08 결정: 주체를 밝힌 전망 전달("KB증권은 ~로 전망했어요", 제목 "KB증권, ~ 전망")은 예측이 아니다
+    (attributed_forecast). 주체 없는 전망("~로 전망돼요"·"영업이익은 ~로 전망했어요")은 그대로 걸린다.
+    실제 실적을 예상치와 견준 표현(prediction_exempt)과 회사가 스스로 밝힌 계획·발언(COMPANY_STATEMENT)도 뺀다."""
     exempt = [re.compile(p) for p in cfg["prediction_exempt"]]
-    for t in texts:
-        if any(a in t for a in COMPANY_STATEMENT):
+    # 문장마다 본다 (설명 문단의 한 문장이 전달 문장이라고 문단 전체를 빼지 않게)
+    sentences = [s for t in texts for s in re.split(r"(?<=[.!?])\s+", t or "") if s.strip()]
+    for t in sentences:
+        if any(a in t for a in COMPANY_STATEMENT) or attributed_forecast(t, headline=True):
             continue
         rest = t
         for p in exempt:
@@ -369,7 +428,8 @@ def _banned_hit(texts: list[str], banned: list[str], cfg: dict) -> bool:
     if any(term in " ".join(texts) for term in banned):
         return True
     patterns = [re.compile(p) for p in cfg["banned_patterns"]]
-    return any(not any(a in t for a in ATTRIBUTION) and any(p.search(t) for p in patterns) for t in texts)
+    return any(not (any(a in t for a in ATTRIBUTION) or attributed_forecast(t, headline=True))
+               and any(p.search(t) for p in patterns) for t in texts)
 
 
 def _ev_text(e: Evidence) -> str:

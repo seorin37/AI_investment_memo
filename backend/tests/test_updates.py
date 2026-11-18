@@ -789,13 +789,14 @@ class GuideRulesTest(unittest.TestCase):
             self.assertNotIn("BANNED", real_codes(summary=[s]), s)
 
     def test_forecast_with_source_as_subject_allowed(self):
-        # 시제 패턴(BANNED)은 주체를 쓴 전망을 통과시키지만, 2026-11-09 결정으로 남의 전망은 사실 근거가 아니다 (PREDICTION)
+        # 2026-11-18 N08 결정: 주체를 밝힌 전망 전달은 BANNED·PREDICTION 모두 통과 (2026-11-09에는 PREDICTION이었다)
         d = disc(text="KB증권은 HBM 매출이 8.0% 상승할 것으로 전망했다.")
         good = {**GOOD, "summary": ["KB증권은 HBM 매출이 8.0% 상승할 것으로 전망했어요. [E1]"],
                 "evidence": [{"source_id": "E1", "fact": "KB증권은 HBM 매출이 8.0% 상승할 것으로 전망했다"}]}
-        self.assertEqual(check_card(parse_card(json.dumps(good)), build_evidence([d]), REAL_BANNED, REAL_TOPIC), ["PREDICTION"])
-        self.assertEqual(check_card(parse_card(json.dumps(good)), build_evidence([d]), REAL_BANNED,
-                                    {**REAL_TOPIC, "prediction_terms": []}), [])
+        self.assertEqual(check_card(parse_card(json.dumps(good)), build_evidence([d]), REAL_BANNED, REAL_TOPIC), [])
+        subjectless = {**good, "summary": ["HBM 매출이 8.0% 상승할 것으로 전망했어요. [E1]"]}     # 주체를 빼면 실패
+        self.assertIn("PREDICTION", check_card(parse_card(json.dumps(subjectless)), build_evidence([d]), REAL_BANNED,
+                                               REAL_TOPIC))
 
     def test_past_facts_allowed(self):
         self.assertEqual(real_codes(summary=["HBM 매출이 8.0% 상승했어요. [E1]"],
@@ -1532,7 +1533,8 @@ class ExtraRulesAndPredictionTest(unittest.TestCase):
     def test_prediction_rule_details(self):
         from pipelines.updates.checks import prediction_text
         cfg = {**self.TOPIC}
-        self.assertIsNotNone(prediction_text(["KB증권은 매출이 늘 것으로 전망했어요"], cfg))   # 주체를 써도 예측은 예측
+        self.assertIsNone(prediction_text(["KB증권은 매출이 늘 것으로 전망했어요"], cfg))      # 주체를 밝힌 전달 (2026-11-18)
+        self.assertIsNotNone(prediction_text(["매출이 늘 것으로 전망했어요"], cfg))            # 주체 없음
         self.assertIsNotNone(prediction_text(["흑자 전환 가능성이 거론돼요"], cfg))
         self.assertIsNone(prediction_text(["영업이익이 시장 예상치를 웃돌았어요"], cfg))     # 실제 실적 vs 예상치
         self.assertIsNone(prediction_text(["매출이 예상보다 8% 많았어요"], cfg))
