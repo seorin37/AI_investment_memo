@@ -106,6 +106,36 @@ def event_lines(conn, symbol: str, limit: int = 5) -> list[str]:
     return out
 
 
+# 주가 요약 (2026-11-18): 질문 답이 공시·뉴스와 함께 주가도 근거로 쓰게. 등락률·52주 고저는 코드가 계산 (LLM 계산 금지 원칙 유지)
+PRICE_SQL = """SELECT trade_date, close, market_cap FROM prices_daily
+WHERE symbol = %(s)s AND trade_date >= CURRENT_DATE - 400 AND close IS NOT NULL ORDER BY trade_date DESC LIMIT 260"""
+
+
+def price_lines(conn, symbol: str) -> list[str]:
+    """최근 종가·1주(5거래일)·1개월(20거래일) 등락률·52주(최근 250거래일) 최고·최저와 날짜·시가총액. 시세가 없으면 빈 목록."""
+    rows = conn.execute(PRICE_SQL, {"s": symbol}).fetchall()
+    if not rows:
+        return []
+    last_d, last, cap = rows[0]
+
+    def chg(n: int) -> str:
+        if len(rows) <= n or not rows[n][1]:
+            return ""
+        return f"{(float(last) / float(rows[n][1]) - 1) * 100:+.1f}%"
+    year = rows[:250]
+    hi = max(year, key=lambda r: r[1])
+    lo = min(year, key=lambda r: r[1])
+    parts = [f"종가 {float(last):,.0f}원"]
+    for label, n in (("1주 전 대비", 5), ("1개월 전 대비", 20)):
+        if chg(n):
+            parts.append(f"{label} {chg(n)} ({rows[n][0]} 종가 {float(rows[n][1]):,.0f}원)")
+    parts.append(f"52주 최고 {float(hi[1]):,.0f}원({hi[0]}) · 최저 {float(lo[1]):,.0f}원({lo[0]})")
+    parts.append(f"52주 최고가 대비 {(float(last) / float(hi[1]) - 1) * 100:+.1f}%")
+    if cap:
+        parts.append(f"시가총액 {korean_won(cap)}")
+    return [f"- 주가 ({last_d} 기준, 시세 DB): " + " · ".join(parts)]
+
+
 def _qlabel(period_end, quarter) -> str:
     return f"{period_end.year}년 {quarter}분기" if quarter else str(period_end)
 
@@ -161,6 +191,7 @@ def company_table(conn, symbol: str, name: str, max_quarters: int = 6, max_years
                      f"매출액 {korean_won(rev)} · 영업이익 {korean_won(op)} · 지배주주 순이익 {korean_won(ni)}"
                      + ("" if fin_co else f" · 연간 영업이익률 {_pct(op, rev)}") + growth)
     lines += event_lines(conn, symbol)                     # 사건 공시 표준 비율 (0018)
+    lines += price_lines(conn, symbol)                     # 주가 요약 (2026-11-18, 질문 답에 주가도 근거로)
     bs = conn.execute(BS_SQL, {"s": symbol}).fetchone()
     if bs:
         end, ptype, fs, ta, tl, te = bs
@@ -211,7 +242,8 @@ def fin_evidence(conn, symbol: str, name: str, question: str, start_index: int, 
         return []
     body = ("코드가 재무 DB에서 꺼낸 값이에요. 분기 이익률·ROE·부채비율·유동비율·당좌비율·이자보상배율·유보율은 재무 지표 표"
             "(기업정보 페이지와 같은 값)이고, 전년 대비 증감률·연간 영업이익률·잠정 영업이익률은 코드가 계산했어요. "
-            "사건 공시 줄의 비율(희석률·시가총액 대비 등)은 사건 비율 표 값이에요.\n" + body)
+            "사건 공시 줄의 비율(희석률·시가총액 대비 등)은 사건 비율 표 값이고, "
+            "주가 줄의 등락률·52주 고저는 시세 DB로 코드가 계산했어요.\n" + body)
     dates = re.findall(r"\d{4}-\d{2}-\d{2}", body)
     c = Candidate(ref=f"{FIN_PREFIX}{symbol}", kind="disclosure", symbol=symbol, date=max(dates) if dates else "",
                   title="재무 표", text=body,

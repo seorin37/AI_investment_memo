@@ -162,7 +162,18 @@ def main() -> int:
                 label = it["description"] + (f" ({it['price_threshold']:,}원)" if it.get("price_threshold") else "")
                 out.append(f"- 💬 한 번 답하기 [{it['ask']}] {label}" if it.get("ask") else f"- 항목 [{it['type']}] {label}")
                 c = cards.get(iid)
-                if c:
+                if c and it.get("ask") and c.get("source_list") is not None and c.get("explanation"):
+                    # 실험(2026-11-18) 질문 답: 화면처럼 이어진 답 본문 + 계산값 + 밑에 출처 (facts는 검증용이라 접어 둠)
+                    out.append(f"  - 💬 **{c.get('headline')}**")
+                    out.append(f"    > {c['explanation']}")
+                    for k in c.get("calculations") or []:
+                        if k.get("ok"):
+                            out.append(f"    > 🧮 {k['label']} = **{k['result']}** (코드 계산)")
+                    kinds = {"disclosure": "공시", "news": "뉴스", "data": "데이터"}
+                    srcs = "; ".join(f"[{kinds.get(s['kind'], s['kind'])}] {s['title']} ({s.get('source') or ''} {s.get('date') or ''})".replace(" )", ")")
+                                     for s in c.get("source_list") or [])
+                    out.append(f"    - 출처: {srcs}")
+                elif c:
                     out.append(f"  - 🃏 **{c.get('headline')}** (when {c.get('when')})")
                     out += [f"    - {f.get('text') if isinstance(f, dict) else f}" for f in c.get("facts", [])]
                     if c.get("explanation"):

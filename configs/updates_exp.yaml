@@ -105,8 +105,14 @@ topic:
   - 여전히
   evidence_mode: all
   max_disclosure_docs: 5
-  max_chunks_per_disclosure: 3
+  max_chunks_per_disclosure: 2   # 2026-11-18: 3 → 2 (운영과 같게. 공시 15청크가 근거를 다 채워 뉴스가 0건이 됐다)
   max_total: 8               # 2026-11-17 비용: 답 생성 근거 상한 15 → 8
+  min_news: 3                # 2026-11-18: 관련 뉴스가 있으면 근거 중 최소 3자리는 뉴스 (evidence.build_evidence)
+  ask_overrides:              # 2026-11-18: 질문 답은 공시·뉴스·주가를 하나로 잇는 종합 답 (topic._judge_v2). 알림 카드는 위 값 그대로
+    max_sentences: 8          #   facts(검증용, 화면에 안 보임) 최대 개수
+    explanation:
+      max_sentences: 7        #   화면에 보이는 답 본문
+      max_chars: 700
   extra_rules:
   - 같은 내용이 공시와 뉴스에 있으면 공시 숫자를 쓴다.
   - 전망·예상·추정을 다룬 기사는 사실 근거로 쓰지 않는다.

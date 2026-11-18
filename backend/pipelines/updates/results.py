@@ -35,6 +35,8 @@ def draft_to_dict(d: UpdateDraft) -> dict:
             out["explanation"] = d.explanation
         if d.calculations:                          # 실험(2026-11-17) ask 즉석 계산 (calc.py). ok인 것만 화면에 보인다
             out["calculations"] = d.calculations
+        if d.source_list:                           # 실험(2026-11-18) ask: 답 아래 출처 목록
+            out["source_list"] = d.source_list
     return out
 
 

@@ -229,6 +229,12 @@ def _judge_v2_run(item: TrackingItem, evidence, call: Callable[[str], str] | Non
     from .judge import NO_COMPARISON, parse_card_v2, wants_comparison
     from .models import Card
 
+    if item.category == "ask" and cfg.get("ask_overrides"):
+        # 실험(2026-11-18): 질문 답은 공시·뉴스·주가를 하나로 이어 쓰는 종합 답이라 문장 수·설명 길이를 따로 둔다
+        ov = cfg["ask_overrides"]
+        cfg = {**cfg, **{k: v for k, v in ov.items() if k != "explanation"},
+               "explanation": {**(cfg.get("explanation") or {}), **(ov.get("explanation") or {})}}
+
     if not evidence or all(e.candidate.doc == "compare" for e in evidence):
         return TopicOutcome("no_candidates", evidence)
     if item.already_shown_ids and all(e.candidate.ref in set(item.already_shown_ids)
@@ -329,7 +335,34 @@ def _judge_v2_run(item: TrackingItem, evidence, call: Callable[[str], str] | Non
     if item.category == "ask" and card.calc:                  # 실험(2026-11-17): 코드가 값을 근거와 대조한 뒤 계산 (calc.py)
         from .calc import compute
         draft.calculations = compute(card.calc, evidence)
+    if item.category == "ask":                               # 실험(2026-11-18): 답 아래에 모아 보일 출처 (답에 쓴 근거만)
+        draft.source_list = source_list(evidence, {eid for _, eid in facts}
+                                        | {c.get(k, {}).get("evidence_id") for c in card.calc for k in ("a", "b")})
     return TopicOutcome("update", evidence, card, [], draft, raw, retried)
+
+
+_KIND_ORDER = {"disclosure": 0, "news": 1}
+
+
+def source_list(evidence, used_ids: set) -> list[dict]:
+    """답에 쓴 근거 → 화면 출처 목록 [{kind, title, date, source, url, ref}]. 공시 → 뉴스 → 재무 표·시세 DB 순, 같은 공시 중복 제거."""
+    seen, out = set(), []
+    for e in evidence:
+        if e.eid not in used_ids:
+            continue
+        c = e.candidate
+        if c.doc == "fintable":
+            kind, key = "data", "fintable"
+            title = "재무·주가 데이터 (DART 재무제표·시세 DB, 코드 계산)"
+        else:
+            kind = c.kind
+            key = c.ref.split("#")[0]                          # 같은 공시의 여러 조각은 하나로
+            title = c.title
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({"kind": kind, "title": title, "date": c.date, "source": c.source, "url": c.url, "ref": c.ref})
+    return sorted(out, key=lambda s: (_KIND_ORDER.get(s["kind"], 2), s["date"] or ""), reverse=False)
 
 
 def coverage_text(coverage: dict | None, uses_news: bool) -> str:

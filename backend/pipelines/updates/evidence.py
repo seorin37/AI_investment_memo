@@ -106,7 +106,8 @@ def pick_disclosures(candidates: list[Candidate], max_disclosure: int = 2,
 def evidence_options(cfg: dict) -> dict:
     """topic 설정 → pick_disclosures·build_evidence에 넘기는 근거 고르기 값."""
     return {"mode": cfg.get("evidence_mode", "legacy"), "max_disclosure_docs": cfg.get("max_disclosure_docs", 5),
-            "max_chunks_per_disclosure": cfg.get("max_chunks_per_disclosure", 2), "max_total": cfg.get("max_total", 15)}
+            "max_chunks_per_disclosure": cfg.get("max_chunks_per_disclosure", 2), "max_total": cfg.get("max_total", 15),
+            "min_news": cfg.get("min_news", 0)}
 
 
 def split_same_event(candidates: list[Candidate], links: dict[str, str], max_disclosure: int = 2,
@@ -114,6 +115,7 @@ def split_same_event(candidates: list[Candidate], links: dict[str, str], max_dis
     """(남길 후보, [(같은 사건으로 묶여 근거에서 뺀 기사, 공시 접수번호)]). links: 기사 ref → 공시 접수번호.
     그 공시가 근거로 뽑힐 때만 뺀다 (공시가 근거에 못 들면 기사는 그대로 근거 후보로 남는다). options는 evidence_options."""
     options.pop("max_total", None)
+    options.pop("min_news", None)
     chosen = {rcept_of(c.ref) for c in pick_disclosures(candidates, max_disclosure, floor, **options)}
     keep, grouped = [], []
     for c in candidates:
@@ -128,17 +130,23 @@ def split_same_event(candidates: list[Candidate], links: dict[str, str], max_dis
 def build_evidence(candidates: list[Candidate], max_disclosure: int = 2, max_news: int = 3,
                    news_dup_similarity: float = 0.7, max_chars_news: int = 600,
                    max_chars_disclosure: int = 800, floor: dict[str, float] | None = None, mode: str = "legacy",
-                   max_disclosure_docs: int = 5, max_chunks_per_disclosure: int = 2, max_total: int = 15) -> list[Evidence]:
-    """floor가 있으면 공시는 '유사도 - 자기 최소 기준'이 큰 순으로 고른다 (없으면 유사도순). mode는 모듈 설명 2)."""
+                   max_disclosure_docs: int = 5, max_chunks_per_disclosure: int = 2, max_total: int = 15,
+                   min_news: int = 0) -> list[Evidence]:
+    """floor가 있으면 공시는 '유사도 - 자기 최소 기준'이 큰 순으로 고른다 (없으면 유사도순). mode는 모듈 설명 2).
+    min_news(all, 2026-11-18): 관련 뉴스가 있으면 근거 max_total 중 최소 이만큼은 뉴스 자리로 남기고 공시를 그만큼 자른다.
+    0이면 예전처럼 공시는 자르지 않고 뉴스부터 (운영 설정). 공시가 상한을 다 채워 뉴스가 0건이 되던 문제 (실험 설정 공시 5건×3청크)."""
     ordered = sorted(candidates, key=lambda c: -candidate_score(c))
     disclosures = pick_disclosures(candidates, max_disclosure, floor, mode, max_disclosure_docs, max_chunks_per_disclosure)
-    news: list[Candidate] = []
-    news_cap = max_news if mode == "legacy" else max(0, max_total - len(disclosures))   # all: 공시는 자르지 않고 뉴스부터
+    unique_news: list[Candidate] = []
     for c in (c for c in ordered if c.kind == "news"):
-        if any(title_similarity(c.title, n.title) >= news_dup_similarity for n in news):
+        if any(title_similarity(c.title, n.title) >= news_dup_similarity for n in unique_news):
             continue                                  # 같은 사건 기사: 가장 유사한 하나만
-        if len(news) < news_cap:
-            news.append(c)
+        unique_news.append(c)
+    if mode != "legacy" and min_news > 0:
+        reserve = min(min_news, len(unique_news), max_total)
+        disclosures = disclosures[:max(0, max_total - reserve)]   # 공시는 margin 높은 공시부터 남는다
+    news_cap = max_news if mode == "legacy" else max(0, max_total - len(disclosures))   # all: 남는 자리를 뉴스로
+    news = unique_news[:news_cap]
     out = []
     for i, c in enumerate(sorted(disclosures + news, key=_recent_first, reverse=True), 1):
         limit = max_chars_disclosure if c.kind == "disclosure" else max_chars_news
