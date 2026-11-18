@@ -2,7 +2,7 @@
    내 데이터는 바뀔 때마다 api.me.save 로 저장돼요. 화면 코드는 act.* 만 부르면 돼요. */
 import { flatRows } from "./screens/boardDrag";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { api, clearQ } from "./api";
+import { api, clearQ, API_MODE } from "./api";
 import type { Checklist, ColorKey, Hold, JobKind, LabDir, Made, MemoEdit, Memo as MemoRaw, Profile, Settings, TrackItem, TrashItem, UserState, Journal as JournalRaw } from "./api/types";
 import { emptyState } from "./api/mock/db";
 import type { Journal, Memo, Stock, TL } from "./data";
@@ -50,8 +50,9 @@ const nowIso = () => new Date().toISOString();
 /* ---------- 뷰 변환 ---------- */
 export function toStock(code: string, hold: Hold): Stock | null {
   const i = api.market.info(code); if (!i) return null;
-  const q = api.market.quote(code) as ReturnType<typeof import("./api/mock/market").quote>;
-  return { stock_code: code, name: i.name, short: i.logo, logo: i.logo, logo_bg: i.logo_bg, logo_ink: i.logo_ink, hold, market: i.market, sector: i.sector, financial: i.financial, price: q.price, chg: q.chg, pct: q.pct, as_of: q.as_of, seed: Number(code.slice(-2)) || 5 };
+  /* 가격은 api.market.price 한 곳에서만 (API 모드: 시세 API가 없어 null → 화면은 "—") */
+  const q = api.market.price(code);
+  return { stock_code: code, name: i.name, short: i.logo, logo: i.logo, logo_bg: i.logo_bg, logo_ink: i.logo_ink, hold, market: i.market, sector: i.sector, financial: i.financial, price: q?.price ?? 0, chg: q?.chg ?? 0, pct: q?.pct ?? 0, as_of: q?.as_of ?? new Date().toISOString(), priced: !!q, seed: Number(code.slice(-2)) || 5 };
 }
 function toTL(m: MemoRaw): TL[] {
   return api.ai.timeline(m).map((x) => {
@@ -156,6 +157,8 @@ function useActs(setUd: React.Dispatch<React.SetStateAction<UserState>>, udRef: 
       /* 휴지통 */
       restore(id: string) {
         up((s) => { const t = s.trash.find((x) => x.id === id); if (!t) return s; const rest = s.trash.filter((x) => x.id !== id);
+          /* API 모드: 서버에 복원 API가 없어 새 메모로 다시 만든다 (새 id · AI 연결 꺼짐 · 수정 이력 없음) */
+          if (t.kind === "메모" && API_MODE) { const o = t.data as MemoRaw, now = nowIso(); const m: MemoRaw = { ...o, id: nid(), ai: false, ai_since: undefined, tracks: undefined, seen_at: undefined, edits: [], created_at: now, updated_at: now }; return { ...s, trash: rest, memos: [m, ...s.memos], stocks: s.stocks.some((x) => x.stock_code === m.stock_code) ? s.stocks : [...s.stocks, { stock_code: m.stock_code, hold: "관심", added_at: now, order: s.stocks.length }] }; }
           if (t.kind === "메모") { const m = t.data as MemoRaw; return { ...s, trash: rest, memos: [m, ...s.memos.filter((x) => x.id !== m.id)], stocks: s.stocks.some((x) => x.stock_code === m.stock_code) ? s.stocks : [...s.stocks, { stock_code: m.stock_code, hold: "관심", added_at: nowIso(), order: s.stocks.length }] }; }
           if (t.kind === "투자 기록") { const j = t.data as JournalRaw; return { ...s, trash: rest, journal: [j, ...s.journal.filter((x) => x.id !== j.id)].sort((a, b) => b.created_at.localeCompare(a.created_at)) }; }
           if (t.kind === "종목") { const k = t.data as UserState["stocks"][number]; return { ...s, trash: rest, stocks: s.stocks.some((x) => x.stock_code === k.stock_code) ? s.stocks : [...s.stocks, { ...k, order: s.stocks.length }] }; }
@@ -218,7 +221,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   /* 처음 열 때: 로그인돼 있으면 이어서 */
   useEffect(() => {
     void Promise.resolve(api.auth.session()).then((s) => {
-      if (s?.profile) { setUd(s); last.current = ""; setRoute(s.onboarded ? { name: "home" } : { name: "pick" }); }
+      /* API 모드는 소셜 로그인에서 돌아온 직후 여기로 와요 — 처음이면 약관부터 */
+      if (s?.profile) { setUd(s); last.current = ""; setRoute(s.onboarded ? { name: "home" } : API_MODE ? { name: "terms" } : { name: "pick" }); }
       else { let seen = false; try { seen = localStorage.getItem("memos.introSeen") === "1"; } catch { /* 무시 */ } setRoute(seen ? { name: "login" } : { name: "intro" }); }
       setReady(true);
     });

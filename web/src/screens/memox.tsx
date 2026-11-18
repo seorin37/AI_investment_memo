@@ -4,22 +4,42 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Modal, cx, useSnack } from "../kit";
 import { paperBg, type Memo } from "../data";
-import { api } from "../api";
+import { api, API_MODE } from "../api";
 import type { TrackItem } from "../api/types";
 import { useApp } from "../store";
 import { CtxMenu, MI, type MenuItem } from "../x";
 import { mainCenter } from "../kit";
 
 /* ---------- AI 연결 창 (앱 12 · 12.1): 메모 저장 ✓ → 항목 확인 → 연결 시작 ---------- */
-export function ConnectDialog({ memo, onClose, onDone }: { memo: { title: string; body: string; code: string } | null; onClose: () => void; onDone: (items: TrackItem[]) => void }) {
+export function ConnectDialog({ memo, onClose, onDone }: { memo: { id?: number; title: string; body: string; code: string } | null; onClose: () => void; onDone: (items: TrackItem[]) => void }) {
   const last = useRef(memo); if (memo) last.current = memo;
   const m = memo ?? last.current;
   const [items, setItems] = useState<TrackItem[]>([]);
   const [sel, setSel] = useState<Record<string, boolean>>({});
-  const [phase, setPhase] = useState<"find" | "pick">("find");
+  const [phase, setPhase] = useState<"find" | "pick" | "fail">("find");
+  const [failMsg, setFailMsg] = useState("");
+  /* API 모드: 창을 열면 서버에서 AI 연결을 켜고(PUT ai-link) 실제 분석 결과(analysis.items)를 보여 줘요.
+     항목은 서버가 정해서 고를 수 없어요. 취소·실패로 닫으면 다시 꺼요(enabled:false). */
+  const linked = useRef<number | null>(null);
+  const close = () => { if (API_MODE && linked.current != null) { void api.ai.linkEnd(linked.current, false); linked.current = null; } onClose(); };
+  const done = (list: TrackItem[]) => { if (API_MODE && linked.current != null) { void api.ai.linkEnd(linked.current, true); linked.current = null; } onDone(list); };
   useLayoutEffect(() => {
     if (!memo) return;
     setPhase("find"); let alive = true;
+    if (API_MODE) {
+      setItems([]); setSel({});
+      if (memo.id == null) { setFailMsg("메모를 찾지 못했어요 · 다시 시도해 주세요"); setPhase("fail"); return; }
+      const id = memo.id; linked.current = id;
+      api.ai.linkStart(id).then((r) => {
+        if (!alive) return;
+        setItems(r.items); setSel(Object.fromEntries(r.items.map((i) => [i.k, true])));
+        if (r.status === "failed") { setFailMsg("메모를 분석하지 못했어요 · 잠시 후 다시 시도해 주세요"); setPhase("fail"); } else setPhase("pick");
+      }, (e: unknown) => {
+        if (!alive) return;
+        setFailMsg(`AI 연결을 켜지 못했어요 · ${e instanceof Error ? e.message : ""}`); setPhase("fail");
+      });
+      return () => { alive = false; };
+    }
     const kk = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--k")) || 1;
     const t0 = Date.now();
     void Promise.resolve(api.ai.findItems(memo.title + " " + memo.body, memo.code)).then((it) => {
@@ -30,7 +50,7 @@ export function ConnectDialog({ memo, onClose, onDone }: { memo: { title: string
   }, [memo]);
   const n = items.filter((i) => sel[i.k]).length;
   return (
-    <Modal open={!!memo} onClose={onClose} width={680} z={75} label="AI 연결">
+    <Modal open={!!memo} onClose={close} width={680} z={75} label="AI 연결">
       <div data-connect className="flex w-[680px] flex-col gap-5 rounded-[28px] bg-white px-8 pb-7 pt-7">
         <div className="flex items-center gap-2">
           {["메모 확인", "항목 고르기", "연결 시작"].map((s, i) => { const on = i === 0 || (i === 1 && phase === "pick"); return (
@@ -49,11 +69,15 @@ export function ConnectDialog({ memo, onClose, onDone }: { memo: { title: string
           {m?.body && <p className="line-clamp-2 text-[14px] leading-[21px] text-[#2e2e38]">{m.body.replace(/\n/g, " ")}</p>}
         </div>
         {phase === "find" ? (
-          <div className="flex h-[132px] items-center justify-center gap-2 text-[15px] font-medium text-[#747d8d]"><span className="h-2 w-2 animate-pulse rounded-full bg-[#15171a]" />메모에서 계속 확인할 항목을 찾고 있어요</div>
+          <div data-connect-loading className="flex h-[132px] items-center justify-center gap-2 text-[15px] font-medium text-[#747d8d]"><span className="h-2 w-2 animate-pulse rounded-full bg-[#15171a]" />메모에서 계속 확인할 항목을 찾고 있어요</div>
+        ) : phase === "fail" ? (
+          <div data-connect-fail className="m-in flex min-h-[132px] items-center justify-center rounded-[14px] bg-[#fdf0f1] px-5 text-center text-[15px] font-bold leading-[23px] text-[#c0392b]">{failMsg}</div>
+        ) : API_MODE && !items.length ? (
+          <div data-connect-empty className="m-in flex min-h-[132px] items-center justify-center rounded-[14px] bg-[#f7f7f7] px-5 text-center text-[15px] leading-[23px] text-[#575b63]">메모에서 계속 확인할 항목을 찾지 못했어요 · 확인하고 싶은 공시·뉴스 주제나 가격을 메모에 적어 주세요</div>
         ) : (
           <div className="m-in flex flex-col gap-2">
             {items.map((it, i) => { const on = !!sel[it.k]; return (
-              <button key={it.k} role="checkbox" aria-checked={on} onClick={() => setSel((s) => ({ ...s, [it.k]: !s[it.k] }))} style={{ ["--i" as string]: i }} className={cx("m-reveal flex h-16 w-full items-center gap-3 rounded-[14px] px-4 text-left transition-colors", on ? "bg-[#f7f7f7] shadow-[inset_0_0_0_1.5px_#111]" : "bg-white shadow-[inset_0_0_0_1px_#e5e7eb] hover:bg-[#f9f9f9]")}>
+              <button key={it.k} role="checkbox" aria-checked={on} aria-disabled={API_MODE || undefined} onClick={() => { if (!API_MODE) setSel((s) => ({ ...s, [it.k]: !s[it.k] })); }} style={{ ["--i" as string]: i }} className={cx("m-reveal flex h-16 w-full items-center gap-3 rounded-[14px] px-4 text-left transition-colors", on ? "bg-[#f7f7f7] shadow-[inset_0_0_0_1.5px_#111]" : "bg-white shadow-[inset_0_0_0_1px_#e5e7eb] hover:bg-[#f9f9f9]")}>
                 <span className={cx("grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full", on ? "bg-[#111]" : "shadow-[inset_0_0_0_1.6px_#c9ccd2]")}>{on && <svg className="m-pop" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 6L4.8 8.3L9.5 3.5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>}</span>
                 <span className="flex min-w-0 flex-1 flex-col"><span className="text-[17px] font-bold leading-[26px] text-[#15171a]">{it.t}</span><span className="text-[14px] leading-[21px] text-[#747d8d]">{it.d}</span></span>
               </button>
@@ -62,8 +86,8 @@ export function ConnectDialog({ memo, onClose, onDone }: { memo: { title: string
           </div>
         )}
         <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="flex h-12 items-center rounded-[12px] bg-[#f2f3f4] px-5 text-[15px] font-medium text-[#15171a] hover:bg-[#e9eaec]">일반 메모로 두기</button>
-          <button disabled={phase !== "pick" || !n} onClick={() => onDone(items.filter((i) => sel[i.k]))} className="flex h-12 items-center rounded-[12px] bg-[#14171c] px-6 text-[15px] font-medium text-white disabled:cursor-not-allowed disabled:bg-[#c9ccd2]">{n ? `${n}개 항목으로 AI 연결` : "항목을 골라 주세요"}</button>
+          <button onClick={close} className="flex h-12 items-center rounded-[12px] bg-[#f2f3f4] px-5 text-[15px] font-medium text-[#15171a] hover:bg-[#e9eaec]">일반 메모로 두기</button>
+          <button disabled={phase !== "pick" || !n} onClick={() => done(items.filter((i) => sel[i.k]))} className="flex h-12 items-center rounded-[12px] bg-[#14171c] px-6 text-[15px] font-medium text-white disabled:cursor-not-allowed disabled:bg-[#c9ccd2]">{n ? `${n}개 항목으로 AI 연결` : "항목을 골라 주세요"}</button>
         </div>
       </div>
     </Modal>

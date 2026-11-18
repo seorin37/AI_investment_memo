@@ -33,11 +33,17 @@ export function BigHead({ s }: { s: Stock }) {
       </div>
       <div className="flex h-[78px] w-[330px] items-center gap-6">
         <div className="flex h-[76px] w-[156px] flex-col items-end gap-[2px]">
+          {s.priced === false ? <>
+            {/* API 모드: 시세 API가 없어 가격을 비워 둠 (api.market.price) */}
+            <p data-price-pending className="w-[156px] text-center text-[32px] font-bold leading-[40px] text-[#c4c9d0]">—</p>
+            <p className="w-[156px] text-center text-[13px] leading-[20px] text-[#6b7684]">시세 준비 중</p>
+          </> : <>
           <p className="w-[156px] text-center text-[32px] font-bold leading-[40px] text-[#191f28]">{won(s.price)}원</p>
           <p className="w-[156px] whitespace-pre text-center text-[17px] font-bold leading-[26px]" style={{ color: up ? "#e5484d" : "#2f6bdb" }}>{up ? "+" : "-"}{won(Math.abs(s.chg))}  {up ? "+" : "-"}{Math.abs(s.pct).toFixed(2)}%</p>
           <p className="w-[156px] text-center text-[13px] leading-[20px] text-[#6b7684]">{mmdd(s.as_of)} 종가 기준</p>
+          </>}
         </div>
-        <div className="relative h-[60px] w-[150px] shrink-0">
+        <div className={s.priced === false ? "invisible relative h-[60px] w-[150px] shrink-0" : "relative h-[60px] w-[150px] shrink-0"}>
           <svg className="absolute left-1 top-[5px]" width="140" height="51" viewBox="0 0 140 51" fill="none"><path d={area} fill={c} fillOpacity="0.11" /></svg>
           <svg className="absolute left-1 top-[54px]" width="140" height="1" viewBox="0 0 140 1" fill="none"><line y1="0.5" x2="140" y2="0.5" stroke="#94A1B0" strokeOpacity="0.5" strokeDasharray="3 4" /></svg>
           <svg className="absolute left-1 top-[7px] overflow-visible" width="143" height="44" viewBox="0 0 143 44" fill="none"><path className="m-line" pathLength={400} d={line} stroke={c} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></svg>

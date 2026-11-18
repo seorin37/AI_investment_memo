@@ -7,6 +7,8 @@ import { OfflineBand, InboxPanel } from "./x";
 import { AppProvider, useApp, useSession, type Demo } from "./store";
 import { Database, Eraser } from "lucide-react";
 import { SnackHost, Seg, Toggle, cx } from "./kit";
+import { API_MODE } from "./api";
+import { ApiBridge, ModeNotice } from "./apimode";
 import { Sidebar, Main } from "./shell";
 import { Login, Start } from "./screens/login";
 import { Terms, Pick } from "./screens/onboard";
@@ -104,9 +106,9 @@ function Shell() {
     return () => window.clearTimeout(t);
   }, [coachPending, coach, route.name, setCoachPending, setCoach]);
   if (!ready) return <div className="h-full bg-[#fdfdfd]" />;
-  if (route.name === "intro") return <div key="intro" className="m-in h-full"><Intro /><DemoTools /></div>;
-  if (route.name === "login") return <div key="login" className="m-in h-full"><Login /><DemoTools /></div>;
-  if (route.name === "terms" || route.name === "pick") return <div key={route.name} className="m-in h-full">{route.name === "terms" ? <Terms /> : <Pick />}<DemoTools /></div>;
+  if (route.name === "intro") return <div key="intro" className="m-in h-full"><Intro />{!API_MODE && <DemoTools />}</div>;
+  if (route.name === "login") return <div key="login" className="m-in h-full"><Login />{!API_MODE && <DemoTools />}</div>;
+  if (route.name === "terms" || route.name === "pick") return <div key={route.name} className="m-in h-full">{route.name === "terms" ? <Terms /> : <Pick />}{!API_MODE && <DemoTools />}</div>;
   return (
     <div key="app" className="m-in flex h-full bg-[#FDFDFD]">
       <Sidebar />
@@ -117,8 +119,9 @@ function Shell() {
       <InboxPanel />
       <MarketDetailHost />
       <OfflineBand />
+      <ModeNotice />
       <Coach />
-      <DemoTools />
+      {!API_MODE && <DemoTools />}
     </div>
   );
 }
@@ -127,6 +130,7 @@ export default function App() {
   return (
     <AppProvider>
       <SnackHost>
+        <ApiBridge />
         <Shell />
       </SnackHost>
     </AppProvider>

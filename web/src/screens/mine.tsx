@@ -87,7 +87,8 @@ export function MinePage() {
                   {sel && <Pick on={sel.has(s.stock_code)} />}
                   <SLogo code={s.stock_code} size={36} r={10} />
                   <span className="flex min-w-0 flex-1 flex-col"><span className="flex items-center gap-2"><span className="truncate text-[17px] font-bold leading-[26px] text-[#15171a]">{s.name}</span>{nn > 0 && <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#e5484d] px-[5px] text-[12px] font-bold text-white">{nn}</span>}</span><span className="text-[13px] leading-[20px] text-[#8b95a1]">메모 {mm.length} · AI 연결 {mm.filter((m) => m.ai).length}</span></span>
-                  <span className="flex flex-col items-end"><span className="text-[15px] font-bold leading-[23px] text-[#15171a]">{s.price.toLocaleString("ko-KR")}원</span><span className="text-[13px] font-bold leading-[20px]" style={{ color: up ? "#e5484d" : "#2f6bdb" }}>{up ? "+" : ""}{s.pct.toFixed(2)}%</span></span>
+                  {s.priced === false ? <span data-price-pending className="flex flex-col items-end"><span className="text-[15px] font-bold leading-[23px] text-[#c4c9d0]">—</span><span className="text-[13px] leading-[20px] text-[#8b95a1]">시세 준비 중</span></span> :
+                  <span className="flex flex-col items-end"><span className="text-[15px] font-bold leading-[23px] text-[#15171a]">{s.price.toLocaleString("ko-KR")}원</span><span className="text-[13px] font-bold leading-[20px]" style={{ color: up ? "#e5484d" : "#2f6bdb" }}>{up ? "+" : ""}{s.pct.toFixed(2)}%</span></span>}
                   {!sel && <button aria-label={`${s.name} 메뉴`} onClick={(e) => { e.stopPropagation(); const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setMenu({ s, at: { x: r.right - 220, y: r.bottom + 6 } }); }} className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] text-[#8b95a1] hover:bg-[#f2f3f4]"><Dots /></button>}
                 </div>
               ); })}

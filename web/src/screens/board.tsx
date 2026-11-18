@@ -60,6 +60,13 @@ export function StockHead({ s }: { s: Stock }) {
           <div className="flex items-center rounded-[6px] bg-[#e8edf5] px-2 py-[3px]"><p className="whitespace-nowrap text-[13px] font-medium leading-[20px] text-black">{s.hold === "보유" ? "보유 중" : "관심"}</p></div>
         </div>
       </div>
+      {s.priced === false ? (
+        /* API 모드: 시세 API가 없어 가격을 비워 둠 (api.market.price) */
+        <div data-price-pending className="flex flex-col items-end gap-[2px]">
+          <p className="whitespace-nowrap text-[26px] font-bold leading-[35px] text-[#c4c9d0]">—</p>
+          <p className="whitespace-nowrap text-[13px] leading-[20px] text-[#6b7684]">시세 준비 중</p>
+        </div>
+      ) : (
       <div className="flex items-start gap-6">
         <div className="flex flex-col items-end gap-[2px]">
           <p className="whitespace-nowrap text-[26px] font-bold leading-[35px] text-[#191f28]">{s.price.toLocaleString("ko-KR")}원</p>
@@ -68,6 +75,7 @@ export function StockHead({ s }: { s: Stock }) {
         </div>
         <MiniChart s={s} />
       </div>
+      )}
     </div>
   );
 }

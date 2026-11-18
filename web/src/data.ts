@@ -17,7 +17,8 @@ export const paperBg = (c: ColorKey, keep = false) => `var(--${keep ? "pk" : "pp
 export const paper = (c: ColorKey, dark: boolean) => (dark ? { ...PAPER[c], ...PAPER[c].dk } : PAPER[c]);
 
 /* 내 종목 (종목 정보 + 시세 + 보유/관심) */
-export type Stock = { stock_code: string; name: string; short: string; logo: string; logo_bg: string; logo_ink?: string; hold: Hold; market: string; sector: string; financial: boolean; price: number; chg: number; pct: number; as_of: string; seed: number };
+export type Stock = { stock_code: string; name: string; short: string; logo: string; logo_bg: string; logo_ink?: string; hold: Hold; market: string; sector: string; financial: boolean; price: number; chg: number; pct: number; as_of: string; seed: number;
+  priced?: boolean /* false = 가격 없음(API 모드, 시세 API 없음) → 화면은 "—". api.market.price 참고 */ };
 
 /* 메모 (보드·팝업에서 쓰는 모양) */
 export type TL = { kind: UpKind | "edit" | "first" | "start"; at: string; date: string; title?: string; body?: string; src?: string; url?: string; old?: { when: string; title: string; body: string } };

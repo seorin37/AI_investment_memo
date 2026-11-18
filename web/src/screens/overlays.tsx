@@ -8,7 +8,7 @@ import { useUsage } from "../x";
 import { LEGAL } from "../legal";
 import { FixedFrame } from "./stock";
 import type { Hold } from "../data";
-import { api } from "../api";
+import { api, API_MODE } from "../api";
 import type { StockInfo, TrashItem } from "../api/types";
 import { useSession, ago as agoT } from "../store";
 import { matchKo } from "../x";
@@ -26,7 +26,20 @@ export function AddStock() {
   const open = overlay === "addStock";
   useEffect(() => { if (open) { setQ(""); setPick(null); setHold("관심"); } }, [open]);
   const t = q.trim();
-  const list = t ? POOL().filter((s) => matchKo(s.name, t) || s.stock_code.includes(t) || s.sector.includes(t)) : POOL().filter((s) => !stocks.some((x) => x.stock_code === s.stock_code)).slice(0, 8);
+  /* API 모드: 입력하면 서버 종목 마스터 검색 (GET /stocks/search, 0.25초 쉬었다가). 검색 전 추천 목록은 그대로 */
+  const [found, setFound] = useState<{ q: string; list: StockInfo[]; err?: string } | null>(null);
+  useEffect(() => {
+    if (!API_MODE || !t) return;
+    const id = window.setTimeout(() => {
+      api.market.search(t).then(
+        (r) => setFound({ q: t, list: r.map((x) => api.market.info(x.stock_code)).filter((x): x is StockInfo => !!x) }),
+        (e: unknown) => setFound({ q: t, list: [], err: e instanceof Error ? e.message : "검색하지 못했어요" }),
+      );
+    }, 250);
+    return () => window.clearTimeout(id);
+  }, [t]);
+  const searching = API_MODE && !!t && found?.q !== t;
+  const list = t ? (API_MODE ? (found?.q === t ? found.list : []) : POOL().filter((s) => matchKo(s.name, t) || s.stock_code.includes(t) || s.sector.includes(t))) : POOL().filter((s) => !stocks.some((x) => x.stock_code === s.stock_code)).slice(0, 8);
   const had = (code: string) => stocks.find((x) => x.stock_code === code);
   const sel = list.find((s) => s.stock_code === pick && !had(s.stock_code));
   const close = () => setOverlay(null);
@@ -51,9 +64,9 @@ export function AddStock() {
           <input autoFocus value={q} onChange={(e) => { setQ(e.target.value); setPick(null); }} onKeyDown={(e) => { if (e.key === "Enter") ok(); }}
             placeholder="종목명 또는 코드" aria-label="종목 검색" className="h-[17px] min-w-0 flex-1 bg-transparent text-[14px] leading-[21px] text-[#16171a] outline-none placeholder:text-[#9a9ea7]" />
         </label>
-        {t && <p className="shrink-0 text-[13px] leading-[20px] text-[#8a8f98]">검색 결과 {list.length}건</p>}
+        {t && <p className="shrink-0 text-[13px] leading-[20px] text-[#8a8f98]">{searching ? "검색 중…" : `검색 결과 ${list.length}건`}</p>}
         <div className="flex min-h-0 w-full flex-1 flex-col items-start gap-[2px] overflow-y-auto">
-          {list.length === 0 && <p className="w-full py-6 text-center text-[13px] leading-[20px] text-[#8a8f98]">찾는 종목이 없어요</p>}
+          {list.length === 0 && !searching && <p className="w-full py-6 text-center text-[13px] leading-[20px] text-[#8a8f98]">{found?.q === t && found.err ? `검색하지 못했어요 · ${found.err}` : "찾는 종목이 없어요"}</p>}
           {list.map((s) => {
             const h = had(s.stock_code), on = !h && s.stock_code === pick;
             const logo = s.logo, bg = s.logo_bg;
@@ -103,6 +116,8 @@ function ConfirmDanger({ kind, onClose, z = 70, text, onRun }: { kind: Danger | 
   const [t, d, b] = lastText.current ?? DANGER[last.current];
   const run = () => {
     if (onRun) { onClose(); onRun(); return; }
+    /* API 모드: 서버에 전체 삭제·회원 탈퇴 API가 없어 지운 척하지 않는다 (상태 비교 저장이라 그대로 두면 종목·메모 삭제 요청이 실제로 나감) */
+    if (API_MODE && last.current !== "logout") { onClose(); snack(last.current === "wipe" ? "전체 삭제는 아직 지원하지 않아요 · 데이터는 그대로예요" : "회원 탈퇴는 아직 지원하지 않아요 · 계정은 그대로예요"); return; }
     if (last.current === "wipe") { onClose(); act.wipeData(); snack("모든 데이터를 삭제했어요"); return; }
     onClose(); if (last.current === "withdraw") void sess.withdraw(); else void sess.logout();
   };
@@ -619,7 +634,7 @@ export function Trash() {
   const t0 = type ?? "전체";
   const kindOk = (t: TrashItem) => t0 === "전체" || t.kind === t0 || (t0 === "체크리스트" && t.kind === "체크리스트 항목");
   const list = trash.filter((t) => kindOk(t) && (!q.trim() || t.title.includes(q.trim()) || t.sub.includes(q.trim())));
-  const restore = async (t: TrashItem) => { setGone(t.id); await sleep(280); act.restore(t.id); setGone(null); snack(t.kind === "메모" ? "메모를 복원했어요 · 원래 종목 보드에 돌아갔어요" : t.kind === "종목" ? "종목을 복원했어요 · 메모도 함께 돌아왔어요" : "복원했어요", { check: true }); };
+  const restore = async (t: TrashItem) => { setGone(t.id); await sleep(280); act.restore(t.id); setGone(null); snack(t.kind === "메모" && API_MODE ? "메모를 새로 만들어 복원했어요 · AI 연결과 업데이트 기록은 복원되지 않아요" : t.kind === "메모" ? "메모를 복원했어요 · 원래 종목 보드에 돌아갔어요" : t.kind === "종목" ? "종목을 복원했어요 · 메모도 함께 돌아왔어요" : "복원했어요", { check: true }); };
   const [ask, setAsk] = useState<TrashItem | null>(null);
   const [askAll, setAskAll] = useState(false);
   const kill = async (t: TrashItem) => { setGone(t.id); await sleep(280); act.purge(t.id); setGone(null); snack("영구 삭제했어요"); };
