@@ -1514,7 +1514,7 @@ class ExtraRulesAndPredictionTest(unittest.TestCase):
         check_topic(ITEM, [disc()], lambda p: prompts.append(p) or NO_UPDATE_JSON, BANNED,
                     {"extra_rules": self.TOPIC["extra_rules"]})
         self.assertIn("# 추가 규칙\n- 같은 내용이 공시와 뉴스에 있으면 공시 숫자를 쓴다.", prompts[0])
-        self.assertIn("- 전망·예상·추정을 다룬 기사는 사실 근거로 쓰지 않는다.", prompts[0])
+        self.assertIn("- 전망·예상·추정 기사도 근거로 쓸 수 있다.", prompts[0])           # 2026-11-18 N08
 
     def test_naver_forecast_card_is_blocked(self):                    # 2026-11-09 비교 실행에서 나온 카드
         from pipelines.updates.models import Card
