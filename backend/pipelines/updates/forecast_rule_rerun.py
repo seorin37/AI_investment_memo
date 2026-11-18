@@ -7,7 +7,7 @@
 
 - 입력: 실행 폴더 llm_io.jsonl의 카드 호출(stage card). 프롬프트의 항목·메모·근거는 그대로 두고 지시문 문장만 바꾼다
   (REWRITES: 고치기 전 문장 → configs/update_judge_prompt_v2*.md·updates.yaml extra_rules의 지금 문장). 변형마다 몇 개가 바뀌었는지 남긴다.
-- 형식 재요청: 운영(topic._judge_v2_run)처럼 FORMAT_TITLE·FORMAT_SUMMARY·FORMAT_EXPLANATION만이면 한 번 고쳐 달라고 한다.
+- 형식 재요청: 운영(topic._judge_v2_run)처럼 형식 코드(topic._FORMAT_CODES)만이면 한 번 고쳐 달라고 한다.
 - 반복(--repeat N): card_repeat_survey 묶음 중 호출이 2번 이상인 묶음마다 첫 실행(A 변형이 있으면 A) 프롬프트를 바꾼 지시문으로 N번 더.
 """
 

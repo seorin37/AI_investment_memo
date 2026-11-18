@@ -22,8 +22,11 @@ from .judge import build_prompt, build_verify_prompt, parse_card, parse_verify
 from .models import Candidate, CreditsExhausted, TopicOutcome, TrackingItem, UpdateDraft
 
 
-_FORMAT_CODES = {"FORMAT_TITLE", "FORMAT_SUMMARY", "FORMAT_EXPLANATION"}
+# 형식만 어긴 카드는 한 번 고쳐 달라고 한다. FORMAT_REASON(memo_link·reason 길이·한 문장)은 2026-11-18부터
+# (memo_link가 두 문장으로 나온 카드가 4번 중 1번 떨어졌다)
+_FORMAT_CODES = {"FORMAT_TITLE", "FORMAT_SUMMARY", "FORMAT_EXPLANATION", "FORMAT_REASON"}
 _REPAIR_REASON = {"FORMAT_TITLE": "title이 {title_max}자(공백 포함)를 넘었어요",
+                  "FORMAT_REASON": "reason이 비었거나 {reason_max}자(공백 포함)를 넘었어요",
                   "FORMAT_SUMMARY": "summary가 {max_sentences}문장을 넘었거나, 한 문장이 [E#]를 뺀 {sentence_max_chars}자를 넘었거나, 문장 끝에 [E#]가 없어요"}
 
 
@@ -174,7 +177,8 @@ def _judge(item: TrackingItem, evidence, call: Callable[[str], str] | None, bann
 
 _REPAIR_REASON_V2 = {"FORMAT_TITLE": "headline이 {title_max}자(공백 포함)를 넘었거나 비었어요",
                      "FORMAT_SUMMARY": "facts가 1~{max_sentences}개가 아니거나, 한 문장이 {sentence_max_chars}자를 넘었거나, text에 [E#] 표시가 있어요",
-                     "FORMAT_EXPLANATION": "explanation이 비었거나, {explanation_max_sentences}문장·{explanation_max_chars}자를 넘었거나, [E#] 표시가 있어요"}
+                     "FORMAT_EXPLANATION": "explanation이 비었거나, {explanation_max_sentences}문장·{explanation_max_chars}자를 넘었거나, [E#] 표시가 있어요",
+                     "FORMAT_REASON": "memo_link가 비었거나, {reason_max}자(공백 포함)를 넘었거나, 한 문장이 아니에요"}
 _COMPARE_WORDS = ("대비", "보다", "비교", "전년", "작년", "직전", "지난", "전기")
 
 

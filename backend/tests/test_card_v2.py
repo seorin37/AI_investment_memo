@@ -213,6 +213,25 @@ class FlowTest(unittest.TestCase):
         out = check_topic(ITEM, [disc()], lambda p: "JSON 아님", [], CFG)
         self.assertEqual(out.checks, [{"stage": "card", "card": None, "codes": ["FORMAT_PARSE"], "raw": "JSON 아님"}])
 
+    def test_format_retry_memo_link(self):
+        """memo_link가 두 문장이면(FORMAT_REASON) 한 번 고쳐 달라고 한다 (2026-11-18, 오늘 실행 항목 7 카드 모양)."""
+        good = {"status": "update", "headline": "SK하이닉스 분기배당 결정", "when": "2026-10-28",
+                "facts": [{"text": "보통주 1주당 20,000원 분기배당을 결정했어요.", "evidence_id": "E1"}],
+                "memo_link": "메모의 '배당' 관심사와 연결돼요.", "sources": ["E1"], "confidence": 0.9}
+        two = {**good, "memo_link": "분기배당 발표 금액을 확인하는 공시예요. 작년 같은 시기 배당금은 제공 자료에 없어요."}
+        prompts, replies = [], iter([two, good])
+        out = check_topic(ITEM, [disc()], lambda p: prompts.append(p) or json.dumps(next(replies), ensure_ascii=False), [],
+                          {**CFG, "format_retry": 1})
+        self.assertEqual(out.kind, "update")
+        self.assertEqual([(c["stage"], c["codes"]) for c in out.checks], [("card", ["FORMAT_REASON"]), ("format_retry", [])])
+        self.assertIn("memo_link가 비었거나, 80자(공백 포함)를 넘었거나, 한 문장이 아니에요", prompts[1])
+
+    def test_repair_reasons_cover_format_codes(self):
+        """재요청 대상 코드마다 안내 문구가 있다 (v1 reason 길이 FORMAT_REASON도 KeyError 없이)."""
+        from pipelines.updates.topic import _FORMAT_CODES, _REPAIR_REASON, _REPAIR_REASON_V2
+        self.assertTrue(_FORMAT_CODES - {"FORMAT_EXPLANATION"} <= set(_REPAIR_REASON))   # v1에는 설명 문단이 없다
+        self.assertTrue(_FORMAT_CODES <= set(_REPAIR_REASON_V2))
+
     def test_number_compare_reads_outcomes_checks(self):
         """number_check_compare가 새 형식(outcomes.jsonl 검사 기록)을 읽어 같은 검사를 다시 돌린다."""
         from pipelines.updates import checks
