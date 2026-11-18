@@ -207,6 +207,53 @@ def test_final_three_types_with_project_config():    # 2026-11-18 고정 세트 
     assert t("KT, AI 사업 확대", pad + "김영섭 KT 대표는 AI 투자를 늘린다고 밝혔다.") == {"030200"}   # 대표는 회사 소식
 
 
+def test_timer_first_night_with_project_config():    # 2026-11-19 매시 태깅 첫날 오탐 7건 (실제 설정)
+    cfg = yaml.safe_load(Path("configs/stock_aliases.yaml").read_text(encoding="utf-8"))
+    stocks = {"000720": "현대건설", "012030": "DB", "025560": "미래산업", "088350": "한화생명", "028260": "삼성물산",
+              "005380": "현대차", "030200": "KT", "005930": "삼성전자", "000660": "SK하이닉스", "003490": "대한항공"}
+    r = st.build_rules(stocks, cfg)
+    t = lambda title, body=None: {h.symbol for h in st.match_article(title, body, r)}   # noqa: E731
+    pad = "업계 소식이다. " * 2
+    # ① 경기 결과 기사: 제목이 경기 기사면 본문 구단 이름은 앞뒤 낱말 없이도 뺀다 / "1승 4패" 전적 표기
+    assert t("[프로배구 전적] 18일", pad + "△ 여자부(SOOP 스타디움) SOOP(5패) 20 16 25 16 - 1 현대건설(1승 4패) 25 25 19 25 - 3") == set()
+    assert t("오늘의 소식", pad + "현대건설(1승 4패)은 홈에서 졌다.") == set()
+    assert t("현대건설, 한강변에 5000가구 대단지") == {"000720"}
+    # ② 흔한 낱말 DB·미래산업
+    assert t("개보위, '자바' 취약점 주의 당부", pad + "데이터베이스(DB) 접근권한이 넓으면 위험하다. DB 조회 권한을 줄여야 한다.") == set()
+    assert t("대기업 계열사 수", pad + "AI·디지털 금융 등 미래산업 진출 목적이 주요 특징이다.") == set()
+    assert t("DB, 3분기 실적 발표") == {"012030"}
+    assert t("특징주", pad + "DB(012030) 주가가 올랐다.") == {"012030"}
+    assert t("미래산업, 반도체 장비 수주 공시") == {"025560"}
+    # ③ 떨어진 직함·"전 ○○ CIO/부사장"
+    assert t("KIC 신임 CIO 내정", pad + "신임 CIO로 신민식 전 한화생명보험 CIO가 내정됐다.") == set()
+    assert t("동곡상 시상식", pad + "지형근 삼성물산 건설부문 전략사업실장 부사장 등 4명이 수상했다.") == set()
+    assert t("인터뷰", pad + "그는 前 삼성전자 부사장으로 일했다.") == set()
+    assert t("KT, AI 사업 확대", pad + "김영섭 KT 대표는 AI 투자를 늘린다고 밝혔다.") == {"030200"}   # 현직 대표 발언은 회사 소식
+    assert t("한화생명, 3분기 순이익 증가") == {"088350"}
+    # ④ 협력사·이직 경력
+    assert t("박대성 대표 인터뷰", pad + "1984년 현대차 1차 협력사인 화신으로 이직했다.") == set()
+    assert t("인재 이동", pad + "삼성전자에서 SK하이닉스로 이직한 엔지니어가 늘었다.") == set()
+    assert t("상생", pad + "현대차는 협력사 지원 프로그램을 확대했다.") == {"005380"}          # 회사가 주어인 협력사 기사는 그대로
+    # 판사·주차장처럼 직함 낱말을 품은 다른 낱말은 직함이 아니다
+    assert t("소송", pad + "삼성전자 사건을 맡은 부장판사가 판결했다.") == {"005930"}
+    r_lgu = st.build_rules({**stocks, "032640": "LG유플러스", "015760": "한국전력", "031430": "신세계인터내셔날"}, cfg)
+    t2 = lambda title, body=None: {h.symbol for h in st.match_article(title, body, r_lgu)}   # noqa: E731
+    long_pad = "통신 업계 소식이다. " * 25
+    # 전체 DB 다시 돌리기에서 찾은 과잉 차단 (2026-11-19)
+    assert t2("[사설] 한전 2년 만에 적자, 이대로 ‘AI 3강’ 뒷받침되겠나",
+              pad + "전력망 확충을 뒷받침해야 할 한국전력이 2년 만에 영업 손실을 냈다.") == {"015760"}   # "N강"은 제목 경기 낱말 아님
+    assert t2("위성폰 영향", long_pad + "LG유플러스(032640)는 실적 설명회를 열었다. " + long_pad
+              + "여명희 LG유플러스 CFO도 영향이 제한적이라고 했다.") == {"032640"}                   # CFO 발언은 회사 소식
+    assert t2("대표 영입", long_pad + "허 대표는 신세계인터내셔날 코스메틱부문 대표를 겸한다. "
+              + "그는 신세계인터내셔날과 동화면세점을 거쳐 CJ그룹으로 자리를 옮겼다.") == {"031430"}
+    assert t("인터뷰", pad + "그는 삼성전자로 이직했다.") == set()
+    # "차장" 앞이 주·정·승·하면 직함이 아니다, 띄어 쓴 낱말 사이 차장은 직함
+    r_role = st.build_rules({"139480": "이마트"}, cfg)
+    assert r_role.person_role_re.match("이마트 앞 주차장 일원", 3) is None
+    assert r_role.person_role_re.match("이마트 영업 차장은", 3) is not None
+    assert r_role.person_role_re.match("이마트 커뮤니케이션실장은", 3) is None                # 긴 붙은 말은 가르지 않는다
+
+
 def test_project_config_loads():
     cfg = yaml.safe_load(Path("configs/stock_aliases.yaml").read_text(encoding="utf-8"))
     rules = st.build_rules({**STOCKS, "005380": "현대차"}, cfg)

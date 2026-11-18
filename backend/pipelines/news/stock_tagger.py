@@ -13,6 +13,9 @@
 - 2026-11-09 표본 O/X로 더한 규칙: 스포츠 구단과 같은 이름(sports_names)은 근처에 경기 말이 있으면 빼고, 짧은 이름·그룹 이름
   바로 뒤에 조사가 아닌 한글이 붙으면(비상장 계열사 "LS오토", "두산인베스트먼트", "기아대책") 빼고, 이름에 "증권"이 든 종목은
   제목에서만(기사 출처 "~증권에 따르면"), 2글자 영문 이름 바로 앞이 한글이면("울산TP") 뺀다.
+- 2026-11-19 매시 태깅 첫날 오탐으로 더한 규칙: 제목이 경기 기사면 본문 구단 이름도 뺀다(sports_title_words), DB·미래산업은 문맥 필요,
+  직함은 띄어 쓴 낱말 두 개까지 건너 보고("삼성물산 건설부문 전략사업실장"), "전/前 ○○ … CIO·부사장"(former_role_words)과
+  "○○ 1차 협력사인 …"·"○○에서 …로 이직"(career_after_patterns)은 인물 경력·다른 회사 이야기로 본다.
 - 붙이는 기준: 제목(score 1.0) / 본문 리드 lead_chars자 안 1번(0.8) / 본문 2번 이상(0.6). 본문 규칙 종목은 기사당 max_body_tags개.
   원문이 없는 기사는 제목만 본다.
 - 공용 DB 쓰기는 --write --target host:port일 때만 (실제 대상과 다르면 멈춘다). 기본은 읽기 전용 dry-run.
@@ -75,6 +78,9 @@ class Rules:
     group_product_re: re.Pattern | None = None               # 그룹 이름 뒤 제품·매장 낱말 ("LG 올레드", "LG 베스트샵")
     body_with_stock_words: set[str] = field(default_factory=set)   # 제목 전용이지만 본문에서 바로 뒤 주식 낱말이면 붙이는 이름 (네이버)
     person_role_re: re.Pattern | None = None                 # 이름 뒤 인물 직함·경력 ("우리금융지주 홍보실장", "한샘 출신")
+    former_role_re: re.Pattern | None = None                 # "전/前 + 이름" 뒤 직함 ("전 한화생명보험 CIO", "前 삼성전자 부사장")
+    career_after_re: re.Pattern | None = None                # 이름 뒤 다른 회사·이직 ("현대차 1차 협력사인 화신으로 이직")
+    sports_title_re: re.Pattern | None = None                # 제목이 경기 기사인가 ("[프로배구 전적]")
 
 
 @dataclass(frozen=True)
@@ -140,9 +146,32 @@ def build_rules(stocks: dict[str, str], cfg: dict, dart_names: set[str] = frozen
                  spaced_suffix_re=_words_re(cfg.get("spaced_suffix_block"), r"\s"),
                  group_product_re=_words_re(cfg.get("group_product_words"), r"\s?"),
                  body_with_stock_words=set(cfg.get("title_only_names") or []) & set(names),
-                 person_role_re=(re.compile(r"\s?[가-힣]{0,4}?(?:" + "|".join(map(re.escape, cfg["person_role_words"]))
-                                            + r")(?=$|[^가-힣]|[이가을를은는의에과와로도만께])")
-                                 if cfg.get("person_role_words") else None))
+                 person_role_re=_role_re(cfg.get("person_role_words")),
+                 former_role_re=_role_re(cfg.get("former_role_words")),
+                 career_after_re=(re.compile("|".join(f"(?:{p})" for p in cfg["career_after_patterns"]))
+                                  if cfg.get("career_after_patterns") else None),
+                 sports_title_re=(re.compile("|".join(f"(?:{w})" for w in cfg["sports_title_words"]))
+                                  if cfg.get("sports_title_words") else None))
+
+
+# 이름과 직함 사이 (2026-11-19): 이름에 붙은 말(4자, 뒤가 띄어쓰기 "한화생명보험 CIO") → 띄어 쓴 낱말 두 개까지("건설부문")
+# → 직함 앞에 붙은 말 4자까지("전략사업실장"). 낱말 단위로만 건너므로 "커뮤니케이션실장"처럼 긴 붙은 말은 가르지 않는다
+_ROLE_GAP = r"(?:[가-힣]{1,4}(?=\s))?(?:\s[가-힣0-9]{1,8}(?=\s)){0,2}?\s?[가-힣]{0,4}?"
+_ROLE_END = r"(?=$|[^가-힣A-Za-z]|[이가을를은는의에과와으로도만께])"
+_ROLE_LOOKBEHIND = {"차장": "(?<![주정승하])"}               # "주차장"·"정차장"은 직함이 아니다
+
+
+def _role_re(words) -> re.Pattern | None:
+    """이름 바로 뒤(낱말 두 개까지 건너) 직함 낱말로 끝나는 꼴. 직함 뒤는 끝·조사·한글 아닌 글자만 ("부장판사"는 아니다)."""
+    if not words:
+        return None
+    alts = [_ROLE_LOOKBEHIND.get(w, "") + re.escape(w) for w in sorted(words, key=len, reverse=True)]
+    return re.compile(_ROLE_GAP + "(?:" + "|".join(alts) + ")" + _ROLE_END)
+
+
+def _former_at(text: str, a: int) -> bool:
+    """이름 바로 앞이 "전 "·"前"인가 (인물 경력 "신민식 전 한화생명보험 CIO")."""
+    return text[max(0, a - 2):a] in ("전 ", "前 ") or text[max(0, a - 1):a] == "前"
 
 
 def _words_re(words, prefix: str) -> re.Pattern | None:
@@ -224,6 +253,10 @@ def _valid(text: str, a: int, b: int, name: str, rules: Rules, in_title: bool = 
         return False                                         # "신세계I&C": 한글 이름 바로 뒤 영문이면 더 긴 다른 회사 이름
     if rules.person_role_re and rules.person_role_re.match(text, b):
         return False                                         # "우리금융지주 홍보실장", "한샘 출신 대표": 인물 직함·경력
+    if rules.former_role_re and _former_at(text, a) and rules.former_role_re.match(text, b):
+        return False                                         # "전 한화생명보험 CIO", "前 삼성전자 부사장": 인물 경력
+    if rules.career_after_re and rules.career_after_re.match(text, b):
+        return False                                         # "현대차 1차 협력사인 화신으로 이직": 다른 회사·이직
     if name in rules.sports_names and _sports_at(text, a, b, rules):
         return False                                         # 프로야구·농구·배구 구단
     if name in rules.group_names:
@@ -258,8 +291,11 @@ def match_article(title: str, body: str | None, rules: Rules) -> list[Hit]:
     if any(p.search(title or "") for p in rules.skip_title):
         return []                                            # [인사]·[부고]: 계열사를 여러 개 나열한다
     # 스포츠 문맥이 한 자리라도 있는 구단 이름은 기사 전체에서 뺀다 (배구 기사 뒤쪽의 "현대건설도 분위기…")
+    # 제목이 경기 기사면("[프로배구 전적] 18일") 본문의 구단 이름은 앞뒤 낱말 없이도 뺀다 (2026-11-19).
+    # 제목은 확실한 경기 낱말(sports_title_words)만 본다 ("AI 3강"의 "N강"은 아니다)
+    sports_title = bool(rules.sports_title_re.search(title or "")) if rules.sports_title_re else False
     sports = {name for text in (title or "", body or "") for a, b, name in find(text, rules)
-              if name in rules.sports_names and _sports_at(text, a, b, rules)}
+              if name in rules.sports_names and (sports_title or _sports_at(text, a, b, rules))}
     for a, b, name in find(title or "", rules):
         sym = rules.names[name]
         if name not in sports and sym not in hits and _valid(title, a, b, name, rules):
