@@ -96,18 +96,22 @@ def all_numbers(text: str) -> set[float]:
 
 # 표 단위. 금액 단위는 표 숫자를 원으로, 개수 단위(명·주·건·개, 배수 천·만·백만… 포함)는 개수로 환산한다.
 # 그 밖의 단위(%·배·회)는 환산하지 않되 금액·개수로도 보지 않는다
-_MONEY_FACTOR = {"원": 1.0, "천원": 1e3, "백만원": 1e6, "억원": 1e8, "조원": 1e12}
+_MONEY_FACTOR = {"원": 1.0, "천원": 1e3, "백만원": 1e6, "억원": 1e8, "십억원": 1e9, "조원": 1e12}
 _COUNT_MULT = {"": 1.0, "천": 1e3, "만": 1e4, "십만": 1e5, "백만": 1e6, "천만": 1e7, "억": 1e8}
 _COUNT_FACTOR = {m + b: f for m, f in _COUNT_MULT.items() for b in ("명", "주", "건", "개")}
 _OTHER_UNITS = ("%", "배", "회")
 _UNITS_RE = "|".join(sorted([*_MONEY_FACTOR, *_COUNT_FACTOR, *_OTHER_UNITS], key=len, reverse=True))
-# 표 머리 "(단위 : 백만원)"·"(단위: 원, %)"·"(단위 : 천명)" (쉼표 뒤는 무시하고 첫 단위만)
-_UNIT_HEADER = re.compile(rf"단위\s*[:：]?\s*({_UNITS_RE})(?![가-힣A-Za-z])")
+# 표 머리 "(단위 : 백만원)"·"(단위: 원, %)"·"(단위 : 천명)" (쉼표 뒤는 무시하고 첫 단위만).
+# 쌍점 뒤 단위를 모르면("(단위 : USD)"·"(단위 : 천)"·"(단위 : 백만)"·"(단위 : 천단위)") _UNKNOWN: 앞 표 단위 범위를 끊는다 (2026-11-18)
+_UNKNOWN = "?"
+_UNIT_HEADER = re.compile(rf"단위\s*[:：]?\s*({_UNITS_RE})(?![가-힣A-Za-z])|단위\s*[:：]\s*([^\s,)\]/:：]{{1,15}})")
 # 표 행 이름표의 단위 "주당배당금(단위: 원)"·"기본주당이익(손실) (단위 : 원)"·"배당금총액(원)"·"비율(%)"·"임직원수(천명)".
-# "단위" 없는 괄호는 금액·%·개수만 단위로 보고 "(주)"는 뺀다 ("(주)한화"의 (주)는 주식회사. "(천주)"는 단위)
+# "단위" 없는 괄호는 금액·%·개수만 단위로 보고 "(주)"는 뺀다 ("(주)한화"의 (주)는 주식회사. "(천주)"는 단위).
+# "(단위: USD)"처럼 모르는 단위면 그 줄은 _UNKNOWN
 _BARE_LABEL_UNITS = [*_MONEY_FACTOR, "%", *(u for u in _COUNT_FACTOR if u != "주")]
 _LABEL_UNIT = re.compile(rf"\(\s*(?:단위\s*[:：]?\s*({_UNITS_RE})|("
-                         + "|".join(sorted(_BARE_LABEL_UNITS, key=len, reverse=True)) + r"))\s*[,)]")
+                         + "|".join(sorted(_BARE_LABEL_UNITS, key=len, reverse=True))
+                         + r")|단위\s*[:：]\s*([^\s,)]{1,15}))\s*[,)]")
 _NO_CONTEXT = None          # 표 머리·이름표가 없는 글: 맨숫자를 금액·개수로도 인정 (기사·문단)
 
 
@@ -139,6 +143,7 @@ def _segments(text: str):
     """(글 조각, 단위). 단위는 그 조각의 맨숫자에 적용할 단위 (없으면 _NO_CONTEXT).
     - 표 머리: 숫자마다 그 앞에 나온 가장 가까운 "(단위 : …)"를 쓴다 (한 근거에 표가 여러 개, 2026-11-18)
     - 행 이름표: 같은 줄 이름표(첫 " | " 앞)에 단위가 있으면 그 줄 값들은 표 머리 대신 그 단위 (줄 단위로만)
+    - 모르는 단위 머리·이름표는 _UNKNOWN: 그 숫자는 맨숫자로만 인정한다 (금액·개수로 보지 않는다)
     DART 청크는 표 한 행이 한 줄이다 (disclosures/chunker. 토큰 한도를 넘는 행만 잘리며, 284만 청크 중 잘린 조각 758줄)."""
     header = _NO_CONTEXT
     for line in (text or "").split("\n"):
@@ -146,8 +151,8 @@ def _segments(text: str):
         label, rest = (line[:cut], line[cut:]) if cut >= 0 else ("", line)
         heads = _UNIT_HEADER.findall(line) if cut < 0 else []   # 행 줄 안의 "(단위: …)"는 그 칸 단위라 표 머리로 쓰지 않는다
         if heads:
-            header = heads[-1]
-        units = [a or b for a, b in _LABEL_UNIT.findall(label)]
+            header = heads[-1][0] or _UNKNOWN
+        units = [a or b or _UNKNOWN for a, b, _ in _LABEL_UNIT.findall(label)]
         if label:
             yield label, header
         yield rest, units[-1] if units else header
@@ -201,7 +206,7 @@ def evidence_number_sets(text: str) -> EvidenceNumbers:
                 out.unit.add(v)
             # 맨숫자 원래 값을 개수로도 인정한다. 단 표 단위가 배수 붙은 개수 단위(천명·백만주…)면 환산값만.
             # 금액 표의 맨숫자는 개수로 둔다: "(단위 : 백만원)" 자기주식 소각 표의 "소각수량: 18,162,721"(주)처럼 열마다 단위가 다르다
-            if kind == COUNT or (kind == BARE and not (kind_u == COUNT and factor != 1)):
+            if kind == COUNT or (kind == BARE and unit != _UNKNOWN and not (kind_u == COUNT and factor != 1)):
                 out.count.add(v)
             if kind == BARE and kind_u == UNIT:
                 out.plain.add(round(v * factor, 6))

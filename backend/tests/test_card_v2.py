@@ -503,6 +503,33 @@ class CountUnitTest(unittest.TestCase):
         self.assertIsNone(table_unit("톤"))
 
 
+class UnknownUnitTest(unittest.TestCase):
+    """모르는 단위 머리 (2026-11-18): "(단위 : USD)"·"(단위 : 천)"처럼 쌍점 뒤 단위를 모르면 앞 표 단위 범위를 끊고,
+    그 표 숫자는 맨숫자로만 인정한다 (DB 표 청크 중 아는 머리 뒤에 모르는 머리가 오는 청크 11,461개). 십억원은 금액 단위."""
+
+    USD_AFTER = ("[표] 매출\n(단위 : 백만원)\n국내 매출 | 당기: 706,565\n\n"
+                 "[표] 해외 법인\n(단위 : USD)\n해외 매출 | 당기: 5,000")
+    PASS = [(USD_AFTER, "7,065억 6,500만원"),                    # 앞 표는 그대로 백만원
+            (USD_AFTER, "5,000"),                                 # 모르는 단위 표 숫자는 맨숫자로
+            ("(단위 : 십억원)\n매출 | 당기: 12", "120억원"), ("(단위: 십억원) 1,234", "1조 2,340억원"),
+            ("(단위 : 천)\n매출 | 당기: 5,000", "5,000"),
+            ("(단위 : 백만원)\n매출 | 당기: 1,000\n\n(단위 : USD)\n매출 | 당기: 5,000\n\n(단위 : 백만원)\n이익 | 당기: 300",
+             "3억원")]                                             # 다시 아는 머리가 오면 그 단위
+    FAIL = [(USD_AFTER, "50억원"), (USD_AFTER, "5,000백만원"), (USD_AFTER, "5,000원"), (USD_AFTER, "5,000명"),
+            ("(단위 : 천)\n매출 | 당기: 5,000", "500만원"), ("(단위 : 천)\n매출 | 당기: 5,000", "5,000원"),
+            ("(단위 : 백만원)\n매출 | 당기: 1,000\n(단위 : 백만)\n이익 | 당기: 300", "3억원"),
+            ("(단위 : 백만원)\n매출 | 당기: 1,000\n(단위 : 천단위)\n이익 | 당기: 300", "3억원"),
+            ("(단위 : 백만원)\n해외매출(단위: USD) | 당기: 5,000", "50억원"),   # 행 이름표의 모르는 단위
+            ("(단위 : 십억원)\n매출 | 당기: 12", "12억원")]
+
+    def test_same_rule_in_v1_v2_answer(self):
+        for name, fn in (("v2", NumberUnitTest._v2), ("v1", NumberUnitTest._v1), ("answer", NumberUnitTest._answer)):
+            for src, said in self.PASS:
+                self.assertFalse(fn(src, said), f"{name} 통과해야 함: {said} ← {src!r}")
+            for src, said in self.FAIL:
+                self.assertTrue(fn(src, said), f"{name} 실패해야 함: {said} ← {src!r}")
+
+
 class MemoLinkNumberTest(unittest.TestCase):
     """memo_link 숫자는 쓴 근거나 메모 문장 중 하나에 있으면 인정 (2026-11-18). headline·facts는 근거만.
     C2_gold run_20261113_124759 항목 M15:1:0 카드: memo_link가 메모의 "13% 아래"를 인용했는데 13%가 근거 E1에 없어 NUMBER였다."""
