@@ -181,6 +181,32 @@ def test_recall_fixes_with_project_config():         # 2026-11-18 재현율 개�
     assert t("현대건설, 한강변에 5000가구 대단지") == {"000720"}                       # 회사 기사는 그대로
 
 
+def test_final_three_types_with_project_config():    # 2026-11-18 고정 세트 남은 오탐 세 유형 (실제 설정)
+    cfg = yaml.safe_load(Path("configs/stock_aliases.yaml").read_text(encoding="utf-8"))
+    stocks = {"004170": "신세계", "035510": "신세계 I&C", "034730": "SK", "096770": "SK이노베이션",
+              "207940": "삼성바이오로직스", "0126Z0": "삼성에피스홀딩스", "090460": "비에이치", "000810": "삼성화재",
+              "089590": "제주항공", "316140": "우리금융지주", "009240": "한샘", "008770": "호텔신라", "030200": "KT"}
+    cfg = {**cfg, "aliases": {**cfg["aliases"], "207940": ["삼성바이오"]}}
+    r = st.build_rules(stocks, cfg)
+    t = lambda title, body=None: {h.symbol for h in st.match_article(title, body, r)}   # noqa: E731
+    pad = "업계 소식이다. " * 2
+    # ① 다른 회사 이름의 앞부분 → 더 긴 이름의 종목으로 (없으면 붙이지 않는다)
+    assert t("상장 일정", pad + "신세계I&C(주식소각) 상장 변경") == {"035510"}
+    assert t("SK이노, 사회문제 해결할 AI 스타트업 3곳 선정") == {"096770"}
+    assert t("삼성바이오에피스, 지주사에 1천43억원 현금 배당") == {"0126Z0"}
+    assert t("비에이치소프트 ‘에듀OK’, 얼굴인식 출결 지원") == set()
+    assert t("신세계, 3분기 영업이익 증가") == {"004170"}
+    # ② 삼성화재 배구·바둑
+    assert t("변상일 '천적' 신진서 꺾고 삼성화재배 첫 결승 진출") == set()
+    assert t("빅매치", pad + "◆18일(수)= 삼성화재-우리카드(대전 충무체육관)") == set()
+    assert t("삼성화재, 3분기 순이익 증가") == {"000810"}
+    # ③ 인물 직함·경력
+    assert t("[부음] 홍정유씨 별세 외", "장주녀씨(제주항공 객실본부장) 시모상") == set()
+    assert t("평가위원회", pad + "강일원 변호사, 김익중 우리금융지주 홍보실장, 김정형 학생") == set()
+    assert t("“갱년기라 뒤척인다고요?”…한샘 출신 대표가 침대에 꽂힌 이유") == set()
+    assert t("KT, AI 사업 확대", pad + "김영섭 KT 대표는 AI 투자를 늘린다고 밝혔다.") == {"030200"}   # 대표는 회사 소식
+
+
 def test_project_config_loads():
     cfg = yaml.safe_load(Path("configs/stock_aliases.yaml").read_text(encoding="utf-8"))
     rules = st.build_rules({**STOCKS, "005380": "현대차"}, cfg)

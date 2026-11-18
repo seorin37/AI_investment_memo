@@ -74,6 +74,7 @@ class Rules:
     spaced_suffix_re: re.Pattern | None = None               # 한 칸 띄고 오는 시설 이름 ("기업은행 챔버홀", "LG 시그니처홀")
     group_product_re: re.Pattern | None = None               # 그룹 이름 뒤 제품·매장 낱말 ("LG 올레드", "LG 베스트샵")
     body_with_stock_words: set[str] = field(default_factory=set)   # 제목 전용이지만 본문에서 바로 뒤 주식 낱말이면 붙이는 이름 (네이버)
+    person_role_re: re.Pattern | None = None                 # 이름 뒤 인물 직함·경력 ("우리금융지주 홍보실장", "한샘 출신")
 
 
 @dataclass(frozen=True)
@@ -138,7 +139,10 @@ def build_rules(stocks: dict[str, str], cfg: dict, dart_names: set[str] = frozen
                  name_suffix_block=tuple(cfg.get("name_suffix_block") or ()),
                  spaced_suffix_re=_words_re(cfg.get("spaced_suffix_block"), r"\s"),
                  group_product_re=_words_re(cfg.get("group_product_words"), r"\s?"),
-                 body_with_stock_words=set(cfg.get("title_only_names") or []) & set(names))
+                 body_with_stock_words=set(cfg.get("title_only_names") or []) & set(names),
+                 person_role_re=(re.compile(r"\s?[가-힣]{0,4}?(?:" + "|".join(map(re.escape, cfg["person_role_words"]))
+                                            + r")(?=$|[^가-힣]|[이가을를은는의에과와로도만께])")
+                                 if cfg.get("person_role_words") else None))
 
 
 def _words_re(words, prefix: str) -> re.Pattern | None:
@@ -216,6 +220,10 @@ def _valid(text: str, a: int, b: int, name: str, rules: Rules, in_title: bool = 
         return False                                         # "IBK기업은행 챔버홀", "LG 시그니처홀": 띄어 쓴 시설 이름
     if b < len(text) and text[b].isdigit() and not name[-1].isdigit():
         return False                                         # "이마트24": 숫자가 붙은 다른 회사 이름
+    if b < len(text) and _HANGUL.match(name[-1]) and re.match(r"[A-Za-z]", text[b]):
+        return False                                         # "신세계I&C": 한글 이름 바로 뒤 영문이면 더 긴 다른 회사 이름
+    if rules.person_role_re and rules.person_role_re.match(text, b):
+        return False                                         # "우리금융지주 홍보실장", "한샘 출신 대표": 인물 직함·경력
     if name in rules.sports_names and _sports_at(text, a, b, rules):
         return False                                         # 프로야구·농구·배구 구단
     if name in rules.group_names:
