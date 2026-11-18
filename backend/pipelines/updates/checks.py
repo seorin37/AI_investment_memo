@@ -87,15 +87,54 @@ def all_numbers(text: str) -> set[float]:
     return {round(v, 6) for v, _ in _scan(text, True) + _scan(text, False)}
 
 
-_UNIT_HEADER = re.compile(r"단위\s*[:：]?\s*(천원|백만원|억원|조원)")
-_HEADER_FACTOR = {"천원": 1e3, "백만원": 1e6, "억원": 1e8, "조원": 1e12}
+# 표 단위. 금액 단위는 표 숫자를 원으로 환산하고, 그 밖의 단위(주·%·개…)는 환산하지 않되 금액으로도 보지 않는다
+_MONEY_FACTOR = {"원": 1.0, "천원": 1e3, "백만원": 1e6, "억원": 1e8, "조원": 1e12}
+_OTHER_UNITS = ("천주", "주", "%", "배", "개", "건", "명", "회")
+_UNITS_RE = "|".join(sorted([*_MONEY_FACTOR, *_OTHER_UNITS], key=len, reverse=True))
+# 표 머리 "(단위 : 백만원)"·"(단위: 원, %)" (쉼표 뒤는 무시하고 첫 단위만)
+_UNIT_HEADER = re.compile(rf"단위\s*[:：]?\s*({_UNITS_RE})(?![가-힣A-Za-z])")
+# 표 행 이름표의 단위 "주당배당금(단위: 원)"·"기본주당이익(손실) (단위 : 원)"·"배당금총액(원)"·"비율(%)".
+# "단위" 없는 괄호는 금액·%만 단위로 본다 ("(주)한화"의 (주)는 주식회사)
+_LABEL_UNIT = re.compile(rf"\(\s*(?:단위\s*[:：]?\s*({_UNITS_RE})|((?:{'|'.join(_MONEY_FACTOR)}|%)))\s*[,)]")
+_NO_CONTEXT = None          # 표 머리·이름표가 없는 글: 맨숫자를 금액으로도 인정 (기사·문단)
+
+
+def _row_split(line: str) -> int:
+    """표 행 줄이면 첫 " | "의 위치 (이름표 끝), 아니면 -1. 청크 제목 "[KB금융 2026 3분기 | III. …]" 안의 " | "는 빼고 찾는다."""
+    depth = 0
+    for i, ch in enumerate(line):
+        if ch == "[":
+            depth += 1
+        elif ch == "]":
+            depth = max(0, depth - 1)
+        elif depth == 0 and line.startswith(" | ", i):
+            return i
+    return -1
+
+
+def _segments(text: str):
+    """(글 조각, 단위). 단위는 그 조각의 맨숫자에 적용할 단위 (없으면 _NO_CONTEXT).
+    - 표 머리: 숫자마다 그 앞에 나온 가장 가까운 "(단위 : …)"를 쓴다 (한 근거에 표가 여러 개, 2026-11-18)
+    - 행 이름표: 같은 줄 이름표(첫 " | " 앞)에 단위가 있으면 그 줄 값들은 표 머리 대신 그 단위 (줄 단위로만)
+    DART 청크는 표 한 행이 한 줄이다 (disclosures/chunker. 토큰 한도를 넘는 행만 잘리며, 284만 청크 중 잘린 조각 758줄)."""
+    header = _NO_CONTEXT
+    for line in (text or "").split("\n"):
+        cut = _row_split(line)
+        label, rest = (line[:cut], line[cut:]) if cut >= 0 else ("", line)
+        heads = _UNIT_HEADER.findall(line) if cut < 0 else []   # 행 줄 안의 "(단위: …)"는 그 칸 단위라 표 머리로 쓰지 않는다
+        if heads:
+            header = heads[-1]
+        units = [a or b for a, b in _LABEL_UNIT.findall(label)]
+        if label:
+            yield label, header
+        yield rest, units[-1] if units else header
 
 
 class EvidenceNumbers:
     """근거 숫자 두 묶음.
     - plain: 답변의 맨숫자·%와 대조. 근거의 모든 값 + 표 머리 환산값 (이전 evidence_numbers와 같다)
-    - unit: 답변에서 단위·"원"이 붙은 금액과 대조. 표 머리("(단위 : 백만원)")가 있으면 근거에 단위·원과 함께 적힌 값과
-      표 숫자를 머리 단위로 환산한 값만 (표의 706,565를 "706,565원"으로 쓰면 걸리게). 머리가 없으면 plain과 같다."""
+    - unit: 답변에서 단위·"원"이 붙은 금액과 대조. 근거에 단위·원과 함께 적힌 값, 표 숫자를 그 줄 단위(행 이름표 → 가장 가까운
+      앞 표 머리)로 환산한 값 (표의 706,565를 "706,565원"으로 쓰면 걸리게). 표 머리·이름표가 없는 글의 맨숫자는 그대로 넣는다."""
 
     __slots__ = ("plain", "unit")
 
@@ -114,17 +153,21 @@ class EvidenceNumbers:
 
 
 def evidence_number_sets(text: str) -> EvidenceNumbers:
-    """근거 글의 숫자 (EvidenceNumbers). 표 머리에 "(단위: 천원)"이 있으면 표 안 숫자를 원 단위로 환산한 값도 인정한다 (DART 재무 표).
-    머리가 글에 없으면 환산하지 않으므로, 모델이 근거에 없는 단위를 붙이면 그대로 걸린다."""
-    pairs = _scan(text, True) + _scan(text, False)
-    values = {round(v, 6) for v, _ in pairs}
-    m = _UNIT_HEADER.search(text or "")
-    if not m:
-        return EvidenceNumbers(values, values)
-    factor = _HEADER_FACTOR[m.group(1)]
-    return EvidenceNumbers(values | {round(v * factor, 6) for v in values},
-                           {round(v, 6) for v, kind in pairs if kind == UNIT}
-                           | {round(v * factor, 6) for v, kind in pairs if kind == BARE})
+    """근거 글의 숫자 (EvidenceNumbers). 표 숫자는 그 줄 단위로 본다 (_segments: 행 이름표 "(단위: 원)" → 가장 가까운 앞 표 머리).
+    금액 단위(천원·백만원…)면 원 단위로 환산한 값도 인정하고, 주·% 같은 단위면 금액으로 인정하지 않는다.
+    표 머리·이름표가 없으면 환산하지 않으므로, 모델이 근거에 없는 단위를 붙이면 그대로 걸린다."""
+    out = EvidenceNumbers()
+    for seg, unit in _segments(text):
+        factor = _MONEY_FACTOR.get(unit) if unit is not _NO_CONTEXT else None
+        for v, kind in _scan(seg, True) + _scan(seg, False):
+            v = round(v, 6)
+            out.plain.add(v)
+            if kind == UNIT or unit is _NO_CONTEXT:
+                out.unit.add(v)
+            elif kind == BARE and factor is not None:
+                out.plain.add(round(v * factor, 6))
+                out.unit.add(round(v * factor, 6))
+    return out
 
 
 def evidence_numbers(text: str) -> set[float]:

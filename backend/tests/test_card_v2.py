@@ -356,6 +356,57 @@ class NumberUnitTest(unittest.TestCase):
         self.assertEqual(evidence_numbers("(단위 : 백만원) 706,565"), ev_sets.plain)   # 값만 쓰는 곳은 이전과 같다
 
 
+# 2026-11-17 dry-run 항목 7 KB금융 분기배당 금액의 E2 원문 (outcomes.jsonl shown_text 그대로)
+KB_DIVIDEND = (
+    "[KB금융 2026 3분기 | III. 재무에 관한 사항 > 3. 연결재무제표 주석 > 26. 배당금 (연결)]\n"
+    "[표] 배당금에 대한 공시 / 당분기말\n(단위 : 백만원)\n열: 연차배당 | 분기배당\n"
+    "소유주에 대한 배분으로 인식된 배당금 | 연차배당: 573,768 | 분기배당: 810,246\n"
+    "소유주에 대한 배분으로 인식된 주당배당금(단위: 원) | 연차배당: 1,605\n\n"
+    "[표] 전기말\n(단위 : 백만원)\n열: 연차배당 | 분기배당\n"
+    "소유주에 대한 배분으로 인식된 배당금 | 연차배당: 298,285 | 분기배당: 1,004,006\n"
+    "소유주에 대한 배분으로 인식된 주당배당금(단위: 원) | 연차배당: 804\n\n"
+    "[표] 배당금에 대한 공시, 중간배당\n(단위 : 백만원)\n"
+    "열: 배당의 구분 / 분기배당 / 분기배당 1 | 배당의 구분 / 분기배당 / 분기배당 2\n"
+    "소유주에 대한 배분으로 인식된 배당금 | 배당의 구분 / 분기배당 / 분기배당 1: 405,088 | 배당의 구분 / 분기배당 / 분기배당 2: 405,158\n"
+    "소유주에 대한 배분으로 인식된 주당배당금(단위: 원) | 배당의 구분 / 분기배당 / 분기배당 1: 1,143 | 배당의 구분 / 분기배당 / 분기배당 2: 1,155")
+TWO_TABLES = ("[삼성전자 2026 3분기 | 연결재무제표 주석]\n[표] 매출\n(단위 : 백만원)\n매출액 | 당분기: 706,565\n\n"
+              "[표] 임원 보수\n(단위 : 천원)\n보수총액 | 당분기: 12,345")
+
+
+class RowUnitTest(unittest.TestCase):
+    """표 행 이름표 단위·표 머리 여러 개 (2026-11-18, 결정 2 변경). 줄 앞쪽 이름표 "(단위: 원)"이 있으면 그 줄 값은 원,
+    표 머리는 숫자마다 가장 가까운 앞 머리를 쓴다. v1·v2·즉시 답변 셋 다 본다."""
+
+    PASS = [(KB_DIVIDEND, "1,143원"), (KB_DIVIDEND, "1,155원"), (KB_DIVIDEND, "1,605원"),
+            (KB_DIVIDEND, "4,050억 8,800만원"), (KB_DIVIDEND, "405,088백만원"),        # 표 머리 백만원 줄은 그대로
+            (KB_DIVIDEND, "1,143"),                                                     # 맨숫자는 그대로 인정
+            (TWO_TABLES, "7,065억 6,500만원"), (TWO_TABLES, "12,345천원"), (TWO_TABLES, "1,234만 5천원"),
+            ("(단위 : 백만원)\n배당성향(%) | 당기: 30.5", "30.5%"),
+            ("(단위 : 백만원)\n발행주식수(단위: 주) | 당기: 1,000,000", "1,000,000주"),
+            ("(단위 : 백만원)\n(주)한화 | 장부금액: 1,000", "10억원"),                       # "(주)"는 단위가 아니다
+            ("(단위 : 백만원)\n기본주당이익(손실) (단위 : 원) | 당기: 2,345", "2,345원"),        # 띄어 쓴 이름표
+            ("(단위: 백만원) [KB금융 2026 3분기 | III. 재무]\n순이익 | 당기: 706,565", "7,065억 6,500만원")]
+    FAIL = [(KB_DIVIDEND, "405,088원"), (KB_DIVIDEND, "573,768원"),                    # 다른 줄의 백만원 값을 원으로
+            (KB_DIVIDEND, "1,143백만원"),                                               # 원 줄 값을 백만원으로
+            (TWO_TABLES, "12,345백만원"), (TWO_TABLES, "706,565천원"),                   # 다른 표의 머리를 쓰면 실패
+            ("(단위 : 백만원)\n발행주식수(단위: 주) | 당기: 1,000,000", "1,000,000원"),       # 주 줄 값은 금액이 아니다
+            ("(단위 : 백만원)\n발행주식수(단위: 주) | 당기: 1,000,000", "1조원"),
+            ("(단위: 백만원) [KB금융 2026 3분기 | III. 재무]\n순이익 | 당기: 706,565", "706,565원")]
+
+    def test_same_rule_in_v1_v2_answer(self):
+        for name, fn in (("v2", NumberUnitTest._v2), ("v1", NumberUnitTest._v1), ("answer", NumberUnitTest._answer)):
+            for src, said in self.PASS:
+                self.assertFalse(fn(src, said), f"{name} 통과해야 함: {said} ← {src[-60:]!r}")
+            for src, said in self.FAIL:
+                self.assertTrue(fn(src, said), f"{name} 실패해야 함: {said} ← {src[-60:]!r}")
+
+    def test_kb_card_from_dryrun(self):
+        """dry-run에서 NUMBER로 떨어졌던 KB금융 카드 문장 그대로."""
+        c = card(headline="KB금융 3분기 분기배당 금액 확인", when="2026-11-16",
+                 facts=[("분기배당 1의 주당배당금은 1,143원이에요.", "E1"), ("분기배당 2의 주당배당금은 1,155원이에요.", "E1")])
+        self.assertNotIn("NUMBER", check_card_v2(c, ev(disc(text=KB_DIVIDEND)), [], CFG))
+
+
 class PreviewTest(unittest.TestCase):
     def test_v2_card_and_compare_page(self):
         from pipelines.updates.preview import build_preview
