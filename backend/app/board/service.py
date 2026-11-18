@@ -10,6 +10,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable
 
+from pipelines.updates.db_store import memo_full_text
+
 from .analysis import AnalysisError, analyze_memo, default_llm, next_update_at, read_option
 from .repository import BoardRepository
 from .schemas import ChecklistCreate, MemoCreate, ReferenceCreate
@@ -118,7 +120,10 @@ class BoardService:
             )
 
         base = {key: value for key, value in values.items() if key in {"title", "body", "color", "pinned"}}
-        body_changed = kind == "note" and "body" in values and (values["body"] or "") != (row.get("content") or "")
+        # 분석 입력(제목 + 본문)이 실제로 바뀐 경우만 다시 분석. 제목만 바뀌어도 입력이 바뀌면 다시 분석한다 (2026-11-18)
+        text_changed = kind == "note" and ("title" in values or "body" in values) and memo_full_text(
+            values.get("title", row.get("title")), values.get("body", row.get("content"))
+        ) != memo_full_text(row.get("title"), row.get("content"))
         if base and not self.repository.update_base(user_id, memo_id, base):
             raise BoardItemNotFoundError(memo_id)
         children_changed = False
@@ -139,7 +144,7 @@ class BoardService:
         fresh = self._require_item(user_id, memo_id)
         if not fresh.get("ai_linked"):
             analysis = self._skipped("ai_off")
-        elif body_changed:                                      # 내용이 실제로 바뀐 경우만 다시 분석
+        elif text_changed:                                      # 제목 + 본문이 실제로 바뀐 경우만 다시 분석
             analysis = self._analyze(fresh)
         else:
             analysis = self._unchanged(memo_id)
@@ -228,7 +233,7 @@ class BoardService:
                                "out_of_scope": False, "next_update_at": None}
         try:
             rev = self.tracking.latest_revision(memo_id)
-            result = analyze_memo(memo_id, rev["revision_no"] if rev else 1, row.get("content") or "", symbol,
+            result = analyze_memo(memo_id, rev["revision_no"] if rev else 1, memo_full_text(row.get("title"), row.get("content")), symbol,
                                   self.tracking.stock_name(symbol), self._llm_call(), self.tracking.price_window(symbol))
         except AnalysisError as exc:
             log.warning("memo analysis failed memo=%s code=%s detail=%s", memo_id, exc.code, exc)

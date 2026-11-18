@@ -39,6 +39,26 @@ SHARED_TARGETS = {("192.168.0.105", 15432, "memos")}          # 공용 DB (host,
 _CHUNKS = re.compile(r"^\[청크 ([\d,]+)\]\s*")
 
 
+UNTITLED = "제목 없음"                                         # 웹이 빈 제목 대신 보내는 값 (web/src/api/sync.ts)
+
+
+def memo_full_text(title: str | None, content: str | None) -> str:
+    """메모 분석·업데이트 판정에 넣는 메모 글 = 제목 + 줄바꿈 + 본문 (2026-11-18).
+
+    웹 메모는 아이폰 메모처럼 첫 줄이 제목, 나머지가 본문이라 한 줄 메모는 본문이 비어 있다. 그래서 제목도 함께 본다.
+    - 제목이 비었거나 '제목 없음'이면 본문만
+    - 본문이 제목으로 시작하면 본문만 (첫 줄 중복 방지 — 앱 빠른 메모는 제목=첫 줄(길면 …로 자름), 본문=전체 글)
+    - 본문이 비면 제목만
+    메모 분석(app/board/service.py)과 매일 업데이트(load_items)가 같은 규칙을 쓴다. 표준 라이브러리만 써서 배치 환경에서도 가볍게 부른다."""
+    t, body = (title or "").strip(), content or ""
+    if not t or t == UNTITLED:
+        return body
+    head = t.rstrip("…").rstrip()
+    if head and body.lstrip().startswith(head):
+        return body
+    return f"{t}\n{body}" if body.strip() else t
+
+
 class NotTestDatabase(RuntimeError):
     pass
 
