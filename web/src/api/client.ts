@@ -19,7 +19,11 @@ export type TimelineEntryWire =
   | { kind: "update"; at: string; update: AiUpdateWire }
   | { kind: "memo_created" | "memo_edit"; at: string; version: { version: number; title: string; body: string; saved_at: string } }
   | { kind: "ai_linked"; at: string };
-export type TimelineWire = { memo_id: string; entries: TimelineEntryWire[]; tracking_items: { id: string; type: string; description: string; status: string }[] };
+export type TrackingItemWire = { id: string; type: "topic" | "price_below" | "price_above" | string; description: string; status: string };
+export type TimelineWire = { memo_id: string; entries: TimelineEntryWire[]; tracking_items: TrackingItemWire[] };
+/* PUT /memos/{id}/ai-link 응답의 analysis (backend/app/board/service.py): status = done · unchanged · confirmed · skipped · failed */
+export type AnalysisWire = { status: string; error?: string | null; items: TrackingItemWire[]; confirmations?: unknown[]; out_of_scope?: boolean };
+export type MemoLinkWire = MemoWire & { analysis?: AnalysisWire | null };
 /* /auth/me 실제 응답: { id, name, bio, avatar_url, email, providers: [{ provider, email, connected, current }], … } */
 export type UserWire = { id: number | string; name?: string | null; bio?: string | null; email?: string | null; [k: string]: unknown };
 export type Provider = "kakao" | "naver" | "google";
@@ -43,7 +47,7 @@ export const api = {
   createChecklist: (code: string, b: { title: string; items: { text: string; done: boolean }[] }) => http.post<ChecklistWire>(`/stocks/${code}/checklists`, b),
   patchItem: <T extends BoardWire>(id: string, b: Record<string, unknown>) => http.patch<T>(`/board-items/${id}`, b),
   patchChecklistItem: (id: string, itemId: string, done: boolean) => http.patch<ChecklistWire>(`/checklists/${id}/items/${itemId}`, { done }),
-  setAiLink: (id: string, enabled: boolean) => http.put<MemoWire>(`/memos/${id}/ai-link`, { enabled }),
+  setAiLink: (id: string, enabled: boolean) => http.put<MemoLinkWire>(`/memos/${id}/ai-link`, { enabled }),
   deleteItem: (id: string, keepalive = false) => http.del(`/board-items/${id}`, keepalive),
 
   /* AI 업데이트 */

@@ -47,7 +47,7 @@
 .x-fold > div { min-height: 0; overflow: hidden; }
 
 /* 미끄러지는 알약 (칩 사이를 스프링 곡선으로) */
-.x-pill { position: absolute; top: 0; bottom: 0; border-radius: 999px; background: #111; transition: left calc(.45s * var(--k, 1)) cubic-bezier(.34,1.45,.64,1), width calc(.45s * var(--k, 1)) cubic-bezier(.34,1.45,.64,1); }
+.x-pill { position: absolute; top: 0; bottom: 0; border-radius: 999px; background: #111; transition: left calc(.45s * var(--k, 1)) cubic-bezier(.34,1.45,.64,1), width calc(.45s * var(--k, 1)) cubic-bezier(.34,1.45,.64,1), top calc(.45s * var(--k, 1)) cubic-bezier(.2,.8,.2,1); }
 
 /* 홈 편집: 위젯 흔들림 없이 테두리 + 들기 */
 .he-lift { box-shadow: 0 18px 40px -16px rgba(17,17,17,.35), 0 0 0 2px #111 !important; transform: scale(1.015); z-index: 10; }
@@ -77,3 +77,11 @@ html[data-offline="1"][data-snack="1"] .v2-nudge { bottom: 164px !important; }
 /* 로그인 실패: 카드가 살짝 흔들림 */
 .x-shake { animation: x-shake calc(.42s * var(--k, 1)) cubic-bezier(.36,.07,.19,.97); }
 @keyframes x-shake { 15%, 85% { transform: translateX(-2px); } 30%, 70% { transform: translateX(5px); } 45%, 55% { transform: translateX(-6px); } }
+
+/* 보드 위치 바꾸기 (11.18, screens/boardDrag.ts) */
+.b-slot { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.b-slot > [data-blift] { cursor: grab; }
+.b-hole { border: 2px dashed #c9ccd2; background: rgba(17, 17, 17, .03); }
+.b-lifted { cursor: grabbing; transform: scale(1.03) rotate(-1deg); filter: drop-shadow(0 18px 28px rgba(0, 0, 0, .22)); }
+html.b-dragging, html.b-dragging * { cursor: grabbing !important; -webkit-user-select: none !important; user-select: none !important; }
+html.dark .b-lifted { filter: drop-shadow(0 18px 28px rgba(255, 255, 255, .2)); }

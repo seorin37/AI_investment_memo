@@ -1,7 +1,9 @@
 /* 2.2 홈 직접 사용자화 + 2.4.1~2.4.4 위젯 — Figma 그대로 (이 화면이 곧 내 홈) */
 import { useRef, useState, type ReactNode } from "react";
 import { cx, Modal } from "../kit";
-import { useApp, type WItem } from "../store";
+import { useApp, hm, ago, mmdd, type WItem } from "../store";
+import { api, useQ } from "../api";
+import type { MarketEvent } from "../api/types";
 import { MarketCardBase } from "./home";
 
 const G = 24, BW = 626; // 격자, 보드 안쪽 폭
@@ -25,7 +27,11 @@ function addSlot(items: WItem[]) {
 }
 
 export function CustomPage() {
-  const { board, setBoard, go, setHomeMode } = useApp();
+  const { ud, act, go } = useApp();
+  const board = ud.home.board;
+  const boardRef = useRef(board); boardRef.current = board;
+  const setBoard = (f: (b: WItem[]) => WItem[]) => act.home({ board: f(boardRef.current) });
+  const setHomeMode = (mode: "template" | "custom") => act.home({ mode });
   const [sel, setSel] = useState<string | null>(board[board.length - 1]?.id ?? null);
   const [pick, setPick] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -121,77 +127,86 @@ function WidgetBody({ id, w }: { id: string; w: number }) {
 }
 const CARD = "flex h-full w-full flex-col items-start overflow-hidden rounded-[20px] bg-white shadow-[0px_5px_22px_0px_rgba(20,26,46,0.04)]";
 function UpdatesW() {
-  const { go } = useApp();
-  const [hov, setHov] = useState("000660");
-  const rows = [["005930", "삼성전자", "관심 · 새 업데이트 2건", 2], ["000660", "SK하이닉스", "보유 · 새 업데이트 3건", 3], ["035420", "네이버", "관심 · 모두 확인했어요", 0]] as const;
+  const { go, stocks, newN } = useApp();
+  const [hov, setHov] = useState(stocks[0]?.stock_code ?? "");
   return (
     <div className={cx(CARD, "gap-3 p-6")}>
       <p className="w-full text-[20px] font-medium leading-[29px] tracking-[-0.01em] text-[#15171a]">업데이트</p>
       <p className="w-full text-[13px] leading-[20px] text-[#747d8d]">내 종목의 새로운 소식</p>
-      {rows.map(([c, n, s, b]) => (
-        <button key={c} onMouseEnter={() => setHov(c)} onClick={() => go({ name: "updates", code: c })} className={cx("flex h-[78px] w-full shrink-0 flex-col items-start gap-2 rounded-[12px] border p-3 text-left", hov === c ? "border-[#477bff] bg-[#eef3f8]" : "border-[#e8ecf3] bg-white")}>
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-3 overflow-y-auto">
+      {!stocks.length && <p className="py-4 text-[13px] text-[#747d8d]">종목을 추가하면 여기에 모여요</p>}
+      {stocks.map((st) => { const c = st.stock_code, b = newN[c] ?? 0; return (
+        <button key={c} onMouseEnter={() => setHov(c)} onClick={() => go({ name: "updates", code: c })} className={cx("flex h-[78px] w-full shrink-0 flex-col items-start gap-2 rounded-[12px] border p-3 text-left", hov === c ? "border-[#111] bg-[#f7f7f7]" : "border-[#e8ecf3] bg-white")}>
           <div className="flex h-[26px] w-full items-start justify-between">
-            <p className="text-[14px] font-medium leading-[21px] tracking-[-0.01em] text-[#15171a]">{n}</p>
-            {b ? <span className="flex h-[26px] w-[26px] items-center justify-center rounded-full bg-[#e45d6a] text-[14px] font-medium leading-[21px] text-white">{b}</span> : null}
+            <p className="text-[14px] font-medium leading-[21px] tracking-[-0.01em] text-[#15171a]">{st.name}</p>
+            {b ? <span className="flex h-[26px] min-w-[26px] items-center justify-center rounded-full bg-[#e45d6a] px-1 text-[14px] font-medium leading-[21px] text-white">{b}</span> : null}
           </div>
-          <p className="w-full text-[13px] leading-[20px] text-[#747d8d]">{s}</p>
+          <p className="w-full text-[13px] leading-[20px] text-[#747d8d]">{st.hold} · {b ? `새 업데이트 ${b}건` : "모두 확인했어요"}</p>
         </button>
-      ))}
-      <div className="flex w-full flex-col items-start gap-2 pt-3"><p className="w-full text-[13px] leading-[20px] text-[#747d8d]">공시, 뉴스, 실적 소식을<br />종목별로 모아 확인하세요.</p></div>
-      <button onClick={() => go({ name: "updates" })} className="w-full text-left text-[13px] font-medium leading-[20px] tracking-[-0.01em] text-[#477bff]">전체 업데이트 보기  →</button>
+      ); })}
+      </div>
+      <button onClick={() => go({ name: "updates" })} className="w-full text-left text-[13px] font-medium leading-[20px] tracking-[-0.01em] text-[#111]">전체 업데이트 보기  →</button>
     </div>
   );
 }
 function CalendarW({ w }: { w: number }) {
-  const days: (number | null)[] = [null, null, null, null, ...Array.from({ length: 31 }, (_, i) => i + 1)];
-  const weeks = Array.from({ length: 5 }, (_, i) => days.slice(i * 7, i * 7 + 7));
-  const ev: Record<number, boolean> = { 8: true, 14: true, 22: true, 29: true };
+  const { stocks } = useApp();
   void w;
+  const now = new Date(); const [ym, setYm] = useState<[number, number]>([now.getFullYear(), now.getMonth()]);
+  const first = new Date(ym[0], ym[1], 1), n = new Date(ym[0], ym[1] + 1, 0).getDate();
+  const days: (number | null)[] = [...Array.from({ length: first.getDay() }, () => null), ...Array.from({ length: n }, (_, i) => i + 1)];
+  const weeks = Array.from({ length: Math.ceil(days.length / 7) }, (_, i) => days.slice(i * 7, i * 7 + 7));
+  const evs = (api.market.schedule(stocks.map((s) => s.stock_code)) as MarketEvent[]).filter((e) => +e.date.slice(0, 4) === ym[0] && +e.date.slice(5, 7) === ym[1] + 1);
+  const ev: Record<number, boolean> = Object.fromEntries(evs.map((e) => [+e.date.slice(8, 10), true]));
+  const today = now.getFullYear() === ym[0] && now.getMonth() === ym[1] ? now.getDate() : -1;
+  const mv = (d: number) => setYm(([y, m]) => { const t = new Date(y, m + d, 1); return [t.getFullYear(), t.getMonth()]; });
   return (
     <div className={cx(CARD, "gap-3 p-6")}>
       <p className="w-full text-[20px] font-medium leading-[29px] tracking-[-0.01em] text-[#15171a]">주요 증시 일정</p>
       <div className="flex h-6 w-full items-center justify-between">
-        <p className="text-[17px] font-medium leading-[26px] tracking-[-0.01em] text-[#15171a]">2026년 10월</p>
-        <p className="w-20 text-center text-[13px] leading-[20px] text-[#747d8d]">‹  오늘  ›</p>
+        <p className="text-[17px] font-medium leading-[26px] tracking-[-0.01em] text-[#15171a]">{ym[0]}년 {ym[1] + 1}월</p>
+        <p className="flex w-24 items-center justify-center gap-2 text-[13px] leading-[20px] text-[#747d8d]"><button aria-label="이전 달" onClick={() => mv(-1)} className="px-1 hover:text-[#15171a]">‹</button><button onClick={() => setYm([now.getFullYear(), now.getMonth()])} className="hover:text-[#15171a]">오늘</button><button aria-label="다음 달" onClick={() => mv(1)} className="px-1 hover:text-[#15171a]">›</button></p>
       </div>
       <div className="flex h-5 w-full items-start gap-1">{["일", "월", "화", "수", "목", "금", "토"].map((d) => <p key={d} className="min-w-0 flex-1 text-center text-[13px] leading-[20px] text-[#747d8d]">{d}</p>)}</div>
-      <div className="flex h-[212px] w-full flex-col items-start gap-2">
+      <div className="flex w-full flex-col items-start gap-2">
         {weeks.map((wk, i) => (
           <div key={i} className="flex h-9 w-full items-start justify-between px-[13.43px]">
             {Array.from({ length: 7 }, (_, j) => wk[j] ?? null).map((d, j) => (
-              <div key={j} className={cx("relative flex h-9 w-9 flex-col items-center rounded-[12px] py-1", d === 14 ? "bg-[#477bff]" : d && ev[d] ? "bg-[#eef3f8]" : "")}>
-                {d && <p className={cx("w-[26px] text-center text-[13px] leading-[20px]", d === 14 ? "text-white" : "text-[#15171a]")}>{d}</p>}
-                {d && ev[d] && <p className={cx("absolute left-[13px] top-[18px] w-[10px] text-center text-[26px] leading-[35px]", d === 14 ? "text-white" : "text-[#477bff]")}>•</p>}
+              <div key={j} className={cx("relative flex h-9 w-9 flex-col items-center rounded-[12px] py-1", d === today ? "bg-[#111]" : d && ev[d] ? "bg-[#f3f4f6]" : "")}>
+                {d && <p className={cx("w-[26px] text-center text-[13px] leading-[20px]", d === today ? "text-white" : "text-[#15171a]")}>{d}</p>}
+                {d && ev[d] && <p className={cx("absolute left-[13px] top-[18px] w-[10px] text-center text-[26px] leading-[35px]", d === today ? "text-white" : "text-[#e5484d]")}>•</p>}
               </div>
             ))}
           </div>
         ))}
       </div>
-      <div className="flex h-[112px] w-full flex-col items-start gap-2">
-        <div className="flex h-8 w-full items-center gap-2 rounded-[12px] bg-[#eef3f8] px-3"><p className="text-[13px] font-medium leading-[20px] tracking-[-0.01em] text-[#15171a]">●  10.14   반도체 산업 주요 일정</p></div>
-        <div className="flex h-8 w-full items-center gap-2 rounded-[12px] bg-[#f1eef6] px-3"><p className="text-[13px] leading-[20px] text-[#747d8d]">●  10.22   관심 종목 실적 발표</p></div>
-        <div className="flex h-8 w-full items-center gap-2 rounded-[12px] bg-[#f1eef6] px-3"><p className="text-[13px] leading-[20px] text-[#747d8d]">●  10.29   AI·반도체 시장 전망 발표</p></div>
+      <div className="flex min-h-0 w-full flex-1 flex-col items-start gap-2 overflow-y-auto">
+        {evs.length === 0 && <p className="text-[13px] leading-[20px] text-[#747d8d]">이 달에 정리된 일정이 없어요</p>}
+        {evs.map((e) => <div key={e.date + e.title} className="flex h-8 w-full shrink-0 items-center gap-2 rounded-[12px] bg-[#f3f4f6] px-3"><p className="truncate text-[13px] font-medium leading-[20px] tracking-[-0.01em] text-[#15171a]">●  {e.date.slice(5, 7)}.{e.date.slice(8, 10)}   {e.title}</p></div>)}
       </div>
     </div>
   );
 }
-const NEWS7: [string, string, string][] = [["12:48", "SK하이닉스, HBM4 공급 확대\n기대감에 강세", "한국경제"], ["11:30", "외국인, 이틀 연속 반도체 순매수", "매일경제"], ["10:05", "3분기 실적 시즌 개막…\nIT·반도체 주목", "서울경제"], ["09:41", "원·달러 환율, 하락 출발", "연합뉴스"], ["08:52", "삼성전자, 실적 발표 앞두고 관망세", "한국경제"], ["08:05", "개장 전 체크할 해외 증시 이슈", "매일경제"], ["07:40", "미 증시 마감…기술주 혼조", "서울경제"]];
 function NewsW() {
+  const { stocks } = useApp();
+  const codes = stocks.map((s) => s.stock_code);
+  const all = useQ("news:" + codes.join(",") + api.market.lastClose(), () => api.market.news(codes)) ?? [];
+  const head = all[0], list = all.slice(1, 8), day = api.market.lastClose();
   return (
     <div className="flex h-full w-full flex-col items-start gap-[9.31px] overflow-hidden rounded-[15.52px] bg-white p-[18.62px]">
-      <div className="flex w-full items-center justify-between"><p className="text-[14px] font-medium leading-[21px] text-[#15171a]">뉴스</p><p className="text-[11px] leading-[16px] text-[#747d8d]">오늘 · 8건</p></div>
-      <div className="flex w-full flex-col items-start gap-[6.21px] rounded-[9.31px] bg-[#eef3f8] p-[10.86px]">
-        <div className="flex w-full items-center justify-between"><span className="rounded-[7.76px] bg-[#e9f1f8] px-[6.21px] py-[1.55px] text-[13px] font-medium leading-[20px] text-[#0c447c]">연합뉴스</span><p className="text-[13px] font-medium leading-[20px] text-[#477bff]">13:12 · 방금</p></div>
-        <p className="w-full text-[14px] font-bold leading-[21px] text-[#1f3a8a]">반도체 강세에<br />코스피 상승 출발</p>
-        <p className="text-[13px] font-medium leading-[20px] text-[#477bff]">원문 읽기 ↗</p>
-      </div>
-      <div className="flex w-full flex-col items-start">
-        {NEWS7.map(([t, h, s]) => (
-          <div key={t} className="flex w-full items-start gap-[7.76px] border-t-[0.78px] border-[#eef0f3] px-[1.55px] py-[7.76px]">
-            <p className="w-[29.48px] shrink-0 text-[13px] font-medium leading-[20px] text-[#747d8d]">{t}</p>
-            <div className="flex min-w-0 flex-1 flex-col items-start gap-[1.55px]"><p className="w-full whitespace-pre-line text-[13px] font-medium leading-[20px] text-[#15171a]">{h}</p><p className="text-[11px] leading-[16px] text-[#747d8d]">{s}</p></div>
+      <div className="flex w-full items-center justify-between"><p className="text-[14px] font-medium leading-[21px] text-[#15171a]">뉴스</p><p className="text-[11px] leading-[16px] text-[#747d8d]">{mmdd(day)} · {all.filter((n) => n.at.slice(0, 10) === day).length}건</p></div>
+      {head && <a href={head.url} target="_blank" rel="noreferrer" className="flex w-full flex-col items-start gap-[6.21px] rounded-[9.31px] bg-[#f3f4f6] p-[10.86px]">
+        <div className="flex w-full items-center justify-between"><span className="rounded-[7.76px] bg-white px-[6.21px] py-[1.55px] text-[13px] font-medium leading-[20px] text-[#575b63]">{head.src}</span><p className="text-[13px] font-medium leading-[20px] text-[#575b63]">{hm(head.at)} · {ago(head.at)}</p></div>
+        <p className="w-full text-[14px] font-bold leading-[21px] text-[#15171a]">{head.title}</p>
+        <p className="text-[13px] font-medium leading-[20px] text-[#15171a] underline">원문 읽기 ↗</p>
+      </a>}
+      <div className="flex min-h-0 w-full flex-1 flex-col items-start overflow-y-auto">
+        {list.map((n) => (
+          <a key={n.id} href={n.url} target="_blank" rel="noreferrer" className="flex w-full items-start gap-[7.76px] border-t-[0.78px] border-[#eef0f3] px-[1.55px] py-[7.76px]">
+            <p className="w-[34px] shrink-0 text-[13px] font-medium leading-[20px] text-[#747d8d]">{n.at.slice(0, 10) === day ? hm(n.at) : mmdd(n.at)}</p>
+            <div className="flex min-w-0 flex-1 flex-col items-start gap-[1.55px]"><p className="w-full text-[13px] font-medium leading-[20px] text-[#15171a]">{n.title}</p><p className="text-[11px] leading-[16px] text-[#747d8d]">{n.src}</p></div>
             <p className="text-[13px] font-medium leading-[20px] text-[#9aa3b2]">↗</p>
-          </div>
+          </a>
         ))}
       </div>
     </div>
