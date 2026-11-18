@@ -180,6 +180,39 @@ class FlowTest(unittest.TestCase):
         out = check_topic(ITEM, [disc()], None, [], {**CFG, "card_schema": "v1"})
         self.assertEqual(out.kind, "not_called")
 
+    def test_check_log_keeps_failed_card_and_evidence_text(self):
+        """검사 기록 (2026-11-17): 떨어진 카드 JSON·코드, 형식 재요청 전 첫 카드, 카드가 쓴 근거의 원문이 outcomes에 남는다."""
+        from pipelines.updates.experiment import _outcome
+        bad = {"status": "update", "headline": "SK하이닉스 분기배당 결정", "when": "2026-10-28",
+               "facts": [{"text": "보통주 1주당 30,000원 분기배당을 결정했어요.", "evidence_id": "E1"}],
+               "memo_link": "메모의 '배당' 관심사와 연결돼요.", "sources": ["E1"], "confidence": 0.9}
+        older = news(day="2026-10-20")                                     # 근거는 최신순이라 공시가 E1
+        out = check_topic(ITEM, [disc(), older], self._call(bad), [], CFG)
+        self.assertEqual([e.candidate.kind for e in out.evidence], ["disclosure", "news"])
+        self.assertEqual((out.kind, out.fail_codes), ("no_update", ["NUMBER"]))
+        self.assertEqual(len(out.checks), 1)
+        self.assertEqual(out.checks[0]["stage"], "card")
+        self.assertEqual(out.checks[0]["codes"], ["NUMBER"])
+        self.assertEqual(parse_card_v2(json.dumps(out.checks[0]["card"], ensure_ascii=False)).facts,
+                         [("보통주 1주당 30,000원 분기배당을 결정했어요.", "E1")])   # 응답과 같은 모양이라 다시 읽힌다
+        row = _outcome(ITEM, out)
+        self.assertEqual(row["checks"], out.checks)
+        by_eid = {e["eid"]: e for e in row["evidence"]}
+        self.assertEqual(by_eid["E1"]["shown_text"], disc().text)        # 카드가 쓴 근거만 원문을 남긴다
+        self.assertNotIn("shown_text", by_eid["E2"])
+        json.dumps(row, ensure_ascii=False)                              # 그대로 jsonl에 쓸 수 있다
+
+        long = {**bad, "headline": "가" * 40, "facts": [{"text": "보통주 1주당 20,000원 분기배당을 결정했어요.", "evidence_id": "E1"}]}
+        answers = iter([long, {**long, "headline": "SK하이닉스 분기배당 결정"}])
+        out = check_topic(ITEM, [disc()], lambda p: json.dumps(next(answers), ensure_ascii=False), [],
+                          {**CFG, "format_retry": 1})
+        self.assertEqual(out.kind, "update")
+        self.assertEqual([(c["stage"], c["codes"]) for c in out.checks], [("card", ["FORMAT_TITLE"]), ("format_retry", [])])
+        self.assertEqual(out.checks[0]["card"]["headline"], "가" * 40)   # 재요청 전 첫 카드도 남는다
+
+        out = check_topic(ITEM, [disc()], lambda p: "JSON 아님", [], CFG)
+        self.assertEqual(out.checks, [{"stage": "card", "card": None, "codes": ["FORMAT_PARSE"], "raw": "JSON 아님"}])
+
 
 class ExplanationTest(unittest.TestCase):
     """설명 문단 시험 (topic.explanation, 2026-11-12). 기본은 꺼져 있어 기존 카드와 같다."""

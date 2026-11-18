@@ -94,12 +94,26 @@ def _fmt(out) -> list[str]:
     return rows
 
 
+def _cited(checks: list[dict]) -> set[str]:
+    """검사 기록의 카드들이 쓴 근거 번호 (facts의 evidence_id와 sources)."""
+    out = set()
+    for row in checks:
+        card = row.get("card") or {}
+        out |= {f.get("evidence_id") for f in card.get("facts") or []} | set(card.get("sources") or [])
+    return out - {"", None}
+
+
 def _outcome(item, out) -> dict:
+    """outcomes.jsonl 한 줄. checks(검사 기록: 카드 JSON·걸린 코드)가 있으면 함께 쓰고, 그 카드들이 쓴 근거에는
+    검사에 쓴 원문 shown_text를 붙인다 (검사 대상 글 = title + shown_text + date, checks._ev_text). 2026-11-17."""
+    checks = getattr(out, "checks", None) or []
+    cited = _cited(checks)
     ev = [{"eid": e.eid, "ref": e.candidate.ref, "kind": e.candidate.kind, "doc": e.candidate.doc, "date": e.candidate.date,
-           "similarity": round(e.candidate.similarity, 4), "title": e.candidate.title} for e in out.evidence]
+           "similarity": round(e.candidate.similarity, 4), "title": e.candidate.title,
+           **({"shown_text": e.shown_text} if e.eid in cited else {})} for e in out.evidence]
     d = out.draft
     return {"item_id": item.item_id, "symbol": item.symbol, "description": item.description, "kind": out.kind,
-            "fail_codes": out.fail_codes, "evidence": ev,
+            "fail_codes": out.fail_codes, "evidence": ev, **({"checks": checks} if checks else {}),
             "grouped": [{"ref": c.ref, "rcept_no": r, "title": c.title} for c, r in out.grouped],
             "card": None if d is None else {"type": d.type, "origin": d.origin, "title": d.title, "summary": d.summary,
                                             "explanation": d.explanation, "memo_link": d.reason, "when": d.when,

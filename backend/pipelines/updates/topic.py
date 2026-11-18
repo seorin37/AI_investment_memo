@@ -185,9 +185,33 @@ def _repair_prompt_v2(prompt: str, raw: str, codes: list[str], cfg: dict) -> str
             "같은 근거만 사용하고 새 사실이나 숫자는 넣지 말고, 규칙을 지켜 JSON 하나로 다시 작성하세요. 문장은 줄이거나 나눠서 쓰세요.")
 
 
+def card_v2_json(card) -> dict:
+    """CardV2 → LLM 응답과 같은 모양의 dict (judge.parse_card_v2로 다시 읽을 수 있다)."""
+    return {"status": card.status, "headline": card.headline, "when": card.when,
+            "facts": [{"text": t, "evidence_id": eid} for t, eid in card.facts], "explanation": card.explanation,
+            "memo_link": card.memo_link, "sources": list(card.sources), "confidence": card.confidence}
+
+
 def _judge_v2(item: TrackingItem, evidence, call: Callable[[str], str] | None, banned: list[str], cfg: dict) -> TopicOutcome:
+    """v2 카드 판단 + 검사 기록. 코드 검사·검수 호출을 할 때마다 그때의 카드와 걸린 코드를 TopicOutcome.checks에 남긴다
+    (2026-11-17, 형식 재요청 전 첫 카드·검사에서 떨어진 카드도 실행 결과에서 다시 볼 수 있게)."""
+    log: list[dict] = []
+    out = _judge_v2_run(item, evidence, call, banned, cfg, log)
+    out.checks = log
+    return out
+
+
+def _judge_v2_run(item: TrackingItem, evidence, call: Callable[[str], str] | None, banned: list[str], cfg: dict,
+                  log: list[dict]) -> TopicOutcome:
     """v2 카드 (judge.parse_card_v2 · checks.check_card_v2). 흐름(이미 보여 준 출처·호출 실패·형식 재요청·검수 호출·실패 처리)은 v1과 같다.
     비교를 원하는 메모(judge.wants_comparison)인데 카드에 비교 문장이 없으면 코드가 "비교 자료 없음"을 덧붙인다."""
+
+    def rec(stage: str, card, codes: list[str], **extra) -> None:
+        row = {"stage": stage, "card": card_v2_json(card) if card is not None else None, "codes": list(codes), **extra}
+        if card is None and "raw" not in extra:
+            row["raw"] = raw                                    # 읽지 못한 응답은 원문을 남긴다
+        log.append(row)
+
     from .checks import check_card_v2, check_no_update_v2
     from .judge import NO_COMPARISON, parse_card_v2, wants_comparison
     from .models import Card
@@ -223,11 +247,14 @@ def _judge_v2(item: TrackingItem, evidence, call: Callable[[str], str] | None, b
         return replace([f"CALL_FAILED:{type(exc).__name__}"])
     card = parse_card_v2(raw)
     if card is None:
+        rec("card", None, ["FORMAT_PARSE"])
         return replace(["FORMAT_PARSE"])
     if card.status == "no_update":
         codes = check_no_update_v2(card)
+        rec("card", card, codes)
         return replace(codes, card) if codes else TopicOutcome("no_update", evidence, card, raw=raw)
     codes = check_card_v2(card, evidence, banned, cfg)
+    rec("card", card, codes)
     retried = False
     if codes and cfg.get("format_retry", 0) and set(codes) <= _FORMAT_CODES:
         retried = True
@@ -239,12 +266,15 @@ def _judge_v2(item: TrackingItem, evidence, call: Callable[[str], str] | None, b
             return replace([f"CALL_FAILED:{type(exc).__name__}"], card)
         card2 = parse_card_v2(raw)
         if card2 is None:
+            rec("format_retry", None, ["FORMAT_PARSE"])
             return replace(["FORMAT_PARSE"], card, retried=True)
         card = card2
         if card.status == "no_update":
             bad = check_no_update_v2(card)
+            rec("format_retry", card, bad)
             return replace(bad, card, retried=True) if bad else TopicOutcome("no_update", evidence, card, raw=raw, retried=True)
         codes = check_card_v2(card, evidence, banned, cfg)
+        rec("format_retry", card, codes)
     if codes:
         return replace(codes, card, retried=retried)
     facts = [(t, eid) for t, eid in card.facts if eid]          # "비교 자료 없음"은 검수하지 않는다
@@ -253,6 +283,7 @@ def _judge_v2(item: TrackingItem, evidence, call: Callable[[str], str] | None, b
         vcard = Card("update", card.headline, [t for t, _ in facts] + extra, card.memo_link, [(e, t) for t, e in facts],
                      card.confidence)   # 설명 문단 문장도 근거와 대조한다
         vcodes, notes = _verify(vcard, evidence, call, item.company_name or item.symbol, item.description)
+        rec("verify", card, vcodes, notes=list(notes))
         if vcodes:
             out = replace(vcodes, card, retried=retried)
             out.verify_notes = notes

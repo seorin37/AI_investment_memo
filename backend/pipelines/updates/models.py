@@ -161,3 +161,5 @@ class TopicOutcome:
     retried: bool = False            # 형식 오류로 한 번 다시 요청했는지
     verify_notes: list[str] = field(default_factory=list)   # 검수 호출이 막은 문장과 이유 (보고서용)
     grouped: list = field(default_factory=list)              # (기사 Candidate, 공시 접수번호): 같은 사건으로 묶여 근거에서 뺀 기사
+    checks: list[dict] = field(default_factory=list)         # v2 검사 기록 {stage: card|format_retry|verify, card, codes}
+                                                             # (topic._judge_v2, 2026-11-17. 실행 결과 outcomes.jsonl에만 쓴다)
