@@ -90,6 +90,8 @@ class FakeRepo:
 
     def update_base(self, user_id, memo_id, values):
         r = self.rows[memo_id]
+        if "title" in values:
+            r["title"] = values["title"]
         if "body" in values:
             r["content"] = values["body"]
         if "color" in values:
@@ -168,15 +170,41 @@ class ServiceTest(unittest.TestCase):
         self.assertIn(int(out["id"]), self.repo.rows)
         self.assertEqual(self.repo.db.commits, 1)                              # 메모 저장은 커밋됨
 
-    def test_update_only_reanalyzes_changed_body(self):
+    def test_update_reanalyzes_when_title_or_body_changes(self):
+        """2026-11-18: 분석 입력 = 제목 + 본문. 제목만 바뀌어도 다시 분석하고, 입력이 그대로면 다시 분석하지 않는다."""
         s = self.svc()
         with mock.patch("app.board.service.analyze_memo", side_effect=fake_analyze) as a:
             m = s.create_memo(1, "005930", MemoCreate(title="t", body="HBM 소식", ai_linked=True))
             mid = int(m["id"])
             self.assertEqual(s.update(1, mid, {"color": "blue"})["analysis"]["status"], "unchanged")
             self.assertEqual(s.update(1, mid, {"body": "HBM 소식"})["analysis"]["status"], "unchanged")
+            self.assertEqual(s.update(1, mid, {"title": "t"})["analysis"]["status"], "unchanged")       # 같은 제목
+            self.assertEqual(s.update(1, mid, {"title": "7만원 밑이면"})["analysis"]["status"], "done")  # 제목만 바뀜
+            self.assertEqual(a.call_args.args[2], "7만원 밑이면\nHBM 소식")
             self.assertEqual(s.update(1, mid, {"body": "파운드리 소식"})["analysis"]["status"], "done")
-        self.assertEqual(a.call_count, 2)
+            self.assertEqual(a.call_args.args[2], "7만원 밑이면\n파운드리 소식")
+        self.assertEqual(a.call_count, 3)
+
+    def test_analysis_input_is_title_and_body(self):
+        s = self.svc()
+        cases = [
+            (("삼성전자 7만원 밑이면", "HBM 소식"), "삼성전자 7만원 밑이면\nHBM 소식"),
+            (("삼성전자 7만원 밑이면", ""), "삼성전자 7만원 밑이면"),                      # 한 줄 메모 (본문 빈 값) → 제목
+            (("", "HBM 소식"), "HBM 소식"),                                                # 제목 없음 → 본문만
+            (("제목 없음", "HBM 소식"), "HBM 소식"),                                       # 웹의 빈 제목 대체값 → 본문만
+            (("HBM 소식", "HBM 소식\n7만원 밑이면"), "HBM 소식\n7만원 밑이면"),             # 본문이 제목으로 시작 → 본문만
+            (("HBM 소식 나오면 실적 발표 전에 다시 확인하…", "HBM 소식 나오면 실적 발표 전에 다시 확인하기"),
+             "HBM 소식 나오면 실적 발표 전에 다시 확인하기"),                               # 앱 빠른 메모: 제목을 …로 자름
+        ]
+        with mock.patch("app.board.service.analyze_memo", side_effect=fake_analyze) as a:
+            for (title, body), want in cases:
+                s.create_memo(1, "005930", MemoCreate(title=title or "x", body=body, ai_linked=True))
+                if not title:                                                          # 스키마상 제목은 필수 → 빈 제목은 행에서 직접 비움
+                    mid = max(self.repo.rows)
+                    self.repo.rows[mid]["title"] = ""
+                    s.set_ai_link(1, mid, True)
+                with self.subTest(title=title, body=body):
+                    self.assertEqual(a.call_args.args[2], want)
 
     def test_ai_toggle(self):
         s = self.svc()

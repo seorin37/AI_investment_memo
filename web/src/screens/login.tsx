@@ -1,8 +1,8 @@
 /* 1. 로그인 · 2.0 홈 시작 설정 — Figma 그대로 */
-import { useApp } from "../store";
+import { useApp, useSession } from "../store";
 import { useState } from "react";
 import { cx } from "../kit";
-const LAST: { p: string | null } = { p: null }; /* 최근 로그인 (로그아웃 뒤에도 남음) */
+const lastLogin = () => { try { return localStorage.getItem("memos.lastLogin"); } catch { return null; } }; /* 최근 로그인 (로그아웃 뒤에도 남음) */
 import { LOGIN_LOGO } from "../assets_wm";
 
 export const KakaoLogo = ({ size = 24 }: { size?: number }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><path d="M12 3C6.48 3 2 6.49 2 10.8C2 13.57 3.85 16 6.63 17.38L5.46 21.68C5.36 22.02 5.75 22.28 6.04 22.1L11.12 18.62C11.41 18.64 11.7 18.65 12 18.65C17.52 18.65 22 15.15 22 10.8C22 6.45 17.52 3 12 3Z" fill="#191919" /></svg>;
@@ -11,14 +11,17 @@ export const GoogleLogo = ({ size = 24 }: { size?: number }) => <svg width={size
 
 export function Login() {
   const { go, x, setX } = useApp();
-  const [err, setErr] = useState(false), [shake, setShake] = useState(0);
+  const sess = useSession();
+  const [err, setErr] = useState(false), [shake, setShake] = useState(0), [busy, setBusy] = useState(false);
   /* 11.16 앱 통일: 최근 로그인 표시 · 로그인 실패 안내 · 인터넷 끊김 */
   const start = (p: "kakao" | "naver" | "google") => () => {
     if (x.offline) { setShake((n) => n + 1); return; }
     if (x.loginFail) { setErr(true); setShake((n) => n + 1); return; }
-    LAST.p = p; go({ name: "terms" });
+    if (busy) return; setBusy(true);
+    try { localStorage.setItem("memos.lastLogin", p); } catch { /* 무시 */ }
+    void sess.login(p).catch(() => { setErr(true); setShake((n) => n + 1); }).finally(() => setBusy(false));
   };
-  const Recent = ({ p }: { p: string }) => LAST.p === p ? <span className="absolute -top-2 right-3 rounded-full bg-[#15171a] px-2 py-[2px] text-[12px] font-bold leading-[16px] text-white">최근 로그인</span> : null;
+  const Recent = ({ p }: { p: string }) => lastLogin() === p ? <span className="absolute -top-2 right-3 rounded-full bg-[#15171a] px-2 py-[2px] text-[12px] font-bold leading-[16px] text-white">최근 로그인</span> : null;
   return (
     <div className="flex h-full min-h-[600px] w-full flex-col items-center justify-center overflow-auto bg-[#fdfdfd]">
       <div key={shake} className={cx("m-pop flex w-[480px] max-w-[calc(100vw-32px)] flex-col items-center gap-7 overflow-hidden rounded-[24px] border border-[#e5e8eb] bg-white px-12 py-10", shake > 0 && "x-shake")}>
@@ -50,7 +53,8 @@ export function Login() {
 
 const Tick = ({ bg }: { bg: string }) => <span className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full text-[13px] font-bold leading-[20px] text-black" style={{ background: bg }}>✓</span>;
 export function Start() {
-  const { go, setHomeMode } = useApp();
+  const { go, act } = useApp();
+  const setHomeMode = (mode: "template" | "custom") => act.home({ mode });
   return (
     <div className="flex min-h-full w-full flex-col items-center justify-center px-10 py-[125px]">
       <div className="flex h-[650px] w-full max-w-[674px] flex-col items-center justify-center gap-6">

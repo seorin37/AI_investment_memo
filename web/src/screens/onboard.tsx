@@ -2,9 +2,10 @@
    Figma page 3(앱) 내용을 로그인처럼 가운데 카드에, 보라 → 검정 (11.13) */
 import { useEffect, useState, type ReactNode } from "react";
 import { cx } from "../kit";
-import { useApp } from "../store";
+import { useApp, useSession } from "../store";
 import { LEGAL } from "../legal";
-import { ALL_STOCKS, type Hold, type Stock } from "../data";
+import type { Hold } from "../data";
+import { api } from "../api";
 
 const INK = "#111111";
 const Check = ({ on, size = 26, delay = 0 }: { on: boolean; size?: number; delay?: number }) => (
@@ -27,8 +28,8 @@ const CTA = ({ on, onClick, children }: { on: boolean; onClick: () => void; chil
 );
 function Card({ children }: { children: ReactNode }) {
   return (
-    <div className="flex h-full min-h-[600px] w-full flex-col items-center justify-center overflow-auto bg-[#fdfdfd] py-8">
-      <div className="m-pop relative flex w-[640px] max-w-[calc(100vw-32px)] flex-col rounded-[24px] border border-[#e5e8eb] bg-white px-14 pb-8 pt-6">{children}</div>
+    <div data-onboard-scroll className="flex h-full w-full flex-col items-center overflow-y-auto bg-[#fdfdfd] py-8">
+      <div className="m-pop relative my-auto flex w-[640px] shrink-0 max-w-[calc(100vw-32px)] flex-col rounded-[24px] border border-[#e5e8eb] bg-white px-14 pb-8 pt-6">{children}</div>
     </div>
   );
 }
@@ -42,7 +43,8 @@ const TERMS: { k: string; t: string; view?: DocK }[] = [
   { k: "inv", t: "[필수] 투자 정보 이용 안내를 확인했어요", view: "invest" },
 ];
 export function Terms() {
-  const { reset, go } = useApp();
+  const { go } = useApp();
+  const sess = useSession();
   const [ok, setOk] = useState<Record<string, boolean>>({});
   const [doc, setDoc] = useState<null | DocK>(null);
   const [leave, setLeave] = useState(false);
@@ -92,7 +94,7 @@ export function Terms() {
             <p className="break-keep text-[15px] leading-[23px] text-[#667085]">지금 나가면 동의한 내용은 저장되지 않아요. 다음에 로그인하면 이어서 할 수 있어요.</p>
             <div className="mt-3 flex gap-2">
               <button onClick={() => setLeave(false)} className="flex h-12 flex-1 items-center justify-center rounded-[12px] bg-[#f2f2f5] text-[15px] font-bold text-[#18181c] hover:bg-[#e8e8ec]">계속하기</button>
-              <button onClick={() => reset()} className="flex h-12 flex-1 items-center justify-center rounded-[12px] bg-[#111] text-[15px] font-bold text-white hover:bg-[#2a2a2a]">그만두기</button>
+              <button onClick={() => void sess.logout()} className="flex h-12 flex-1 items-center justify-center rounded-[12px] bg-[#111] text-[15px] font-bold text-white hover:bg-[#2a2a2a]">그만두기</button>
             </div>
           </div>
         </div>
@@ -102,33 +104,18 @@ export function Terms() {
 }
 
 /* ---------- 01.2 관심 종목 고르기 — 앱 '변경 후(제안 적용)' 화면처럼 12종목 · 3줄 (11.13) ---------- */
-const PICKS: { code: string; name: string; logo: string; bg: string; ink?: string; price: number; pct: number }[] = [
-  { code: "005930", name: "삼성전자", logo: "삼", bg: "#1428a0", price: 71400, pct: 2.15 },
-  { code: "000660", name: "SK하이닉스", logo: "S", bg: "#ea002c", price: 180500, pct: 2.38 },
-  { code: "035420", name: "NAVER", logo: "N", bg: "#03c75a", price: 212300, pct: 1.29 },
-  { code: "105560", name: "KB금융", logo: "K", bg: "#ffbc00", ink: "#16171a", price: 78300, pct: 1.12 },
-  { code: "373220", name: "LG에너지솔루션", logo: "L", bg: "#a50034", price: 351500, pct: -0.85 },
-  { code: "207940", name: "삼성바이오로직스", logo: "삼", bg: "#1428a0", price: 1012000, pct: 0.4 },
-  { code: "005380", name: "현대차", logo: "현", bg: "#002c5f", price: 238500, pct: -0.62 },
-  { code: "000270", name: "기아", logo: "기", bg: "#05141f", price: 101300, pct: 0.3 },
-  { code: "068270", name: "셀트리온", logo: "셀", bg: "#1572c6", price: 182400, pct: 1.05 },
-  { code: "012450", name: "한화에어로스페이스", logo: "한", bg: "#f37321", price: 412000, pct: 3.12 },
-  { code: "329180", name: "HD현대중공업", logo: "H", bg: "#0a6e8a", price: 296500, pct: -1.2 },
-  { code: "055550", name: "신한지주", logo: "신", bg: "#0046ff", price: 52800, pct: 0.57 },
-];
+const PICK_CODES = api.market.onboardPicks();
+const PICKS = PICK_CODES.map((code) => { const i = api.market.info(code)!; return { code, name: i.name, logo: i.logo, bg: i.logo_bg, ink: i.logo_ink }; });
 const Radio = ({ on }: { on: boolean }) => on
   ? <span className="flex h-[26px] w-[26px] items-center justify-center rounded-full bg-[#111]"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 6.2L5 8.6L9.5 3.6" stroke="white" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
   : <span className="h-[26px] w-[26px] rounded-full shadow-[inset_0_0_0_1.6px_#d1d5db]" />;
 export function Pick() {
-  const { go, setStocks, setCoachPending, setX } = useApp();
+  const { go, act, setCoachPending, setX } = useApp();
   const [sel, setSel] = useState<Record<string, Hold | undefined>>({});
   const n = Object.values(sel).filter(Boolean).length;
   const done = (skip?: boolean) => {
-    if (!skip) setStocks(PICKS.filter((p) => sel[p.code]).map((p) => {
-      const base = ALL_STOCKS.find((s) => s.code === p.code);
-      const s: Stock = base ?? { code: p.code, name: p.name === "NAVER" ? "네이버" : p.name, short: p.logo, logo: p.logo, logoBg: p.bg, hold: "관심", market: "KOSPI", price: p.price, chg: Math.round(p.price * p.pct / 100 / 100) * 100, pct: p.pct, seed: Number(p.code.slice(-2)) || 5 };
-      return { ...s, hold: sel[p.code]! };
-    }));
+    act.setStocks(skip ? [] : PICK_CODES.filter((c) => sel[c]).map((c) => ({ stock_code: c, hold: sel[c]! })));
+    act.onboarded();
     setCoachPending(true); // v2: 처음 홈에 들어가면 코치마크
     setX((v) => ({ ...v, first: true, firstStep: 0 })); // 11.16 앱 통일: 첫 홈 → 첫 메모 안내
     go({ name: "start" });

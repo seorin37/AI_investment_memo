@@ -3,6 +3,8 @@
 import { useRef, useState, type ReactNode } from "react";
 import { Modal, cx, useSnack } from "../kit";
 import { useApp } from "../store";
+import { api } from "../api";
+import { mkData, rangeLabels, type MkKey, type Range } from "../marketData";
 import { useFlip } from "./board";
 
 export const HALF = new Set(["updates", "news", "check"]);
@@ -18,13 +20,14 @@ export function rows(list: string[]) {
 }
 
 export function HomeGrid({ render, onAdd }: { render: (id: string, w: number | string | undefined) => ReactNode; onAdd: () => void }) {
-  const { x, setX } = useApp();
+  const { x, ud, act } = useApp();
   const snack = useSnack();
-  const list = x.homeW, edit = x.homeEdit;
+  const list = ud.home.widgets, edit = x.homeEdit;
   const box = useRef<HTMLDivElement>(null);
   useFlip(box);
   const [drag, setDrag] = useState<string | null>(null), [gone, setGone] = useState<string | null>(null);
-  const setList = (f: (l: string[]) => string[]) => setX((v) => ({ ...v, homeW: f(v.homeW) }));
+  const cur = useRef(list); cur.current = list;
+  const setList = (f: (l: string[]) => string[]) => act.home({ widgets: f(cur.current) });
   const remove = (id: string) => {
     setGone(id);
     const kk = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--k")) || 1;
@@ -83,28 +86,27 @@ export function EditBar({ onAdd, onReset }: { onAdd: () => void; onReset: () => 
 }
 
 export function AddWidget({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { x, setX } = useApp();
+  const { ud, act } = useApp();
   const snack = useSnack();
   return (
     <Modal open={open} onClose={onClose} width={680} label="위젯 추가">
       <div data-add-widget className="flex w-[680px] flex-col gap-4 rounded-[20px] bg-white p-7">
         <div className="flex items-center justify-between"><p className="text-[22px] font-bold leading-[31px] text-[#15171a]">위젯 추가</p><button onClick={onClose} className="text-[14px] font-medium text-[#6b7684] hover:text-[#191f28]">닫기</button></div>
         <div className="flex flex-col gap-2">
-          {CATALOG.map(([id, t, d]) => { const have = x.homeW.includes(id); return (
-            <button key={id} disabled={have} onClick={() => { setX((v) => ({ ...v, homeW: [id, ...v.homeW] })); onClose(); snack("위젯을 맨 위에 넣었어요 · 끌어서 옮길 수 있어요", { check: true }); }} className={cx("flex h-[68px] w-full items-center gap-3 rounded-[16px] px-4 text-left", have ? "cursor-default bg-[#f7f8fa] opacity-60" : "bg-[#f5f6f8] hover:bg-[#eef0f3]")}>
+          {CATALOG.map(([id, t, d]) => { const have = ud.home.widgets.includes(id); return (
+            <button key={id} disabled={have} onClick={() => { act.home({ widgets: [id, ...ud.home.widgets] }); onClose(); snack("위젯을 맨 위에 넣었어요 · 끌어서 옮길 수 있어요", { check: true }); }} className={cx("flex h-[68px] w-full items-center gap-3 rounded-[16px] px-4 text-left", have ? "cursor-default bg-[#f7f8fa] opacity-60" : "bg-[#f5f6f8] hover:bg-[#eef0f3]")}>
               <span className="flex min-w-0 flex-1 flex-col"><span className="text-[17px] font-bold leading-[26px] text-[#15171a]">{t}</span><span className="text-[14px] leading-[21px] text-[#747d8d]">{d}</span></span>
               <span className="shrink-0 text-[14px] font-bold text-[#575b63]">{have ? "홈에 있어요" : "추가"}</span>
             </button>
           ); })}
         </div>
-        <p className="text-[13px] leading-[20px] text-[#8b95a1]">주요 증시 일정(달력) 위젯은 11.11 결정으로 뺐어요.</p>
       </div>
     </Modal>
   );
 }
 
 export function ResetConfirm({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { setX } = useApp();
+  const { act } = useApp();
   const snack = useSnack();
   return (
     <Modal open={open} onClose={onClose} width={400} label="기본 구성으로 되돌릴까요?">
@@ -112,7 +114,7 @@ export function ResetConfirm({ open, onClose }: { open: boolean; onClose: () => 
         <div className="flex flex-col gap-2"><p className="text-[22px] font-bold leading-[31px] text-[#15171a]">기본 구성으로 되돌릴까요?</p><p className="break-keep text-[15px] leading-[23px] text-[#747d8d]">지금 순서와 고른 위젯이 처음 구성(시장 · 업데이트 · 뉴스)으로 바뀌어요.</p></div>
         <div className="flex gap-2">
           <button onClick={onClose} className="flex h-12 flex-1 items-center justify-center rounded-[12px] bg-[#f2f3f4] text-[15px] font-medium text-[#15171a]">취소</button>
-          <button onClick={() => { setX((v) => ({ ...v, homeW: DEFAULT_W })); onClose(); snack("기본 구성으로 되돌렸어요", { check: true }); }} className="flex h-12 flex-1 items-center justify-center rounded-[12px] bg-[#14171c] text-[15px] font-medium text-white">되돌리기</button>
+          <button onClick={() => { act.home({ widgets: DEFAULT_W }); onClose(); snack("기본 구성으로 되돌렸어요", { check: true }); }} className="flex h-12 flex-1 items-center justify-center rounded-[12px] bg-[#14171c] text-[15px] font-medium text-white">되돌리기</button>
         </div>
       </div>
     </Modal>
@@ -121,69 +123,78 @@ export function ResetConfirm({ open, onClose }: { open: boolean; onClose: () => 
 
 /* ---------- 체크리스트 위젯 (다 끝내면 축하) ---------- */
 export function CheckWidget({ h = 472 }: { h?: number }) {
-  const { checklist, setChecklist, clTitle } = useApp();
+  const { checklists, stocks, act, go, setMemoOpen } = useApp();
   const [add, setAdd] = useState("");
+  const withCl = stocks.filter((s) => checklists[s.stock_code]);
+  const [pick, setPick] = useState<string | null>(null);
+  const code = pick && stocks.some((s) => s.stock_code === pick) ? pick : (withCl[0] ?? stocks[0])?.stock_code;
+  const cl = code ? checklists[code] : undefined, checklist = cl?.items ?? [];
   const done = checklist.length > 0 && checklist.every((c) => c.d);
   return (
     <div data-check-widget className="flex w-full flex-col gap-2 overflow-hidden rounded-[20px] border border-[#e5e7eb] bg-white px-6 pb-4 pt-[18px]" style={{ height: h }}>
-      <div className="flex items-center justify-between"><p className="text-[17px] font-bold leading-[26px] text-[#15171a]">{clTitle}</p><p className="text-[13px] text-[#6b7078]">{checklist.filter((c) => c.d).length}/{checklist.length}</p></div>
-      {done && <div className="m-pop flex items-center gap-2 rounded-[12px] bg-[#f2f9f4] px-3 py-2 text-[14px] font-bold text-[#1e8e4e]"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" fill="#1e8e4e" /><path d="M4.8 8.2L7 10.3L11.2 5.9" stroke="white" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg>오늘 할 일을 다 했어요</div>}
+      <div className="flex items-center justify-between"><p className="text-[17px] font-bold leading-[26px] text-[#15171a]">{cl?.title ?? "체크리스트"}</p><p className="text-[13px] text-[#6b7078]">{checklist.filter((c) => c.d).length}/{checklist.length}</p></div>
+      {stocks.length > 0 && <div className="-mx-1 flex shrink-0 gap-1 overflow-x-auto px-1 pb-1">{stocks.map((s) => <button key={s.stock_code} onClick={() => setPick(s.stock_code)} className={cx("h-8 shrink-0 rounded-full px-3 text-[13px] font-bold transition-colors", s.stock_code === code ? "bg-[#15171a] text-white" : "bg-[#f3f4f6] text-[#575b63] hover:bg-[#e9eaec]")}>{s.name}{checklists[s.stock_code] ? ` ${checklists[s.stock_code].items.filter((c) => !c.d).length}` : ""}</button>)}</div>}
+      {done && <div className="m-pop flex items-center gap-2 rounded-[12px] bg-[#f2f9f4] px-3 py-2 text-[14px] font-bold text-[#1e8e4e]"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" fill="#1e8e4e" /><path d="M4.8 8.2L7 10.3L11.2 5.9" stroke="white" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg>모두 확인했어요!</div>}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        {checklist.map((c, i) => (
-          <button key={i} onClick={() => setChecklist((l) => l.map((y, j) => (j === i ? { ...y, d: !y.d } : y)))} className="flex h-11 w-full shrink-0 items-center gap-3 border-t border-[#f0f1f3] text-left first:border-t-0">
+        {!stocks.length && <p className="py-6 text-center text-[14px] text-[#8b95a1]">종목을 추가하면 종목별 체크리스트를 쓸 수 있어요</p>}
+        {code && !checklist.length && <p className="py-6 text-center text-[14px] leading-[21px] text-[#8b95a1]">아직 체크리스트가 없어요<br />아래에 확인할 일을 적고 Enter</p>}
+        {code && checklist.map((c) => (
+          <button key={c.id} onClick={() => act.toggleCheck(code, c.id)} className="flex h-11 w-full shrink-0 items-center gap-3 border-t border-[#f0f1f3] text-left first:border-t-0">
             <span className={cx("grid h-5 w-5 shrink-0 place-items-center rounded-full transition-colors", c.d ? "bg-[#15171a]" : "shadow-[inset_0_0_0_1.6px_#c9ccd2]")}>{c.d && <svg className="m-pop" width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2.5 6L4.8 8.3L9.5 3.5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>}</span>
             <span className={cx("truncate text-[15px] leading-[23px] transition-colors", c.d ? "text-[#a0a5ad] line-through" : "text-[#15171a]")}>{c.t}</span>
           </button>
         ))}
       </div>
-      <input value={add} onChange={(e) => setAdd(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && add.trim()) { setChecklist((l) => [...l, { t: add.trim(), d: false }]); setAdd(""); } }} placeholder="할 일을 적고 Enter" className="h-11 shrink-0 rounded-[12px] bg-[#f3f4f6] px-4 text-[15px] text-[#15171a] outline-none placeholder:text-[#8b95a1] focus:shadow-[inset_0_0_0_1.5px_#111]" />
+      <div className="flex shrink-0 items-center gap-2">
+        <input disabled={!code} value={add} onChange={(e) => setAdd(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && add.trim() && code) { act.addCheck(code, add.trim()); setAdd(""); } }} placeholder="할 일을 적고 Enter" className="h-11 min-w-0 flex-1 rounded-[12px] bg-[#f3f4f6] px-4 text-[15px] text-[#15171a] outline-none placeholder:text-[#8b95a1] disabled:opacity-50" />
+        {code && <button onClick={() => { go({ name: "stock", code, tab: "board" }); setMemoOpen(-2); }} className="h-11 shrink-0 rounded-[12px] px-3 text-[13px] font-bold text-[#575b63] hover:bg-[#f3f4f6]">편집</button>}
+      </div>
     </div>
   );
 }
 
 /* ---------- 시장 상세: 선을 훑으면 그날 값 · 기간 바꾸기 ---------- */
-type MKd = { key: string; name: string; v: string; r: Record<string, readonly [string, string, number, string, number, string?]> };
-export function MarketDetail({ m, onClose }: { m: MKd | null; onClose: () => void }) {
+export function MarketDetail({ m, onClose }: { m: MkKey | null; onClose: () => void }) {
   const last = useRef(m); if (m) last.current = m;
-  const d0 = m ?? last.current;
-  const [r, setR] = useState("1달");
+  const key = m ?? last.current;
+  const [r, setR] = useState<Range>("1달");
   const [hx, setHx] = useState<number | null>(null);
-  if (!d0) return <Modal open={false} onClose={onClose} label="시장 상세"><div /></Modal>;
-  const d = d0.r[r] ?? d0.r["1일"];
-  const pts = d[3].replace(/[ML]/g, " ").trim().split(/\s+/).map(Number);
-  const xs = pts.filter((_, i) => i % 2 === 0), ys = pts.filter((_, i) => i % 2 === 1);
-  const W = 616, H = 220, sx = W / 208, sy = (H - 30) / 48;
-  const base = parseFloat(d0.v.replace(/,/g, ""));
-  const up = d[2] > 0, col = up ? "#E5484D" : "#2F6BDB";
-  const val = (y: number) => base * (1 + ((ys[ys.length - 1] - y) / 48) * (Math.abs(parseFloat(d[0].replace(/[^\d.]/g, "")) / base) * 1.6 || 0.01));
-  const labels = r === "1일" ? ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:30"] : r === "1주" ? ["11.10", "11.11", "11.12", "11.13", "11.14"] : r === "1달" ? ["10.16", "10.23", "10.30", "11.06", "11.13"] : ["24.11", "25.02", "25.05", "25.08", "25.11"];
-  const idx = hx === null ? null : Math.max(0, Math.min(xs.length - 1, Math.round(hx / (W / (xs.length - 1)))));
+  if (!key) return <Modal open={false} onClose={onClose} label="시장 상세"><div /></Modal>;
+  const md = mkData(key, r), sr = md.sr;
+  const W = 616, H = 220, mn = Math.min(...sr), mx = Math.max(...sr);
+  const X = (i: number) => (i / (sr.length - 1)) * W, Y = (v: number) => 10 + ((mx - v) / (mx - mn || 1)) * (H - 40);
+  const col = md.up ? "#E5484D" : "#2F6BDB";
+  const labels = rangeLabels(r);
+  const days = r === "1일" ? [] : api.market.tradingDays(sr.length);
+  const idx = hx === null ? null : Math.max(0, Math.min(sr.length - 1, Math.round((hx / W) * (sr.length - 1))));
   const fmt = (n: number) => n.toLocaleString("ko-KR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const when = (i: number) => r === "1일" ? `${String(9 + Math.floor((i * 390) / (sr.length - 1) / 60)).padStart(2, "0")}:${String(Math.floor(((i * 390) / (sr.length - 1)) % 60)).padStart(2, "0")}` : days[i] ? `${days[i].slice(5, 7)}.${days[i].slice(8, 10)} 종가` : "";
+  const line = sr.map((v, i) => `${i ? "L" : "M"}${X(i).toFixed(1)} ${Y(v).toFixed(1)}`).join("");
   return (
-    <Modal open={!!m} onClose={onClose} width={680} label={`${d0.name} 상세`}>
+    <Modal open={!!m} onClose={onClose} width={680} label={`${md.name} 상세`}>
       <div data-market-detail className="flex w-[680px] flex-col gap-4 rounded-[28px] bg-white px-8 pb-7 pt-7">
         <div className="flex items-start justify-between">
           <div className="flex flex-col">
-            <p className="text-[15px] font-medium leading-[23px] text-[#575b63]">{d0.name}</p>
-            <p className="text-[30px] font-bold leading-[40px] text-[#15171a]">{idx === null ? d0.v : fmt(val(ys[idx]))}</p>
-            <p className="text-[14px] font-bold leading-[21px]" style={{ color: up ? "#e5484d" : "#2f6bdb" }}>{idx === null ? `${d[0]} · ${d[1]}` : `${labels[Math.min(labels.length - 1, Math.round((idx / (xs.length - 1)) * (labels.length - 1)))]} · 전일 확정 종가 기준`}</p>
+            <p className="text-[15px] font-medium leading-[23px] text-[#575b63]">{md.name}</p>
+            <p className="text-[30px] font-bold leading-[40px] text-[#15171a]">{idx === null ? md.v : fmt(sr[idx])}</p>
+            <p className="text-[14px] font-bold leading-[21px]" style={{ color: md.up ? "#e5484d" : "#2f6bdb" }}>{idx === null ? `${md.label} · ${md.when}` : when(idx)}</p>
           </div>
           <button aria-label="닫기" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-[10px] hover:bg-[#f2f3f4]"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M5 5L15 15M15 5L5 15" stroke="#333" strokeWidth="1.8" strokeLinecap="round" /></svg></button>
         </div>
         <div className="relative" style={{ width: W, height: H }} onMouseMove={(e) => { const b = (e.currentTarget as HTMLElement).getBoundingClientRect(); setHx(((e.clientX - b.left) / b.width) * W); }} onMouseLeave={() => setHx(null)}>
           <svg key={r} width={W} height={H} viewBox={`0 0 ${W} ${H}`} fill="none" className="absolute inset-0">
-            {[0, 1, 2, 3].map((i) => <line key={i} x1="0" x2={W} y1={10 + i * ((H - 30) / 3)} y2={10 + i * ((H - 30) / 3)} stroke="#eef0f3" />)}
-            {idx !== null && <clipPath id="mdc"><rect x="0" y="0" width={xs[idx] * sx} height={H} /></clipPath>}
-            <path d={xs.map((x, i) => `${i ? "L" : "M"}${x * sx} ${10 + ys[i] * sy}`).join("")} stroke={idx === null ? col : "#c9ccd2"} strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round" className={idx === null ? "m-line" : undefined} pathLength={idx === null ? 400 : undefined} />
-            {idx !== null && <path clipPath="url(#mdc)" d={xs.map((x, i) => `${i ? "L" : "M"}${x * sx} ${10 + ys[i] * sy}`).join("")} stroke={col} strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round" />}
-            {idx !== null && <><line x1={xs[idx] * sx} x2={xs[idx] * sx} y1="0" y2={H - 20} stroke="#15171a" strokeDasharray="3 3" /><circle cx={xs[idx] * sx} cy={10 + ys[idx] * sy} r="5" fill="#fff" stroke={col} strokeWidth="2.4" /></>}
+            {[0, 1, 2, 3].map((i) => <line key={i} x1="0" x2={W} y1={10 + i * ((H - 40) / 3)} y2={10 + i * ((H - 40) / 3)} stroke="#eef0f3" />)}
+            {idx !== null && <clipPath id="mdc"><rect x="0" y="0" width={X(idx)} height={H} /></clipPath>}
+            <path d={line} stroke={idx === null ? col : "#c9ccd2"} strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round" className={idx === null ? "m-line" : undefined} pathLength={idx === null ? 400 : undefined} />
+            {idx !== null && <path clipPath="url(#mdc)" d={line} stroke={col} strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round" />}
+            {idx !== null && <><line x1={X(idx)} x2={X(idx)} y1="0" y2={H - 24} stroke="#15171a" strokeDasharray="3 3" /><circle cx={X(idx)} cy={Y(sr[idx])} r="5" fill="#fff" stroke={col} strokeWidth="2.4" /></>}
           </svg>
-          <div className="absolute bottom-0 left-0 right-0 flex justify-between">{labels.map((l) => <span key={l} className="text-[11px] leading-[16px] text-[#8b95a1]">{l}</span>)}</div>
+          <div className="absolute bottom-0 left-0 right-0 flex justify-between">{labels.map((l, i) => <span key={l + i} className="text-[11px] leading-[16px] text-[#8b95a1]">{l}</span>)}</div>
         </div>
         <div className="flex h-12 w-full items-start rounded-[14px] bg-[#f3f4f6] p-1">
-          {["1일", "1주", "1달", "1년"].map((x) => <button key={x} onClick={() => setR(x)} className={cx("flex h-10 min-w-0 flex-1 items-center justify-center rounded-[12px] text-[15px] leading-[23px] transition-colors", r === x ? "bg-white font-bold text-[#16171a]" : "font-medium text-[#8b95a1] hover:text-[#16171a]")}>{x}</button>)}
+          {(["1일", "1주", "1달", "1년"] as Range[]).map((x) => <button key={x} onClick={() => setR(x)} className={cx("flex h-10 min-w-0 flex-1 items-center justify-center rounded-[12px] text-[15px] leading-[23px] transition-colors", r === x ? "bg-white font-bold text-[#16171a]" : "font-medium text-[#8b95a1] hover:text-[#16171a]")}>{x}</button>)}
         </div>
-        <p className="text-[13px] leading-[20px] text-[#8b95a1]">선을 마우스로 훑으면 그때의 값이 보여요 · 전일 확정 종가 기준 · 화면 예시</p>
+        <p className="text-[13px] leading-[20px] text-[#8b95a1]">선을 마우스로 훑으면 그때의 값이 보여요 · {r === "1일" ? "전 거래일 하루 흐름 · " : ""}{`${md.q.as_of.slice(5, 7)}.${md.q.as_of.slice(8, 10)} 종가 기준`}</p>
       </div>
     </Modal>
   );
@@ -191,7 +202,7 @@ export function MarketDetail({ m, onClose }: { m: MKd | null; onClose: () => voi
 
 /* ---------- 첫 홈 → 첫 메모 (앱 '첫 홈'): 종목 고르기 ✓ → 첫 메모 → AI 연결, 끝나면 '지켜보고 있어요' ---------- */
 export function FirstMemo() {
-  const { x, setX, stocks, go, setMemoOpen } = useApp();
+  const { x, setX, stocks, go, setMemoOpen, ud } = useApp();
   const [pick, setPick] = useState(false), [code, setCode] = useState<string | null>(null);
   const st = x.firstStep;
   const steps: [string, boolean][] = [["종목 고르기", true], ["첫 메모", st >= 1], ["AI 연결", st >= 2]];
@@ -199,11 +210,11 @@ export function FirstMemo() {
     <div data-first-memo className="m-in flex w-full flex-col gap-4 rounded-[20px] border border-[#e5e7eb] bg-white px-6 py-5">
       <div className="flex items-start gap-4">
         <div className="flex min-w-0 flex-1 flex-col">
-          <p className="text-[20px] font-bold leading-[29px] text-[#15171a]">{st >= 2 ? "AI가 이 메모를 지켜보고 있어요" : st >= 1 ? "첫 메모를 남겼어요" : "반가워요, 김나라님 · 첫 메모를 남겨 보세요"}</p>
+          <p className="text-[20px] font-bold leading-[29px] text-[#15171a]">{st >= 2 ? "AI가 이 메모를 지켜보고 있어요" : st >= 1 ? "첫 메모를 남겼어요" : `반가워요, ${ud.profile?.name ?? ""}님 · 첫 메모를 남겨 보세요`}</p>
           <p className="break-keep text-[15px] leading-[23px] text-[#575b63]">{st >= 2 ? "관련 소식이 생기면 업데이트 탭과 알림함에 알려 드려요. 보통 공시·뉴스가 쌓이는 데 하루 이틀 걸려요." : st >= 1 ? "AI 연결은 메모를 열어 언제든 켤 수 있어요. 켜면 관련 공시·뉴스·종가 변화를 찾아 드려요." : "왜 이 종목을 골랐는지, 무엇을 확인하고 싶은지 한두 줄이면 충분해요."}</p>
         </div>
         {st >= 2 ? <button onClick={() => setX((v) => ({ ...v, first: false }))} className="h-10 shrink-0 rounded-[12px] bg-[#f2f3f4] px-4 text-[15px] font-bold text-[#15171a] hover:bg-[#e9eaec]">확인</button>
-          : <button data-first-write onClick={() => { setCode(stocks[0]?.code ?? null); setPick(true); }} className="h-11 shrink-0 rounded-[12px] bg-[#15171a] px-5 text-[15px] font-bold text-white hover:bg-[#2a2a2a]">{st >= 1 ? "메모 하나 더 쓰기" : "첫 메모 쓰기"}</button>}
+          : <button data-first-write onClick={() => { setCode(stocks[0]?.stock_code ?? null); setPick(true); }} className="h-11 shrink-0 rounded-[12px] bg-[#15171a] px-5 text-[15px] font-bold text-white hover:bg-[#2a2a2a]">{st >= 1 ? "메모 하나 더 쓰기" : "첫 메모 쓰기"}</button>}
       </div>
       <div className="flex items-center gap-2">
         {steps.map(([t, on], i) => (
@@ -218,8 +229,8 @@ export function FirstMemo() {
           <div className="flex flex-col gap-1"><p className="text-[22px] font-bold leading-[31px] text-[#15171a]">어느 종목에 남길까요?</p><p className="text-[15px] leading-[23px] text-[#747d8d]">메모는 종목별 메모 보드에 저장돼요</p></div>
           <div className="flex max-h-[300px] flex-col gap-1 overflow-y-auto">
             {stocks.length === 0 && <p className="py-6 text-center text-[14px] text-[#8b95a1]">고른 종목이 없어요 · 사이드바 + 에서 추가해 보세요</p>}
-            {stocks.map((s) => { const on = code === s.code; return (
-              <button key={s.code} onClick={() => setCode(s.code)} className={cx("flex h-14 w-full items-center gap-3 rounded-[14px] px-3 text-left transition-colors", on ? "bg-[#f7f7f7] shadow-[inset_0_0_0_1.5px_#111]" : "hover:bg-[#f9f9f9]")}>
+            {stocks.map((s) => { const on = code === s.stock_code; return (
+              <button key={s.stock_code} onClick={() => setCode(s.stock_code)} className={cx("flex h-14 w-full items-center gap-3 rounded-[14px] px-3 text-left transition-colors", on ? "bg-[#f7f7f7] shadow-[inset_0_0_0_1.5px_#111]" : "hover:bg-[#f9f9f9]")}>
                 <span className="flex min-w-0 flex-1 flex-col"><span className="text-[16px] font-bold text-[#15171a]">{s.name}</span><span className="text-[13px] text-[#8b95a1]">{s.hold}</span></span>
                 <span className={cx("grid h-[22px] w-[22px] place-items-center rounded-full", on ? "bg-[#111]" : "shadow-[inset_0_0_0_1.6px_#c9ccd2]")}>{on && <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 6L4.8 8.3L9.5 3.5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>}</span>
               </button>

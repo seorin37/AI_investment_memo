@@ -6,9 +6,11 @@ import { useApp, type Notif } from "./store";
 
 /* ---------- 사용량 % (앱과 같이 화면에 %로) ---------- */
 export function useUsage() {
-  const { studio, x } = useApp();
-  return studio.creditOut ? 100 : x.usage;
+  const { ud } = useApp();
+  return Math.min(100, Math.round(ud.usage.pct));
 }
+/* 사용량이 다시 채워지는 날 (예: "12월 1일") */
+export function useResetDay() { const { ud } = useApp(); const d = new Date(ud.usage.reset_at); return `${d.getMonth() + 1}월 ${d.getDate()}일`; }
 
 /* ---------- 사용량을 다 썼을 때 안내 상자 (메모 보드 · 메모 상세 · 업데이트 · 스튜디오 공통) ---------- */
 export function SpentBox({ title, sub, className }: { title: string; sub: string; className?: string }) {
@@ -136,9 +138,8 @@ export const MI = {
 /* ---------- 알림함 (Lucian #074) — 사이드바 종 버튼 + 창 ---------- */
 export const BellIcon = ({ size = 20 }: { size?: number }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9.5a6 6 0 0 1 12 0c0 5 2 6.5 2 6.5H4s2-1.5 2-6.5" /><path d="M10 19.5a2 2 0 0 0 4 0" /></svg>;
 export function useNotifs() {
-  const { x } = useApp();
-  const list = x.notifs.filter((n) => (n.kind === "upd" ? x.noti.upd : x.noti.studio));
-  return { list, unread: list.filter((n) => !n.read).length, allOff: !x.noti.upd && !x.noti.studio };
+  const { notifs, ud } = useApp();
+  return { list: notifs, unread: notifs.filter((n) => !n.read).length, allOff: !ud.settings.noti_upd && !ud.settings.noti_studio };
 }
 export function BellBtn({ rail }: { rail?: boolean }) {
   const { x, setX } = useApp();
@@ -162,7 +163,7 @@ const NIcon = ({ n }: { n: Notif }) => (
   </span>
 );
 export function InboxPanel() {
-  const { x, setX, sideOpen, go, setMemoOpen, setStudio, sgo, openSettings } = useApp();
+  const { x, setX, sideOpen, go, setMemoOpen, setStudio, sgo, openSettings, act, made } = useApp();
   const { list, unread, allOff } = useNotifs();
   const [tab, setTab] = useState<"all" | "upd" | "studio">("all");
   const ref = useRef<HTMLDivElement>(null);
@@ -175,15 +176,16 @@ export function InboxPanel() {
   }, [x.inbox, setX]);
   const shown = list.filter((n) => tab === "all" || n.kind === tab);
   const open = (n: Notif) => {
-    setX((v) => ({ ...v, inbox: false, notifs: v.notifs.map((m) => (m.id === n.id ? { ...m, read: true } : m)), memoTab: n.kind === "upd" ? 1 : v.memoTab }));
-    if (n.kind === "upd" && n.code) { go({ name: "stock", code: n.code, tab: "board" }); if (n.memo != null) window.setTimeout(() => setMemoOpen(n.memo!), 120); }
-    else if (n.view) { setStudio((s) => ({ ...s, open: true, badge: null, ...(n.view === "player" ? { mini: false, playing: true } : {}) })); sgo(n.view); }
+    setX((v) => ({ ...v, inbox: false, memoTab: n.kind === "upd" ? 1 : v.memoTab }));
+    if (n.kind === "studio") act.readNotif(Number(n.id.slice(1)));
+    if (n.kind === "upd" && n.stock_code) { go({ name: "stock", code: n.stock_code, tab: "board" }); if (n.memo != null) window.setTimeout(() => setMemoOpen(n.memo!), 120); }
+    else if (n.view && n.made != null && made.some((m) => m.id === n.made)) { setStudio((s) => ({ ...s, open: true, badge: null, cur: n.made!, ...(n.view === "player" ? { mini: false, playing: true, t: 0 } : {}) })); sgo(n.view); }
   };
   return (
     <div ref={ref} role="dialog" aria-label="알림함" data-inbox className={cx("u074-pan fixed top-4 z-[60] flex max-h-[calc(100vh-32px)] w-[380px] flex-col rounded-[22px] border border-[#e5e8eb] bg-white shadow-[0_30px_60px_-30px_rgba(17,17,17,.35)]", x.inbox && "on")} style={{ left: (sideOpen ? 250 : 72) + 8 }}>
       <div className="flex items-center gap-2 px-5 pb-2 pt-[18px]">
         <p className="flex-1 text-[20px] font-bold leading-[29px] text-[#15171a]">알림</p>
-        <button tabIndex={x.inbox ? 0 : -1} disabled={!unread} onClick={() => setX((v) => ({ ...v, notifs: v.notifs.map((m) => ({ ...m, read: true })) }))} className="h-8 rounded-[8px] px-2 text-[14px] font-bold text-[#575b63] enabled:hover:bg-[#f5f6f8] disabled:opacity-40">모두 읽음</button>
+        <button tabIndex={x.inbox ? 0 : -1} disabled={!unread} onClick={() => act.readAll()} className="h-8 rounded-[8px] px-2 text-[14px] font-bold text-[#575b63] enabled:hover:bg-[#f5f6f8] disabled:opacity-40">모두 읽음</button>
       </div>
       <div className="flex gap-1 px-4 pb-2">
         {([["all", "전체"], ["upd", "업데이트"], ["studio", "스튜디오"]] as const).map(([k, l]) => <button key={k} tabIndex={x.inbox ? 0 : -1} onClick={() => setTab(k)} className={cx("h-8 rounded-full px-3 text-[13px] font-bold transition-colors", tab === k ? "bg-[#15171a] text-white" : "text-[#8b95a1] hover:bg-[#f5f6f8]")}>{l}</button>)}
@@ -208,13 +210,13 @@ const Empty = ({ t, s }: { t: string; s: string }) => (
 /* ---------- AI 사용량 창 (스튜디오 칩을 누르면) ---------- */
 export function UsageSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { setOverlay, setPlanOpen, openSettings, setStudio } = useApp();
-  const pct = useUsage();
+  const pct = useUsage(), day = useResetDay();
   return (
     <Modal open={open} onClose={onClose} width={400} label="AI 사용량">
       <div data-usage-sheet className="flex w-[400px] flex-col gap-4 rounded-[28px] bg-white px-7 py-[27px]">
         <div className="flex flex-col gap-1">
           <p className="text-[22px] font-bold leading-[31px] text-[#15171a]">AI 사용량</p>
-          <p className="break-keep text-[15px] leading-[23px] text-[#747d8d]">{pct >= 100 ? "이번 달 AI 사용량을 다 썼어요 · 12월 1일에 새로 채워져요" : `이번 달 ${pct}% 사용 · 12월 1일에 새로 채워져요`}</p>
+          <p className="break-keep text-[15px] leading-[23px] text-[#747d8d]">{pct >= 100 ? `이번 달 AI 사용량을 다 썼어요 · ${day}에 새로 채워져요` : `이번 달 ${pct}% 사용 · ${day}에 새로 채워져요`}</p>
         </div>
         <div className="h-2 w-full rounded-full bg-[#eceef1]"><div className="h-2 rounded-full transition-[width]" style={{ width: `${pct}%`, background: pct >= 100 ? "#e5484d" : "#15171a", transitionDuration: "calc(.6s * var(--k))" }} /></div>
         <div className="flex flex-col gap-2">

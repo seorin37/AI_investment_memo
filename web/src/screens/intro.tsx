@@ -43,15 +43,15 @@ const PlugOn = () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"
 export function ArtAttach() {
   return (
     <div className="flex h-full w-full items-center justify-center gap-3 px-6">
-      <div className="v2-rise dk-keep relative h-[152px] w-[184px] shrink-0" style={{ ["--i" as string]: 0 }}>
-        <div className="flex h-full w-full flex-col items-start gap-2 rounded-[16px_16px_0px_16px] bg-[#fceaaa] px-4 pb-8 pt-[14px]">
+      <div className="memo-card v2-rise dk-keep relative h-[152px] w-[184px] shrink-0" style={{ ["--i" as string]: 0 }}>
+        <div className="memo-paper paper-cut flex h-full w-full flex-col items-start gap-2 rounded-[16px_16px_0px_16px] px-4 pb-8 pt-[14px]" style={{ background: "var(--pk-yellow)" }}>
           <div className="flex w-full items-center justify-between">
-            <p className="whitespace-nowrap text-[13px] font-medium leading-[20px] text-[#4a4a55]">내 메모</p>
-            <span className="grid h-7 w-7 place-items-center rounded-full bg-white/80"><PlugOn /></span>
+            <p className="mi-3 whitespace-nowrap text-[13px] font-medium leading-[20px] text-[#4a4a55]">내 메모</p>
+            <span className="m-plug grid h-7 w-7 place-items-center rounded-full bg-white/80"><PlugOn /></span>
           </div>
-          <p className="w-full break-keep text-[20px] font-bold leading-[1.36] text-[#16161c]">HBM 수요 계속 갈까?</p>
+          <p className="mi-1 w-full break-keep text-[20px] font-bold leading-[1.36] text-[#16161c]">HBM 수요 계속 갈까?</p>
         </div>
-        <svg className="absolute bottom-0 right-0" width="30" height="30" viewBox="0 0 30 30" fill="none"><path d="M30 0V30H0L30 0Z" fill="#F4F5F7" /><path d="M0 9C0 3 3 0 9 0H30L0 30V9Z" fill="#efbf2a" /></svg>
+        <svg className="m-fold pointer-events-none absolute bottom-0 right-0" width="30" height="30" viewBox="0 0 30 30" fill="none"><path d="M0 9C0 3 3 0 9 0H30L0 30V9Z" style={{ fill: "var(--pka-yellow)" }} /></svg>
       </div>
       <div className="relative h-[2px] w-9 shrink-0 rounded-full bg-[#d5d8dd]"><span className="v2-dotrun absolute top-[-2px] h-[6px] w-[6px] rounded-full bg-[#111]" /></div>
       <div className="flex min-w-0 flex-1 flex-col gap-[10px]">
@@ -106,7 +106,7 @@ export function Intro() {
   const { go } = useApp();
   const [cur, setCur] = useState(0);
   const last = cur === PAGES.length - 1;
-  const done = () => go({ name: "login" });
+  const done = () => { try { localStorage.setItem("memos.introSeen", "1"); } catch { /* 무시 */ } go({ name: "login" }); };
   const next = () => (last ? done() : setCur((c) => c + 1));
   const prev = () => setCur((c) => Math.max(0, c - 1));
   useEffect(() => {

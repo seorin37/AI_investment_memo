@@ -100,7 +100,7 @@ function FormatPanel({ ed, onClose }: { ed: React.RefObject<HTMLDivElement | nul
 }
 
 export function JournalPage() {
-  const { journal, setJournal } = useApp();
+  const { journal, act: A } = useApp();
   const [sel, setSel] = useState(journal[0]?.id ?? 0);
   const [q, setQ] = useState("");
   const [fmt, setFmt] = useState(false);
@@ -110,7 +110,6 @@ export function JournalPage() {
   const cur = journal.find((j) => j.id === sel) ?? journal[0];
   const list = journal.filter((j) => !q.trim() || j.title.includes(q.trim()) || j.body.join(" ").includes(q.trim()));
   /* 11.16 앱 통일: 묶음(고정됨·오늘·지난 30일·월별) · 고정 · 휴지통 · 선택 · 공유 · 기록 안에서 찾기 · 사진 */
-  const { setTrash } = useApp();
   const snack = useSnack();
   const [grouped, setGrouped] = useState(true), [pinOpen, setPinOpen] = useState(true);
   const [pick, setPick] = useState<Set<number> | null>(null);
@@ -118,20 +117,19 @@ export function JournalPage() {
   const [find, setFind] = useState<string | null>(null);
   const photo = useRef<HTMLInputElement>(null);
   const today = nowFull().date;
-  const mon = (d: string) => parseInt(d), day = (d: string) => parseInt(d.split("월")[1] ?? "0");
-  const inLast30 = (d: string) => { const m = mon(d), dd = day(d); return (m === 11 && dd <= 16) || (m === 10 && dd >= 17); };
+  const inLast30 = (j: Journal) => Date.now() - new Date(j.created_at).getTime() < 30 * 864e5;
+  const monthOf = (j: Journal) => { const d = new Date(j.created_at), y = new Date().getFullYear(); return d.getFullYear() === y ? `${d.getMonth() + 1}월` : `${d.getFullYear()}년 ${d.getMonth() + 1}월`; };
   const groups: [string, Journal[]][] = !grouped ? [["", list]] : (() => {
     const g = new Map<string, Journal[]>(); const put = (k: string, j: Journal) => { if (!g.has(k)) g.set(k, []); g.get(k)!.push(j); };
-    list.forEach((j) => put(j.pinned ? "고정됨" : j.date === today ? "오늘" : inLast30(j.date) ? "지난 30일" : `${mon(j.date)}월`, j));
+    list.forEach((j) => put(j.pinned ? "고정됨" : j.date === today ? "오늘" : inLast30(j) ? "지난 30일" : monthOf(j), j));
     return ["고정됨", "오늘", "지난 30일", ...[...g.keys()].filter((k) => !["고정됨", "오늘", "지난 30일"].includes(k))].filter((k) => g.has(k)).map((k) => [k, g.get(k)!] as [string, Journal[]]);
   })();
   const trashJ = (ls: Journal[]) => {
-    const ids = new Set(ls.map((j) => j.id)); let before: Journal[] = [];
-    setJournal((a) => { before = a; return a.filter((j) => !ids.has(j.id)); });
-    setTrash((t) => [...ls.map((j) => ({ icon: "journal", t: j.title || "제목 없음", s: "투자 기록 · 방금 삭제", type: "투자 기록" })), ...t]);
-    snack(ls.length > 1 ? `기록 ${ls.length}개를 휴지통으로 옮겼어요` : "기록 1개를 휴지통으로 옮겼어요", { undo: () => { setJournal(before); setTrash((t) => t.slice(ls.length)); } });
+    const before = A.snapshot();
+    A.trashJournal(ls.map((j) => j.id));
+    snack(ls.length > 1 ? `기록 ${ls.length}개를 휴지통으로 옮겼어요` : "기록 1개를 휴지통으로 옮겼어요", { undo: () => A.rollback(before) });
   };
-  const pinJ = (ls: Journal[], on: boolean) => { const ids = new Set(ls.map((j) => j.id)); setJournal((a) => a.map((j) => (ids.has(j.id) ? { ...j, pinned: on } : j))); snack(on ? (ls.length > 1 ? `${ls.length}개를 고정했어요` : "고정했어요") : "고정을 풀었어요", { check: true }); };
+  const pinJ = (ls: Journal[], on: boolean) => { A.pinJournal(ls.map((j) => j.id), on); snack(on ? (ls.length > 1 ? `${ls.length}개를 고정했어요` : "고정했어요") : "고정을 풀었어요", { check: true }); };
   const copyJ = (j: Journal, msg = "내용을 복사했어요") => { try { void navigator.clipboard?.writeText([j.title, ...j.body].join("\n")).catch(() => {}); } catch { /* 무시 */ } snack(msg, { check: true }); };
   const rowMenu = (j: Journal): MenuItem[] => [
     { label: j.pinned ? "고정 풀기" : "맨 위에 고정", icon: MI.pin, run: () => pinJ([j], !j.pinned) },
@@ -153,12 +151,14 @@ export function JournalPage() {
     setHits(ranges.length);
     return () => { H.delete("jr-find"); };
   }, [find, cur?.id, cur?.html, cur?.body]); // eslint-disable-line react-hooks/exhaustive-deps
-  const addPhoto = (f: File) => { const r = new FileReader(); r.onload = () => { const el = ed.current; if (!el) return; const p = document.createElement("p"); const img = document.createElement("img"); img.src = String(r.result); img.alt = f.name; img.style.maxWidth = "100%"; img.style.borderRadius = "12px"; p.appendChild(img); el.appendChild(p); el.dispatchEvent(new Event("input", { bubbles: true })); snack("사진을 넣었어요", { check: true }); }; r.readAsDataURL(f); };
+  const addPhoto = (f: File) => { if (!f.type.startsWith("image/")) { snack("사진 파일만 넣을 수 있어요"); return; } const r = new FileReader(); r.onload = () => { const src = new Image(); src.onload = () => { const k = Math.min(1, 900 / Math.max(src.width, src.height)), c = document.createElement("canvas"); c.width = Math.round(src.width * k); c.height = Math.round(src.height * k); c.getContext("2d")!.drawImage(src, 0, 0, c.width, c.height); put(c.toDataURL("image/jpeg", 0.82)); }; src.src = String(r.result); }; const put = (url: string) => { const el = ed.current; if (!el) return; const p = document.createElement("p"); const img = document.createElement("img"); img.src = url; img.alt = f.name; img.style.maxWidth = "100%"; img.style.borderRadius = "12px"; p.appendChild(img); el.appendChild(p); el.dispatchEvent(new Event("input", { bubbles: true })); snack("사진을 넣었어요", { check: true }); }; r.readAsDataURL(f); };
   useEffect(() => { if (!journal.find((j) => j.id === sel) && journal[0]) setSel(journal[0].id); }, [journal, sel]);
-  const edit = (p: Partial<Journal>) => setJournal((a) => a.map((j) => (j.id === cur.id ? { ...j, ...p } : j)));
+  const edit = (p: Partial<Journal>) => { if (cur) A.updateJournal(cur.id, p); };
+  /* 비어 있는 새 기록은 다른 기록으로 옮기면 지워요 */
+  const prevSel = useRef(sel);
+  useEffect(() => { const was = prevSel.current; if (was !== sel) A.dropEmptyJournal(was); prevSel.current = sel; }, [sel]); // eslint-disable-line react-hooks/exhaustive-deps
   const add = () => {
-    const id = Date.now(), t = nowFull();
-    setJournal((a) => [{ id, title: "", date: t.date, full: t.full, body: [""], todo: [] }, ...a]);
+    const id = A.addJournal();
     setQ(""); setSel(id); setFresh(id); window.setTimeout(() => setFresh(null), 1400);
   };
   const tool = (k: string) => {

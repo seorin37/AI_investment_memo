@@ -62,8 +62,8 @@ export function Plug({ size = 14, filled = true, color = "currentColor", classNa
   );
 }
 
-export function StockLogo({ s, size = 28 }: { s: { logo: string; logoBg: string }; size?: number }) {
-  return <span className="dk-keep grid shrink-0 place-items-center rounded-[8px] font-black text-white" style={{ width: size, height: size, background: s.logoBg, fontSize: s.logo.length > 1 ? size * 0.34 : size * 0.44 }}>{s.logo}</span>;
+export function StockLogo({ s, size = 28 }: { s: { logo: string; logo_bg: string }; size?: number }) {
+  return <span className="dk-keep grid shrink-0 place-items-center rounded-[8px] font-black text-white" style={{ width: size, height: size, background: s.logo_bg, fontSize: s.logo.length > 1 ? size * 0.34 : size * 0.44 }}>{s.logo}</span>;
 }
 
 export function KindTag({ k }: { k: string }) {

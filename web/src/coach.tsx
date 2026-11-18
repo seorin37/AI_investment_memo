@@ -22,18 +22,18 @@ const TIP_W = 320, EDGE = 16;
 /* 코치마크를 보여 줄 종목과 메모: 소식이 붙은 AI 연결 메모가 있는 종목을 먼저 */
 const newsCount = (m: Memo) => (m.ai ? (m.timeline ?? []).filter((x) => x.kind === "뉴스" || x.kind === "공시" || x.kind === "주가").length : 0);
 export function coachMemo(memos: Memo[], code: string) {
-  const mine = memos.filter((m) => m.code === code && newsCount(m) > 0);
+  const mine = memos.filter((m) => m.stock_code === code && newsCount(m) > 0);
   return mine.find((m) => newsCount(m) >= 2) ?? mine[0];
 }
 export function coachStock(stocks: Stock[], memos: Memo[]) {
-  return stocks.find((s) => coachMemo(memos, s.code)) ?? stocks[0];
+  return stocks.find((s) => coachMemo(memos, s.stock_code)) ?? stocks[0];
 }
 
 type Box = { x: number; y: number; w: number; h: number };
 const kk = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--k")) || 1;
 
 export function Coach() {
-  const { coach, setCoach, setCoachDone, go, setOverlay, setStudio, stocks, memos, setMemoOpen } = useApp();
+  const { coach, setCoach, act, go, setOverlay, setStudio, stocks, memos, setMemoOpen } = useApp();
   const snack = useSnack();
   const step = coach?.step ?? null;
   const [vp, setVp] = useState({ w: window.innerWidth, h: window.innerHeight });
@@ -67,7 +67,7 @@ export function Coach() {
   }, [paint]);
 
   /* ---- 단계마다 화면 준비 ---- */
-  const code = (coachStock(stocks, memos) ?? stocks[0])?.code;
+  const code = (coachStock(stocks, memos) ?? stocks[0])?.stock_code;
   useEffect(() => {
     if (step == null) return;
     setOverlay(null); setMemoOpen(null);
@@ -150,9 +150,9 @@ export function Coach() {
     return () => cancelAnimationFrame(id);
   }, [step == null]); // eslint-disable-line react-hooks/exhaustive-deps
   const end = useCallback((finished: boolean) => {
-    setCoach(null); setCoachDone(true); setOverlay(null); go({ name: "home" });
+    setCoach(null); act.coachDone(); setOverlay(null); go({ name: "home" });
     snack(finished ? "준비됐어요. 떠오른 생각 한 줄부터 적어 보세요" : "사용법은 설정 › 정보에서 다시 볼 수 있어요", finished ? { check: true } : {});
-  }, [setCoach, setCoachDone, setOverlay, go, snack]);
+  }, [setCoach, act, setOverlay, go, snack]);
   const next = useCallback(() => { if (step == null) return; if (step < N - 1) setCoach({ step: step + 1 }); else end(true); }, [step, setCoach, end]);
   const prev = useCallback(() => { if (step != null && step > 0) setCoach({ step: step - 1 }); }, [step, setCoach]);
   /* 키보드: 화면 뒤 입력칸으로 글자가 들어가지 않게 막고, → 다음 · ← 이전 · Esc 끝 */

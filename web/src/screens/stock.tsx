@@ -38,7 +38,7 @@ export function FixedFrame({ children, fill }: { children: ReactNode; fill?: boo
 /* ============ 6 · 기업 메모장 / 7 · 기업 정보 (머리 · 탭 · 본문) ============ */
 export function StockPage({ code, tab }: { code: string; tab: "board" | "info" }) {
   const { stocks, go } = useApp();
-  const s = stocks.find((x) => x.code === code) ?? stocks[0];
+  const s = stocks.find((x) => x.stock_code === code) ?? stocks[0];
   if (!s) return null;
   const info = tab === "info";
   return (
@@ -47,7 +47,7 @@ export function StockPage({ code, tab }: { code: string; tab: "board" | "info" }
         <StockHead s={s} />
         <div className="flex shrink-0 items-start gap-2">
           {(["board", "info"] as const).map((t) => (
-            <button key={t} onClick={() => go({ name: "stock", code: s.code, tab: t })} className={cx("flex h-10 items-center rounded-[20px] px-5 text-[15px] font-medium leading-[23px] transition-colors", tab === t ? "bg-black text-white" : "bg-white text-[#8f8f8f] hover:text-[#191f28]")}>{t === "board" ? "보드" : "기업 정보"}</button>
+            <button key={t} onClick={() => go({ name: "stock", code: s.stock_code, tab: t })} className={cx("flex h-10 items-center rounded-[20px] px-5 text-[15px] font-medium leading-[23px] transition-colors", tab === t ? "bg-black text-white" : "bg-white text-[#8f8f8f] hover:text-[#191f28]")}>{t === "board" ? "보드" : "기업 정보"}</button>
           ))}
         </div>
         <div key={tab} className="m-in flex w-full flex-1 flex-col">{tab === "board" ? <Board s={s} /> : <CompanyInfo s={s} />}</div>
