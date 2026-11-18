@@ -1,0 +1,157 @@
+# AI 업데이트 파이프라인 설정. 임계값은 experiment 결과(유사도 분포)를 보고 조정한다 (아래 값은 임시).
+# 2026-11-11 매일 실행 (pipelines.updates.daily, systemd 사용자 타이머 memos-updates-daily.timer)
+daily:
+  run_at: "06:30"            # 한국 시간. 메모 저장 응답의 next_update_at도 이 값을 쓴다
+  max_usd_per_day: 1.0       # 그날(한국 날짜) 매일 실행분 LLM 비용 합이 이 값을 넘으면 남은 항목은 다음 날로
+  lock_key: 581094101        # Postgres advisory lock (daily_refresh 581094001과 다른 값) — 중복 실행 방지
+# 2026-11-11 저장 방식. file: 결과 폴더 파일 + --used-refs·--item-state 파일 (기본) | db: 기존 테이블(tracking_updates·update_sources·
+# tracking_matches·tracking_items.last_checked_at)에 쓰고 항목도 DB에서 읽는다 (db_store.py, 로컬 테스트 DB만). experiment --store
+store: file
+news:
+  variant: hybrid            # news_embedding_variants.variant (dense | hybrid). 둘 다 dense 벡터로 검색한다
+  lookback_days: 30
+  top_k: 8
+  # 2026-11-09 뉴스 후보 검색 방식. article: 제목+요약 벡터(news_embedding_variants, 기존) | chunks: 원문 청크(news_chunks,
+  # dense+sparse → colbert 재정렬 → 기사 단위 최고 청크 → body_hash 중복 제거, 원문 없는 기사는 article 방식으로 보충).
+  # 2026-11-10 기본값 chunks로 전환. topic.min_similarity_news_chunks(calibrate·noise_floor --news-search chunks)를 정하기 전에는
+  # min_similarity_news 값을 임시로 쓴다 (실행 때 경고, summary search.news_search.uncalibrated). 기존 방식은 --news-search article
+  search: chunks
+  chunks:
+    dense_k: 100
+    sparse_k: 100
+    rerank_k: 30             # colbert를 계산할 상위 청크 수 (질의 때 인코딩)
+    colbert: true
+    weights: {dense: 0.4, sparse: 0.2, colbert: 0.4}
+    dedup_body_hash: true    # 본문이 같은 기사(같은 매체 재전송)는 가장 먼저 발행된 하나만
+    fallback_headline: true  # 원문이 아직 없는 기사는 제목+요약 벡터로 찾는다 (min_similarity_news)
+disclosure:
+  top_k: 4
+# 2026-11-10 뉴스 후보 관련성 판정 (relevance.py): 후보 검색 → 판정(항목별 뉴스 후보를 묶어 1회) → O인 뉴스만 카드 생성.
+# 판정 뒤 남은 후보가 없으면 카드 생성 없이 no_new_info(no_relevant_candidates). experiment --no-relevance로 끈다. 공시는 판정하지 않는다.
+# 2026-11-11 프롬프트 고정 (configs/candidate_relevance_prompt.md). 재검증(페르소나 메모 40건): 정밀도 82%·재현율 82%
+# (company 88%/78%, industry 78%/88%). 이전 42건(범위 규칙 전): 필터만 69% → 판정 88%·재현율 76%. 제목 모드는 효과 없음(재현율 71%)
+relevance:
+  enabled: true
+  prompt: configs/candidate_relevance_prompt.md
+  model: gpt-6.1-sol         # 카드 생성과 같은 모델이면 같은 클라이언트로 부른다 (비용이 summary 토큰에 함께 들어간다)
+  max_text: 800              # 후보 내용 최대 글자 수 (원문 청크 전문)
+# 2026-11-09 같은 사건 묶기: 근거 공시와 같은 사건 기사를 LLM 근거에서 빼고 공시 카드의 보조 기사(제목·매체·날짜·링크)로 붙인다.
+# 기준은 공시-기사 30쌍 O/X 판정으로 정함 (same_event.py). 원문 청크가 없는 기사는 묶지 않는다
+same_event:
+  enabled: false
+  min_similarity: 0.70       # 공시 청크 × 기사 원문 청크 dense 최댓값이 이 이상이면 묶는다
+  number_similarity: 0.62    # 이 이상 min_similarity 미만이면 공시 핵심 숫자(금액·주식 수)가 기사에도 있을 때만
+  days_before: 1             # 기사 발행일이 공시일 이 날수 전 ~
+  days_after: 3              # ~ 이 날수 뒤
+  event_only: true           # 수시공시만
+price:
+  near_pct: 3.0              # 조건가까지 남은 거리가 조건가의 이 % 이내면 '가까워짐'
+# 최신순 하향식 검색 (experiment): 이 기간 안에서 임계값을 넘은 후보를 날짜 최신순으로 fetch_k건 가져온다.
+# news.lookback_days / top_k, disclosure.top_k는 noise_floor(유사도순 검색)가 쓴다.
+recent:
+  lookback_days: 365         # 오늘부터 이 날수만큼 거슬러 간다. 그 안에 없으면 카드를 만들지 않는다
+  fetch_k: 50                # 종류별로 DB에서 가져오는 최대 후보 수
+  include_subsidiary: false  # 자회사 공시("자회사의 주요경영사항")를 후보에 넣을지. 자회사 실적을 모회사 실적처럼 쓰지 않게 기본은 뺀다
+  # 2026-11-09 사람 검수(run_20261109_133043 review_findings.md)로 넣은 후보 거르기. 하나씩 켜고 끌 수 있다 (코드 기본값은 모두 꺼짐)
+  # 2026-11-09 결정: (a) period_end·(b) 정정본만 켬, 같은 본문 중복 제거·뉴스 종목명 필터는 끔
+  filters:
+    periodic_date: period_end        # rcept_dt | period_end. 정기보고서 최신순 기준 (period_end가 없으면 접수일, 기간 시작 비교는 접수일). [기재정정] 옛 보고서가 최신으로 뽑혔다
+    latest_version_only: true        # 같은 보고서의 원본·정정본 중 가장 늦게 접수한 것만 (회사·종류·제목·기간으로 묶음, 수시공시는 30일 안 정정)
+    dedupe_same_text: false          # 본문이 같은 공시 청크는 가장 최근 보고서의 것 하나만 (반기·사업보고서에 되풀이되는 각주)
+    news_require_company: false      # false | true(제목 + 앞부분) | title(제목만). 종목명·별칭(company_aliases, configs/stock_aliases.yaml)이 없는 뉴스를 뺀다
+    news_company_lead_chars: 150     # 위에서 보는 앞부분 길이 (요약·청크 앞)
+  # 2026-11-06: 제목이 다른 상장사 이름으로 시작하고("파트론, …") 추적 종목 이름이 없는 기사는 뺀다. 협력사 실적을 추적 종목 것처럼 썼다
+  drop_other_company_news: false
+  # 위 필터가 쓰는 회사 이름: stocks(코스피) + 이 파일(DART corpCode.xml, 코스닥 포함). 파일이 없으면 stocks 이름만 쓴다
+  company_names_file: data/raw/dart/corpCode.xml
+  # 추적 종목의 다른 이름. 제목에 있으면 추적 종목 기사로 보고 빼지 않는다 (빼는 근거로는 쓰지 않는다)
+  company_aliases:
+    NAVER: [네이버]
+    KB금융: [KB국민은행, 국민은행, KB]
+    SK하이닉스: [하이닉스, SK닉스, 닉스, 하닉, SK하닉]   # 2026-11-09 하닉·SK하닉 추가 (제목에 '하닉'만 있는 기사 17건)
+    삼성전자: [삼성, 삼전]
+topic:
+  min_similarity: 0.5        # 종류별 값이 없을 때 쓰는 기본 임계값
+  # 2026-11-05 최신순 하향식 비교(updates_t1~t4) 중 조합 ③ 엄격을 채택. 형식적 공시 근거 0건, 붙은 근거의 관련성이 가장 높았다
+  min_similarity_news: 0.58
+  min_similarity_disclosure: 0.64
+  strong_similarity_news: 0.63       # 날짜를 거슬러 가다 이 이상인 후보가 나오면 그 날짜에서 멈춘다
+  strong_similarity_disclosure: 0.68 # 끝까지 없으면 lookback_days 전체에서 유사도 높은 순으로 고른다
+  # 수시공시(disclosures.kind major/other): "항목: 값" 표라 정기보고서와 유사도 분포가 다를 수 있어 따로 둔다.
+  # 2026-11-05 run_20261105_135524(페르소나 200개)에서 0.58 이상은 대부분 관련, 0.55~0.58은 섞여 있었다. 지우면 공시 값(0.64/0.68)을 쓴다
+  min_similarity_event: 0.58
+  strong_similarity_event: 0.63
+  # 강한 후보에서 멈출 때 그날부터 이 날수 전까지는 함께 본다. 공시(10-29)를 다룬 기사(10-30)에서 멈춰 원본 공시가 빠지던 문제
+  stop_window_days: 3
+  max_disclosure_evidence: 2
+  max_news_evidence: 3
+  # 2026-11-09 근거 고르기. legacy: 공시 max_disclosure_evidence개(청크)·뉴스 max_news_evidence개 (기본, 팀 결과 유지) |
+  # all: 임계값 넘는 건 다 넣고 안전 상한만 (공시는 접수번호 단위로 공시당 최고 청크 2개·최대 5건, 뉴스는 중복 뺀 나머지 전부,
+  # 합이 max_total을 넘으면 뉴스부터 자른다)
+  # 2026-11-10 카드 모양. v1: title·summary·reason (configs/update_judge_prompt.md, 기본) | v2: headline·when·facts[문장, 근거]·
+  # memo_link (configs/update_judge_prompt_v2.md, 사건 하나·문장마다 근거 하나·같은 메모 같은 근거 카드 합치기). experiment --card-schema
+  card_schema: v2               # 2026-11-10 미리보기 확인 후 v2를 기본값으로 (v1은 --card-schema v1)
+  compare_prior: true           # v2에서 실적·배당·정기보고서 근거에 직전 같은 기간 값(DB, compare_prior.py)을 비교 근거로 넣는다
+  # v2 비교 판단·선택 권유 검사 (JUDGMENT). "나음?"류 메모에도 두 대상의 사실만 나란히, 어느 쪽이 낫다는 말은 하지 않는다.
+  # "더 높아요"처럼 수치를 견준 사실은 걸리지 않게 판단 낱말(낫·좋·유리·매력·싸)만 본다
+  judgment_patterns:
+    - '(더|가장|훨씬|상대적으로)\s*(나아|낫|나은|좋아|좋은|좋습|우수|매력|싸|저렴|비싸)'
+    - '(이|가|쪽이|편이)\s*(나아요|낫|나은\s*(선택|편|쪽))'
+    - '(갈아타|선택하|고르|추천)(세요|는\s*게|기를|할\s*만)'
+    - '(싸|비싸|저렴해)\s*(보여요|보입니다|보인다)'
+  # 2026-11-11 v2 자료 범위 (COVERAGE): 뉴스는 DB의 가장 오래된 발행일 이후만 있어 카드에 "○월 ○일 이후 기사 기준"을 붙인다.
+  # 그 전 기간을 전제로 한 아래 말은 쓴 근거에 그 말이 그대로 있을 때만 허용 (범위 밖 원인·추이를 단정하지 않게)
+  coverage_terms: [처음, 최초, 사상 첫, 줄곧, 계속, 꾸준히, 그동안, 오랫동안, 연속, 이전부터, 여전히]
+  evidence_mode: all            # 2026-11-09 기본값 all (공시 2·뉴스 3 고정 폐지). legacy는 평가 비교용으로만 남긴다
+  max_disclosure_docs: 5
+  max_chunks_per_disclosure: 2
+  max_total: 15
+  # 지침서 프롬프트 파일은 그대로 두고 입력 끝에 붙이는 규칙 (2026-11-09)
+  extra_rules:
+    - 같은 내용이 공시와 뉴스에 있으면 공시 숫자를 쓴다.
+    - 전망·예상·추정을 다룬 기사는 사실 근거로 쓰지 않는다.
+  # 카드의 핵심 사실(제목·요약·근거 fact)이 예측이면 PREDICTION으로 실패 처리 (2026-11-09 "매출 3조5천143억원 전망" 카드).
+  # 실제 실적을 예상치와 견준 표현은 뺀다. 지우면 검사하지 않는다
+  prediction_terms: [전망, 예상, 추정, 관측, 가능성, 예측, 내다봤, 내다본, 내다보]
+  prediction_exempt:
+    - '(예상|전망|추정)치를?\s*(상회|하회|웃돌|밑돌|넘|넘어|넘었|넘겼)'
+    - '(시장|컨센서스)\s*(예상|전망)을?\s*(상회|하회|웃돌|밑돌|넘)'
+    - '(예상|전망)보다'
+    - '(예상|전망)(과|와)\s*(같|달리|비슷)'
+  related_news_min_similarity: 0.6   # 공시 카드에 링크로 덧붙이는 관련 기사의 최소 유사도 (LLM이 문장으로 쓰지 않은 기사, 임시값)
+  news_dup_similarity: 0.7   # 이 이상 비슷한 제목의 기사는 하나로 묶는다 (임시: 글자 이중쌍 유사도)
+  max_text_chars_news: 600
+  max_text_chars_disclosure: 800
+  format_retry: 1            # 제목·문장 길이만 어겼을 때 고쳐 달라고 다시 요청하는 횟수 (0이면 끔). 숫자·출처·금지어 위반은 다시 요청하지 않는다
+  on_check_fail: drop        # fixed(고정 문구 카드로 대체, 지침서) | drop(카드를 만들지 않음)
+  # 2026-11-05 다른 회사 기사의 실적을 추적 종목의 것처럼 쓴 카드(파트론 → 삼성전자)가 코드 검사를 통과해 켰다
+  verify_call: true          # 코드 검사를 통과한 카드를 LLM이 문장별로 근거와 다시 대조한다 (통과 카드당 호출 +1)
+  title_max: 30              # 2026-11-05 20 → 30: 종목명이 들어가면 20자를 쉽게 넘어 내용이 괜찮은 카드도 버려졌다
+  max_sentences: 3
+  sentence_max_chars: 60
+  min_confidence: 0.7
+  min_fact_overlap: 0.6
+  # 수시공시("항목: 값" 표)는 fact를 문장으로 풀어 쓰면 겹치는 글자가 적다 (2026-11-05 KB·SK하이닉스 배당·잠정실적 카드가 걸림).
+  # 숫자 검사와 검수 호출이 따로 있어 낮춘다. 지우면 min_fact_overlap을 쓴다
+  min_fact_overlap_event: 0.4
+  reason_max: 80
+  # 2026-11-05 100 → 200: 배당·실적 공시에서 숫자 여러 개를 한 fact에 적어 104~138자가 된 좋은 카드가 버려졌다.
+  # 근거 조각을 통째로 옮긴 답(318~581자)은 계속 걸리게 둔다. fact는 화면에 보이지 않는 칸 (검사·출처 quote용)
+  fact_max: 200
+  max_evidence: 3
+  # 시제 패턴: 예측·단정 표현. 회사 발언을 전한 문장("~라고 밝혔어요")에는 적용하지 않는다 (checks.ATTRIBUTION)
+  banned_patterns:
+    - '(오를|내릴|올라갈|떨어질|상승할|하락할|회복될|반등할)\s*(거|것|가능성|전망|듯)'
+    - '가능성이?\s*(높|큽|커)'
+    - '(할|될)\s*전망'
+    # 주체 없이 전망·예상을 전한 문장 ("매출은 3조원으로 전망돼요"). "KB증권은 ~로 전망했어요"처럼 주체를 쓴 문장은 걸리지 않는다
+    # 2026-11-06 "기대" 추가: "환율 하락 요인으로 기대돼요"가 통과했다
+    - '(전망|예상|추정|관측|기대)(돼요|되어요|됩니다|돼|이에요|입니다)'
+    # 2026-11-06 진행형 추가: "환율 하락 요인으로 기대되고 있어요"가 통과했다. "기대" 단독은 넣지 않는다 ("시장 기대치를 웃돌았어요"는 사실)
+    - '(전망|예상|추정|관측|기대)되고\s*있(어요|습니다|다)'
+    - '것으로\s*(보여요|보입니다|보인다)'
+# 금지 표현 사전: 지침서 3-3 초기 사전 (부분 문자열 일치). 시제 패턴은 위 topic.banned_patterns.
+# "매수", "매도" 단독은 넣지 않았다: 자사주 매수·지분 매도 같은 공시 사실을 막기 때문.
+banned:
+  [사세요, 파세요, 매수 기회, 매도 기회, 담을 때, 손절하세요, 오를 거, 상승할 가능성, 회복될 전망, 호재, 악재,
+   긍정적, 부정적, 저평가, 고평가, 유망, 유리, 불리, 확실히, 반드시, 틀림없이]

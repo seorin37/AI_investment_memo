@@ -1,0 +1,77 @@
+{
+ "memos": 35,
+ "sentences": 105,
+ "items": 67,
+ "decision": {
+  "full_fallback": 28,
+  "partial": 20,
+  "normal": 51,
+  "needs_confirmation": 6
+ },
+ "category": {
+  "-": 6,
+  "A1": 33,
+  "A2": 1,
+  "A3": 7,
+  "A4": 8,
+  "A5": 2,
+  "B1": 3,
+  "B2": 2,
+  "B3": 3,
+  "B4": 6,
+  "B5": 4,
+  "B6": 2,
+  "B7": 4,
+  "B8": 1,
+  "B9": 3,
+  "C1": 9,
+  "C2": 3,
+  "C3": 5,
+  "C4": 2,
+  "C5": 1
+ },
+ "reason": {
+  "EMOTION": 3,
+  "EMOTION_MIXED": 3,
+  "EVENT": 7,
+  "HYPOTHESIS": 2,
+  "MEANINGLESS": 4,
+  "NEGATION": 3,
+  "OTHER_STOCK_MIXED": 5,
+  "OUT_OF_SCOPE": 4,
+  "OUT_OF_SCOPE_MIXED": 1,
+  "PAST_FACT": 2,
+  "PREDICTION_MIXED": 2,
+  "PRICE": 1,
+  "PRICE_GUESS": 1,
+  "PRINCIPLE": 3,
+  "QUESTION": 8,
+  "SELF_TODO": 6,
+  "SPAM": 2,
+  "TOPIC": 33,
+  "UNRESOLVED_REF": 1,
+  "UNSUPPORTED_CONDITION": 5,
+  "USER_ACTION": 9
+ },
+ "flags": {
+  "profanity": 6,
+  "vocative": 2,
+  "pii_masked": 2
+ },
+ "merge_sentences": 9,
+ "split_sentences": 4,
+ "persona": {
+  "P1": 6,
+  "P2": 6,
+  "P3": 6,
+  "P4": 6,
+  "P5": 5,
+  "P6": 6
+ },
+ "symbol": {
+  "000660": 8,
+  "005930": 12,
+  "035420": 8,
+  "105560": 7
+ }
+}

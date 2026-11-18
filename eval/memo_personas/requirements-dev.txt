@@ -1,0 +1,7 @@
+# 맥북 점검·테스트 전용 (서린 PC 실행에는 필요 없음)
+-r requirements.txt
+pytest
+pgserver==0.1.4   # 임시 Postgres + pgvector (devtools/fake_db.py, tests/test_export_db.py)
+pandas            # tests/test_sample_personas.py (3단계 페르소나 도구와 같은 의존성)
+numpy
+pyarrow<21        # 3단계 페르소나 도구 (Nemotron parquet 읽기)

@@ -1,0 +1,11 @@
+# PC2: Dense + Sparse 하이브리드 모드 (한 번의 추론으로 둘 다 생성)
+mode: hybrid
+
+embed:
+  return_dense: true
+  return_sparse: true
+
+hybrid:
+  # 7:3, 3:7 실험은 이 두 값만 바꾼다.
+  dense_weight: 0.5
+  sparse_weight: 0.5

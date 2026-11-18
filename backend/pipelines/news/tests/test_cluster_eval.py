@@ -1,0 +1,164 @@
+import csv
+
+import pytest
+
+from backend.pipelines.news import cluster_eval as ce
+
+
+def test_sparse_score_and_bucket():
+    assert ce.sparse_score({"1": 0.5, "2": 0.2}, {"1": 0.4, "3": 1.0}) == pytest.approx(0.2)
+    assert ce.sparse_score('{"1": 1.0}', None) == 0.0
+    assert ce.bucket_of(0.55) == "0.55-0.60"
+    assert ce.bucket_of(0.6499) == "0.60-0.65"
+    assert ce.bucket_of(0.79) == "0.75-0.80"
+    assert ce.bucket_of(0.95) == "0.95-1.00" and ce.bucket_of(0.9499) == "0.90-0.95"
+
+
+def test_sample_pairs_dedupes_and_balances_buckets():
+    rows = [(1, 2, 0.56, {}, {}), (2, 1, 0.56, {}, {})]                 # 같은 쌍이 양쪽에서 나옴
+    rows += [(10 + i, 100 + i, 0.71, {}, {}) for i in range(30)]
+    picked = ce.sample_pairs(rows, per_bucket=5)
+    assert sum(1 for p in picked if p[:2] == (1, 2)) == 1
+    assert sum(1 for p in picked if ce.bucket_of(p[2]) == "0.70-0.75") == 5
+    assert picked == ce.sample_pairs(rows, per_bucket=5)                 # 같은 seed면 같은 결과
+
+
+def _write(path, rows):
+    with path.open("w", encoding="utf-8-sig", newline="") as f:
+        w = csv.DictWriter(f, ce.FIELDS)
+        w.writeheader()
+        for i, (sim, label) in enumerate(rows, 1):
+            w.writerow({**{k: "" for k in ce.FIELDS}, "pair_id": i, "similarity": sim, "label": label})
+
+
+def test_score_and_recommend(tmp_path):
+    path = tmp_path / "pairs.csv"
+    _write(path, [(0.58, "different"), (0.62, "different"), (0.66, "same"), (0.68, "different"),
+                  (0.72, "same"), (0.76, "same"), (0.79, "same"), (0.60, "unsure"), (0.61, "")])
+    labels = ce.load_labels(path)
+    assert len(labels) == 7                                              # unsure·빈칸 제외
+    by_t = {r["threshold"]: r for r in ce.score(labels)}
+    assert by_t[0.55]["false_merge"] == pytest.approx(3 / 7)
+    assert by_t[0.65]["false_merge"] == pytest.approx(1 / 5) and by_t[0.65]["missed"] == 0
+    assert by_t[0.70]["false_merge"] == 0 and by_t[0.70]["missed"] == pytest.approx(1 / 4)
+    assert ce.recommend(ce.score(labels)) == 0.69
+
+
+def test_load_labels_rejects_unknown_value(tmp_path):
+    path = tmp_path / "bad.csv"
+    _write(path, [(0.6, "maybe")])
+    with pytest.raises(ValueError):
+        ce.load_labels(path)
+
+
+def test_separation_auc():
+    assert ce.separation_auc([(0.9, "same"), (0.8, "same"), (0.5, "different")]) == 1.0
+    assert ce.separation_auc([(0.5, "same"), (0.9, "different")]) == 0.0
+    assert ce.separation_auc([(0.7, "same"), (0.7, "different")]) == 0.5
+    assert ce.separation_auc([(0.7, "same")]) is None
+
+
+def test_colbert_pair_is_symmetric():
+    import numpy as np
+    a = np.array([[1.0, 0.0], [0.0, 1.0]])
+    b = np.array([[1.0, 0.0]])
+    assert ce._colbert_pair(a, b) == pytest.approx(ce._colbert_pair(b, a))
+    assert ce._colbert_pair(a, a) == pytest.approx(1.0)
+
+
+def test_add_colbert_keeps_labels_and_compare_uses_it(tmp_path, monkeypatch):
+    import numpy as np
+    path = tmp_path / "pairs.csv"
+    with path.open("w", encoding="utf-8-sig", newline="") as f:
+        w = csv.DictWriter(f, ce.FIELDS)
+        w.writeheader()
+        for i, (a, b, sim, label) in enumerate([(1, 2, 0.9, "same"), (3, 4, 0.8, "different"), (5, 6, 0.7, "same")], 1):
+            w.writerow({**{k: "" for k in ce.FIELDS}, "pair_id": i, "a_id": a, "b_id": b,
+                        "similarity": sim, "sparse_score": 0.1 * i, "label": label, "note": f"메모{i}"})
+    names = [r["score"] for r in ce.compare(path)]
+    assert names[:2] == ["dense", "sparse"] and "colbert" not in names       # colbert 칸이 비면 건너뜀
+    assert "dense+0.2×sparse" in names
+    vec = {1: [[1, 0]], 2: [[1, 0]], 3: [[1, 0]], 4: [[0, 1]], 5: [[1, 0]], 6: [[0.8, 0.6]]}
+    monkeypatch.setattr(ce, "article_texts", lambda conn, ids: {i: f"t{i}" for i in ids})
+    encode = lambda texts: [np.array(vec[int(t[1:])], dtype=float) for t in texts]
+    assert ce.add_colbert(None, path, encode) == 3
+    rows = list(csv.DictReader(path.open(encoding="utf-8-sig")))
+    assert [r["colbert_score"] for r in rows] == ["1.0000", "0.0000", "0.8000"]
+    assert [r["label"] for r in rows] == ["same", "different", "same"] and rows[0]["note"] == "메모1"
+    by = {r["score"]: r for r in ce.compare(path)}
+    assert by["colbert"]["auc"] == 1.0 and by["dense"]["auc"] == 0.5
+
+
+def test_load_labels_with_rules(tmp_path):
+    path = tmp_path / "pairs.csv"
+    rows = [("2026-10-22T01:00+00:00", "고양 등 경기 11곳 한파주의보 해제", "2026-10-22T01:05+00:00", "원주 등 강원 18곳 한파주의보 해제"),
+            ("2026-10-21T09:00+00:00", "상어 부캉이 수로 밖으로", "2026-10-21T16:00+00:00", "부캉이 다시 돌아와"),   # KST 18시 ↔ 다음 날 1시
+            ("2026-10-22T01:00+00:00", "한은 기준금리 동결", "2026-10-22T02:00+00:00", "한은 동결(종합)")]
+    with path.open("w", encoding="utf-8-sig", newline="") as f:
+        w = csv.DictWriter(f, ce.FIELDS)
+        w.writeheader()
+        for i, (ap, at, bp, bt) in enumerate(rows, 1):
+            w.writerow({**{k: "" for k in ce.FIELDS}, "pair_id": i, "similarity": 0.9, "label": "same",
+                        "a_published": ap, "a_title": at, "b_published": bp, "b_title": bt})
+    assert [s for s, _ in ce.load_labels(path)] == [0.9, 0.9, 0.9]
+    assert [s for s, _ in ce.load_labels(path, rules=True)] == [-1.0, -1.0, 0.9]
+
+
+def _write_full(path, rows):
+    """rows: (similarity, label, a_published, a_title, b_published, b_title)"""
+    with path.open("w", encoding="utf-8-sig", newline="") as f:
+        w = csv.DictWriter(f, ce.FIELDS)
+        w.writeheader()
+        for i, (sim, label, ap, at, bp, bt) in enumerate(rows, 1):
+            w.writerow({**{k: "" for k in ce.FIELDS}, "pair_id": i, "similarity": sim, "label": label,
+                        "a_id": i * 10, "b_id": i * 10 + 1, "a_published": ap, "a_title": at,
+                        "b_published": bp, "b_title": bt})
+
+
+def test_llm_eval_targets_judges_and_summarizes(tmp_path):
+    day = "2026-10-22T01:00+00:00"
+    path = tmp_path / "pairs.csv"
+    _write_full(path, [
+        (0.90, "same", day, "한은 동결", day, "한은 동결(종합)"),                     # 1: 0.85 이상 → LLM 안 감, 묶임
+        (0.80, "same", day, "김여정 확성기", day, "김여정 확성기 가동"),              # 2: LLM 대상
+        (0.75, "different", day, "PHP 결함 발견", day, "일본 PHP 대응 촉구"),         # 3: LLM 대상
+        (0.72, "different", day, "고양 등 경기 11곳", day, "원주 등 강원 18곳"),       # 4: 규칙에 걸림 → 대상 아님
+        (0.78, "unsure", day, "가", day, "나"),                                       # 5: 빠짐
+        (0.65, "same", day, "다", day, "라"),                                         # 6: 0.70 미만 → 놓침
+        (0.71, "same", day, "코스피 반등", day, "코스피 반등 마감"),                   # 7: LLM 대상, 답 없음
+    ])
+    rows = ce.llm_targets(path)
+    assert [r["pair_id"] for r in rows] == ["2", "3", "7"]
+
+    answers = {"김여정 확성기": True, "PHP 결함 발견": True, "코스피 반등": None}
+
+    class Judge:
+        last_reason = ""
+
+        def __call__(self, a, members):
+            assert len(members) == 1 and a.published_at.tzinfo is not None
+            self.last_reason = f"이유-{a.title}"
+            return answers[a.title]
+
+    results = ce.judge_pairs(rows, Judge())
+    assert [(r["llm"], r["agree"]) for r in results] == [("same", "yes"), ("same", "no"), ("none", "no")]
+    assert results[0]["reason"] == "이유-김여정 확성기"
+    s = ce.summarize_llm(results, path)
+    assert s["table"][("different", "same")] == 1 and s["table"][("same", "none")] == 1
+    assert s["accuracy"] == pytest.approx(1 / 2) and s["unavailable"] == 1
+    assert s["merged"] == 3                                   # 1, 2, 3
+    assert s["false_merge"] == pytest.approx(1 / 3)          # 3번
+    assert s["missed"] == pytest.approx(2 / 4)               # same 1·2·6·7 중 6·7 놓침
+    out = tmp_path / "out" / "llm.csv"
+    ce.write_llm_results(results, out)
+    assert len(list(csv.DictReader(out.open(encoding="utf-8-sig")))) == 3
+
+
+def test_llm_command_cancels_without_calling(tmp_path, monkeypatch):
+    day = "2026-10-22T01:00+00:00"
+    path = tmp_path / "pairs.csv"
+    _write_full(path, [(0.80, "same", day, "가", day, "나")])
+    monkeypatch.setattr("builtins.input", lambda prompt: "n")
+    import backend.pipelines.news.same_event_judge as sj
+    monkeypatch.setattr(sj, "judge_from_env", lambda *a, **k: pytest.fail("취소했는데 호출함"))
+    assert ce.main(["llm", str(path)]) == 1

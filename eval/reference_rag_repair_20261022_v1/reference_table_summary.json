@@ -1,0 +1,30 @@
+{
+  "run_id": "rag_repair_20261022_v1",
+  "questions": 100,
+  "gold_items": 116,
+  "verification_status": {
+    "evidence_verified": 94,
+    "not_disclosed_in_scope": 2,
+    "source_not_available": 4
+  },
+  "corpus_status": {
+    "indexed_complete": 86,
+    "extraction_loss": 14
+  },
+  "human_review_status": {
+    "pending": 100
+  },
+  "no_db_write": true,
+  "no_embedding": true,
+  "no_retrieval_evaluation": true,
+  "inputs": {
+    "query_metadata": {
+      "path": "eval/package_eval_20261022_135833_726451/query_metadata.jsonl",
+      "sha256": "3908996059a8fbfab86488cf5096b8c7f71b3db26d493eb5fcae4f4d232f1861"
+    },
+    "fact_spec": {
+      "path": "eval/rag_repair_20261022_v1/reference_fact_spec.tsv",
+      "sha256": "899f2289b0bdb39b9e75246fc045ff39baac158db34dde2019dbba1921bc27f7"
+    }
+  }
+}

@@ -1,7 +1,46 @@
+# 비밀값 (.env.example은 올린다)
 .env
+.env.*
+!.env.example
+
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+.venv/
+
+# Node (프론트엔드)
 node_modules/
 dist/
+build/
+.next/
+
+# 수집한 원본 데이터 (용량이 크므로 올리지 않는다)
+data/raw/
+*.sqlite3
+logs/
+
+# 편집기·OS
 .vscode/
+.idea/
 .DS_Store
+Thumbs.db
+data/sample/
+
+# 평가용 페르소나 테스트 산출물 (실제 결과 results/memo_personas/personas_100/ 은 커밋한다)
+results/memo_personas/personas_100_mock/
+*_failed/
+data/run_all/
+data/run_financials/
+data/events/
+
+# 뉴스 원문 샘플 HTML (lead_fetcher --probe --save-fixtures, 원문은 커밋하지 않는다)
+samples/
+
+# 금융사 비율 추출 결과 (run_financial_ratios)
+data/financials_ratios/
+data/periodic_updates/
+data/periodic_updates_test/
+# 뉴스 원문 수집 결과 (fulltext.py, 원문은 커밋하지 않는다)
+data/news_raw/

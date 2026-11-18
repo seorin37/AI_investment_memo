@@ -1,0 +1,10 @@
+# Hybrid 가중치 실험: dense 0.3 / sparse 0.7 (WO-019). 후보 생성은 hybrid와 같다.
+mode: hybrid
+
+embed:
+  return_dense: true
+  return_sparse: true
+
+hybrid:
+  dense_weight: 0.3
+  sparse_weight: 0.7
