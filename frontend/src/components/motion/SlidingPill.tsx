@@ -5,7 +5,8 @@
  * 색·크기는 화면이 넘김 (이 파일에는 색 없음).
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View, type LayoutChangeEvent, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { Animated, Pressable, StyleSheet, View, type LayoutChangeEvent, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { SPRING, tween, useValue } from '@/components/motion/motion';
 
 export interface PillItem<K extends string> {

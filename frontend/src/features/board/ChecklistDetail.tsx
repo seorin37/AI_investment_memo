@@ -8,7 +8,8 @@
  *  - 마지막 항목: "모두 확인했어요" 칸이 펼쳐지고(.45s) 배지가 돌며 튀어나와 물결(1.1s) · 색종이 90개
  */
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type LayoutChangeEvent, type TextInputInstance } from 'react-native';
+import { Animated, Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent, type TextInputInstance } from 'react-native';
+import { Text, TextInput } from '@/components/ui/AppText';
 import Svg, { Polygon } from 'react-native-svg';
 import { MobileIcon } from '@/components/icons/MobileIcons';
 import { Appear } from '@/components/motion/Appear';

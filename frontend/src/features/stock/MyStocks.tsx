@@ -5,7 +5,8 @@
  *  - 순서 바꾸기(reorder_mode): ⋮⋮ 를 끌면 줄이 따라오고 다른 줄이 비켜 남 (#317 · .6s) · 끄는 동안 화면 스크롤 멈춤
  */
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, type GestureResponderHandlers } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View, type GestureResponderHandlers } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { MobileIcon } from '@/components/icons/MobileIcons';
 import { Appear, PopWhen } from '@/components/motion/Appear';
 import { SlidingPill } from '@/components/motion/SlidingPill';

@@ -14,7 +14,8 @@
  * 모션 참고: Lucian UX/UI Prompt · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
+import { Animated, Pressable, RefreshControl, ScrollView, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import Svg, { Polygon } from 'react-native-svg';
 import { MobileIcon, type MobileIconName } from '@/components/icons/MobileIcons';
 import { StockSummaryCard } from '@/components/mobile/StockSummaryCard';

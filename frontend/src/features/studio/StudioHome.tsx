@@ -6,7 +6,8 @@
  *        · 사용량 %가 올라감(#098)
  */
 import { useEffect, useRef } from 'react';
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { MobileIcon } from '@/components/icons/MobileIcons';
 import { Appear } from '@/components/motion/Appear';
 import { CountUp } from '@/components/motion/CountUp';

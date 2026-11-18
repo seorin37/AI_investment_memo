@@ -4,7 +4,8 @@
  * 움직임: [메모 보드|기업정보] 알약이 미끄러짐(#039 · 화면이 바뀌어도 직전 탭에서 출발) · 작은 주가 선이 그려짐(1.2s).
  */
 import { useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { lineLength, useDraw } from '@/components/motion/ChartMotion';
 import { SlidingPill } from '@/components/motion/SlidingPill';

@@ -5,7 +5,8 @@
  *        · 읽으면 보라 점이 작아지며 사라짐 · 불러오는 동안 뼈대(#079) · 당겨서 새로고침(#085)
  */
 import { useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { MobileIcon } from '@/components/icons/MobileIcons';
 import { Appear, PopWhen } from '@/components/motion/Appear';
 import { CountUp } from '@/components/motion/CountUp';

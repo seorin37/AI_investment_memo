@@ -4,7 +4,8 @@
  * 체크는 .6배 → 1배로 톡. 한 번 추가되면 다시 누를 수 없음(added).
  */
 import { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { Animated, Pressable, StyleSheet, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { MobileIcon } from '@/components/icons/MobileIcons';
 import { EASE, ND, SPRING, tween, useValue } from '@/components/motion/motion';
 

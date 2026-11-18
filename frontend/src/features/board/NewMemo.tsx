@@ -4,7 +4,8 @@
  * 움직임: 메모지가 .96배에서 펼쳐지듯 나타남 · 예시 글은 쓰기 시작하면 .25초에 걸쳐 흐려짐 · AI 연결 스위치(.4s spring)
  */
 import { useEffect } from 'react';
-import { Animated, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, ScrollView, StyleSheet, View } from 'react-native';
+import { Text, TextInput } from '@/components/ui/AppText';
 import Svg, { Polygon } from 'react-native-svg';
 import { Appear } from '@/components/motion/Appear';
 import { EASE, ND, tween, useValue } from '@/components/motion/motion';

@@ -5,7 +5,8 @@
  * - MobileToast: useUI().showToast 알림을 앱 화면 아래에 띄움 (웹은 AppShell 의 Toast)
  */
 import type { ReactNode } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { TopBarAction } from '@/components/layout/TopBar';

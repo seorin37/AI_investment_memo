@@ -7,7 +7,8 @@
  *  - AI 사용량 막대가 차오르고(.6s) % 숫자가 올라감(#098) · 카드가 차례로 떠오름
  */
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { Animated, Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { MobileIcon } from '@/components/icons/MobileIcons';
 import { Appear } from '@/components/motion/Appear';
 import { CountUp } from '@/components/motion/CountUp';

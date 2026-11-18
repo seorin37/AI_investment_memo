@@ -5,7 +5,8 @@
  *        · 당겨서 새로고침(#085) · 아래 검정 알약 넛지(#252) · 버튼 누름 spring
  */
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import Svg, { Path } from 'react-native-svg';
 import { MobileIcon, type MobileIconName } from '@/components/icons/MobileIcons';
 import { Appear } from '@/components/motion/Appear';

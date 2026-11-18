@@ -5,7 +5,8 @@
  *        · 해설이 펼쳐지며 떠오름 · "오늘도 참여했어요"가 튀어나옴 · 오늘 칸이 체크로 바뀌며 톡
  */
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { MobileIcon } from '@/components/icons/MobileIcons';
 import { Appear, PopWhen } from '@/components/motion/Appear';
 import { Collapse } from '@/components/motion/Collapse';

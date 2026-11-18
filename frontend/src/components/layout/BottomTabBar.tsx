@@ -5,7 +5,8 @@
  *        · hidden 이면 아래로 내려가 숨음(메모 고르기 중 · .38s)
  */
 import { useEffect, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, type LayoutChangeEvent } from 'react-native';
+import { Animated, Pressable, StyleSheet, type LayoutChangeEvent } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MobileIcon, type MobileIconName } from '@/components/icons/MobileIcons';
 import { PopWhen } from '@/components/motion/Appear';

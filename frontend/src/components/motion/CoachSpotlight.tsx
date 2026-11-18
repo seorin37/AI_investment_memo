@@ -6,7 +6,8 @@
  * 대상 위치(target)는 화면이 measureInWindow 등으로 재서 넘김. 화면 전체를 덮는 자리(Modal 등)에 둠.
  */
 import { useEffect } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import Svg, { Path } from 'react-native-svg';
 import { Appear } from '@/components/motion/Appear';
 import { EASE, MOVE, ND, SPRING, tween, useReduceMotion, useTweenNumber, useValue } from '@/components/motion/motion';

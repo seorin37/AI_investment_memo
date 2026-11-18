@@ -8,7 +8,8 @@
  *  - 줄을 꾹 누르면 onLongPress (고르기)
  */
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextInputInstance } from 'react-native';
+import { Animated, Keyboard, Pressable, ScrollView, StyleSheet, View, type TextInputInstance } from 'react-native';
+import { Text, TextInput } from '@/components/ui/AppText';
 import { MobileIcon } from '@/components/icons/MobileIcons';
 import { Appear } from '@/components/motion/Appear';
 import { Chevron, Collapse } from '@/components/motion/Collapse';

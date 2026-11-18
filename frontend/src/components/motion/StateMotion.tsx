@@ -6,7 +6,8 @@
  *  - Spinner: 둥근 고리가 .8초에 한 바퀴 (체험판 .scan i · .ptr.spin)
  */
 import { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { Animated, Pressable, StyleSheet, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { MobileIcon } from '@/components/icons/MobileIcons';
 import { Appear } from '@/components/motion/Appear';
 import { EASE, LINEAR, ND, SPRING, tween, useReduceMotion, useValue } from '@/components/motion/motion';

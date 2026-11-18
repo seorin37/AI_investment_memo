@@ -7,7 +7,8 @@
  * 화면 맨 아래(탭바 위)에 두고 bottom 으로 자리 지정.
  */
 import { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, View } from 'react-native';
+import { AnimatedText, Text } from '@/components/ui/AppText';
 import Svg, { Circle } from 'react-native-svg';
 import { EASE, LINEAR, ND, SPRING, tween, useProgress, useValue } from '@/components/motion/motion';
 
@@ -51,7 +52,7 @@ export function Snackbar({ message, count, actionLabel, onAction, onTimeout, dur
     <Animated.View pointerEvents={message ? 'auto' : 'none'} accessibilityLiveRegion="polite"
       style={[st.snack, { bottom, opacity: t.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolate: 'clamp' }),
         transform: [{ translateY: t.interpolate({ inputRange: [0, 1], outputRange: [26, 0] }) }, { scale: t.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] }) }] }]}>
-      <Animated.Text style={[st.msg, { transform: [{ scale: bump }] }]} numberOfLines={1}>{last.current}</Animated.Text>
+      <AnimatedText style={[st.msg, { transform: [{ scale: bump }] }]} numberOfLines={1}>{last.current}</AnimatedText>
       {actionLabel && onAction && (
         <Pressable onPress={onAction} style={st.undo} accessibilityRole="button">
           <Text style={st.undoText}>{actionLabel}</Text>

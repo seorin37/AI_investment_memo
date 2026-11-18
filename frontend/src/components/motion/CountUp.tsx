@@ -3,7 +3,8 @@
  * 처음 보일 때 0(또는 from)에서 값까지 .9s ease, 값이 바뀌면 이전 값에서 새 값까지.
  * format 으로 쉼표 · 소수 · 단위를 붙임 (숫자 계산은 서버/코드 값 그대로, 화면 표시만 움직임).
  */
-import { Text, type StyleProp, type TextStyle } from 'react-native';
+import { type StyleProp, type TextStyle } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { EASE, useTweenNumber } from '@/components/motion/motion';
 
 export const fmtInt = (n: number) => Math.round(n).toLocaleString('ko-KR');

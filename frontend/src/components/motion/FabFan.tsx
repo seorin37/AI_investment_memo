@@ -8,7 +8,8 @@
  * 화면 맨 위(ScrollView 밖)에 두면 됨. 색은 화면이 넘김.
  */
 import { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { MobileIcon, type MobileIconName } from '@/components/icons/MobileIcons';
 import { EASE, ND, SPRING, tween, useReduceMotion, useValue } from '@/components/motion/motion';
 

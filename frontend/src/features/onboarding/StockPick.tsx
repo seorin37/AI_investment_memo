@@ -5,7 +5,8 @@
  *        · 선택 수가 바뀌면 숫자가 톡 · [보유·관심 정하기 ›]가 옆에서 나타남 · [다음]이 켜지며 spring
  */
 import { useEffect } from 'react';
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Appear, PopWhen } from '@/components/motion/Appear';
 import { InkCheck } from '@/components/motion/InkCheck';

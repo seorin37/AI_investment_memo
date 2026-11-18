@@ -10,7 +10,8 @@
  *  - 불러오는 동안 빛줄기 뼈대 (#079)
  */
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import Svg, { Circle, G, Line, Path, Polygon, Rect, Text as SvgText } from 'react-native-svg';
 import type { ChartRange } from '@/types/models';
 import { MobileIcon } from '@/components/icons/MobileIcons';

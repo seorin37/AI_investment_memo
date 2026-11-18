@@ -8,7 +8,8 @@
  * 움직임: 스크롤하면 아래 선이 나타남(lineOpacity · #332 useLargeTitle 과 짝) · 알림 점은 새로 생길 때 톡.
  */
 import type { ReactNode } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, View } from 'react-native';
+import { AnimatedText, Text } from '@/components/ui/AppText';
 import { PopWhen } from '@/components/motion/Appear';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MobileIcon, type MobileIconName } from '@/components/icons/MobileIcons';
@@ -58,7 +59,7 @@ export function TopBar({ left, title, onBack, onCancel, logo, actions = [], safe
     <View style={[st.bar, { paddingTop: safeTop ? insets.top : 0, height: BAR_H + (safeTop ? insets.top : 0) }]}>
       <View style={st.row}>
         {left === 'logo' && (logo ?? <Text style={st.logoText}>{"memo's"}</Text>)}
-        {left === 'title' && <Animated.Text style={[st.title, titleOpacity !== undefined && { opacity: titleOpacity }]} numberOfLines={1}>{title}</Animated.Text>}
+        {left === 'title' && <AnimatedText style={[st.title, titleOpacity !== undefined && { opacity: titleOpacity }]} numberOfLines={1}>{title}</AnimatedText>}
         {left === 'back' && (
           <Pressable style={st.backBtn} onPress={onBack} hitSlop={8} accessibilityRole="button" accessibilityLabel="뒤로">
             <MobileIcon name="back" size={22} color={C.text} strokeWidth={2.2} />

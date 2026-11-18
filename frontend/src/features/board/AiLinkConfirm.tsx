@@ -5,7 +5,8 @@
  *         · 체크 상자 잉크(#014) · 완료 원이 0 → 1 로 튀고(.55s spring) 체크가 그려짐(.45s) · 버튼 누름 spring
  */
 import { useEffect } from 'react';
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import Svg, { Path } from 'react-native-svg';
 import { Appear } from '@/components/motion/Appear';
 import { InkCheck } from '@/components/motion/InkCheck';

@@ -8,7 +8,8 @@
  *         · 요약 끝 [출처] 칩을 누르면 출처가 펼쳐짐(#224 · .42s) · AI 연결 스위치(.4s spring)
  */
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text, TextInput } from '@/components/ui/AppText';
 import Svg, { Polygon } from 'react-native-svg';
 import { MobileIcon, type MobileIconName } from '@/components/icons/MobileIcons';
 import { Appear, PopWhen } from '@/components/motion/Appear';

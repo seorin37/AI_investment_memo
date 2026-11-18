@@ -7,7 +7,8 @@
  * 문구 예: "이번 주 내 종목, 한 장으로 볼까요?" (웹 nudge.tsx 와 같은 문구는 화면이 넘김)
  */
 import { useEffect, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
+import { Animated, Pressable, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { MobileIcon } from '@/components/icons/MobileIcons';
 import { EASE, ND, SPRING, tween, useReduceMotion, useTweenNumber, useValue } from '@/components/motion/motion';
 

@@ -10,7 +10,8 @@
  * 한 번에 한 줄만 열리게 open / onOpenChange 로 부모가 관리.
  */
 import { useEffect, useRef, type ReactNode } from 'react';
-import { Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, PanResponder, Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import { MobileIcon, type MobileIconName } from '@/components/icons/MobileIcons';
 import { ND, SPRING, tween, useValue } from '@/components/motion/motion';
 

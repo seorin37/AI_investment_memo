@@ -4,7 +4,8 @@
  * 움직임: 장마다 차례로 떠오름(rvin 60ms) · 주가 선이 그려지고(1.2s) 소식 번호가 .9초 뒤 나타나며 두 번 톡(hit)
  *        · 숫자가 올라감(#098) · [메모에 추가] → "✓ 추가됨"으로 바뀜(#051)
  */
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/AppText';
 import Svg, { Circle, G, Line, Path, Text as SvgText } from 'react-native-svg';
 import { AddButton } from '@/components/motion/AddButton';
 import { Appear } from '@/components/motion/Appear';
