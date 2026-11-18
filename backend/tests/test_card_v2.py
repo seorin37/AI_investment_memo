@@ -633,6 +633,65 @@ class ForecastAttributionTest(unittest.TestCase):
         self.assertFalse(attributed_forecast("이 통계는 반등 전망의 근거로 제시됐어요."))            # 출처 주어 없음
         self.assertFalse(attributed_forecast("KB증권은 보고서를 제시했고 주가는 오를 전망이에요."))  # 주체 없는 단정이 섞임
         self.assertFalse(attributed_forecast("두 수치는 향후 1년간 예상 이익을 기준으로 제시된 것이에요."))
+        self.assertFalse(attributed_forecast("매출이 줄어들었어요."))                               # "들었"은 띄어 쓴 때만
+
+    # 2026-11-18 안 A 재실행에서 예측 표현으로 걸린 카드 6장 (forecast_rule_rerun, 문장 그대로).
+    # 전달 동사(들었·전했)·소유격 주체·제목 맨 앞 이름은 통과, 자료를 주체 없이 "~ 전망이에요"로 가리킨 문장은 그대로 실패
+    # (검사를 풀지 않고 지시문 [전망 근거]에 "주체를 넣는다"를 넣었다)
+    RERUN_CARDS = [
+        ("A 항목 3", "KB증권, 4분기 영업이익 104조원 전망",
+         ["김동원 KB증권 애널리스트는 SK하이닉스의 4분기 영업이익을 104조원으로 전망했어요.",
+          "김동원 KB증권 애널리스트는 판가 상승과 출하량 증가를 실적 전망의 근거로 들었어요."],
+         "SK하이닉스 주가 상승 전망의 근거를 확인하려는 관심사와 연결되는 실적 전망이에요.", "",
+         ["SK하이닉스 주가 상승 전망의 근거를 확인하려는 관심사와 연결되는 실적 전망이에요."]),
+        ("A_all 항목 3", "KB증권, SK하이닉스 4분기 영업이익 전망",
+         ["김동원 KB증권 애널리스트는 4분기 영업이익을 104조원으로 예상했어요.",
+          "매일경제는 판가 상승과 출하량 증가를 실적 전망의 배경으로 전했어요."],
+         "메모의 '상승 전망의 근거 확인'과 연결되는 증권사의 실적 전망과 그 배경이에요.", "",
+         ["메모의 '상승 전망의 근거 확인'과 연결되는 증권사의 실적 전망과 그 배경이에요."]),   # "증권사"는 막연한 주어
+        ("B 항목 3", "KB증권, SK하이닉스 실적 전망 제시",
+         ["김동원 KB증권 애널리스트는 HBM4 판매 비중이 HBM3E를 넘어설 것으로 예측했어요."],
+         "메모의 '상승 전망의 근거 확인'과 연결되는 증권사 실적 전망과 그 전제인 판매가격·출하량 예상에 관한 내용이에요.", "",
+         ["메모의 '상승 전망의 근거 확인'과 연결되는 증권사 실적 전망과 그 전제인 판매가격·출하량 예상에 관한 내용이에요."]),
+        ("C2_all 항목 10", "머스크, 중국 메모리 대규모 생산 전망",
+         ["머스크는 중국이 2028년 엄청난 양의 메모리 반도체를 생산할 것이라고 전망했어요.",
+          "머스크는 중국이 관련 제조 기술을 확보하면 대규모 증산에 나설 수 있다고 전망했어요."],
+         "메모에서 '중국 메모리 업체 증설'을 주목하셨는데, 이번 자료는 중국의 메모리 공급 확대 가능성에 대한 머스크의 전망이에요.",
+         "머스크는 중국 업체들이 기술을 확보하면 생산 규모를 급격히 확대할 수 있다고 주장했어요. "
+         "이는 중국 업체의 실제 증설 발표가 아니라 기술 확보를 조건으로 한 생산 확대 전망이에요.",
+         ["이는 중국 업체의 실제 증설 발표가 아니라 기술 확보를 조건으로 한 생산 확대 전망이에요."]),
+        ("C_all 항목 3", "KB증권, 하이닉스 4분기 이익 전망 제시",
+         ["김동원 KB증권 애널리스트는 4분기 영업이익을 104조원으로 예상했어요.",
+          "KB증권은 4분기 D램·낸드 출하량이 3분기보다 각각 24%, 5% 늘 것으로 봤어요."],
+         "메모에서는 주가 상승 전망의 근거를 궁금해하셨는데, 이번 자료는 KB증권이 제시한 실적 전망과 그 배경을 담고 있어요.",
+         "김동원 애널리스트는 평균판매가격 상승과 출하량 증가를 실적 전망의 배경으로 제시했어요. "
+         "이 수치들은 발표된 4분기 실적이 아니라 해당 애널리스트의 예상치예요.",
+         ["이 수치들은 발표된 4분기 실적이 아니라 해당 애널리스트의 예상치예요."]),          # "해당 애널리스트"는 이름 없음
+        ("오늘 실행 항목 3", "KB증권, SK하이닉스 4분기 이익 전망",
+         ["SK하이닉스의 3분기 영업이익은 83조원이었어요.", "김동원 KB증권 애널리스트는 4분기 영업이익을 104조원으로 전망했어요.",
+          "김동원 KB증권 애널리스트는 4분기 D램 출하량이 3분기보다 24% 늘 것으로 예상했어요."],
+         "SK하이닉스 주가 상승 전망의 근거를 확인하려는 관심사와 연결되는 실적·출하량 전망이에요.", "",
+         ["SK하이닉스 주가 상승 전망의 근거를 확인하려는 관심사와 연결되는 실적·출하량 전망이에요."]),
+    ]
+
+    def test_rerun_cards(self):
+        import re
+        from pipelines.updates.checks import _banned_hit, forecast_subjects, prediction_text
+        for name, head, facts, link, exp, still in self.RERUN_CARDS:
+            names = forecast_subjects(facts)
+            texts = [head, *facts, link] + [s for s in re.split(r"(?<=[.!?])\s+", exp) if s.strip()]
+            flagged = [t for t in texts if prediction_text([t], self.cfg, names) or _banned_hit([t], self.banned, self.cfg, names)]
+            self.assertEqual(flagged, still, name)
+
+    def test_possessive_and_headline_name(self):
+        from pipelines.updates.checks import attributed_forecast
+        self.assertTrue(attributed_forecast("이번 자료는 KB증권의 실적 전망을 다룬 기사예요."))     # 지시문 예시
+        self.assertTrue(attributed_forecast("이 수치는 김동원 애널리스트의 예상치예요."))
+        self.assertFalse(attributed_forecast("이번 자료는 증권가의 실적 전망이에요."))               # 막연한 주어
+        self.assertFalse(attributed_forecast("이번 자료는 SK하이닉스의 실적 전망이에요."))           # 대상일 수 있다 (names에 없으면)
+        self.assertFalse(attributed_forecast("KB증권의 전망이에요. 주가는 오를 거예요."))           # 나머지에 주체 없는 단정
+        self.assertTrue(attributed_forecast("머스크, 중국 메모리 대규모 생산 전망", headline=True, names={"머스크"}))
+        self.assertFalse(attributed_forecast("머스크, 중국 메모리 대규모 생산 전망", headline=True))
 
 
 class MemoLinkNumberTest(unittest.TestCase):

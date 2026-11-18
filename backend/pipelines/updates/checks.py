@@ -45,42 +45,77 @@ ATTRIBUTION = ("라고 밝혔", "고 밝혔", "고 발표", "고 전했", "고 �
 # - 막연한 주어는 주체가 아니다 (2026-11-18): 시장·업계·증권가·전문가(들)·투자자(들)·(업계) 관계자·일각·"○○들"·대명사.
 #   사람은 이름이 있어야 한다 ("김 애널리스트는" O, "애널리스트는"·"한 연구원은" X). 증권사·기관·회사·언론 이름은 그대로 주체
 _FORECAST_ACT = re.compile(r"(전망|예상|추정|관측|예측)(했|한다|하고|하며|해요|합니다|하는)|내다(봤|보|본)|(전망|예상|추정)치를?\s*(제시|내놓|내놨|발표|밝혔)")
-_SAY_ACT = re.compile(r"(제시|설명|분석|언급|강조)(했|한다고|하며|한)|밝혔|밝힌|찾았|짚었|봤어요|본다고|보고\s*있")
+# 전달 동사. "들었"은 앞이 띄어쓰기일 때만 ("근거로 들었어요" O, "줄어들었어요" X)
+_SAY_ACT = re.compile(r"(제시|설명|분석|언급|강조)(했|한다고|하며|한)|밝혔|밝힌|찾았|짚었|봤어요|본다고|보고\s*있|"
+                      r"(?<![가-힣])(들었|든\s)|전했|전한|꼽았|꼽은")
+# 소유격 주체 "머스크의 전망이에요"·"KB증권의 실적 전망을 다룬 기사예요"·"김동원 애널리스트의 예상치예요" (2026-11-18)
+_POSSESSIVE = re.compile(r"([가-힣A-Za-z0-9&·]+)의\s+(?:[가-힣A-Za-z0-9·]+\s+){0,3}?(전망치|예상치|추정치|전망|예상|추정|관측)"
+                         r"(이에요|예요|입니다|이다|을|를|과|와|에|으로|은|는|이)?")
 _PERSON_WORD = r"연구원|연구위원|애널리스트|이코노미스트|기자|대표|센터장|본부장|팀장|부장|사장|회장|위원장|총재|장관|교수"
 _SOURCE_WORD = re.compile(r"(증권|증권사|금융투자|리서치|연구소|은행|신문|일보|경제|뉴스|통신|방송|협회|기구|"
                           r"정부|당국|부처|회사|그룹|센터|운용|평가|IB|S&P|무디스|피치|모건스탠리|골드만삭스|"
                           rf"JP모간|씨티|노무라|UBS|트렌드포스|가트너|IDC|옴디아|카운터포인트|WSTS|{_PERSON_WORD})$")
-_VAGUE_SUBJECT = re.compile(r"^(시장|업계|증권가|증권업계|금융권|전문가|투자자|관계자|일각|기관|외국인|개인|컨센서스|시장참여자|"
-                            r"그|그녀|이들|그들|누군가)(에서)?$|들(에서)?$")
+_VAGUE_SUBJECT = re.compile(r"^(시장|업계|증권가|증권업계|증권사|금융권|전문가|투자자|관계자|일각|기관|외국인|개인|컨센서스|"
+                            r"시장참여자|외신|언론|그|그녀|이들|그들|누군가)(에서)?$|들(에서)?$")
 _PERSON_ONLY = re.compile(rf"^({_PERSON_WORD})$")
-_NOT_A_NAME = {"한", "어느", "일부", "다른", "많은", "여러", "몇몇", "업계", "시장", "증권가", "익명의", "해당"}
+_NOT_A_NAME = {"한", "어느", "일부", "다른", "많은", "여러", "몇몇", "업계", "시장", "증권가", "익명의", "해당", "이", "그"}
 
 
-def _named(m: re.Match, text: str) -> bool:
-    """주어 m이 막연하지 않은 주체인가. 직함만 있으면("애널리스트는") 바로 앞 낱말이 이름이어야 한다."""
-    word = m.group(1)
+def _named_word(word: str, before: str) -> bool:
+    """word가 막연하지 않은 주체인가. 직함만 있으면("애널리스트") before의 마지막 낱말이 이름이어야 한다."""
     if _VAGUE_SUBJECT.search(word):
         return False
     if _PERSON_ONLY.match(word):
-        before = text[:m.start()].split()
-        return bool(before) and before[-1] not in _NOT_A_NAME and not _VAGUE_SUBJECT.search(before[-1])
+        prev = before.split()
+        return bool(prev) and prev[-1] not in _NOT_A_NAME and not _VAGUE_SUBJECT.search(prev[-1])
     return True
+
+
+def _named(m: re.Match, text: str) -> bool:
+    return _named_word(m.group(1), text[:m.start()])
 _NOT_SUBJECT = re.compile(r"(이익|매출|매출액|주가|수요|공급|가격|실적|업황|비율|금액|규모|수익|출하|생산|투자|성장|전망|예상|배당|점유율)$")
 _SUBJECT = re.compile(r"([가-힣A-Za-z0-9&·]+)(?:은|는|이|가)\s")
 _UNATTRIBUTED = re.compile(r"(전망|예상|추정|관측|기대)(돼요|되어요|됩니다|돼|이에요|입니다|된다|이다)|(할|될)\s*전망|"
                            r"것으로\s*(보여요|보입니다|보인다)|(거|것)(예요|이에요|입니다)|가능성이?\s*(높|큽|커)")
 
 
-def attributed_forecast(text: str, headline: bool = False) -> bool:
-    """주체를 밝힌 전망 전달 문장인가 (위 설명). headline이면 "출처, …" 제목 형식도 본다."""
+def _source_owner(word: str, before: str, names) -> bool:
+    """소유격·제목 맨 앞 낱말이 전망한 주체인가: 막연하지 않고, 출처 낱말(증권·언론·이름 있는 직함…)이거나
+    카드 사실 문장에서 전망 주체로 나온 이름(names). "SK하이닉스의 실적 전망"처럼 전망 대상일 수 있는 말은 names에 있어야 한다."""
+    if not _named_word(word, before) or _NOT_SUBJECT.search(word):
+        return False
+    return bool(_SOURCE_WORD.search(word)) or word in names
+
+
+def forecast_subjects(texts) -> set[str]:
+    """전망 전달 문장(attributed_forecast)의 이름 있는 주어 ("머스크는 ~로 전망했어요" → 머스크). 제목·소유격 판단에 쓴다."""
+    out = set()
+    for t in texts:
+        t = _TAG.sub("", t or "")
+        if not attributed_forecast(t):
+            continue
+        subjects = [m for m in _SUBJECT.finditer(t) if _named(m, t) and not _NOT_SUBJECT.search(m.group(1))]
+        if subjects:                                    # 맨 앞 주어와 출처 낱말 주어만 ("머스크는 중국이 …"의 중국은 아니다)
+            out |= {subjects[0].group(1)} | {m.group(1) for m in subjects if _SOURCE_WORD.search(m.group(1))}
+    return out
+
+
+def attributed_forecast(text: str, headline: bool = False, names=frozenset()) -> bool:
+    """주체를 밝힌 전망 전달 문장인가 (위 설명). headline이면 "출처, …" 제목 형식도 본다.
+    names: 카드 사실 문장의 전망 주체 이름 (forecast_subjects). 제목 맨 앞·소유격 주체로 인정한다."""
     t = _TAG.sub("", text or "").strip()
-    if not t or _UNATTRIBUTED.search(t):
+    if not t:
+        return False
+    # 소유격 주체: "○○의 전망이에요"를 지운 나머지에 주체 없는 단정이 없으면 전달
+    stripped = _POSSESSIVE.sub(lambda m: " " if _source_owner(m.group(1), t[:m.start()], names) else m.group(0), t)
+    if stripped != t and not _UNATTRIBUTED.search(stripped):
+        return True
+    if _UNATTRIBUTED.search(t):
         return False
     if headline:
         head, sep, _ = t.partition(",")
         words = head.split()
-        if sep and words and _SOURCE_WORD.search(words[-1]) and not _VAGUE_SUBJECT.search(words[-1]) and (
-                not _PERSON_ONLY.match(words[-1]) or (len(words) > 1 and words[-2] not in _NOT_A_NAME)):
+        if sep and words and _source_owner(words[-1], " ".join(words[:-1]), names):
             return True
     act = _FORECAST_ACT.search(t)
     if act:
@@ -373,7 +408,7 @@ def _check_body(lines: list[str], ev_pairs: list[tuple[str, str]], extra: list[s
 COMPANY_STATEMENT = ("라고 밝혔", "고 밝혔", "고 발표", "고 설명", "계획이라고")
 
 
-def prediction_text(texts: list[str], cfg: dict) -> str | None:
+def prediction_text(texts: list[str], cfg: dict, names=frozenset()) -> str | None:
     """예측(전망·예상·추정·관측·가능성 …)을 핵심 사실로 쓴 글 (2026-11-09 "네이버 3분기 매출 3조5천143억원 전망" 카드).
     2026-11-18 N08 결정: 주체를 밝힌 전망 전달("KB증권은 ~로 전망했어요", 제목 "KB증권, ~ 전망")은 예측이 아니다
     (attributed_forecast). 주체 없는 전망("~로 전망돼요"·"영업이익은 ~로 전망했어요")은 그대로 걸린다.
@@ -382,7 +417,7 @@ def prediction_text(texts: list[str], cfg: dict) -> str | None:
     # 문장마다 본다 (설명 문단의 한 문장이 전달 문장이라고 문단 전체를 빼지 않게)
     sentences = [s for t in texts for s in re.split(r"(?<=[.!?])\s+", t or "") if s.strip()]
     for t in sentences:
-        if any(a in t for a in COMPANY_STATEMENT) or attributed_forecast(t, headline=True):
+        if any(a in t for a in COMPANY_STATEMENT) or attributed_forecast(t, headline=True, names=names):
             continue
         rest = t
         for p in exempt:
@@ -423,12 +458,12 @@ def text_dates(text: str) -> set[str]:
     return out
 
 
-def _banned_hit(texts: list[str], banned: list[str], cfg: dict) -> bool:
+def _banned_hit(texts: list[str], banned: list[str], cfg: dict, names=frozenset()) -> bool:
     """v1 _check_body와 같은 금지 표현 검사: 사전은 부분 문자열, 시제 패턴은 회사 발언 전달 문장을 뺀 문장에만."""
     if any(term in " ".join(texts) for term in banned):
         return True
     patterns = [re.compile(p) for p in cfg["banned_patterns"]]
-    return any(not (any(a in t for a in ATTRIBUTION) or attributed_forecast(t, headline=True))
+    return any(not (any(a in t for a in ATTRIBUTION) or attributed_forecast(t, headline=True, names=names))
                and any(p.search(t) for p in patterns) for t in texts)
 
 
@@ -473,8 +508,10 @@ def check_card_v2(card, evidence: list[Evidence], banned: list[str], cfg: dict |
     if exp_cfg.get("enabled") and (not exp or len(exp) > exp_cfg.get("max_chars", 400) or _TAG.search(exp)
                                    or len(_SENT_END.findall(exp.strip())) > exp_cfg.get("max_sentences", 4)):
         codes.append("FORMAT_EXPLANATION")
-    texts = [card.headline, *(t for t, _ in facts), card.memo_link] + ([exp] if exp else [])
-    if _banned_hit(texts, banned, cfg):
+    # 설명 문단은 문장마다 (금지 표현 예외·예측 검사를 문장 단위로)
+    texts = [card.headline, *(t for t, _ in facts), card.memo_link] + [s for s in re.split(r"(?<=[.!?])\s+", exp) if s.strip()]
+    names = forecast_subjects(t for t, _ in facts)       # 제목 맨 앞·소유격 주체로 인정할 전망 주체 (사실 문장에서)
+    if _banned_hit(texts, banned, cfg, names):
         codes.append("BANNED")
     # 숫자: 문장마다 그 근거 하나에만. 제목·memo_link는 쓴 근거 전체 안에서
     union = EvidenceNumbers()
@@ -485,7 +522,7 @@ def check_card_v2(card, evidence: list[Evidence], banned: list[str], cfg: dict |
     bad = any(eid in ids and not evidence_number_sets(_ev_text(ids[eid])).supports(t) for t, eid in facts)
     if bad or not (union.supports(card.headline) and union.supports(exp) and link.supports(card.memo_link)):
         codes.append("NUMBER")
-    if cfg["prediction_terms"] and prediction_text(texts, cfg):
+    if cfg["prediction_terms"] and prediction_text(texts, cfg, names):
         codes.append("PREDICTION")
     # 자료 범위 밖을 전제로 한 말 ("처음", "줄곧" …): 그 말이 쓴 근거에 그대로 있을 때만 (2026-11-11, 범위 밖 원인·추이를 단정하지 않게)
     def outside(text: str, hay: str) -> bool:
