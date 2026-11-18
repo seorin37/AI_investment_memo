@@ -113,6 +113,8 @@ _LABEL_UNIT = re.compile(rf"\(\s*(?:단위\s*[:：]?\s*({_UNITS_RE})|("
                          + "|".join(sorted(_BARE_LABEL_UNITS, key=len, reverse=True))
                          + r")|단위\s*[:：]\s*([^\s,)]{1,15}))\s*[,)]")
 _NO_CONTEXT = None          # 표 머리·이름표가 없는 글: 맨숫자를 금액·개수로도 인정 (기사·문단)
+_HEAD_CELL = re.compile(r"\|\s*\(\s*단위\s*[:：][^()|]*\)\s*$")          # 줄 끝 칸 전체가 "(단위 : X)"
+_LABEL_CURRENCY = re.compile(r"\[\s*[A-Z]{3}\s*[,\]]")                   # 이름표의 통화 표시 "[USD, 천]"
 
 
 def table_unit(unit: str) -> tuple[str, float] | None:
@@ -149,10 +151,22 @@ def _segments(text: str):
     for line in (text or "").split("\n"):
         cut = _row_split(line)
         label, rest = (line[:cut], line[cut:]) if cut >= 0 else ("", line)
-        heads = _UNIT_HEADER.findall(line) if cut < 0 else []   # 행 줄 안의 "(단위: …)"는 그 칸 단위라 표 머리로 쓰지 않는다
+        # 행 줄 안의 "(단위: …)"는 그 칸 단위라 표 머리로 쓰지 않는다. 단 줄 끝 칸 전체가 "(단위 : X)"면 표 머리
+        # ("(대상기간 : | 2026년 02월 13일 | ~ | … ) | (단위 : 천주)", 2026-11-18 실제 공시 확인)
+        heads = _UNIT_HEADER.findall(line) if cut < 0 or _HEAD_CELL.search(line) else []
         if heads:
-            header = heads[-1][0] or _UNKNOWN
+            # 한 머리에 모르는 단위가 섞이면 모르는 단위 ("(외화단위: 천USD, …, 원화단위: 백만원)"의 USD 칸을 백만원으로 보지 않게)
+            header = _UNKNOWN if any(not a for a, _ in heads) else heads[-1][0]
         units = [a or b or _UNKNOWN for a, b, _ in _LABEL_UNIT.findall(label)]
+        if _LABEL_CURRENCY.search(label):                         # "기초통화금액, USD [USD, 천]"
+            units = [_UNKNOWN]
+        # 행 안 칸에 모르는 단위가 적힌 줄("한도단위: USD | 한도액: 350,000")은 그 줄만 모르는 단위 (2026-11-18 실제 공시 확인)
+        if not units and cut >= 0 and any(not a and b for a, b in _UNIT_HEADER.findall(rest)):
+            units = [_UNKNOWN]
+        # 숫자가 없는 열 머리 행의 이름표 단위는 표 머리 ("구분(단위 : 천명) | SO수 | 가입자 | 점유율")
+        # (데이터 행은 "칸: 값" 꼴이라 뺀다: "주당배당금(원) | 당기: - | 전기: -")
+        if units and cut >= 0 and not re.search(r"[\d:：]", rest):
+            header = units[-1]
         if label:
             yield label, header
         yield rest, units[-1] if units else header
