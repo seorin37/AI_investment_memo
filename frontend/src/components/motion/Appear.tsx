@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect -- RN Animated 관용 패턴. React Compiler 켜면 이 파일부터 정리 필요 */
 /**
  * 나타나기 — 체험판의 짧은 등장 움직임을 한 부품으로.
  *   up    아래에서 12px 떠오름 · .45s ease · 60ms 차이 (rvin: AI 업데이트 · 보고서 줄)

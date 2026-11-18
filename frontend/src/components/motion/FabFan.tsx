@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/refs -- RN Animated 관용 패턴. React Compiler 켜면 이 파일부터 정리 필요 */
 /**
  * 부채꼴 + 버튼 (Lucian #011 fab-radial-menu) — 체험판 memo.html 값 그대로.
  *  - 평소: 버튼 둘레가 2.6초마다 숨 쉬듯 번짐 (fabbr)

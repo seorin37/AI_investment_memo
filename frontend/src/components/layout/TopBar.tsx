@@ -57,7 +57,7 @@ export function TopBar({ left, title, onBack, onCancel, logo, actions = [], safe
   return (
     <View style={[st.bar, { paddingTop: safeTop ? insets.top : 0, height: BAR_H + (safeTop ? insets.top : 0) }]}>
       <View style={st.row}>
-        {left === 'logo' && (logo ?? <Text style={st.logoText}>memo's</Text>)}
+        {left === 'logo' && (logo ?? <Text style={st.logoText}>{"memo's"}</Text>)}
         {left === 'title' && <Animated.Text style={[st.title, titleOpacity !== undefined && { opacity: titleOpacity }]} numberOfLines={1}>{title}</Animated.Text>}
         {left === 'back' && (
           <Pressable style={st.backBtn} onPress={onBack} hitSlop={8} accessibilityRole="button" accessibilityLabel="뒤로">

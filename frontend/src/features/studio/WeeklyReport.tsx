@@ -60,7 +60,7 @@ export function WeeklyReport({ week_label, period_label, created_label, summary,
     <ScrollView style={st.root} contentContainerStyle={st.body}>
       <Appear kind="up" index={0} style={st.cover}>
         <View style={st.coverTop}>
-          <Text style={st.coverTag}>MEMO'S WEEKLY REPORT</Text>
+          <Text style={st.coverTag}>{"MEMO'S WEEKLY REPORT"}</Text>
           <View style={st.weekChip}><Text style={st.weekText}>{week_label}</Text></View>
         </View>
         <Text style={st.coverTitle}>주간보고서</Text>

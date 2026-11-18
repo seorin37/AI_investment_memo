@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect -- RN Animated 관용 패턴. React Compiler 켜면 이 파일부터 정리 필요 */
 /**
  * MY — 프로필 카드 · AI 사용량(%) · 계정(알림) · 화면(다크 모드) · 서비스(사용량) · 기타(데이터 · 휴지통 · 정보) · 지원(피드백 · 도움말).
  * 체험판 my.html — 움직임:

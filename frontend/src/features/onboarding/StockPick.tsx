@@ -11,8 +11,7 @@ import { Appear, PopWhen } from '@/components/motion/Appear';
 import { InkCheck } from '@/components/motion/InkCheck';
 import { EASE, ND, SPRING, tween, useValue } from '@/components/motion/motion';
 import { usePressScale } from '@/components/motion/StateMotion';
-import type { PickStock } from '@/features/onboarding/StockPick.types';
-import type { StockPickProps } from '@/features/onboarding/StockPick.types';
+import type { PickStock, StockPickProps } from '@/features/onboarding/StockPick.types';
 
 const C = {
   bg: '#FFFFFF',

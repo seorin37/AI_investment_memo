@@ -8,7 +8,7 @@
  *  - 줄을 꾹 누르면 onLongPress (고르기)
  */
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextInputInstance } from 'react-native';
 import { MobileIcon } from '@/components/icons/MobileIcons';
 import { Appear } from '@/components/motion/Appear';
 import { Chevron, Collapse } from '@/components/motion/Collapse';
@@ -17,6 +17,7 @@ import { EASE, tween, useValue } from '@/components/motion/motion';
 import { NoResults } from '@/components/motion/StateMotion';
 import { SwipeRow } from '@/components/motion/SwipeRow';
 import type { JournalListProps, JournalNote } from '@/features/journal/JournalList.types';
+import { useBackClose } from '@/hooks/useBackClose';
 
 const C = {
   appBg: '#F3F4F6',
@@ -39,7 +40,13 @@ export function JournalList({ notes, onOpen, onNew, onDictate, onLongPress, onPi
   const [q, setQ] = useState('');
   const [focus, setFocus] = useState(false);
   const [closed, setClosed] = useState<string[]>([]);
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
+  /* 안드로이드 뒤로가기: 밀린 줄 닫기 → 검색 닫기 순서로 먼저 처리 */
+  useBackClose(() => {
+    if (openRow) { setOpenRow(null); return true; }
+    if (focus) { inputRef.current?.blur(); Keyboard.dismiss(); setFocus(false); return true; }
+    return false;
+  });
   /** #027: 0 = 평소(새 기록 버튼) · 1 = 검색 중([취소]) */
   const f = useValue(0);
   useEffect(() => { tween(f, focus ? 1 : 0, 350, EASE, false).start(); }, [focus, f]);

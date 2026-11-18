@@ -7,7 +7,7 @@
  * 이 화면은 상단 바·탭바가 없음 (안전 영역은 직접 처리).
  */
 import { useRef, useState } from 'react';
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent, type ScrollViewInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MobileIcon } from '@/components/icons/MobileIcons';
 import { Appear } from '@/components/motion/Appear';
@@ -40,7 +40,7 @@ const PAD = 24;
 export function IntroSlides({ slides, onDone }: IntroSlidesProps) {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const ref = useRef<ScrollView>(null);
+  const ref = useRef<ScrollViewInstance>(null);
   const [page, setPage] = useState(0);
   /** 넘어간 방향과 거리 (버튼 = 폭의 40% · 손가락 = 40px) */
   const [push, setPush] = useState({ dx: 0, n: 0 });

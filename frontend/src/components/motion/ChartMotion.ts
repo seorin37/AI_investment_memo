@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/refs -- RN Animated 관용 패턴. React Compiler 켜면 이 파일부터 정리 필요 */
 /**
  * 차트 움직임
  *  - useScrub (Lucian #096 line-chart-scrub): 차트를 누른 채 옆으로 움직이면 가장 가까운 날의 값을 보여 줌. 손을 떼면 사라짐.

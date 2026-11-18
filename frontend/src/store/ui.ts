@@ -19,6 +19,9 @@ interface UIState {
   drawerOpen: boolean;
   modal: ModalState;
   toast: { id: number; message: string } | null;
+  /** 앱 하단 탭바 숨김 (메모 고르기 중 — MemoBoard onSelectionChange) */
+  tabBarHidden: boolean;
+  setTabBarHidden(hidden: boolean): void;
   toggleSidebar(): void;
   setDrawer(open: boolean): void;
   openModal(m: NonNullable<ModalState>): void;
@@ -31,6 +34,8 @@ export const useUI = create<UIState>()((set) => ({
   drawerOpen: false,
   modal: null,
   toast: null,
+  tabBarHidden: false,
+  setTabBarHidden: (hidden) => set({ tabBarHidden: hidden }),
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   setDrawer: (open) => set({ drawerOpen: open }),
   openModal: (modal) => set({ modal, drawerOpen: false }),

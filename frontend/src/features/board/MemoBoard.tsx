@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/refs, react-hooks/set-state-in-effect -- RN Animated 관용 패턴. React Compiler 켜면 이 파일부터 정리 필요 */
 /**
  * 메모 보드 (종목별). 체험판 memo.html 의 보드 부분 — 움직임 포함.
  *  - 위: 종목 요약 카드 + [메모 보드 | 기업정보]
@@ -27,6 +28,7 @@ import { Shimmer, SkeletonSwap } from '@/components/motion/Skeleton';
 import { SlidingPill } from '@/components/motion/SlidingPill';
 import { SwipeRow } from '@/components/motion/SwipeRow';
 import { Snackbar } from '@/components/motion/Snackbar';
+import { useBackClose } from '@/hooks/useBackClose';
 import { usePressScale } from '@/components/motion/StateMotion';
 import type { MemoColor } from '@/types/models';
 import { BOARD_C as C, CHECKLIST_C as CK, MEMO_PAPER } from '@/features/board/boardTokens';
@@ -79,6 +81,13 @@ export function MemoBoard(props: MemoBoardProps) {
   const [confetti, setConfetti] = useState<{ x: number; y: number; id: number } | null>(null);
   const [snack, setSnack] = useState<Snack>(null);
   const [openRow, setOpenRow] = useState<string | null>(null);
+  /* 안드로이드 뒤로가기: 메뉴 닫기 → 밀린 줄 닫기 → 고르기 해제 순서로 먼저 처리 (색 시트는 BottomSheet Modal 이 닫음) */
+  useBackClose(() => {
+    if (fanOpen) { setFanOpen(false); return true; }
+    if (openRow) { setOpenRow(null); return true; }
+    if (sel.length) { setSel([]); return true; }
+    return false;
+  });
 
   const live = useMemo(() => [...items].sort(sortItems), [items]);
   const newCount = live.reduce((a, it) => a + (it.kind === 'memo' ? it.unread_updates : 0), 0);

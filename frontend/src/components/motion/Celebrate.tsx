@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/refs, react-hooks/purity -- RN Animated 관용 패턴. React Compiler 켜면 이 파일부터 정리 필요 */
 /**
  * 축하 (Lucian #093 success-burst) — 체험판 memo.html 값 그대로.
  *  - DotBurst: 체크할 때 상자 둘레로 작은 점 8개가 20~28px 튀며 사라짐 (.52s cubic-bezier(.2,.7,.3,1))

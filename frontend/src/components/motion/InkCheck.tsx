@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect -- RN Animated 관용 패턴. React Compiler 켜면 이 파일부터 정리 필요 */
 /**
  * 체크 상자 (Lucian #014 checkbox-ink + 체험판 체크리스트 .ckr2 .cc)
  *  - 체크하면 안쪽이 가운데에서 번지며 채워지고(.35s spring) 상자가 .6 → 1.15 → 1 로 톡 (.38s)

@@ -65,8 +65,8 @@ export function AiLinkConfirm({ step, stock_name, memo, candidates, onToggleCand
               <Text style={st.noneText}>메모는 일반 메모로 그대로 저장돼요.{'\n'}확인할 사실이나 가격 조건을 구체적으로 적고{'\n'}다시 확인해 보세요.</Text>
               <View style={st.exBox}>
                 <Text style={st.exHead}>이렇게 적으면 찾을 수 있어요</Text>
-                <Text style={st.ex}>공시·뉴스 · "다음 정기보고서에서 HBM 매출 확인하기"</Text>
-                <Text style={st.ex}>가격 조건 · "20만원 아래로 내려오면 다시 보기"</Text>
+                <Text style={st.ex}>{'공시·뉴스 · "다음 정기보고서에서 HBM 매출 확인하기"'}</Text>
+                <Text style={st.ex}>{'가격 조건 · "20만원 아래로 내려오면 다시 보기"'}</Text>
               </View>
             </Appear>
           )}
@@ -156,7 +156,7 @@ function Candidate({ c, onPress }: { c: TrackingCandidate; onPress: () => void }
         ) : (
           <>
             <Text style={st.candSub}>정기보고서와 뉴스에서 관련 사실을 찾아 연결해요.</Text>
-            <Text style={st.quote}>메모 속 문장 · "{c.quote}"</Text>
+            <Text style={st.quote}>{`메모 속 문장 · "${c.quote}"`}</Text>
           </>
         )}
       </View>

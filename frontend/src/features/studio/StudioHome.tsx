@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/refs -- RN Animated 관용 패턴. React Compiler 켜면 이 파일부터 정리 필요 */
 /**
  * 스튜디오 — "쌓인 소식을 듣고, 읽고, 실험해 보세요" · AI 사용량 칩 · 기능 카드 4개 · 만든 항목(맨 위 라디오 카드 + 목록).
  * 체험판 studio.html. 상단 바(스튜디오 · 알림 · 프로필)는 TopBar 로 따로.

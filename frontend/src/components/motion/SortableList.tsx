@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/refs -- RN Animated 관용 패턴. React Compiler 켜면 이 파일부터 정리 필요 */
 /**
  * 끌어서 순서 바꾸기 (Lucian #317 sort-flip-list) — 체험판 stock.html 값. 내 종목의 보유·관심 안 순서.
  *  - ⋮⋮ 손잡이를 4px 넘게 움직여야 끌기 시작

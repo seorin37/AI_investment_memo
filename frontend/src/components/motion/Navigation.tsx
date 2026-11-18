@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/refs -- RN Animated 관용 패턴. React Compiler 켜면 이 파일부터 정리 필요 */
 /**
  * 화면 넘어가기 · 큰 제목 · 당겨서 새로고침
  *

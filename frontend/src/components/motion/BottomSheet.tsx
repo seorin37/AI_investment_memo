@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/refs, react-hooks/set-state-in-effect -- RN Animated 관용 패턴. React Compiler 켜면 이 파일부터 정리 필요 */
 /**
  * 아래에서 올라오는 시트 (Lucian #336 bottom-sheet) — 체험판 .gsh 값.
  *  - 열기: 아래에서 .45s cubic-bezier(.3,1.25,.5,1) (살짝 넘쳤다 멈춤) · 뒤 막 .3s

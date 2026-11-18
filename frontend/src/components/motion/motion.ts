@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/refs, react-hooks/set-state-in-effect -- RN Animated 관용 패턴. React Compiler 켜면 이 파일부터 정리 필요 */
 /**
  * 모션 공통값 — 체험판(memo.html · x/app 스타일)의 CSS 변수를 그대로 옮김.
  *   --ease   cubic-bezier(.2,.8,.2,1)     부드럽게 멈춤

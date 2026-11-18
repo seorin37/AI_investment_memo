@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/refs -- RN Animated 관용 패턴. React Compiler 켜면 이 파일부터 정리 필요 */
 /**
  * 줄 밀기 — 체험판 memo.html(목록 보기) · journal.html 값 그대로. RN 기본 PanResponder 만 사용.
  *  - 옆으로 8px 넘게, 세로보다 많이 움직여야 밀기 시작 (세로 스크롤과 안 겹치게)

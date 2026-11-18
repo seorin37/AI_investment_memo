@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/refs -- RN Animated 관용 패턴. React Compiler 켜면 이 파일부터 정리 필요 */
 /**
  * 되돌리기 알림 (Lucian #071 snackbar-undo) — 체험판 .snack 값.
  *  - 26px 아래 · .95배 → 제자리 (.45s spring) · 투명도 .2s

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect -- RN Animated 관용 패턴. React Compiler 켜면 이 파일부터 정리 필요 */
 /**
  * 뼈대 → 내용 (Lucian #079)
  *  - Shimmer: 회색 뼈대 위로 흰 빛줄기가 1.1초마다 왼쪽 → 오른쪽 (체험판 .sk · shim)

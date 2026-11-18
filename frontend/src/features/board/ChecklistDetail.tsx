@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/refs -- RN Animated 관용 패턴. React Compiler 켜면 이 파일부터 정리 필요 */
 /**
  * 체크리스트 — 귤색 종이 위에 이름(바로 수정) · 작성일 · 진행 수 · 막대 · 항목 줄(체크 · ×) · 맨 끝 "항목 추가" 줄.
  * 다 끝내면 "모두 확인했어요" 배지. AI 연결은 없음.
@@ -7,7 +8,7 @@
  *  - 마지막 항목: "모두 확인했어요" 칸이 펼쳐지고(.45s) 배지가 돌며 튀어나와 물결(1.1s) · 색종이 90개
  */
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type LayoutChangeEvent } from 'react-native';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type LayoutChangeEvent, type TextInputInstance } from 'react-native';
 import Svg, { Polygon } from 'react-native-svg';
 import { MobileIcon } from '@/components/icons/MobileIcons';
 import { Appear } from '@/components/motion/Appear';
@@ -23,7 +24,7 @@ const R = { paper: 22, box: 8, win: 16, badge: 16 };
 
 export function ChecklistDetail({ mode, title, date_full, items, pinned, onChangeTitle, onToggleItem, onDeleteItem, onAddItem, onAllDone }: ChecklistDetailProps) {
   const [draft, setDraft] = useState('');
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
   const L = items.length;
   const d = items.filter((x) => x.done).length;
   const all = L > 0 && d === L;
