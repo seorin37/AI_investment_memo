@@ -21,6 +21,8 @@ import { AddStock, Settings, Feedback, Trash, HelpPage, LogoutConfirm } from "./
 import { ReportPage } from "./screens/report";
 import { MinePage } from "./screens/mine";
 import { StudioColumn, AudioPopup, ReportPopup, CreditPopup, ChargePopup } from "./studio";
+import { API_MODE } from "./api/config";
+import { ApiNotes, SampleNotice } from "./apimode";
 
 function Screen() {
   const { route } = useApp();
@@ -95,9 +97,9 @@ function Shell() {
     const t = window.setTimeout(() => { setCoachPending(false); setCoach({ step: -1 }); }, 600);
     return () => window.clearTimeout(t);
   }, [coachPending, coach, route.name, setCoachPending, setCoach]);
-  if (route.name === "intro") return <div key="intro" className="m-in h-full"><Intro /><DemoTools /></div>;
-  if (route.name === "login") return <div key="login" className="m-in h-full"><Login /><DemoTools /></div>;
-  if (route.name === "terms" || route.name === "pick") return <div key={route.name} className="m-in h-full">{route.name === "terms" ? <Terms /> : <Pick />}<DemoTools /></div>;
+  if (route.name === "intro") return <div key="intro" className="m-in h-full"><Intro />{!API_MODE && <DemoTools />}</div>;
+  if (route.name === "login") return <div key="login" className="m-in h-full"><Login />{!API_MODE && <DemoTools />}</div>;
+  if (route.name === "terms" || route.name === "pick") return <div key={route.name} className="m-in h-full">{route.name === "terms" ? <Terms /> : <Pick />}{!API_MODE && <DemoTools />}</div>;
   return (
     <div key="app" className="m-in flex h-full bg-[#f3f4f6]">
       <Sidebar />
@@ -108,8 +110,9 @@ function Shell() {
       <InboxPanel />
       <MarketDetailHost />
       <OfflineBand />
+      <SampleNotice />
       <Coach />
-      <DemoTools />
+      {!API_MODE && <DemoTools />}
     </div>
   );
 }
@@ -118,6 +121,7 @@ export default function App() {
   return (
     <AppProvider>
       <SnackHost>
+        <ApiNotes />
         <Shell />
       </SnackHost>
     </AppProvider>

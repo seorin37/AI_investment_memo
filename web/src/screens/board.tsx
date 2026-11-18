@@ -3,7 +3,9 @@ import { createPortal } from "react-dom";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Modal, cx, series } from "../kit";
 import { PAPER, type ColorKey, type Memo, type TL, type Stock } from "../data";
-import { useApp } from "../store";
+import { useApp, useChecklist } from "../store";
+import { API_MODE } from "../api/config";
+import { mmdd } from "../api/map";
 import { coachMemo } from "../coach";
 import { Spark, Arrow, Cross, useStudioOpen } from "../nudge";
 import { BoardHead, MemoList, SelectBar, ConnectDialog, CtxMenu, Pick, Dots, useMemoActions, type BoardFilter } from "./memox";
@@ -59,6 +61,13 @@ export function StockHead({ s }: { s: Stock }) {
           <div className="flex items-center rounded-[6px] bg-[#e8edf5] px-2 py-[3px]"><p className="whitespace-nowrap text-[13px] font-medium leading-[20px] text-black">{s.hold === "보유" ? "보유 중" : "관심"}</p></div>
         </div>
       </div>
+      {API_MODE ? (
+        /* 시세 API가 아직 없어(분류 C) 예시 가격을 실제처럼 보이지 않게 비워 둠 */
+        <div data-price-pending className="flex flex-col items-end gap-[2px]">
+          <p className="whitespace-nowrap text-[26px] font-bold leading-[35px] text-[#c4c9d0]">—</p>
+          <p className="whitespace-nowrap text-[13px] leading-[20px] text-[#6b7684]">시세 준비 중</p>
+        </div>
+      ) : (
       <div className="flex items-start gap-6">
         <div className="flex flex-col items-end gap-[2px]">
           <p className="whitespace-nowrap text-[26px] font-bold leading-[35px] text-[#191f28]">{s.price.toLocaleString("ko-KR")}원</p>
@@ -67,6 +76,7 @@ export function StockHead({ s }: { s: Stock }) {
         </div>
         <MiniChart s={s} />
       </div>
+      )}
     </div>
   );
 }
@@ -151,8 +161,8 @@ const CheckDot = ({ on, onClick, off = "#d8d4de", fill = "#ada0c5", w = 1.4 }: {
     {on && <svg className="m-pop" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 6L4.8 8.3L9.5 3.5" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>}
   </button>
 );
-function ChecklistCard({ onOpen }: { onOpen: () => void }) {
-  const { checklist, setChecklist, clTitle } = useApp();
+function ChecklistCard({ code, onOpen }: { code: string; onOpen: () => void }) {
+  const { checklist, setChecklist, clTitle } = useChecklist(code);
   const done = checklist.filter((c) => c.d).length;
   return (
     <div data-flip="check" onClick={onOpen} className="flex min-h-[200px] w-full shrink-0 cursor-pointer flex-col items-start overflow-hidden rounded-[16px] border border-[#ebe9ed] bg-white px-5 pb-3 pt-4">
@@ -189,7 +199,8 @@ function NewMemoFab({ onClick }: { onClick: () => void }) {
 
 /* ---------- 보드 ---------- */
 export function Board({ s }: { s: Stock }) {
-  const { memos, setMemos, memoOpen, setMemoOpen, overlay, coach, hideNudge, studio, x, setX } = useApp();
+  const { memos, setMemos, memoOpen, setMemoOpen, overlay, coach, hideNudge, studio, x, setX, loadTimeline } = useApp();
+  const hasCheck = useChecklist(s.code).has;
   const studioOpen = useStudioOpen();
   const snack = useSnack();
   const act = useMemoActions();
@@ -225,6 +236,8 @@ export function Board({ s }: { s: Stock }) {
   const ref = useRef<HTMLDivElement>(null);
   useFlip(ref);
   const mine = memos.filter((m) => m.code === s.code);
+  /* 빈 보드: 메모도 체크리스트도 없을 때 (시연 모드는 지금처럼 SK하이닉스만 체크리스트가 있음) */
+  const empty = mine.length === 0 && !hasCheck;
   const shown = mine.filter((m) => filter === "all" || (filter === "ai" ? m.ai : m.badge > 0));
   const cols = [0, 1, 2].map((c) => {
     const inCol = shown.filter((m) => (m.col ?? 0) % 3 === c);
@@ -234,14 +247,15 @@ export function Board({ s }: { s: Stock }) {
   });
   const upd = (id: number, p: Partial<Memo>) => setMemos((a) => a.map((m) => (m.id === id ? { ...m, ...p } : m)));
   const open = dlg?.mode === "edit" ? memos.find((m) => m.id === dlg.id) : undefined;
+  useEffect(() => { if (API_MODE && open) loadTimeline(open.id); }, [open?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col items-start gap-4">
       {studio.creditOut && <SpentBox title="AI 연결이 잠시 멈췄어요" sub={"이번 달 AI 사용량을 다 썼어요. 12월 1일에 다시 찾아요.\n메모는 계속 쓸 수 있어요."} />}
-      {!(mine.length === 0 && s.code !== "000660") && <BoardHead mine={mine} filter={filter} setFilter={(f) => { setFilter(f); }} view={view} setView={setView} />}
-      {view === "list" && !(mine.length === 0 && s.code !== "000660") && <MemoList list={[...shown].sort((a, b) => Number(b.pinned) - Number(a.pinned))} sel={sel} onOpen={(m) => setDlg({ mode: "edit", id: m.id })} onPick={toggleSel} onMenu={(m, at) => setMenu({ m, at })} />}
-      <div className={cx("flex min-h-0 w-full flex-1 items-start gap-6", view === "list" && !(mine.length === 0 && s.code !== "000660") && "hidden")}>
+      {!empty && <BoardHead mine={mine} filter={filter} setFilter={(f) => { setFilter(f); }} view={view} setView={setView} />}
+      {view === "list" && !empty && <MemoList list={[...shown].sort((a, b) => Number(b.pinned) - Number(a.pinned))} sel={sel} onOpen={(m) => setDlg({ mode: "edit", id: m.id })} onPick={toggleSel} onMenu={(m, at) => setMenu({ m, at })} />}
+      <div className={cx("flex min-h-0 w-full flex-1 items-start gap-6", view === "list" && !empty && "hidden")}>
       <div ref={ref} className="flex min-w-0 flex-1 items-start gap-4 pb-10 pt-[14px]">
-        {mine.length === 0 && s.code !== "000660" && (
+        {empty && (
           <div data-empty-board className="m-in flex w-full flex-col items-center gap-5 rounded-[20px] border border-dashed border-[#cfd3d9] bg-white px-8 py-12">
             <span className="dk-keep relative block h-[52px] w-[60px]"><span className="block h-full w-full rounded-[10px_10px_0px_10px] bg-[#fceaaa]" /><svg className="absolute bottom-0 right-0" width="16" height="16" viewBox="0 0 30 30" fill="none"><path d="M30 0V30H0L30 0Z" fill="#FFFFFF" /><path d="M0 9C0 3 3 0 9 0H30L0 30V9Z" fill="#efbf2a" /></svg></span>
             <div className="flex flex-col items-center gap-2">
@@ -256,7 +270,7 @@ export function Board({ s }: { s: Stock }) {
             <button onClick={() => setDlg({ mode: "new", tab: "memo" })} className="flex h-12 items-center justify-center rounded-[14px] bg-[#111] px-6 text-[17px] font-bold leading-[26px] text-white hover:bg-[#2a2a2a]">첫 메모 쓰기</button>
           </div>
         )}
-        {!(mine.length === 0 && s.code !== "000660") && cols.map((col, ci) => (
+        {!empty && cols.map((col, ci) => (
           <div key={ci} className="flex w-[276px] shrink-0 flex-col items-start gap-6">
             {col.map((m) => (
               <div key={m.id} className="relative w-full" onContextMenu={(e) => { e.preventDefault(); if (!sel) setMenu({ m, at: { x: e.clientX, y: e.clientY } }); }}>
@@ -267,7 +281,7 @@ export function Board({ s }: { s: Stock }) {
                 {!sel && <button aria-label="메모 메뉴" data-memo-menu={m.id} onClick={(e) => { e.stopPropagation(); const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setMenu({ m, at: { x: r.left, y: r.bottom + 6 } }); }} className="absolute bottom-2 left-3 z-10 grid h-7 w-7 place-items-center rounded-[8px] text-[#4a4a55] opacity-0 transition-opacity hover:bg-white/60 focus-visible:opacity-100 [div:hover>&]:opacity-100"><Dots /></button>}
               </div>
             ))}
-            {ci === 0 && s.code === "000660" && filter === "all" && <ChecklistCard onOpen={() => setDlg({ mode: "new", tab: "check" })} />}
+            {ci === 0 && hasCheck && filter === "all" && <ChecklistCard code={s.code} onOpen={() => setDlg({ mode: "new", tab: "check" })} />}
           </div>
         ))}
       </div>
@@ -281,11 +295,11 @@ export function Board({ s }: { s: Stock }) {
         onSave={(p) => { if (open) { const changed = (p.title !== undefined && p.title !== open.title) || (p.body !== undefined && p.body !== open.body); if (changed) p.timeline = [...(p.timeline ?? open.timeline ?? firstOnly(open)), { kind: "edit", date: "11월 16일", old: { when: `11월 16일 · 고치기 전`, title: open.title, body: open.body.replace(/\n/g, " ") } }]; upd(open.id, p); if (changed) snack("저장했어요 · 수정 이력에 1개 추가", { check: true }); } setDlg(null); }}
         onMenu={(at) => open && setMenu({ m: open, at })} onConnect={(t) => open && setConnect({ id: open.id, ...t })}
         onNudge={() => { if (open?.badge) upd(open.id, { badge: 0 }); setDlg(null); hideNudge("memo"); studioOpen.report([s.code]); }} />
-      <NewDialog open={dlg?.mode === "new"} tab0={dlg?.mode === "new" ? dlg.tab : "memo"} init={dlg?.mode === "new" ? dlg.init : undefined} name={s.name} onClose={() => setDlg(null)}
+      <NewDialog code={s.code} open={dlg?.mode === "new"} tab0={dlg?.mode === "new" ? dlg.tab : "memo"} init={dlg?.mode === "new" ? dlg.init : undefined} name={s.name} onClose={() => setDlg(null)}
         onSave={(m) => {
           const id = Date.now();
           const wantAi = m.ai; const base = wantAi ? { ...m, ai: false, tracks: undefined, timeline: undefined } : m;
-          setMemos((a) => { const i = a.findIndex((x) => x.code === s.code && (x.col ?? 0) === 0 && !x.pinned); const n: Memo = { ...base, id, code: s.code, date: "11.16", badge: 0, col: 0, pinned: false }; const b = a.slice(); b.splice(i < 0 ? a.length : i, 0, n); return b; });
+          setMemos((a) => { const i = a.findIndex((x) => x.code === s.code && (x.col ?? 0) === 0 && !x.pinned); const n: Memo = { ...base, id, code: s.code, date: API_MODE ? mmdd(new Date().toISOString()) : "11.16", badge: 0, col: 0, pinned: false }; const b = a.slice(); b.splice(i < 0 ? a.length : i, 0, n); return b; });
           setFresh(id); window.setTimeout(() => setFresh(null), 1600); setDlg(null);
           if (x.first) setX((v) => ({ ...v, firstStep: Math.max(v.firstStep, 1) }));
           if (wantAi) window.setTimeout(() => setConnect({ id, title: m.title, body: m.body, isNew: true }), 380); else snack("메모를 저장했어요", { check: true });
@@ -563,8 +577,8 @@ function MemoDialog({ open, memo, name, onClose, onSave, onNudge, onMenu, onConn
 }
 
 /* ---------- 6.1 새 메모 · 6.2 체크리스트 ---------- */
-function NewDialog({ open, tab0, init, name, onClose, onSave }: { open: boolean; tab0: "memo" | "check"; init?: string; name: string; onClose: () => void; onSave: (m: Omit<Memo, "id" | "code" | "date" | "badge" | "col" | "pinned">) => void }) {
-  const { checklist, setChecklist, clTitle, setClTitle } = useApp();
+function NewDialog({ code, open, tab0, init, name, onClose, onSave }: { code: string; open: boolean; tab0: "memo" | "check"; init?: string; name: string; onClose: () => void; onSave: (m: Omit<Memo, "id" | "code" | "date" | "badge" | "col" | "pinned">) => void }) {
+  const { checklist, setChecklist, clTitle, setClTitle } = useChecklist(code);
   const snack = useSnack();
   const [tab, setTab] = useState<0 | 1>(0), [color, setColor] = useState<ColorKey>("yellow"), [ai, setAi] = useState(false), [empty, setEmpty] = useState(true);
   const [items, setItems] = useState(checklist), [title, setTitle] = useState(clTitle), [add, setAdd] = useState("");

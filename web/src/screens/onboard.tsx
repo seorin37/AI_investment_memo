@@ -5,6 +5,8 @@ import { cx } from "../kit";
 import { useApp } from "../store";
 import { LEGAL } from "../legal";
 import { ALL_STOCKS, type Hold, type Stock } from "../data";
+import { API_MODE } from "../api/config";
+import { newStock } from "../api/map";
 
 const INK = "#111111";
 const Check = ({ on, size = 26, delay = 0 }: { on: boolean; size?: number; delay?: number }) => (
@@ -126,6 +128,7 @@ export function Pick() {
   const done = (skip?: boolean) => {
     if (!skip) setStocks(PICKS.filter((p) => sel[p.code]).map((p) => {
       const base = ALL_STOCKS.find((s) => s.code === p.code);
+      if (API_MODE) return newStock(p.code, p.name === "NAVER" ? "네이버" : p.name, "KOSPI", sel[p.code]!); // 서버 저장은 store 동기화가 함
       const s: Stock = base ?? { code: p.code, name: p.name === "NAVER" ? "네이버" : p.name, short: p.logo, logo: p.logo, logoBg: p.bg, hold: "관심", market: "KOSPI", price: p.price, chg: Math.round(p.price * p.pct / 100 / 100) * 100, pct: p.pct, seed: Number(p.code.slice(-2)) || 5 };
       return { ...s, hold: sel[p.code]! };
     }));

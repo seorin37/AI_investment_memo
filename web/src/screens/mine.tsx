@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { Modal, PageTitle, cx, useSnack } from "../kit";
 import { NEW_N, type Stock } from "../data";
 import { useApp } from "../store";
+import { API_MODE } from "../api/config";
 import { SLogo } from "../fig";
 import { FixedFrame } from "./stock";
 import { CtxMenu, MI, SkelPage, type MenuItem } from "../x";
@@ -21,7 +22,7 @@ export function useStockActions() {
     const ids = new Set(list.map((s) => s.code));
     const before = stocks;
     setStocks((a) => a.filter((s) => !ids.has(s.code)));
-    setTrash((t) => [...list.map((s) => ({ icon: "stock", t: s.name, s: "종목 · 방금 삭제", type: "종목" })), ...t]);
+    setTrash((t) => [...list.map((s) => ({ icon: "stock", t: s.name, s: "종목 · 방금 삭제", type: "종목", stock: s })), ...t]);
     if (route.name === "stock" && ids.has(route.code)) go({ name: "home" });
     snack(list.length > 1 ? `${list.length}개 종목을 내 종목에서 뺐어요` : `${list[0].name}을 내 종목에서 뺐어요`, { undo: () => { setStocks(before); setTrash((t) => t.slice(list.length)); } });
   };
@@ -82,13 +83,15 @@ export function MinePage() {
           {groups.filter(([, l]) => l.length).map(([g, l]) => (
             <div key={g} data-sk className="flex w-full flex-col overflow-hidden rounded-[20px] border border-[#e5e7eb] bg-white">
               <div className="flex h-12 items-center justify-between px-5"><p className="text-[15px] font-bold text-[#15171a]">{g}</p><p className="text-[13px] text-[#8b95a1]">{l.length}종목</p></div>
-              {l.map((s, i) => { const mm = memos.filter((m) => m.code === s.code), up = s.chg >= 0, nn = NEW_N[s.code] ?? 0; return (
+              {l.map((s, i) => { const mm = memos.filter((m) => m.code === s.code), up = s.chg >= 0, nn = API_MODE ? (s.unread ?? 0) : NEW_N[s.code] ?? 0; return (
                 <div key={s.code} data-mine-row={s.code} role="button" tabIndex={0} onClick={() => (sel ? tog(s) : go({ name: "stock", code: s.code, tab: "board" }))} onKeyDown={(e) => { if (e.key === "Enter") go({ name: "stock", code: s.code, tab: "board" }); }} onContextMenu={(e) => { e.preventDefault(); if (!sel) setMenu({ s, at: { x: e.clientX, y: e.clientY } }); }}
                   className={cx("m-reveal flex h-[72px] cursor-pointer items-center gap-4 border-t border-[#f0f1f3] px-5 hover:bg-[#f9f9f9]", sel?.has(s.code) && "bg-[#f7f7f7]")} style={{ ["--i" as string]: i }}>
                   {sel && <Pick on={sel.has(s.code)} />}
                   <SLogo code={s.code} size={36} r={10} />
                   <span className="flex min-w-0 flex-1 flex-col"><span className="flex items-center gap-2"><span className="truncate text-[17px] font-bold leading-[26px] text-[#15171a]">{s.name}</span>{nn > 0 && <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#e5484d] px-[5px] text-[12px] font-bold text-white">{nn}</span>}</span><span className="text-[13px] leading-[20px] text-[#8b95a1]">메모 {mm.length} · AI 연결 {mm.filter((m) => m.ai).length}</span></span>
-                  <span className="flex flex-col items-end"><span className="text-[15px] font-bold leading-[23px] text-[#15171a]">{s.price.toLocaleString("ko-KR")}원</span><span className="text-[13px] font-bold leading-[20px]" style={{ color: up ? "#e5484d" : "#2f6bdb" }}>{up ? "+" : ""}{s.pct.toFixed(2)}%</span></span>
+                  {API_MODE
+                    ? <span className="flex flex-col items-end"><span className="text-[15px] font-bold leading-[23px] text-[#c4c9d0]">—</span><span className="text-[13px] leading-[20px] text-[#8b95a1]">시세 준비 중</span></span>
+                    : <span className="flex flex-col items-end"><span className="text-[15px] font-bold leading-[23px] text-[#15171a]">{s.price.toLocaleString("ko-KR")}원</span><span className="text-[13px] font-bold leading-[20px]" style={{ color: up ? "#e5484d" : "#2f6bdb" }}>{up ? "+" : ""}{s.pct.toFixed(2)}%</span></span>}
                   {!sel && <button aria-label={`${s.name} 메뉴`} onClick={(e) => { e.stopPropagation(); const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setMenu({ s, at: { x: r.right - 220, y: r.bottom + 6 } }); }} className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] text-[#8b95a1] hover:bg-[#f2f3f4]"><Dots /></button>}
                 </div>
               ); })}

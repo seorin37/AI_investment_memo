@@ -9,7 +9,7 @@ export const PAPER: Record<ColorKey, { bg: string; accent: string; label: string
 };
 
 export type Hold = "보유" | "관심";
-export type Stock = { code: string; name: string; short: string; logo: string; logoBg: string; hold: Hold; market: string; price: number; chg: number; pct: number; seed: number };
+export type Stock = { code: string; name: string; short: string; logo: string; logoBg: string; hold: Hold; market: string; price: number; chg: number; pct: number; seed: number; unread?: number /* API 모드: 서버의 읽지 않은 AI 업데이트 수 */ };
 export const ALL_STOCKS: Stock[] = [
   { code: "000660", name: "SK하이닉스", short: "S", logo: "S", logoBg: "#ea002c", hold: "보유", market: "KOSPI", price: 180500, chg: 4200, pct: 2.38, seed: 3 },
   { code: "005930", name: "삼성전자", short: "삼", logo: "삼", logoBg: "#1428a0", hold: "관심", market: "KOSPI", price: 71400, chg: 1500, pct: 2.15, seed: 7 },
@@ -111,8 +111,9 @@ export const JOURNAL: Journal[] = [
   { id: 4, title: "09/25 손절 기준 정리", date: "9월 25일", full: "2026년 9월 25일 오후 11:10", body: ["지지선 근처에서 분할 매수 고민.", "-10%면 이유를 다시 적고 판단하기."], todo: [] },
 ];
 
-/* 휴지통 */
-export const TRASH = [
+/* 휴지통 — memo/stock: API 모드에서 지운 원래 항목 (복원할 때 다시 저장) */
+export type TrashItem = { icon: string; t: string; s: string; type: string; memo?: Memo; stock?: Stock };
+export const TRASH: TrashItem[] = [
   { icon: "memo", t: "20만원 밑으로 오면 다시 생각", s: "SK하이닉스 / 메모 · 2시간 전 삭제", type: "메모" },
   { icon: "journal", t: "10/08 실적 발표 전 점검", s: "투자 기록 · 어제 삭제", type: "투자 기록" },
   { icon: "memo", t: "삼성전자랑 같이 비교해보기", s: "SK하이닉스 / 메모 · 3일 전 삭제", type: "메모" },

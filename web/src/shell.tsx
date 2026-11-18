@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { DarkRail, DarkRow } from "./theme";
 import { cx } from "./kit";
-import { useApp } from "./store";
+import { useApp, useProfile } from "./store";
+import { API_MODE } from "./api/config";
 import { Icon, SLogo, type IconName } from "./fig";
 import { WORDMARK, AVATAR } from "./assets_wm";
 import { BellBtn, CtxMenu, matchKo } from "./x";
@@ -23,6 +24,7 @@ function Row({ icon, label, on, onClick, w = 218, children }: { icon?: IconName;
 
 export function Sidebar() {
   const { route, go, stocks, memos, setOverlay, openSettings, sideOpen, setSideOpen } = useApp();
+  const profile = useProfile();
   const [open, setOpen] = useState({ mine: true, 보유: true, 관심: true });
   const [fly, setFly] = useState(false);
   const [q, setQ] = useState("");
@@ -173,7 +175,7 @@ export function Sidebar() {
         <div className="flex h-12 w-[218px] items-center justify-between pr-1">
           <button onClick={() => openSettings("내 프로필")} className="flex items-center gap-3 text-left">
             <img src={AVATAR} alt="" className="dk-keep h-12 w-12 rounded-full object-cover" />
-            <span className="flex flex-col gap-1"><span className={LABEL}>김나라</span><span className="text-[13px] leading-[20px] text-[#9f9f9f]">대학생</span></span>
+            <span className="flex flex-col gap-1"><span className={cx(LABEL, API_MODE && "max-w-[140px] truncate")}>{profile.name}</span><span className="text-[13px] leading-[20px] text-[#9f9f9f]">{profile.sub}</span></span>
           </button>
           <button aria-label="로그아웃" title="로그아웃" onClick={() => setOverlay("logout")} className="grid h-[18px] w-[18px] place-items-center"><Icon n="logout" size={18} /></button>
         </div>

@@ -8,7 +8,10 @@ import { useUsage } from "../x";
 import { LEGAL } from "../legal";
 import { FixedFrame } from "./stock";
 import { SEARCH_POOL, NEW_LOGO, ALL_STOCKS, type Hold } from "../data";
-import { useApp } from "../store";
+import { useApp, useProfile } from "../store";
+import { API_MODE } from "../api/config";
+import { api, type UserWire } from "../api/client";
+import { newStock } from "../api/map";
 
 const TR = "tracking-[-0.01em]";
 
@@ -24,7 +27,20 @@ export function AddStock() {
   const open = overlay === "addStock";
   useEffect(() => { if (open) { setQ(""); setPick(null); setHold("관심"); } }, [open]);
   const t = q.trim();
-  const list = t ? SEARCH_POOL.filter((s) => s.name.includes(t) || s.code.includes(t)) : DEFAULT_LIST.map((c) => SEARCH_POOL.find((s) => s.code === c)!);
+  /* API 모드: 입력하면 서버 종목 마스터 검색 (GET /stocks/search, 0.25초 쉬었다가) */
+  const [remote, setRemote] = useState<{ q: string; list: typeof SEARCH_POOL; err?: string } | null>(null);
+  useEffect(() => {
+    if (!API_MODE || !t) return;
+    const id = window.setTimeout(() => {
+      api.searchStocks(t).then(
+        (r) => setRemote({ q: t, list: r.map((x) => ({ code: x.code.trim(), name: x.name, market: x.market })) }),
+        (e) => setRemote({ q: t, list: [], err: e instanceof Error ? e.message : "검색하지 못했어요" }),
+      );
+    }, 250);
+    return () => window.clearTimeout(id);
+  }, [t]);
+  const searching = API_MODE && !!t && remote?.q !== t;
+  const list = t ? (API_MODE ? (remote?.q === t ? remote.list : []) : SEARCH_POOL.filter((s) => s.name.includes(t) || s.code.includes(t))) : DEFAULT_LIST.map((c) => SEARCH_POOL.find((s) => s.code === c)!);
   const had = (code: string) => stocks.find((x) => x.code === code);
   const sel = list.find((s) => s.code === pick && !had(s.code));
   const close = () => setOverlay(null);
@@ -32,7 +48,7 @@ export function AddStock() {
     if (!sel) return;
     const base = ALL_STOCKS.find((s) => s.code === sel.code);
     const [logo, bg] = NEW_LOGO[sel.code] ?? [sel.name[0], "#111"];
-    const s = base ? { ...base, hold } : { code: sel.code, name: sel.name, short: logo, logo, logoBg: bg, hold, market: sel.market, price: sel.code === "105560" ? 78300 : 48250, chg: sel.code === "105560" ? 870 : 650, pct: sel.code === "105560" ? 1.12 : 1.37, seed: Number(sel.code.slice(-2)) };
+    const s = API_MODE ? newStock(sel.code, sel.name, sel.market, hold) : base ? { ...base, hold } : { code: sel.code, name: sel.name, short: logo, logo, logoBg: bg, hold, market: sel.market, price: sel.code === "105560" ? 78300 : 48250, chg: sel.code === "105560" ? 870 : 650, pct: sel.code === "105560" ? 1.12 : 1.37, seed: Number(sel.code.slice(-2)) };
     setStocks((a) => [...a, s]); close();
     snack(`${sel.name}${josa(sel.name)} ${hold} 종목에 추가했어요`, { check: true, action: { label: "메모 쓰기 ›", run: () => { go({ name: "stock", code: sel.code, tab: "board" }); setMemoOpen(-1); } } });
   };
@@ -52,9 +68,9 @@ export function AddStock() {
           <input autoFocus value={q} onChange={(e) => { setQ(e.target.value); setPick(null); }} onKeyDown={(e) => { if (e.key === "Enter") ok(); }}
             placeholder="종목명 또는 코드" aria-label="종목 검색" className="h-[17px] min-w-0 flex-1 bg-transparent text-[14px] leading-[21px] text-[#16171a] outline-none placeholder:text-[#9a9ea7]" />
         </label>
-        {t && <p className="shrink-0 text-[13px] leading-[20px] text-[#8a8f98]">검색 결과 {list.length}건</p>}
+        {t && <p className="shrink-0 text-[13px] leading-[20px] text-[#8a8f98]">{searching ? "검색 중…" : `검색 결과 ${list.length}건`}</p>}
         <div className="flex min-h-0 w-full flex-1 flex-col items-start gap-[2px] overflow-y-auto">
-          {list.length === 0 && <p className="w-full py-6 text-center text-[13px] leading-[20px] text-[#8a8f98]">찾는 종목이 없어요</p>}
+          {list.length === 0 && !searching && <p className="w-full py-6 text-center text-[13px] leading-[20px] text-[#8a8f98]">{remote?.q === t && remote.err ? `검색하지 못했어요 · ${remote.err}` : "찾는 종목이 없어요"}</p>}
           {list.map((s) => {
             const h = had(s.code), on = !h && s.code === pick;
             const [logo, bg] = h ? [h.logo, h.logoBg] : NEW_LOGO[s.code] ?? (ALL_STOCKS.find((x) => x.code === s.code) ? [ALL_STOCKS.find((x) => x.code === s.code)!.logo, ALL_STOCKS.find((x) => x.code === s.code)!.logoBg] : [s.name[0], "#111"]);
@@ -103,6 +119,8 @@ function ConfirmDanger({ kind, onClose, z = 70, text, onRun }: { kind: Danger | 
   const [t, d, b] = lastText.current ?? DANGER[last.current];
   const run = () => {
     if (onRun) { onClose(); onRun(); return; }
+    /* API 모드: 전체 삭제 · 회원 탈퇴 API가 아직 없어(분류 C) 지운 척하지 않는다 */
+    if (API_MODE && last.current !== "logout") { onClose(); snack(last.current === "wipe" ? "전체 삭제는 아직 지원하지 않아요 · 데이터는 그대로예요" : "회원 탈퇴는 아직 지원하지 않아요 · 계정은 그대로예요"); return; }
     if (last.current === "wipe") { onClose(); snack("모든 데이터를 삭제했어요"); return; }
     onClose(); reset();
   };
@@ -262,9 +280,21 @@ function Withdraw({ open, onClose, danger }: { open: boolean; onClose: () => voi
     </Modal>
   );
 }
+/* 연결된 로그인 줄: 시연은 Figma 문구, API 모드는 /auth/me 의 providers (계정 추가 연결 API는 아직 없음 · 분류 C) */
+type LoginRow = readonly ["구글" | "카카오" | "네이버", string, boolean];
+const DEMO_LOGINS: LoginRow[] = [["구글", "nara@gmail.com · 현재 로그인 중", true], ["카카오", "연결되지 않음", false], ["네이버", "연결되지 않음", false]];
+function loginRows(user: UserWire | null): LoginRow[] {
+  const list = Array.isArray(user?.providers) ? (user.providers as { provider?: string; email?: string | null }[]) : [];
+  return ([["google", "구글"], ["kakao", "카카오"], ["naver", "네이버"]] as const).map(([p, n]) => {
+    const hit = list.find((x) => x.provider === p);
+    return [n, hit ? `${hit.email || "연결됨"} · 연결됨` : "연결되지 않음", !!hit] as const;
+  });
+}
 function TabProfile({ danger }: { danger: (d: Danger) => void }) {
+  const { user } = useApp();
   const [wd, setWd] = useState(false);
-  const [name, setName] = useState("김나라"), [intro, setIntro] = useState("대학생");
+  const profile = useProfile(); // API 모드: 로그인한 사용자. 프로필 수정 API는 아직 없음(분류 C) — 입력은 이 화면에서만 바뀜
+  const [name, setName] = useState(profile.name), [intro, setIntro] = useState(profile.sub);
   const field = (l: string, v: string, set: (s: string) => void) => (
     <div className="flex w-[351px] flex-col items-start gap-2">
       <p className="text-[14px] font-medium leading-[21px] text-[#8e8a97]">{l}</p>
@@ -273,7 +303,7 @@ function TabProfile({ danger }: { danger: (d: Danger) => void }) {
   );
   return (<>
     <div className="flex h-[72px] w-[718px] items-center gap-5">
-      <div className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-[#f3f1ef]"><p className={cx("text-[26px] font-bold leading-[35px] text-[#15171a]", TR)}>김</p></div>
+      <div className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-[#f3f1ef]"><p className={cx("text-[26px] font-bold leading-[35px] text-[#15171a]", TR)}>{profile.name.slice(0, 1)}</p></div>
       <div className="flex w-[300px] flex-col items-start gap-3"><T15>프로필 사진</T15><div className="flex h-9 w-[300px] items-start gap-2"><SBtn w={94}>사진 변경</SBtn><SBtn w={64}>삭제</SBtn></div></div>
     </div>
     <div className="flex items-start gap-4">{field("이름", name, setName)}{field("한 줄 소개", intro, setIntro)}</div>
@@ -281,13 +311,13 @@ function TabProfile({ danger }: { danger: (d: Danger) => void }) {
       <H16>연결된 로그인</H16>
       <D14 w={718}>연결한 계정으로 MEMO'S에 로그인할 수 있어요.</D14>
       <Card>
-        {([["구글", "nara@gmail.com · 현재 로그인 중"], ["카카오", "연결되지 않음"], ["네이버", "연결되지 않음"]] as const).map(([n, d], i) => (
+        {(API_MODE ? loginRows(user) : DEMO_LOGINS).map(([n, d, on], i) => (
           <div key={n} className="contents">
             {i > 0 && <Hr />}
             <div className="flex h-12 w-[678px] items-center gap-3">
               <LoginBadge n={n} />
               <div className="flex w-[534px] flex-col items-start gap-1"><T15>{n}</T15><p className="whitespace-nowrap text-[14px] font-medium leading-[21px] text-[#8e8a97]">{d}</p></div>
-              {i === 0 ? <p className="whitespace-nowrap text-[14px] font-medium leading-[21px] text-[#15171a]">사용 중</p> : <SBtn w={80}>연결</SBtn>}
+              {on ? <p className="whitespace-nowrap text-[14px] font-medium leading-[21px] text-[#15171a]">사용 중</p> : <SBtn w={80}>연결</SBtn>}
             </div>
           </div>
         ))}
@@ -590,6 +620,15 @@ export function Trash() {
   const t0 = type ?? "전체";
   const list = trash.filter((t) => (t0 === "전체" || t.type === t0) && (!q.trim() || t.t.includes(q.trim()) || t.s.includes(q.trim())));
   const restore = async (t: (typeof trash)[number]) => {
+    /* API 모드: 이 기기에서 지운 원래 메모·종목을 다시 저장한다 (서버에 복원 API가 없어 새로 저장 · 분류 B). 예시 항목은 없음 */
+    if (API_MODE) {
+      if (!t.memo && !t.stock) { snack("이 항목은 아직 복원할 수 없어요"); return; }
+      setGone(t.t); await sleep(280); setTrash((a) => a.filter((x) => x !== t)); setGone(null);
+      if (t.stock) { const st = t.stock; setStocks((a) => (a.some((s) => s.code === st.code) ? a : [...a, st])); }
+      if (t.memo) { const m = t.memo; setMemos((a) => (a.some((x) => x.id === m.id) ? a : [...a, m])); }
+      snack("복원했어요");
+      return;
+    }
     setGone(t.t); await sleep(280); setTrash((a) => a.filter((x) => x.t !== t.t)); setGone(null);
     if (t.type === "메모") setMemos((a) => a.some((m) => m.title === t.t) ? a : [...a, { id: Date.now(), code: "000660", date: "10.20", title: t.t, body: "", color: "yellow", ai: false, pinned: false, badge: 0, col: 0 }]);
     if (t.type === "투자 기록") setJournal((a) => a.some((j) => j.title === t.t) ? a : [...a, { id: Date.now(), title: t.t, date: "10월 8일", full: "2026년 10월 8일 오후 9:02", body: ["발표일 확인하고 체크리스트 정리.", "컨센서스 대비 가이던스 문구를 꼭 볼 것."], todo: [] }]);
@@ -602,7 +641,7 @@ export function Trash() {
   const [askAll, setAskAll] = useState(false);
   const kill = async (t: (typeof trash)[number]) => {
     setGone(t.t); await sleep(280); setTrash((a) => a.filter((x) => x.t !== t.t)); setGone(null);
-    snack("영구 삭제했어요");
+    snack(API_MODE ? "휴지통 목록에서 지웠어요" : "영구 삭제했어요"); // API 모드: 서버에는 영구 삭제 API가 없음 (분류 C)
   };
   const sp = { strokeWidth: 1.95556, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
   return (
