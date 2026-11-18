@@ -14,13 +14,17 @@ _TAG = re.compile(r"\[E\d+\]")
 _DATE = re.compile(r"(\d{4})[.\-/](\d{1,2})(?:[.\-/](\d{1,2}))?")
 # 단위는 긴 것부터 맞춘다 ("706,565백만원"을 706,565로, "5천억"을 5천으로 읽지 않게). 뒤의 "원"은 단위가 붙은 금액인지 가리는 데만 쓴다
 _UNIT = {"조": 1e12, "천억": 1e11, "백억": 1e10, "십억": 1e9, "억": 1e8, "천만": 1e7, "백만": 1e6, "만": 1e4, "천": 1e3}
-_NUM = re.compile(r"(\d[\d,]*(?:\.\d+)?)\s*(" + "|".join(sorted(_UNIT, key=len, reverse=True)) + r")?\s*(%|퍼센트)?(\s*원)?")
+# 개수 단위 "명·주·건·개" (2026-11-18 N30). 뒤에 조사나 한글 아닌 글자가 올 때만 ("주당"·"주식"·"건설"·"개월"은 아니다)
+_COUNT_WORD = r"(?:명|주|건|개)(?=$|[^가-힣]|[이가을를은는의에과와로으도만씩입였])"
+_NUM = re.compile(r"(\d[\d,]*(?:\.\d+)?)\s*(" + "|".join(sorted(_UNIT, key=len, reverse=True))
+                  + rf")?\s*(%|퍼센트)?(\s*원)?(\s*{_COUNT_WORD})?")
+_COUNT_AFTER = re.compile(rf"\s*{_COUNT_WORD}")
 # 표의 "배당금총액(원): 14,103,466,480,000"처럼 바로 앞 이름표가 "(원)"인 숫자는 원 단위 금액으로 본다
 _WON_LABEL = re.compile(r"\(원\)\s*[:：]?\s*$")
 # 한국식으로 나눠 쓴 금액 ("14조 1034억 6648만 8000원", "5조7천921억원", "21만7천500원")은 한 값으로 읽는다.
 # 단위 없는 마지막 숫자는 뒤에 "원"이 올 때만 붙인다 ("1,000억 2026년"의 2026을 붙이지 않게)
 _NUMK = r"\d[\d,]*(?:\.\d+)?(?:\s*천(?:\s*\d{1,3}(?!\d))?)?"
-_RUN = re.compile(rf"(?:{_NUMK}\s*(?:조|억|만)\s*)+(?:{_NUMK}(?=\s*원))?")
+_RUN = re.compile(rf"(?:{_NUMK}\s*(?:조|억|만)\s*)+(?:{_NUMK}(?=\s*(?:원|{_COUNT_WORD})))?")
 _PART = re.compile(rf"({_NUMK})\s*(조|억|만)?")
 
 DEFAULTS = {"title_max": 20, "max_sentences": 3, "sentence_max_chars": 60, "min_confidence": 0.7, "min_fact_overlap": 0.6,
@@ -49,30 +53,33 @@ def _compound(run: str) -> list[float]:
     return [sum(v * f for v, f in parts)]
 
 
-UNIT, PCT, BARE = "unit", "pct", "bare"   # 숫자 종류: 단위(조·억·만·백만…)나 "원"이 붙은 금액 / % / 맨숫자
+# 숫자 종류: 단위(조·억·만·백만…)나 "원"이 붙은 금액 / % / 맨숫자 / 개수 단위(명·주·건·개)가 붙은 수 ("30,853천 명" = 30,853,000명)
+UNIT, PCT, BARE, COUNT = "unit", "pct", "bare", "count"
 
 
 def _scan(text: str, combine: bool) -> list[tuple[float, str]]:
-    """(값, 종류). combine이면 나눠 쓴 금액을 먼저 한 값으로 읽고 그 자리는 지운다."""
+    """(값, 종류). combine이면 나눠 쓴 금액·개수("3,085만 3천 명")를 먼저 한 값으로 읽고 그 자리는 지운다."""
     text = _TAG.sub(" ", text or "")
     text = _DATE.sub(lambda m: " ".join(g for g in m.groups() if g), text)
     out = []
     if combine:
         def take(m):
-            out.extend((v, UNIT) for v in _compound(m.group(0)))
+            kind = COUNT if _COUNT_AFTER.match(m.string, m.end()) else UNIT
+            out.extend((v, kind) for v in _compound(m.group(0)))
             return " "
         text = _RUN.sub(take, text)
     for m in _NUM.finditer(text):
-        raw, unit, pct, won = m.groups()
-        kind = (UNIT if unit or won or _WON_LABEL.search(text[max(0, m.start() - 12):m.start()])
+        raw, unit, pct, won, count = m.groups()
+        kind = (COUNT if count and not won and not pct
+                else UNIT if unit or won or _WON_LABEL.search(text[max(0, m.start() - 12):m.start()])
                 else PCT if pct else BARE)
         out.append((float(raw.replace(",", "")) * _UNIT.get(unit, 1), kind))
     return out
 
 
 def _card_scan(text: str) -> list[tuple[float, str]]:
-    """답변 쪽 숫자 (값, 종류). 한 자리 맨숫자(3분기 등)는 비교에서 뺀다."""
-    return [(round(v, 6), kind) for v, kind in _scan(text, True) if v >= 10 or kind != BARE]
+    """답변 쪽 숫자 (값, 종류). 한 자리 맨숫자(3분기 등)·한 자리 개수("1주당"의 1주)는 비교에서 뺀다."""
+    return [(round(v, 6), kind) for v, kind in _scan(text, True) if v >= 10 or kind not in (BARE, COUNT)]
 
 
 def numbers(text: str) -> set[float]:
@@ -87,16 +94,32 @@ def all_numbers(text: str) -> set[float]:
     return {round(v, 6) for v, _ in _scan(text, True) + _scan(text, False)}
 
 
-# 표 단위. 금액 단위는 표 숫자를 원으로 환산하고, 그 밖의 단위(주·%·개…)는 환산하지 않되 금액으로도 보지 않는다
+# 표 단위. 금액 단위는 표 숫자를 원으로, 개수 단위(명·주·건·개, 배수 천·만·백만… 포함)는 개수로 환산한다.
+# 그 밖의 단위(%·배·회)는 환산하지 않되 금액·개수로도 보지 않는다
 _MONEY_FACTOR = {"원": 1.0, "천원": 1e3, "백만원": 1e6, "억원": 1e8, "조원": 1e12}
-_OTHER_UNITS = ("천주", "주", "%", "배", "개", "건", "명", "회")
-_UNITS_RE = "|".join(sorted([*_MONEY_FACTOR, *_OTHER_UNITS], key=len, reverse=True))
-# 표 머리 "(단위 : 백만원)"·"(단위: 원, %)" (쉼표 뒤는 무시하고 첫 단위만)
+_COUNT_MULT = {"": 1.0, "천": 1e3, "만": 1e4, "십만": 1e5, "백만": 1e6, "천만": 1e7, "억": 1e8}
+_COUNT_FACTOR = {m + b: f for m, f in _COUNT_MULT.items() for b in ("명", "주", "건", "개")}
+_OTHER_UNITS = ("%", "배", "회")
+_UNITS_RE = "|".join(sorted([*_MONEY_FACTOR, *_COUNT_FACTOR, *_OTHER_UNITS], key=len, reverse=True))
+# 표 머리 "(단위 : 백만원)"·"(단위: 원, %)"·"(단위 : 천명)" (쉼표 뒤는 무시하고 첫 단위만)
 _UNIT_HEADER = re.compile(rf"단위\s*[:：]?\s*({_UNITS_RE})(?![가-힣A-Za-z])")
-# 표 행 이름표의 단위 "주당배당금(단위: 원)"·"기본주당이익(손실) (단위 : 원)"·"배당금총액(원)"·"비율(%)".
-# "단위" 없는 괄호는 금액·%만 단위로 본다 ("(주)한화"의 (주)는 주식회사)
-_LABEL_UNIT = re.compile(rf"\(\s*(?:단위\s*[:：]?\s*({_UNITS_RE})|((?:{'|'.join(_MONEY_FACTOR)}|%)))\s*[,)]")
-_NO_CONTEXT = None          # 표 머리·이름표가 없는 글: 맨숫자를 금액으로도 인정 (기사·문단)
+# 표 행 이름표의 단위 "주당배당금(단위: 원)"·"기본주당이익(손실) (단위 : 원)"·"배당금총액(원)"·"비율(%)"·"임직원수(천명)".
+# "단위" 없는 괄호는 금액·%·개수만 단위로 보고 "(주)"는 뺀다 ("(주)한화"의 (주)는 주식회사. "(천주)"는 단위)
+_BARE_LABEL_UNITS = [*_MONEY_FACTOR, "%", *(u for u in _COUNT_FACTOR if u != "주")]
+_LABEL_UNIT = re.compile(rf"\(\s*(?:단위\s*[:：]?\s*({_UNITS_RE})|("
+                         + "|".join(sorted(_BARE_LABEL_UNITS, key=len, reverse=True)) + r"))\s*[,)]")
+_NO_CONTEXT = None          # 표 머리·이름표가 없는 글: 맨숫자를 금액·개수로도 인정 (기사·문단)
+
+
+def table_unit(unit: str) -> tuple[str, float] | None:
+    """표 단위 문자열 → (종류, 배수). 숫자 검사가 모르는 단위면 None. ("백만원" → (UNIT, 1e6), "천명" → (COUNT, 1e3), "%" → (PCT, 1))"""
+    if unit in _MONEY_FACTOR:
+        return UNIT, _MONEY_FACTOR[unit]
+    if unit in _COUNT_FACTOR:
+        return COUNT, _COUNT_FACTOR[unit]
+    if unit in _OTHER_UNITS:
+        return PCT if unit == "%" else BARE, 1.0
+    return None
 
 
 def _row_split(line: str) -> int:
@@ -134,39 +157,57 @@ class EvidenceNumbers:
     """근거 숫자 두 묶음.
     - plain: 답변의 맨숫자·%와 대조. 근거의 모든 값 + 표 머리 환산값 (이전 evidence_numbers와 같다)
     - unit: 답변에서 단위·"원"이 붙은 금액과 대조. 근거에 단위·원과 함께 적힌 값, 표 숫자를 그 줄 단위(행 이름표 → 가장 가까운
-      앞 표 머리)로 환산한 값 (표의 706,565를 "706,565원"으로 쓰면 걸리게). 표 머리·이름표가 없는 글의 맨숫자는 그대로 넣는다."""
+      앞 표 머리)로 환산한 값 (표의 706,565를 "706,565원"으로 쓰면 걸리게). 표 머리·이름표가 없는 글의 맨숫자는 그대로 넣는다.
+    - count: 답변에서 명·주·건·개가 붙은 수와 대조. 근거에 개수 단위와 함께 적힌 값, 표 숫자를 개수 단위(천명·백만주…)로
+      환산한 값, 그 밖의 맨숫자 원래 값 (배수 붙은 개수 단위 표만 빼고). 개수 환산값은 plain·unit에 넣지 않는다
+      ("30,853천명"으로 "30,853,000원"·"30,853명" 불가)"""
 
-    __slots__ = ("plain", "unit")
+    __slots__ = ("plain", "unit", "count")
 
-    def __init__(self, plain: set[float] | None = None, unit: set[float] | None = None):
+    def __init__(self, plain: set[float] | None = None, unit: set[float] | None = None,
+                 count: set[float] | None = None):
         self.plain = set(plain or ())
         self.unit = set(unit or ())
+        self.count = set(count or ())
+
+    def copy(self) -> "EvidenceNumbers":
+        return EvidenceNumbers(self.plain, self.unit, self.count)
 
     def __ior__(self, other: "EvidenceNumbers") -> "EvidenceNumbers":
         self.plain |= other.plain
         self.unit |= other.unit
+        self.count |= other.count
         return self
 
     def supports(self, text: str) -> bool:
-        """답변 글의 숫자가 모두 근거에 있나. 단위·원이 붙은 숫자는 unit, 나머지는 plain과 대조한다."""
-        return all(v in (self.unit if kind == UNIT else self.plain) for v, kind in _card_scan(text))
+        """답변 글의 숫자가 모두 근거에 있나. 금액은 unit, 개수는 count, 나머지는 plain과 대조한다."""
+        pick = {UNIT: self.unit, COUNT: self.count}
+        return all(v in pick.get(kind, self.plain) for v, kind in _card_scan(text))
 
 
 def evidence_number_sets(text: str) -> EvidenceNumbers:
     """근거 글의 숫자 (EvidenceNumbers). 표 숫자는 그 줄 단위로 본다 (_segments: 행 이름표 "(단위: 원)" → 가장 가까운 앞 표 머리).
-    금액 단위(천원·백만원…)면 원 단위로 환산한 값도 인정하고, 주·% 같은 단위면 금액으로 인정하지 않는다.
+    금액 단위(천원·백만원…)면 원 단위로 환산한 값도 인정하고, 개수 단위(천명·백만주…)면 개수로만 환산하며,
+    %·배 같은 단위면 금액·개수로 인정하지 않는다.
     표 머리·이름표가 없으면 환산하지 않으므로, 모델이 근거에 없는 단위를 붙이면 그대로 걸린다."""
     out = EvidenceNumbers()
     for seg, unit in _segments(text):
-        factor = _MONEY_FACTOR.get(unit) if unit is not _NO_CONTEXT else None
+        free = unit is _NO_CONTEXT
+        kind_u, factor = (None, None) if free else (table_unit(unit) or (None, None))
         for v, kind in _scan(seg, True) + _scan(seg, False):
             v = round(v, 6)
             out.plain.add(v)
-            if kind == UNIT or unit is _NO_CONTEXT:
+            if kind == UNIT or (free and kind != COUNT):
                 out.unit.add(v)
-            elif kind == BARE and factor is not None:
+            # 맨숫자 원래 값을 개수로도 인정한다. 단 표 단위가 배수 붙은 개수 단위(천명·백만주…)면 환산값만.
+            # 금액 표의 맨숫자는 개수로 둔다: "(단위 : 백만원)" 자기주식 소각 표의 "소각수량: 18,162,721"(주)처럼 열마다 단위가 다르다
+            if kind == COUNT or (kind == BARE and not (kind_u == COUNT and factor != 1)):
+                out.count.add(v)
+            if kind == BARE and kind_u == UNIT:
                 out.plain.add(round(v * factor, 6))
                 out.unit.add(round(v * factor, 6))
+            elif kind == BARE and kind_u == COUNT:
+                out.count.add(round(v * factor, 6))
     return out
 
 
@@ -360,7 +401,7 @@ def check_card_v2(card, evidence: list[Evidence], banned: list[str], cfg: dict |
     union = EvidenceNumbers()
     for e in cited:
         union |= evidence_number_sets(_ev_text(e))
-    link = EvidenceNumbers(union.plain, union.unit)
+    link = union.copy()
     link |= evidence_number_sets(memo_text)
     bad = any(eid in ids and not evidence_number_sets(_ev_text(ids[eid])).supports(t) for t, eid in facts)
     if bad or not (union.supports(card.headline) and union.supports(exp) and link.supports(card.memo_link)):

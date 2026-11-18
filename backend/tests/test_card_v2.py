@@ -463,6 +463,46 @@ class RowUnitTest(unittest.TestCase):
         self.assertNotIn("NUMBER", check_card_v2(c, ev(disc(text=KB_DIVIDEND)), [], CFG))
 
 
+class CountUnitTest(unittest.TestCase):
+    """배수가 붙은 개수 단위 (2026-11-18 N30). 표 머리·이름표 "(단위: 천명)"·"(백만주)"의 맨숫자는 개수로 환산하고,
+    환산값은 명·주·건·개를 붙인 카드 숫자하고만 맞춘다 ("30,853천명"으로 "30,853,000원"은 안 된다). v1·v2·즉시 답변 셋 다."""
+
+    HEAD = "(단위: 천명) 30,853"
+    ROW = "(단위 : 백만원)\n임직원수(단위: 천명) | 당기: 30,853"
+    PASS = [(HEAD, "30,853천 명"), (HEAD, "3,085만 3천 명"), (HEAD, "30,853,000명"), (HEAD, "30,853"),
+            ("[표] 고객\n(단위 : 천명)\n고객수 | 당기: 30,853", "30,853천 명"),
+            (ROW, "3,085만 3천 명"), ("(단위 : 원)\n가입자(천명) | 당기: 30,853", "30,853천명"),   # 행 이름표
+            ("(단위 : 백만주)\n유통주식수 | 당기: 12.5", "1,250만 주"), ("(단위: 천건) 4,321", "432만 1천 건"),
+            ("(단위 : 주)\n자기주식 | 취득: 1,000,000", "100만주를"),
+            ("임직원 30,853천명", "30,853천 명"), ("임직원 30,853명", "30,853명"),               # 표 머리 없는 글
+            ("임직원 3만명", "30,000명"), ("가입자 30,853", "30,853명"),
+            # 금액 표 안의 개수 열: 2026-11-12 A_all 항목 8 KB금융 자기주식 소각 카드 (표 머리 백만원, 소각수량은 주)
+            ("[표] 자기주식 소각현황\n(단위 : 백만원)\n소각일: 2026.05.15 | 주식종류: 보통주 | 소각수량: 18,162,721 | "
+             "소각금액: 2,002,230", "18,162,721주")]
+    FAIL = [(HEAD, "30,853명"), (HEAD, "30,853,000원"), (HEAD, "30,853천원"),
+            (ROW, "30,853명"), (ROW, "30,853,000원"), (ROW, "30,853백만원"),
+            ("(단위 : 백만주)\n유통주식수 | 당기: 12.5", "12,500,000원"), ("(단위 : 백만주)\n유통주식수 | 당기: 12.5", "12.5주"),
+            ("(단위 : 백만원)\n매출 | 당기: 30,853", "30,853,000,000명"),                      # 금액 환산값을 개수로
+            ("임직원 30,853천명", "30,853,000원")]                                           # 표 머리 없는 글도
+
+    def test_same_rule_in_v1_v2_answer(self):
+        for name, fn in (("v2", NumberUnitTest._v2), ("v1", NumberUnitTest._v1), ("answer", NumberUnitTest._answer)):
+            for src, said in self.PASS:
+                self.assertFalse(fn(src, said), f"{name} 통과해야 함: {said} ← {src!r}")
+            for src, said in self.FAIL:
+                self.assertTrue(fn(src, said), f"{name} 실패해야 함: {said} ← {src!r}")
+
+    def test_count_words(self):
+        from pipelines.updates.checks import COUNT, _card_scan, table_unit
+        self.assertEqual(_card_scan("자기주식 1,000주를 취득"), [(1000.0, COUNT)])
+        self.assertEqual(_card_scan("3,085만 3천 명이에요"), [(30853000.0, COUNT)])
+        for text in ("1주당 1,143원", "3개월", "주식 1,000 주식", "1,000 건설"):        # 주당·개월·주식·건설은 개수가 아니다
+            self.assertNotIn(COUNT, {k for _, k in _card_scan(text)}, text)
+        self.assertEqual(table_unit("백만주"), (COUNT, 1e6))
+        self.assertEqual(table_unit("천원")[1], 1e3)
+        self.assertIsNone(table_unit("톤"))
+
+
 class MemoLinkNumberTest(unittest.TestCase):
     """memo_link 숫자는 쓴 근거나 메모 문장 중 하나에 있으면 인정 (2026-11-18). headline·facts는 근거만.
     C2_gold run_20261113_124759 항목 M15:1:0 카드: memo_link가 메모의 "13% 아래"를 인용했는데 13%가 근거 E1에 없어 NUMBER였다."""

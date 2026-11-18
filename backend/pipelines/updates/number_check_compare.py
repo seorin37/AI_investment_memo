@@ -112,11 +112,11 @@ def _around(text: str, digits: str, width: int = 40) -> str:
 
 
 def _raw_numbers(text: str) -> list[tuple[str, str]]:
-    """(숫자 글자, 붙은 단위·원). 단위가 없으면 ""."""
+    """(숫자 글자, 붙은 단위·원·개수 단위). 단위가 없으면 ""."""
     out = []
     for m in new._NUM.finditer(text or ""):
-        raw, unit, pct, won = m.groups()
-        tail = (unit or "") + ("원" if won else "") + (pct or "")
+        raw, unit, pct, won, *count = m.groups()
+        tail = (unit or "") + ("원" if won else "") + (pct or "") + "".join(c.strip() for c in count if c)
         out.append((raw, tail))
     return out
 
