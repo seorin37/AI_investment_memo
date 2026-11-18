@@ -64,7 +64,13 @@ class Rules:
     sports_names: set[str] = field(default_factory=set)
     sports_words: tuple[str, ...] = ()
     prefix_check: set[str] = field(default_factory=set)     # 바로 뒤 글자를 보는 이름 (짧은 이름·그룹 이름)
-    title_only: set[str] = field(default_factory=set)       # 제목에서만 붙이는 이름 ("증권"이 든 종목)
+    title_only: set[str] = field(default_factory=set)       # 제목에서만 붙이는 이름 ("증권"이 든 종목, 네이버)
+    context_after_window: int = 10                           # 리드·본문의 흔한 단어 이름: 바로 뒤 이 글자 수 안의 주식 낱말만
+    skip_title: tuple[re.Pattern, ...] = ()                  # 이 제목의 기사는 건너뛴다 ([인사]·[부고])
+    group_list_words: tuple[str, ...] = ()                   # "삼성·LG"처럼 그룹 이름 나열로 보는 말
+    group_list_tail: tuple[str, ...] = ()                    # 나열 끝에 오면 그룹 이야기 ("…LG그룹", "… 등 주요 대기업")
+    sports_re: re.Pattern | None = None                      # sports_words (정규식)
+    name_suffix_block: tuple[str, ...] = ()                  # 이름 바로 뒤에 붙으면 다른 기관 ("한국공항공사", "기업은행챔버홀")
 
 
 @dataclass(frozen=True)
@@ -119,7 +125,14 @@ def build_rules(stocks: dict[str, str], cfg: dict, dart_names: set[str] = frozen
                  sports_names=set(cfg.get("sports_names") or []) & set(names),
                  sports_words=tuple(cfg.get("sports_words") or ()),
                  prefix_check={n for n in names if len(n) <= int(cfg.get("prefix_check_max_len", 3)) or n in groups},
-                 title_only={n for n in names if any(w in n for w in (cfg.get("title_only_words") or []))})
+                 title_only=({n for n in names if any(w in n for w in (cfg.get("title_only_words") or []))}
+                             | (set(cfg.get("title_only_names") or []) & set(names))),
+                 context_after_window=int(cfg.get("context_after_window", 10)),
+                 skip_title=tuple(re.compile(p) for p in (cfg.get("skip_title_patterns") or [])),
+                 group_list_words=tuple(sorted(set(cfg.get("group_list_words") or []), key=len, reverse=True)),
+                 group_list_tail=tuple(cfg.get("group_list_tail") or ()),
+                 sports_re=re.compile("|".join(f"(?:{w})" for w in (cfg.get("sports_words") or []))) if cfg.get("sports_words") else None,
+                 name_suffix_block=tuple(cfg.get("name_suffix_block") or ()))
 
 
 def _latin_ok(text: str, a: int, b: int, name: str) -> bool:
@@ -149,25 +162,57 @@ def find(text: str, rules: Rules) -> list[tuple[int, int, str]]:
     return sorted(out)
 
 
-def _valid(text: str, a: int, b: int, name: str, rules: Rules) -> bool:
+_CODE_AFTER = re.compile(r"\s*[(\[]\s*\d{6}\s*[)\]]")      # "대상(001680)"
+
+
+def _group_talk(text: str, a: int, b: int, name: str, rules: Rules) -> bool:
+    """그룹 이름 자리가 그룹 이야기인가 (2026-11-18): 뒤에 영문 계열사 낱말 / 그룹 이름 나열 / 나열 끝의 그룹·대기업."""
+    after = text[b:b + 30]
+    if re.match(r"\s?[A-Za-z]", after):
+        return True                                          # "LG CNS", "SK C&C", "SK AX", "SK u타워": 영문 계열사·시설
+    if text[max(0, a - 1):a] == "범":
+        return True                                          # "범LG家": 그룹 일가
+    words = "|".join(map(re.escape, rules.group_list_words))
+    if words and (re.search(rf"(?:{words})\s*[·・,]\s*$", text[max(0, a - 8):a])
+                  or re.match(rf"\s*[·・,]\s*(?:{words})(?![가-힣])", after)):
+        return True                                          # "삼성·LG", "삼성·SK·LG"
+    tail = "|".join(map(re.escape, rules.group_list_tail))
+    return bool(tail and re.match(rf"(?:\s*[·・,/]\s*[가-힣A-Za-z]{{1,6}}?)*\s*(?:등\s*)?(?:주요\s*)?(?:{tail})", after))
+
+
+def _valid(text: str, a: int, b: int, name: str, rules: Rules, in_title: bool = True) -> bool:
     if name in rules.prefix_check and b < len(text) and _HANGUL.match(text[b]) and text[b] not in _PARTICLE_START:
         return False                                         # "LS오토", "두산인베스트먼트", "기아대책": 다른 이름의 앞부분
     if name in rules.prefix_check and _HANGUL.match(name[0]) and a > 0 and _HANGUL.match(text[a - 1]):
         return False                                         # "경영인대상", "평생학습대상": 다른 낱말의 뒷부분
+    if any(text.startswith(s, b) for s in rules.name_suffix_block):
+        return False                                         # "한국공항공사", "IBK기업은행챔버홀": 다른 기관·시설
+    if b < len(text) and text[b].isdigit() and not name[-1].isdigit():
+        return False                                         # "이마트24": 숫자가 붙은 다른 회사 이름
     if name in rules.sports_names:
         w = rules.context_window
         around = text[max(0, a - w):a] + " " + text[b:b + w]
-        if any(word in around for word in rules.sports_words):
-            return False                                     # 프로야구·농구 구단
+        if (rules.sports_re.search(around) if rules.sports_re else any(word in around for word in rules.sports_words)):
+            return False                                     # 프로야구·농구·배구 구단
     if name in rules.group_names:
         after = text[b:b + 6].lstrip()
         if any(after.startswith(s) for s in rules.group_suffixes):
             return False                                     # "SK그룹", "LG家", "한화 회장" → 그룹 이야기
-    if name in rules.require_context:
-        w = rules.context_window
-        around = text[max(0, a - w):a] + " " + text[b:b + w]
-        if not any(word in around for word in rules.context_words):
+        if _group_talk(text, a, b, name, rules):
             return False
+    if name in rules.require_context:
+        if a > 0 and text[a - 1].isalnum():
+            return False                                     # "한국PR대상": 영문·숫자 바로 뒤에 붙은 흔한 단어 이름
+        if in_title:
+            w = rules.context_window
+            around = text[max(0, a - w):a] + " " + text[b:b + w]
+            if not any(word in around for word in rules.context_words):
+                return False
+        else:                                                # 리드·본문: 바로 뒤 주식 낱말·종목코드·㈜만
+            after = text[b:b + rules.context_after_window]
+            if not (any(word in after for word in rules.context_words) or _CODE_AFTER.match(text, b)
+                    or "㈜" in text[max(0, a - 2):a] or "(주)" in text[max(0, a - 4):a]):
+                return False
     return True
 
 
@@ -178,6 +223,8 @@ def _snippet(text: str, a: int, b: int, width: int = 40) -> str:
 def match_article(title: str, body: str | None, rules: Rules) -> list[Hit]:
     """한 기사에 붙일 종목. 제목 규칙 → 리드 규칙 → 본문 2번 이상 순으로 강한 규칙 하나만 남긴다."""
     hits: dict[str, Hit] = {}
+    if any(p.search(title or "") for p in rules.skip_title):
+        return []                                            # [인사]·[부고]: 계열사를 여러 개 나열한다
     for a, b, name in find(title or "", rules):
         sym = rules.names[name]
         if sym not in hits and _valid(title, a, b, name, rules):
@@ -186,7 +233,7 @@ def match_article(title: str, body: str | None, rules: Rules) -> list[Hit]:
         counts: Counter = Counter()
         first: dict[str, tuple[int, int, str]] = {}
         for a, b, name in find(body, rules):
-            if name in rules.title_only or not _valid(body, a, b, name, rules):
+            if name in rules.title_only or not _valid(body, a, b, name, rules, in_title=False):
                 continue
             sym = rules.names[name]
             counts[sym] += 1
@@ -283,6 +330,8 @@ def main(argv=None) -> int:
     ap.add_argument("--config", type=Path, default=CONFIG_PATH)
     ap.add_argument("--sample-out", type=Path, help="오탐 의심 표본 csv 경로")
     ap.add_argument("--sample", type=int, default=30)
+    ap.add_argument("--links-out", type=Path,
+                    help="새로 붙일 연결 전체(news_id, symbol, score, 규칙, 이름)를 csv로. --write 전에 남겨 두면 그대로 되돌릴 수 있다")
     ap.add_argument("--write", action="store_true", help="news_stocks에 실제로 더한다 (--target 필수)")
     ap.add_argument("--target", help="--write일 때 접속 대상 host:port. 다르면 쓰지 않고 멈춘다")
     args = ap.parse_args(argv)
@@ -303,8 +352,19 @@ def main(argv=None) -> int:
     with psycopg.connect(dsn) as conn:
         conn.read_only = not args.write
         rules = load_rules(conn, args.config)
-        stats = tag_window(conn, rules, since, until, write=args.write)
+        stats = tag_window(conn, rules, since, until, write=False)
         new = stats.pop("_new")
+        if args.links_out:                                   # 쓰기 전에 넣을 연결을 남긴다 (되돌리기: 이 파일의 쌍만 지운다)
+            args.links_out.parent.mkdir(parents=True, exist_ok=True)
+            with args.links_out.open("w", encoding="utf-8", newline="") as f:
+                w = csv.writer(f)
+                w.writerow(["news_id", "symbol", "score", "rule", "name"])
+                w.writerows((nid, h.symbol, h.score, h.rule, h.name) for nid, _, _, h in new)
+            print(f"넣을 연결 {len(new)}개 → {args.links_out}")
+        if args.write and new:
+            with conn.transaction(), conn.cursor() as cur:
+                cur.executemany(INSERT_SQL, [(nid, h.symbol, h.score) for nid, _, _, h in new])
+            stats["written"] = len(new)
         if not args.write:
             conn.rollback()
     print(f"이름 {len(rules.names)}개 (막는 긴 이름 포함 {len(rules.blockers)}), 문맥 필요 {len(rules.require_context)}개")
