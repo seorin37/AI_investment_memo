@@ -22,7 +22,7 @@ from pathlib import Path
 from pipelines.common.config import load_config, resolve_path
 
 from .card_repeat_survey import card_calls, group
-from .checks import check_card_v2, prediction_text
+from .checks import _banned_hit, check_card_v2, forecast_subjects, prediction_text
 from .judge import parse_card_v2
 from .models import Card
 from .number_check_compare import parse_evidence
@@ -97,10 +97,14 @@ def judge(client, prompt: str, memo: str, cfg: dict, banned: list[str], verify: 
     explain = bool(card.explanation)
     ccfg = {**cfg, "explanation": {**(cfg.get("explanation") or {}), "enabled": explain}}
     codes = check_card_v2(card, evidence, banned, ccfg, memo)
-    texts = [card.headline, *(t for t, _ in card.facts), card.memo_link] + ([card.explanation] if explain else [])
+    # 걸린 문장 표시: check_card_v2와 같게 문장 단위·사실 문장의 전망 주체(names)를 넘긴다
+    texts = [card.headline, *(t for t, _ in card.facts), card.memo_link] + (
+        [s for s in re.split(r"(?<=[.!?])\s+", card.explanation) if s.strip()] if explain else [])
+    names = forecast_subjects(t for t, eid in card.facts if eid)
     row.update(card={"headline": card.headline, "when": card.when, "facts": [list(f) for f in card.facts],
                      "memo_link": card.memo_link, "explanation": card.explanation}, codes=codes,
-               prediction=prediction_text(texts, cfg) if cfg.get("prediction_terms") else None)
+               prediction=prediction_text(texts, cfg, names) if cfg.get("prediction_terms") else None,
+               banned_sentences=[t for t in texts if _banned_hit([t], banned, cfg, names)])
     if verify and not codes:
         facts = [(t, eid) for t, eid in card.facts if eid]
         extra = [s.strip() for s in re.split(r"(?<=[.!?])\s+", card.explanation) if s.strip()] if explain else []
@@ -109,6 +113,45 @@ def judge(client, prompt: str, memo: str, cfg: dict, banned: list[str], verify: 
         vcodes, notes = _verify(vcard, evidence, call, _field(prompt, "종목"), _field(prompt, "항목"))
         row.update(verify=vcodes, verify_notes=notes)
     return row
+
+
+def reverify(calls: list[dict], prev: Path, max_usd: float, out: str | None) -> int:
+    """prev(이전 결과)에서 검수를 받은 카드(verify가 있는 줄)에 지금 VERIFY_INSTRUCTION으로 검수만 다시. 전후 막힌 문장 비교."""
+    from pipelines.tracking.openai_client import OpenAIClient
+
+    from .topic import _verify
+    by = {(c["run"], c["item_id"]): c for c in calls}
+    rows = [r for r in json.loads(prev.read_text(encoding="utf-8"))["rows"] if r.get("verify") is not None]
+    spent, results, clients = [0.0], [], {}
+    for r in rows:
+        if spent[0] >= max_usd:
+            break
+        c, card = by[(r["run"], r["item_id"])], r["card"]
+        client = clients.setdefault(c["model"], OpenAIClient.from_env(c["model"]))
+
+        def call(p: str, client=client) -> str:
+            before = len(client.calls)
+            try:
+                return client(p)
+            finally:
+                for rec in client.calls[before:]:
+                    spent[0] += usd(client.model, rec.prompt_tokens or 0, rec.output_tokens or 0) or 0.0
+        facts = [(t, eid) for t, eid in card["facts"] if eid]
+        extra = [s.strip() for s in re.split(r"(?<=[.!?])\s+", card.get("explanation") or "") if s.strip()]
+        vcard = Card("update", card["headline"], [t for t, _ in facts] + extra, card["memo_link"], [(e, t) for t, e in facts], 0.9)
+        codes, notes = _verify(vcard, parse_evidence(c["new_prompt"]), call, _field(c["new_prompt"], "종목"),
+                               _field(c["new_prompt"], "항목"))
+        results.append({"run": r["run"], "item_id": r["item_id"], "before": r["verify"], "before_notes": r.get("verify_notes"),
+                        "after": codes, "after_notes": notes,
+                        "new_blocked": [n for n in notes if n not in (r.get("verify_notes") or [])]})
+    report = {"cards": len(results), "usd": round(spent[0], 6),
+              "blocked_before": sum(bool(x["before"]) for x in results), "blocked_after": sum(bool(x["after"]) for x in results),
+              "results": results}
+    text = json.dumps(report, ensure_ascii=False, indent=1)
+    if out:
+        Path(out).write_text(text, encoding="utf-8")
+    print(text[:8000])
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -120,6 +163,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--repeat", type=int, default=0)
     ap.add_argument("--max-usd", type=float, default=1.0)
     ap.add_argument("--only", nargs="*", default=[], help="이 호출만: 실행이름앞부분:항목 (예: C2_all:10 run_20261118:3)")
+    ap.add_argument("--reverify", help="이전 결과 JSON: 코드 검사를 통과해 검수를 받은 카드에 지금 검수 지시문으로 검수만 다시 (카드 호출 없음)")
     ap.add_argument("--out")
     args = ap.parse_args(argv)
     pairs = rewrites()
@@ -146,6 +190,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     from pipelines.tracking.openai_client import OpenAIClient
+    if args.reverify:
+        return reverify(calls, Path(args.reverify), args.max_usd, args.out)
     real = load_config("configs/updates.yaml")
     cfg, banned = {**real["topic"]}, list(real["banned"])
     clients: dict[str, OpenAIClient] = {}

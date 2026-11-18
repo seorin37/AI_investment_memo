@@ -692,6 +692,11 @@ class ForecastAttributionTest(unittest.TestCase):
         self.assertFalse(attributed_forecast("KB증권의 전망이에요. 주가는 오를 거예요."))           # 나머지에 주체 없는 단정
         self.assertTrue(attributed_forecast("머스크, 중국 메모리 대규모 생산 전망", headline=True, names={"머스크"}))
         self.assertFalse(attributed_forecast("머스크, 중국 메모리 대규모 생산 전망", headline=True))
+        # 전달 동사 문장의 주체도 사실 문장의 전망 주체(names)면 인정 (2026-11-18 항목 10 재실행 memo_link)
+        link = "메모에서 우려한 중국 메모리 업체의 증설과 관련해, 머스크가 중국의 기술 확보 이후 공급 확대 가능성을 언급한 기사예요."
+        self.assertTrue(attributed_forecast(link, names={"머스크"}))
+        self.assertFalse(attributed_forecast(link))
+        self.assertFalse(attributed_forecast("업계가 중국의 공급 확대 가능성을 언급한 기사예요.", names={"업계"}))   # 막연한 주어는 names여도 X
 
 
 class MemoLinkNumberTest(unittest.TestCase):

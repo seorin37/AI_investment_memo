@@ -125,7 +125,9 @@ def attributed_forecast(text: str, headline: bool = False, names=frozenset()) ->
             return True
     # 출처 주어의 전달 동사: "김 애널리스트는 … 반등 전망의 근거로 제시했어요", "KB증권이 … 전망의 근거로 제시한 통계예요"
     say = _SAY_ACT.search(t)
-    return bool(say and any(_SOURCE_WORD.search(m.group(1)) and _named(m, t) for m in _SUBJECT.finditer(t[:say.start()])))
+    # 출처 낱말 주어 또는 사실 문장의 전망 주체(names: "머스크가 … 가능성을 언급한 기사예요")
+    return bool(say and any((_SOURCE_WORD.search(m.group(1)) or m.group(1) in names) and _named(m, t)
+                            for m in _SUBJECT.finditer(t[:say.start()])))
 
 
 def _korean(num: str) -> float:
