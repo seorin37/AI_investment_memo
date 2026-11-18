@@ -1,4 +1,5 @@
 /* Figma Page 2.5에서 그대로 옮긴 아이콘·작은 부품 */
+import { api } from "./api";
 import type { CSSProperties, ReactNode } from "react";
 
 const S = (p: { d: string; w?: number; c?: string; sw?: number; fill?: boolean }) =>
@@ -26,15 +27,10 @@ export function Icon({ n, size = 20, c = "#333333", style }: { n: IconName; size
 }
 
 /* 종목 로고 (24px r7.2 · 흰 글자) — Figma logo/종목 */
-export const LOGO_BG: Record<string, [string, string]> = {
-  "000660": ["S", "#EA002C"], "005930": ["삼", "#1428A0"], "035420": ["네", "#03C75A"],
-  "105560": ["KB", "#ffbc00"], "005380": ["H", "#002c5f"], "000270": ["K", "#05141f"], "373220": ["LG", "#a50034"], "035720": ["K", "#ffcd00"], "068270": ["C", "#2f4ea1"], "005935": ["삼", "#1428a0"], "247540": ["E", "#0a7e3f"], "028300": ["H", "#d71a20"],
-  "207940": ["삼", "#1428a0"], "012450": ["한", "#f37321"], "329180": ["H", "#0a6e8a"], "055550": ["신", "#0046ff"],
-};
 export function SLogo({ code, size = 24, r }: { code: string; size?: number; r?: number }) {
-  const [t, bg] = LOGO_BG[code] ?? ["?", "#9f9f9f"];
+  const i = api.market.info(code), t = i?.logo ?? "?", bg = i?.logo_bg ?? "#9f9f9f";
   return (
-    <span aria-hidden className="dk-keep grid shrink-0 place-items-center font-bold text-white" style={{ width: size, height: size, borderRadius: r ?? size * 0.3, background: bg, fontSize: size * (t.length > 1 ? 0.34 : 0.425), lineHeight: 1 }}>{t}</span>
+    <span aria-hidden className="dk-keep grid shrink-0 place-items-center font-bold" style={{ width: size, height: size, borderRadius: r ?? size * 0.3, background: bg, color: i?.logo_ink ?? "#fff", fontSize: size * (t.length > 2 ? 0.28 : t.length > 1 ? 0.34 : 0.425), lineHeight: 1 }}>{t}</span>
   );
 }
 

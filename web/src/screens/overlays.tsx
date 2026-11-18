@@ -7,50 +7,33 @@ import { Modal, PageTitle, cx, sleep, useSnack } from "../kit";
 import { useUsage } from "../x";
 import { LEGAL } from "../legal";
 import { FixedFrame } from "./stock";
-import { SEARCH_POOL, NEW_LOGO, ALL_STOCKS, type Hold } from "../data";
-import { useApp, useProfile } from "../store";
-import { API_MODE } from "../api/config";
-import { api, type UserWire } from "../api/client";
-import { newStock } from "../api/map";
+import type { Hold } from "../data";
+import { api } from "../api";
+import type { StockInfo, TrashItem } from "../api/types";
+import { useSession, ago as agoT } from "../store";
+import { matchKo } from "../x";
+import { useApp } from "../store";
 
 const TR = "tracking-[-0.01em]";
 
 /* ================= 4 · 종목 추가 — Page 3 '07 내 종목 · 종목 추가 시트' 내용을 가운데 팝업에 (보라 → 검정, 11.13) ================= */
-const AI_OK = ["005930", "000660", "035420", "105560"]; // AI 연결 가능 (DB 4개 기업)
-const DEFAULT_LIST = ["105560", "005380", "000270", "373220", "035720", "000660"]; // 11.16: 창이 커져서 6개
+const POOL = () => api.market.universe() as StockInfo[];
 const josa = (w: string) => { const c = w.charCodeAt(w.length - 1); return c >= 0xac00 && c <= 0xd7a3 && (c - 0xac00) % 28 ? "을" : "를"; };
-const PlugMini = () => <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M3.9 1.2V2.5M6.1 1.2V2.5" stroke="#111111" strokeWidth="1.08" strokeLinecap="round" /><path d="M2.9 2.6H7.1V4.3C7.1 5.46 6.16 6.4 5 6.4C3.84 6.4 2.9 5.46 2.9 4.3V2.6Z" fill="#111111" /><path d="M5 6.4V8.6" stroke="#111111" strokeWidth="1.08" strokeLinecap="round" /></svg>;
 export function AddStock() {
-  const { overlay, setOverlay, stocks, setStocks, go, setMemoOpen } = useApp();
+  const { overlay, setOverlay, stocks, act, go, setMemoOpen } = useApp();
   const snack = useSnack();
   const [q, setQ] = useState(""), [pick, setPick] = useState<string | null>(null), [hold, setHold] = useState<Hold>("관심");
   const open = overlay === "addStock";
   useEffect(() => { if (open) { setQ(""); setPick(null); setHold("관심"); } }, [open]);
   const t = q.trim();
-  /* API 모드: 입력하면 서버 종목 마스터 검색 (GET /stocks/search, 0.25초 쉬었다가) */
-  const [remote, setRemote] = useState<{ q: string; list: typeof SEARCH_POOL; err?: string } | null>(null);
-  useEffect(() => {
-    if (!API_MODE || !t) return;
-    const id = window.setTimeout(() => {
-      api.searchStocks(t).then(
-        (r) => setRemote({ q: t, list: r.map((x) => ({ code: x.code.trim(), name: x.name, market: x.market })) }),
-        (e) => setRemote({ q: t, list: [], err: e instanceof Error ? e.message : "검색하지 못했어요" }),
-      );
-    }, 250);
-    return () => window.clearTimeout(id);
-  }, [t]);
-  const searching = API_MODE && !!t && remote?.q !== t;
-  const list = t ? (API_MODE ? (remote?.q === t ? remote.list : []) : SEARCH_POOL.filter((s) => s.name.includes(t) || s.code.includes(t))) : DEFAULT_LIST.map((c) => SEARCH_POOL.find((s) => s.code === c)!);
-  const had = (code: string) => stocks.find((x) => x.code === code);
-  const sel = list.find((s) => s.code === pick && !had(s.code));
+  const list = t ? POOL().filter((s) => matchKo(s.name, t) || s.stock_code.includes(t) || s.sector.includes(t)) : POOL().filter((s) => !stocks.some((x) => x.stock_code === s.stock_code)).slice(0, 8);
+  const had = (code: string) => stocks.find((x) => x.stock_code === code);
+  const sel = list.find((s) => s.stock_code === pick && !had(s.stock_code));
   const close = () => setOverlay(null);
   const ok = () => {
     if (!sel) return;
-    const base = ALL_STOCKS.find((s) => s.code === sel.code);
-    const [logo, bg] = NEW_LOGO[sel.code] ?? [sel.name[0], "#111"];
-    const s = API_MODE ? newStock(sel.code, sel.name, sel.market, hold) : base ? { ...base, hold } : { code: sel.code, name: sel.name, short: logo, logo, logoBg: bg, hold, market: sel.market, price: sel.code === "105560" ? 78300 : 48250, chg: sel.code === "105560" ? 870 : 650, pct: sel.code === "105560" ? 1.12 : 1.37, seed: Number(sel.code.slice(-2)) };
-    setStocks((a) => [...a, s]); close();
-    snack(`${sel.name}${josa(sel.name)} ${hold} 종목에 추가했어요`, { check: true, action: { label: "메모 쓰기 ›", run: () => { go({ name: "stock", code: sel.code, tab: "board" }); setMemoOpen(-1); } } });
+    act.addStock(sel.stock_code, hold); close();
+    snack(`${sel.name}${josa(sel.name)} ${hold} 종목에 추가했어요`, { check: true, action: { label: "메모 쓰기 ›", run: () => { go({ name: "stock", code: sel.stock_code, tab: "board" }); setMemoOpen(-1); } } });
   };
   return (
     <Modal open={open} onClose={close} width={680} label="종목 추가">
@@ -68,22 +51,22 @@ export function AddStock() {
           <input autoFocus value={q} onChange={(e) => { setQ(e.target.value); setPick(null); }} onKeyDown={(e) => { if (e.key === "Enter") ok(); }}
             placeholder="종목명 또는 코드" aria-label="종목 검색" className="h-[17px] min-w-0 flex-1 bg-transparent text-[14px] leading-[21px] text-[#16171a] outline-none placeholder:text-[#9a9ea7]" />
         </label>
-        {t && <p className="shrink-0 text-[13px] leading-[20px] text-[#8a8f98]">{searching ? "검색 중…" : `검색 결과 ${list.length}건`}</p>}
+        {t && <p className="shrink-0 text-[13px] leading-[20px] text-[#8a8f98]">검색 결과 {list.length}건</p>}
         <div className="flex min-h-0 w-full flex-1 flex-col items-start gap-[2px] overflow-y-auto">
-          {list.length === 0 && !searching && <p className="w-full py-6 text-center text-[13px] leading-[20px] text-[#8a8f98]">{remote?.q === t && remote.err ? `검색하지 못했어요 · ${remote.err}` : "찾는 종목이 없어요"}</p>}
+          {list.length === 0 && <p className="w-full py-6 text-center text-[13px] leading-[20px] text-[#8a8f98]">찾는 종목이 없어요</p>}
           {list.map((s) => {
-            const h = had(s.code), on = !h && s.code === pick;
-            const [logo, bg] = h ? [h.logo, h.logoBg] : NEW_LOGO[s.code] ?? (ALL_STOCKS.find((x) => x.code === s.code) ? [ALL_STOCKS.find((x) => x.code === s.code)!.logo, ALL_STOCKS.find((x) => x.code === s.code)!.logoBg] : [s.name[0], "#111"]);
+            const h = had(s.stock_code), on = !h && s.stock_code === pick;
+            const logo = s.logo, bg = s.logo_bg;
             return (
-              <button key={s.code} disabled={!!h} onClick={() => setPick(on ? null : s.code)} onDoubleClick={() => { setPick(s.code); }} aria-pressed={on}
+              <button key={s.stock_code} disabled={!!h} onClick={() => setPick(on ? null : s.stock_code)} onDoubleClick={() => { setPick(s.stock_code); }} aria-pressed={on}
                 className={cx("flex w-full shrink-0 items-center gap-3 rounded-[14px] py-[9px] pr-3 text-left transition-colors", on ? "bg-[#f7f7f7] pl-[10px] shadow-[inset_0_0_0_1.5px_#111]" : "pl-[10px] hover:bg-[#f9f9f9]", h && "cursor-default opacity-50 hover:bg-transparent")}>
-                <span className="dk-keep flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]" style={{ background: bg }}><span className="text-[15px] font-bold leading-[23px] text-white" style={{ fontSize: logo.length > 1 ? 12 : 15 }}>{logo}</span></span>
+                <span className="dk-keep flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]" style={{ background: bg }}><span className="text-[15px] font-bold leading-[23px]" style={{ fontSize: logo.length > 2 ? 10 : logo.length > 1 ? 12 : 15, color: s.logo_ink ?? "#fff" }}>{logo}</span></span>
                 <span className="flex min-w-0 flex-1 flex-col items-start gap-[1px]">
                   <span className="flex items-center gap-[6px]">
                     <span className="whitespace-nowrap text-[15px] font-bold leading-[23px] text-[#16171a]">{s.name}</span>
-                    {AI_OK.includes(s.code) && <span className="flex items-center gap-[3px] rounded-[6px] bg-[#efefef] px-[6px] py-[2px]"><PlugMini /><span className="whitespace-nowrap text-[13px] font-bold leading-[20px] text-[#111]">AI 연결</span></span>}
+                    <span className="whitespace-nowrap rounded-[6px] bg-[#f2f3f4] px-[6px] py-[2px] text-[13px] font-medium leading-[20px] text-[#575b63]">{s.sector}</span>
                   </span>
-                  <span className="whitespace-nowrap text-[13px] leading-[20px] text-[#8a8f98]">{s.code} · {s.market}{h ? ` · 이미 ${h.hold}에 있어요` : ""}</span>
+                  <span className="whitespace-nowrap text-[13px] leading-[20px] text-[#8a8f98]">{s.stock_code} · {s.market}{h ? ` · 이미 ${h.hold}에 있어요` : ""}</span>
                 </span>
                 {!h && (on
                   ? <svg width="22" height="22" viewBox="0 0 22 22" fill="none" className="shrink-0"><circle cx="11" cy="11" r="11" fill="#111111" /><path d="M6.8 11.2L9.6 14L15.2 8.2" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
@@ -112,17 +95,16 @@ const DANGER: Record<Danger, [string, string, string]> = {
   wipe: ["모든 데이터를 삭제할까요?", "모든 메모, 기록, 종목이 영구 삭제돼요. 되돌릴 수 없어요.", "전체 삭제"],
 };
 function ConfirmDanger({ kind, onClose, z = 70, text, onRun }: { kind: Danger | null; onClose: () => void; z?: number; text?: [string, string, string]; onRun?: () => void }) {
-  const { reset } = useApp();
+  const { act } = useApp();
+  const sess = useSession();
   const snack = useSnack();
   const last = useRef<Danger>("logout"); if (kind) last.current = kind;
   const lastText = useRef(text); if (text) lastText.current = text;
   const [t, d, b] = lastText.current ?? DANGER[last.current];
   const run = () => {
     if (onRun) { onClose(); onRun(); return; }
-    /* API 모드: 전체 삭제 · 회원 탈퇴 API가 아직 없어(분류 C) 지운 척하지 않는다 */
-    if (API_MODE && last.current !== "logout") { onClose(); snack(last.current === "wipe" ? "전체 삭제는 아직 지원하지 않아요 · 데이터는 그대로예요" : "회원 탈퇴는 아직 지원하지 않아요 · 계정은 그대로예요"); return; }
-    if (last.current === "wipe") { onClose(); snack("모든 데이터를 삭제했어요"); return; }
-    onClose(); reset();
+    if (last.current === "wipe") { onClose(); act.wipeData(); snack("모든 데이터를 삭제했어요"); return; }
+    onClose(); if (last.current === "withdraw") void sess.withdraw(); else void sess.logout();
   };
   return (
     <Modal open={!!kind} onClose={onClose} z={z} width={400} label={t}>
@@ -203,7 +185,8 @@ const HEAD: Record<string, { sub?: string; beta?: boolean; plug?: boolean }> = {
 };
 
 export function Settings() {
-  const { overlay, setOverlay, settingsTab, planOpen, setPlanOpen } = useApp();
+  const { overlay, setOverlay, settingsTab, planOpen, setPlanOpen, ud } = useApp();
+  const pname = ud.profile?.name ?? "";
   const [tab, setTab] = useState(settingsTab);
   const [danger, setDanger] = useState<Danger | null>(null);
   const [plan, setPlan] = useState(false);
@@ -217,16 +200,16 @@ export function Settings() {
       <div className="flex h-[780px] max-h-[calc(100vh-32px)] w-[1040px] items-start overflow-hidden rounded-[20px] bg-white shadow-[0px_12px_32px_-8px_rgba(28,41,64,0.08),0px_2px_8px_0px_rgba(28,41,64,0.05)]">
         <nav className="flex h-full w-[250px] shrink-0 flex-col items-start gap-5 border-r border-[#e5e3e8] bg-white px-4 py-6">
           <div className="flex h-[52px] w-[218px] items-center gap-3 px-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f3f1ef]"><p className={cx("text-[17px] font-medium leading-[26px] text-[#15171a]", TR)}>김</p></div>
-            <div className="flex w-[146px] flex-col items-start gap-1"><p className={cx("text-[17px] font-medium leading-[26px] text-[#15171a]", TR)}>김나라</p><p className="text-[14px] font-medium leading-[21px] text-[#8e8a97]">설정</p></div>
+            <Avatar size={36} />
+            <div className="flex w-[146px] flex-col items-start gap-1"><p className={cx("truncate text-[17px] font-medium leading-[26px] text-[#15171a]", TR)}>{pname}</p><p className="text-[14px] font-medium leading-[21px] text-[#8e8a97]">설정</p></div>
           </div>
           {S_NAV.map(([g, items]) => (
             <div key={g} className="flex w-[218px] flex-col items-start gap-1">
               <div className="flex h-[26px] w-[218px] flex-col items-start px-3"><p className="text-[14px] font-medium leading-[21px] text-[#8e8a97]">{g}</p></div>
               {items.map((it) => { const on = tab === it; return (
-                <button key={it} onClick={() => setTab(it)} className={cx("flex h-[42px] w-[218px] items-center gap-3 rounded-[8px] px-3 py-2 text-left", on ? "bg-[#f3f1ef]" : "hover:bg-[#f8f7f5]")}>
-                  <NavIcon n={it} c={on ? "#5E5668" : "#333333"} />
-                  <span className={cx("whitespace-nowrap text-[15px]", on ? "font-bold leading-[20px] text-[#15171a]" : "leading-[21px] text-[#15171a]")}>{it}</span>
+                <button key={it} onClick={() => setTab(it)} className={cx("flex h-[42px] w-[218px] items-center gap-3 rounded-[8px] px-3 py-2 text-left", on ? "bg-[#FBF8FF]" : "hover:bg-[#F9F9F9]")}>
+                  <NavIcon n={it} c={on ? "#6A42AB" : "#333333"} />
+                  <span className={cx("whitespace-nowrap text-[15px]", on ? "font-bold leading-[20px] text-[#6A42AB]" : "leading-[21px] text-[#15171a]")}>{it}</span>
                 </button>
               ); })}
             </div>
@@ -280,44 +263,49 @@ function Withdraw({ open, onClose, danger }: { open: boolean; onClose: () => voi
     </Modal>
   );
 }
-/* 연결된 로그인 줄: 시연은 Figma 문구, API 모드는 /auth/me 의 providers (계정 추가 연결 API는 아직 없음 · 분류 C) */
-type LoginRow = readonly ["구글" | "카카오" | "네이버", string, boolean];
-const DEMO_LOGINS: LoginRow[] = [["구글", "nara@gmail.com · 현재 로그인 중", true], ["카카오", "연결되지 않음", false], ["네이버", "연결되지 않음", false]];
-function loginRows(user: UserWire | null): LoginRow[] {
-  const list = Array.isArray(user?.providers) ? (user.providers as { provider?: string; email?: string | null }[]) : [];
-  return ([["google", "구글"], ["kakao", "카카오"], ["naver", "네이버"]] as const).map(([p, n]) => {
-    const hit = list.find((x) => x.provider === p);
-    return [n, hit ? `${hit.email || "연결됨"} · 연결됨` : "연결되지 않음", !!hit] as const;
-  });
+export function Avatar({ size, fs }: { size: number; fs?: number }) {
+  const { ud } = useApp();
+  const p = ud.profile;
+  if (p?.photo) return <img src={p.photo} alt="" className="shrink-0 rounded-full object-cover" style={{ width: size, height: size }} />;
+  return <div className="flex shrink-0 items-center justify-center rounded-full bg-[#f3f1ef]" style={{ width: size, height: size }}><p className={cx("font-bold text-[#15171a]", TR)} style={{ fontSize: fs ?? size * 0.45 }}>{(p?.name ?? "?").trim().slice(0, 1)}</p></div>;
 }
+const PROV: ["구글" | "카카오" | "네이버", "google" | "kakao" | "naver"][] = [["구글", "google"], ["카카오", "kakao"], ["네이버", "naver"]];
 function TabProfile({ danger }: { danger: (d: Danger) => void }) {
-  const { user } = useApp();
+  const { ud, act } = useApp();
+  const snack = useSnack();
   const [wd, setWd] = useState(false);
-  const profile = useProfile(); // API 모드: 로그인한 사용자. 프로필 수정 API는 아직 없음(분류 C) — 입력은 이 화면에서만 바뀜
-  const [name, setName] = useState(profile.name), [intro, setIntro] = useState(profile.sub);
+  const p = ud.profile;
+  const [name, setName] = useState(p?.name ?? ""), [intro, setIntro] = useState(p?.job ?? "");
+  const file = useRef<HTMLInputElement>(null);
+  const commit = () => { const n = name.trim(); if (!n) { setName(p?.name ?? ""); snack("이름은 비워 둘 수 없어요"); return; } if (n !== p?.name || intro.trim() !== p?.job) { act.profile({ name: n, job: intro.trim() }); snack("프로필을 저장했어요", { check: true }); } };
+  const pickPhoto = (f?: File) => {
+    if (!f) return; if (!f.type.startsWith("image/")) { snack("사진 파일만 올릴 수 있어요"); return; }
+    const r = new FileReader(); r.onload = () => { const img = new Image(); img.onload = () => { const c = document.createElement("canvas"), k = 160 / Math.max(img.width, img.height); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height); act.profile({ photo: c.toDataURL("image/jpeg", 0.85) }); snack("사진을 넣었어요", { check: true }); }; img.src = String(r.result); }; r.readAsDataURL(f);
+  };
   const field = (l: string, v: string, set: (s: string) => void) => (
     <div className="flex w-[351px] flex-col items-start gap-2">
       <p className="text-[14px] font-medium leading-[21px] text-[#8e8a97]">{l}</p>
-      <input value={v} onChange={(e) => set(e.target.value)} aria-label={l} className="h-[42px] w-[351px] rounded-[8px] border border-[#e5e3e8] bg-white px-3 py-[10px] text-[15px] leading-[23px] text-[#15171a] outline-none focus:border-[#15171a]" />
+      <input value={v} maxLength={20} onChange={(e) => set(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} aria-label={l} className="h-[42px] w-[351px] rounded-[8px] border border-[#e5e3e8] bg-white px-3 py-[10px] text-[15px] leading-[23px] text-[#15171a] outline-none focus:border-[#15171a]" />
     </div>
   );
   return (<>
     <div className="flex h-[72px] w-[718px] items-center gap-5">
-      <div className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-[#f3f1ef]"><p className={cx("text-[26px] font-bold leading-[35px] text-[#15171a]", TR)}>{profile.name.slice(0, 1)}</p></div>
-      <div className="flex w-[300px] flex-col items-start gap-3"><T15>프로필 사진</T15><div className="flex h-9 w-[300px] items-start gap-2"><SBtn w={94}>사진 변경</SBtn><SBtn w={64}>삭제</SBtn></div></div>
+      <Avatar size={72} fs={26} />
+      <div className="flex w-[300px] flex-col items-start gap-3"><T15>프로필 사진</T15><div className="flex h-9 w-[300px] items-start gap-2"><SBtn w={94} onClick={() => file.current?.click()}>사진 변경</SBtn><SBtn w={64} onClick={() => { if (p?.photo) { act.profile({ photo: undefined }); snack("사진을 지웠어요"); } }}>삭제</SBtn></div></div>
+      <input ref={file} type="file" accept="image/*" hidden onChange={(e) => { pickPhoto(e.target.files?.[0]); e.target.value = ""; }} />
     </div>
     <div className="flex items-start gap-4">{field("이름", name, setName)}{field("한 줄 소개", intro, setIntro)}</div>
     <div className="flex w-[718px] flex-col items-start gap-5">
       <H16>연결된 로그인</H16>
-      <D14 w={718}>연결한 계정으로 MEMO'S에 로그인할 수 있어요.</D14>
+      <D14 w={718}>로그인한 소셜 계정이에요. 다른 계정으로 들어오면 새 계정으로 시작해요.</D14>
       <Card>
-        {(API_MODE ? loginRows(user) : DEMO_LOGINS).map(([n, d, on], i) => (
+        {PROV.map(([n, k], i) => (
           <div key={n} className="contents">
             {i > 0 && <Hr />}
             <div className="flex h-12 w-[678px] items-center gap-3">
               <LoginBadge n={n} />
-              <div className="flex w-[534px] flex-col items-start gap-1"><T15>{n}</T15><p className="whitespace-nowrap text-[14px] font-medium leading-[21px] text-[#8e8a97]">{d}</p></div>
-              {on ? <p className="whitespace-nowrap text-[14px] font-medium leading-[21px] text-[#15171a]">사용 중</p> : <SBtn w={80}>연결</SBtn>}
+              <div className="flex w-[534px] flex-col items-start gap-1"><T15>{n}</T15><p className="whitespace-nowrap text-[14px] font-medium leading-[21px] text-[#8e8a97]">{p?.provider === k ? `${p.email} · 현재 로그인 중` : "연결되지 않음"}</p></div>
+              {p?.provider === k ? <p className="whitespace-nowrap text-[14px] font-medium leading-[21px] text-[#15171a]">사용 중</p> : <p className="whitespace-nowrap text-[14px] font-medium leading-[21px] text-[#c0c4cc]">—</p>}
             </div>
           </div>
         ))}
@@ -337,10 +325,10 @@ function TabProfile({ danger }: { danger: (d: Danger) => void }) {
 
 /* 8-4 알림 (11.13: 업데이트 알림 + 스튜디오 알림만) */
 function TabNoti() {
-  const { x, setX } = useApp();
+  const { ud, act } = useApp();
   const snack = useSnack();
-  const key = (k: string) => (k === "업데이트" ? "upd" : "studio") as "upd" | "studio";
-  const S = (k: string, l: string) => <Switch on={x.noti[key(k)]} set={(v) => { setX((y) => ({ ...y, noti: { ...y.noti, [key(k)]: v } })); snack(v ? "알림을 켰어요 · 알림함에 다시 보여요" : "알림을 껐어요 · 알림함에서도 안 보여요", { check: true }); }} label={l} />;
+  const key = (k: string) => (k === "업데이트" ? "noti_upd" : "noti_studio") as "noti_upd" | "noti_studio";
+  const S = (k: string, l: string) => <Switch on={ud.settings[key(k)]} set={(v) => { act.settings({ [key(k)]: v }); snack(v ? "알림을 켰어요 · 알림함에 다시 보여요" : "알림을 껐어요 · 알림함에서도 안 보여요", { check: true }); }} label={l} />;
   return (
     <div className="flex w-[718px] flex-col items-start gap-5">
       <H16>받을 알림</H16>
@@ -354,9 +342,18 @@ function TabNoti() {
 
 /* 8-6 데이터 */
 function TabData({ danger }: { danger: (d: Danger) => void }) {
-  const { memos, journal, stocks } = useApp();
+  const { memos, journal, stocks, ud } = useApp();
+  const snack = useSnack();
+  const exportAll = () => {
+    try {
+      const { profile, ...rest } = ud; const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), profile: profile && { name: profile.name, job: profile.job }, ...rest }, null, 2)], { type: "application/json" });
+      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `memos-backup-${new Date().toISOString().slice(0, 10)}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      snack("내 데이터를 파일로 내보냈어요", { check: true });
+    } catch { snack("내보내기에 실패했어요. 다시 시도해 주세요"); }
+  };
   return (<>
     <Card><div className="flex h-20 w-[678px] items-start gap-4"><Stat l="메모" v={`${memos.length}개`} /><Stat l="투자 기록" v={`${journal.length}개`} /><Stat l="종목" v={`${stocks.length}개`} /></div></Card>
+    <Row t="내 데이터 내보내기" d="메모·체크리스트·투자 기록·종목을 JSON 파일 하나로 내려받아요." w={558}><SBtn w={120} onClick={exportAll}>내보내기</SBtn></Row>
     <Card>
       <p className={cx("whitespace-nowrap text-[17px] font-medium leading-[26px] text-[#e45d6a]", TR)}>위험 구역</p>
       <div className="flex w-[678px] items-center gap-6">
@@ -368,17 +365,18 @@ function TabData({ danger }: { danger: (d: Danger) => void }) {
 }
 
 /* 8-7 정보 */
+const OSS: [string, string, string][] = [["React", "MIT", "Meta"], ["Vite", "MIT", "VoidZero"], ["Tailwind CSS", "MIT", "Tailwind Labs"], ["Radix UI", "MIT", "WorkOS"], ["lucide-react", "ISC", "Lucide Contributors"], ["Lucian UX/UI Prompt", "MIT", "Seokwoooo"], ["Pretendard", "OFL-1.1", "Kil Hyung-jin"], ["date-fns", "MIT", "date-fns"], ["sonner", "MIT", "Emil Kowalski"]];
 function TabInfo() {
   const { setOverlay, setCoach, setCoachPending } = useApp();
   const replay = () => { setOverlay(null); setCoachPending(false); window.setTimeout(() => setCoach({ step: -1 }), 320); }; // v2: 사용법 다시 보기
-  const [doc, setDoc] = useState<null | "terms" | "privacy" | "invest">(null);
+  const [doc, setDoc] = useState<null | "terms" | "privacy" | "invest" | "oss">(null);
   return (<>
     <Row t="버전" d="MEMO'S v0.1.0 (베타)" w={558}><div className="flex h-7 w-[136px] items-center"><p className="whitespace-nowrap text-[14px] font-medium leading-[21px] text-[#8e8a97]">최신 버전이에요</p></div></Row>
     <Hr />
     <div className="flex w-[718px] flex-col items-start">
       {["사용법 다시 보기", "이용약관", "개인정보 처리방침", "오픈소스 라이선스", "피드백 보내기", "문의하기"].map((t) => (
         <div key={t} className="contents">
-          <button onClick={t === "피드백 보내기" ? () => setOverlay("feedback") : t === "사용법 다시 보기" ? replay : t === "이용약관" ? () => setDoc("terms") : t === "개인정보 처리방침" ? () => setDoc("privacy") : undefined} className="-mx-3 flex h-[52px] w-[742px] items-center justify-between rounded-[8px] px-3 hover:bg-[#f8f7f5]">
+          <button onClick={t === "피드백 보내기" ? () => setOverlay("feedback") : t === "사용법 다시 보기" ? replay : t === "이용약관" ? () => setDoc("terms") : t === "개인정보 처리방침" ? () => setDoc("privacy") : t === "오픈소스 라이선스" ? () => setDoc("oss") : () => setOverlay("feedback")} className="-mx-3 flex h-[52px] w-[742px] items-center justify-between rounded-[8px] px-3 hover:bg-[#f8f7f5]">
             <span className="whitespace-nowrap text-[15px] leading-[23px] text-[#15171a]">{t}</span><Chev dir="right" />
           </button>
           <Hr />
@@ -391,10 +389,11 @@ function TabInfo() {
     </div>
     <div className="flex w-[718px] flex-col items-start gap-1 rounded-[12px] bg-[#f8f7f5] p-4"><p className="w-[686px] text-[15px] leading-[23px] text-[#8e8a97]">MEMO'S는 투자 권유를 하지 않으며, 제공되는 모든 정보는 참고용이에요. 투자 판단과 그 결과에 대한 책임은 투자자 본인에게 있어요.</p></div>
     <p className="w-[718px] text-[14px] font-medium leading-[21px] text-[#8e8a97]">SIG · Saram Is Good</p>
-    <Modal open={!!doc} onClose={() => setDoc(null)} width={680} z={70} label={doc ? LEGAL[doc].t : "문서"}>
+    <Modal open={!!doc} onClose={() => setDoc(null)} width={680} z={70} label={doc === "oss" ? "오픈소스 라이선스" : doc ? LEGAL[doc].t : "문서"}>
       <div className="flex w-[680px] flex-col gap-4 rounded-[28px] bg-white px-8 py-7">
-        <div className="flex items-center justify-between"><p className="text-[22px] font-bold leading-[31px] text-[#15171a]">{doc ? LEGAL[doc].t : ""}</p><CloseX onClick={() => setDoc(null)} /></div>
-        <div className="legal max-h-[min(560px,calc(100vh-200px))] overflow-y-auto pr-2" dangerouslySetInnerHTML={{ __html: doc ? LEGAL[doc].h : "" }} />
+        <div className="flex items-center justify-between"><p className="text-[22px] font-bold leading-[31px] text-[#15171a]">{doc === "oss" ? "오픈소스 라이선스" : doc ? LEGAL[doc].t : ""}</p><CloseX onClick={() => setDoc(null)} /></div>
+        {doc === "oss" ? <div data-oss className="flex max-h-[min(560px,calc(100vh-200px))] flex-col overflow-y-auto pr-2">{OSS.map(([n, l, u]) => <div key={n} className="flex items-center justify-between border-b border-[#efeff2] py-3"><span className="text-[15px] font-medium text-[#15171a]">{n}</span><span className="text-[14px] text-[#8e8a97]">{l} · {u}</span></div>)}</div>
+          : <div className="legal max-h-[min(560px,calc(100vh-200px))] overflow-y-auto pr-2" dangerouslySetInnerHTML={{ __html: doc ? LEGAL[doc].h : "" }} />}
       </div>
     </Modal>
   </>);
@@ -407,22 +406,20 @@ function TabUsage({ onPlan }: { onPlan: () => void }) {
   const { memos, setOverlay, go, setMemoOpen } = useApp();
   const pct = useUsage();
   const [open, setOpen] = useState<string | null>(null);
-  const tracked = (code: string) => memos.filter((m) => m.code === code && m.ai).map((m) => ({ t: m.title, id: m.id as number | null, k: m.tracks }));
-  const rows: [string, string, { t: string; id: number | null; k?: string }[]][] = [
-    ["SK하이닉스", "000660", tracked("000660")],
-    ["삼성전자", "005930", [{ t: "HBM 실적 변화", id: null, k: "뉴스 · HBM 공급 동향" }, { t: "파운드리 신규 수주", id: null, k: "뉴스 · 파운드리" }]],
-    ["NAVER", "035420", tracked("035420")],
-  ];
+  const { stocks, ud } = useApp();
+  const tracked = (code: string) => memos.filter((m) => m.stock_code === code && m.ai).map((m) => ({ t: m.title, id: m.id as number | null, k: m.tracks }));
+  const rows: [string, string, { t: string; id: number | null; k?: string }[]][] = stocks.map((s) => [s.name, s.stock_code, tracked(s.stock_code)]);
+  const reset = new Date(ud.usage.reset_at), resetT = `${reset.getMonth() + 1}.${String(reset.getDate()).padStart(2, "0")}`;
   const total = rows.reduce((a, r) => a + r[2].length, 0);
   const openMemo = (code: string, id: number | null) => { setOverlay(null); go({ name: "stock", code, tab: "board" }); if (id != null) setMemoOpen(id); };
   return (<>
     <Card gap={0} className="!p-6">
-      <div className="flex h-6 w-[670px] items-center justify-between"><div className="flex items-center gap-2"><p className={cx("text-[17px] font-bold leading-[26px] text-[#15171a]", TR)}>무료 플랜</p><Chip>가정</Chip></div><Chip>예시 데이터</Chip></div>
+      <div className="flex h-6 w-[670px] items-center justify-between"><div className="flex items-center gap-2"><p className={cx("text-[17px] font-bold leading-[26px] text-[#15171a]", TR)}>무료 플랜</p></div></div>
       <p className={cx("mt-4 whitespace-nowrap text-[36px] font-bold leading-[40px] text-[#15171a]", "tracking-[-0.02em]")}>{pct}% 사용</p>
       <div className="mt-5 flex h-2 w-[670px] items-start rounded-full bg-[#eceef1]"><div className="h-2 rounded-full transition-[width]" style={{ width: (pct / 100) * 670, background: pct >= 100 ? "#e5484d" : "#15171a", transitionDuration: "calc(.6s * var(--k))" }} /></div>
-      <div className="mt-3 flex h-[22px] w-[670px] items-center justify-between"><p className="text-[15px] leading-[23px] text-[#575b63]">남은 사용량 {100 - pct}%</p><p className="text-[15px] leading-[23px] text-[#8e8a97]">다음 갱신 11.30</p></div>
+      <div className="mt-3 flex h-[22px] w-[670px] items-center justify-between"><p className="text-[15px] leading-[23px] text-[#575b63]">남은 사용량 {100 - pct}%</p><p className="text-[15px] leading-[23px] text-[#8e8a97]">다음 갱신 {resetT}</p></div>
     </Card>
-    {pct >= 90 && <div data-usage-warn className={cx("flex w-[718px] flex-col gap-1 rounded-[16px] px-5 py-4", pct >= 100 ? "bg-[#fdf0f1]" : "bg-[#fff4e5]")}><p className={cx("text-[17px] font-bold leading-[26px]", pct >= 100 ? "text-[#c0392b]" : "text-[#7a4a00]")}>{pct >= 100 ? "AI 업데이트가 일시 중단되었어요" : "사용량이 거의 다 찼어요"}</p><p className={cx("text-[15px] leading-[23px]", pct >= 100 ? "text-[#a8433a]" : "text-[#8a5a00]")}>{pct >= 100 ? "사용량을 모두 썼어요. 메모 작성과 기존 기록 확인은 그대로 할 수 있어요." : `이번 기간 사용량의 ${pct}%를 썼어요. 11.30에 다시 채워져요.`}</p></div>}
+    {pct >= 90 && <div data-usage-warn className={cx("flex w-[718px] flex-col gap-1 rounded-[16px] px-5 py-4", pct >= 100 ? "bg-[#fdf0f1]" : "bg-[#fff4e5]")}><p className={cx("text-[17px] font-bold leading-[26px]", pct >= 100 ? "text-[#c0392b]" : "text-[#7a4a00]")}>{pct >= 100 ? "AI 업데이트가 일시 중단되었어요" : "사용량이 거의 다 찼어요"}</p><p className={cx("text-[15px] leading-[23px]", pct >= 100 ? "text-[#a8433a]" : "text-[#8a5a00]")}>{pct >= 100 ? "사용량을 모두 썼어요. 메모 작성과 기존 기록 확인은 그대로 할 수 있어요." : `이번 기간 사용량의 ${pct}%를 썼어요. ${resetT}에 다시 채워져요.`}</p></div>}
     <div className="flex w-[718px] flex-col items-start gap-3">
       <div className="flex h-5 w-[718px] items-center justify-between px-1"><p className="text-[15px] leading-[23px] text-[#8e8a97]">종목별 추적 현황</p><p className="text-[15px] leading-[23px] text-[#8e8a97]">추적 항목 {total}개</p></div>
       <div className="flex w-[718px] flex-col items-start overflow-hidden rounded-[16px] border border-[#e5e3e8] bg-white">
@@ -436,6 +433,7 @@ function TabUsage({ onPlan }: { onPlan: () => void }) {
             <div className={cx("grid w-full transition-[grid-template-rows]", on ? "grid-rows-[1fr]" : "grid-rows-[0fr]")} style={{ transitionDuration: "calc(.3s * var(--k))" }}>
               <div className="overflow-hidden">
                 <div className="flex w-full flex-col items-start px-6 pb-3 pt-1">
+                  {!items.length && <button onClick={() => openMemo(code, null)} className="flex min-h-[52px] w-full items-center justify-between rounded-[8px] py-1 pl-11 pr-2 text-left text-[15px] text-[#8e8a97] hover:bg-[#f8f7f5]">AI 연결한 메모가 없어요 · 보드에서 메모의 플러그를 눌러 켤 수 있어요<Chev dir="right" /></button>}
                   {items.map((t) => (
                     <button key={t.t} onClick={() => openMemo(code, t.id)} className="flex min-h-[52px] w-full items-center justify-between gap-3 rounded-[8px] py-1 pl-11 pr-2 text-left hover:bg-[#f8f7f5]">
                       <span className="flex min-w-0 flex-col"><span className="truncate whitespace-nowrap text-[17px] leading-[26px] text-[#15171a]">{t.t}</span>{t.k && <span className="truncate text-[14px] leading-[21px] text-[#8e8a97]">{t.k}</span>}</span>
@@ -608,9 +606,10 @@ function TipBtn({ tip, danger, onClick, children }: { tip: string; danger?: bool
     </button>
   );
 }
-const TYPES = ["전체", "메모", "투자 기록", "종목"];
+const TYPES = ["전체", "메모", "투자 기록", "종목", "체크리스트"];
+const ICON_OF: Record<TrashItem["kind"], string> = { 메모: "memo", "투자 기록": "journal", 종목: "stock", "체크리스트 항목": "journal" };
 export function Trash() {
-  const { overlay, setOverlay, trash, setTrash, setMemos, setJournal, setStocks, stocks } = useApp();
+  const { overlay, setOverlay, trash, act } = useApp();
   const snack = useSnack();
   const [q, setQ] = useState(""), [type, setType] = useState<string | null>(null), [menu, setMenu] = useState(false), [gone, setGone] = useState<string | null>(null);
   const fref = useRef<HTMLDivElement>(null);
@@ -618,31 +617,12 @@ export function Trash() {
   useEffect(() => { if (open) { setQ(""); setType(null); setMenu(false); } }, [open]);
   useEffect(() => { if (!menu) return; const f = (e: MouseEvent) => { if (!fref.current?.contains(e.target as Node)) setMenu(false); }; document.addEventListener("mousedown", f); return () => document.removeEventListener("mousedown", f); }, [menu]);
   const t0 = type ?? "전체";
-  const list = trash.filter((t) => (t0 === "전체" || t.type === t0) && (!q.trim() || t.t.includes(q.trim()) || t.s.includes(q.trim())));
-  const restore = async (t: (typeof trash)[number]) => {
-    /* API 모드: 이 기기에서 지운 원래 메모·종목을 다시 저장한다 (서버에 복원 API가 없어 새로 저장 · 분류 B). 예시 항목은 없음 */
-    if (API_MODE) {
-      if (!t.memo && !t.stock) { snack("이 항목은 아직 복원할 수 없어요"); return; }
-      setGone(t.t); await sleep(280); setTrash((a) => a.filter((x) => x !== t)); setGone(null);
-      if (t.stock) { const st = t.stock; setStocks((a) => (a.some((s) => s.code === st.code) ? a : [...a, st])); }
-      if (t.memo) { const m = t.memo; setMemos((a) => (a.some((x) => x.id === m.id) ? a : [...a, m])); }
-      snack("복원했어요");
-      return;
-    }
-    setGone(t.t); await sleep(280); setTrash((a) => a.filter((x) => x.t !== t.t)); setGone(null);
-    if (t.type === "메모") setMemos((a) => a.some((m) => m.title === t.t) ? a : [...a, { id: Date.now(), code: "000660", date: "10.20", title: t.t, body: "", color: "yellow", ai: false, pinned: false, badge: 0, col: 0 }]);
-    if (t.type === "투자 기록") setJournal((a) => a.some((j) => j.title === t.t) ? a : [...a, { id: Date.now(), title: t.t, date: "10월 8일", full: "2026년 10월 8일 오후 9:02", body: ["발표일 확인하고 체크리스트 정리.", "컨센서스 대비 가이던스 문구를 꼭 볼 것."], todo: [] }]);
-    const back = ALL_STOCKS.find((s) => s.name === t.t);
-    if (t.type === "종목" && back && !stocks.some((s) => s.code === back.code)) setStocks((a) => [...a, back]);
-    else if (t.type === "종목" && !stocks.some((s) => s.name === t.t)) setStocks((a) => [...a, { code: "005380", name: t.t, short: "H", logo: "H", logoBg: "#002c5f", hold: "관심", market: "KOSPI", price: 214500, chg: -1500, pct: -0.69, seed: 21 }]);
-    snack("복원했어요");
-  };
-  const [ask, setAsk] = useState<(typeof trash)[number] | null>(null);
+  const kindOk = (t: TrashItem) => t0 === "전체" || t.kind === t0 || (t0 === "체크리스트" && t.kind === "체크리스트 항목");
+  const list = trash.filter((t) => kindOk(t) && (!q.trim() || t.title.includes(q.trim()) || t.sub.includes(q.trim())));
+  const restore = async (t: TrashItem) => { setGone(t.id); await sleep(280); act.restore(t.id); setGone(null); snack(t.kind === "메모" ? "메모를 복원했어요 · 원래 종목 보드에 돌아갔어요" : t.kind === "종목" ? "종목을 복원했어요 · 메모도 함께 돌아왔어요" : "복원했어요", { check: true }); };
+  const [ask, setAsk] = useState<TrashItem | null>(null);
   const [askAll, setAskAll] = useState(false);
-  const kill = async (t: (typeof trash)[number]) => {
-    setGone(t.t); await sleep(280); setTrash((a) => a.filter((x) => x.t !== t.t)); setGone(null);
-    snack(API_MODE ? "휴지통 목록에서 지웠어요" : "영구 삭제했어요"); // API 모드: 서버에는 영구 삭제 API가 없음 (분류 C)
-  };
+  const kill = async (t: TrashItem) => { setGone(t.id); await sleep(280); act.purge(t.id); setGone(null); snack("영구 삭제했어요"); };
   const sp = { strokeWidth: 1.95556, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
   return (
     <Modal open={open} onClose={() => setOverlay(null)} width={680} scrim="rgba(0,0,0,0.32)" label="휴지통">
@@ -675,11 +655,11 @@ export function Trash() {
           <div className="flex min-h-0 w-[634px] flex-1 flex-col items-start overflow-y-auto">
             {list.length === 0 && <div data-trash-empty className="m-in flex w-full flex-col items-center gap-1 py-16 text-center"><p className="text-[17px] font-bold leading-[26px] text-[#333d4b]">{trash.length ? "찾는 항목이 없어요" : "휴지통이 비어 있어요"}</p><p className="text-[14px] leading-[21px] text-[#8b95a1]">{trash.length ? "다른 말로 찾아보세요" : "지운 메모·기록·종목이 여기에 모여요"}</p></div>}
             {list.map((t) => (
-              <div key={t.t} className={cx("m-w flex h-[72px] w-[634px] shrink-0 items-center gap-3 border-b border-[#e8eaed] py-2 pl-2 pr-1", gone === t.t && "m-gone")}>
-                <svg width="24" height="24" viewBox="0 0 22 22" fill="none" stroke="#333333" {...sp} className="shrink-0">{TICON[t.icon]}</svg>
+              <div key={t.id} data-trash-row className={cx("m-w flex h-[72px] w-[634px] shrink-0 items-center gap-3 border-b border-[#e8eaed] py-2 pl-2 pr-1", gone === t.id && "m-gone")}>
+                <svg width="24" height="24" viewBox="0 0 22 22" fill="none" stroke="#333333" {...sp} className="shrink-0">{TICON[ICON_OF[t.kind]]}</svg>
                 <div className="flex h-[46px] min-w-0 flex-1 flex-col items-start gap-[2px]">
-                  <p className={cx("w-full truncate text-[17px] font-medium leading-[26px] text-[#15171a]", TR)}>{t.t}</p>
-                  <p className="w-full truncate text-[14px] leading-[21px] text-[#747d8d]">{t.s}</p>
+                  <p className={cx("w-full truncate text-[17px] font-medium leading-[26px] text-[#15171a]", TR)}>{t.title}</p>
+                  <p className="w-full truncate text-[14px] leading-[21px] text-[#747d8d]">{t.sub} · {agoT(t.deleted_at)} 삭제</p>
                 </div>
                 <div className="flex h-10 w-[88px] shrink-0 items-center gap-2">
                   <TipBtn tip="복원" onClick={() => restore(t)}>{(c) => <svg width="22" height="22" viewBox="0 0 20 20" fill="none"><path d="M7.22226 5L3.33337 8.88889L7.22226 12.7778" stroke={c} strokeWidth="1.77778" strokeLinecap="round" strokeLinejoin="round" /><path d="M3.33337 8.89062H11.6667C15 8.89062 16.6667 10.5573 16.6667 13.8906V15.0017" stroke={c} strokeWidth="1.77778" strokeLinecap="round" strokeLinejoin="round" /></svg>}</TipBtn>
@@ -690,13 +670,13 @@ export function Trash() {
           </div>
         </div>
         <div className="flex h-9 w-[634px] shrink-0 items-center gap-2">
-          <p className="min-w-0 flex-1 text-[14px] leading-[21px] text-[#747d8d]">보관 기간과 자동 삭제 여부는 추후 안내합니다.</p>
+          <p className="min-w-0 flex-1 text-[14px] leading-[21px] text-[#747d8d]">휴지통 항목은 직접 지우기 전까지 보관돼요.</p>
           <button data-trash-empty-all disabled={!trash.length} onClick={() => setAskAll(true)} className="h-9 rounded-[10px] px-3 text-[14px] font-bold text-[#e45d6a] enabled:hover:bg-[#fdf0f1] disabled:opacity-40">휴지통 비우기</button>
           <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="#6B7280" strokeWidth="1.42222" strokeLinecap="round" strokeLinejoin="round"><path d="M14.0623 9.38623L14.2223 7.99957L14.0623 6.6129L13.6089 5.29734L12.8623 4.12401L11.8756 3.13734L10.7023 2.39068L9.38672 1.93734L8.00005 1.77734L6.61339 1.93734L5.29783 2.39068L4.1245 3.13734L3.13783 4.12401L2.39117 5.29734L1.93783 6.6129L1.77783 7.99957L1.93783 9.38623L2.39117 10.7018L3.13783 11.8751L4.1245 12.8618L5.29783 13.6085L6.61339 14.0618L8.00005 14.2218L9.38672 14.0618L10.7023 13.6085L11.8756 12.8618L12.8623 11.8751L13.6089 10.7018L14.0623 9.38623Z" /><path d="M6.22217 6.39887C6.22217 5.21369 6.81476 4.62109 7.99995 4.62109C9.18513 4.62109 9.77772 5.15443 9.77772 6.22109C9.77772 6.93221 9.18513 7.5248 7.99995 7.99887V9.06554" /><path d="M8 11.0234V11.2012" /></svg>
         </div>
       </div>
-      <ConfirmDanger kind={askAll ? "wipe" : null} onClose={() => setAskAll(false)} text={askAll ? ["휴지통을 비울까요?", `${trash.length}개 항목이 영구 삭제돼요. 되돌릴 수 없어요.`, "비우기"] : undefined} onRun={() => { setTrash([]); snack("휴지통을 비웠어요"); }} />
-      <ConfirmDanger kind={ask ? "wipe" : null} onClose={() => setAsk(null)} text={ask ? ["영구 삭제할까요?", `'${ask.t}'을(를) 영구 삭제하면 되돌릴 수 없어요.`, "영구 삭제"] : undefined} onRun={() => { if (ask) void kill(ask); }} />
+      <ConfirmDanger kind={askAll ? "wipe" : null} onClose={() => setAskAll(false)} text={askAll ? ["휴지통을 비울까요?", `${trash.length}개 항목이 영구 삭제돼요. 되돌릴 수 없어요.`, "비우기"] : undefined} onRun={() => { act.emptyTrash(); snack("휴지통을 비웠어요"); }} />
+      <ConfirmDanger kind={ask ? "wipe" : null} onClose={() => setAsk(null)} text={ask ? ["영구 삭제할까요?", `'${ask.title}'을(를) 영구 삭제하면 되돌릴 수 없어요.`, "영구 삭제"] : undefined} onRun={() => { if (ask) void kill(ask); }} />
     </Modal>
   );
 }
@@ -707,14 +687,38 @@ export function HelpPage() {
   return (
     <FixedFrame>
     <div className="flex w-[860px] flex-col items-start gap-8 pb-8 pt-8">
-      <PageTitle title="도움말" sub="서비스 이용 안내는 준비 중입니다." />
+      <PageTitle title="도움말" sub="자주 묻는 질문과 사용법이에요." />
       {/* v2: 처음 안내(코치마크)를 다시 볼 수 있게 */}
       <button data-help-replay onClick={() => { setCoachPending(false); setCoach({ step: -1 }); }} className="flex w-[420px] max-w-full items-center gap-4 rounded-[16px] border border-[#e5e8eb] bg-white p-5 text-left hover:bg-[#f9f9f9]">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-[#111111]"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7.2" stroke="white" strokeWidth="1.6" /><path d="M12.9 7.1L11.3 11.3L7.1 12.9L8.7 8.7L12.9 7.1Z" fill="white" /></svg></span>
         <span className="flex min-w-0 flex-1 flex-col"><span className="text-[17px] font-bold leading-[26px] text-[#191f28]">사용법 다시 보기</span><span className="text-[14px] leading-[21px] text-[#6b7684]">메모 쓰기부터 스튜디오까지 30초 안내</span></span>
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M6.75 4.5L11.25 9L6.75 13.5" stroke="#9AA0AA" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
       </button>
+      <Faq />
     </div>
     </FixedFrame>
+  );
+}
+
+const FAQ: [string, string][] = [
+  ["메모는 어떻게 쓰나요?", "사이드바에서 종목을 고르고 보드 오른쪽 아래 + 를 눌러요. 첫 줄은 제목이 되고, 나머지는 본문이에요. 메모 색은 보기 칸과 같은 색으로 저장돼요."],
+  ["AI 연결을 켜면 무엇이 달라지나요?", "메모에서 확인할 항목(실적, 배당, 가격 조건 등)을 찾아 그와 관련된 공시·뉴스·종가 변화만 메모 아래 'AI 업데이트'에 모아 드려요. 켤 때 최근 7거래일 소식도 함께 찾아봐요."],
+  ["가격 조건은 언제 알려 주나요?", "'15만원 밑이면' 처럼 적으면 장이 끝난 뒤 확정된 종가로 계산해요. 조건에 가까워지거나 닿으면 소식으로 붙여 드려요. 실시간 알림은 아니에요."],
+  ["체크리스트는 어디에 저장되나요?", "종목마다 하나씩 보드 맨 위에 있어요. 홈의 체크리스트 위젯에서도 종목을 골라 바로 체크할 수 있어요. 항목을 모두 지우고 저장하면 휴지통으로 옮겨져요."],
+  ["스튜디오 결과는 얼마나 보관되나요?", "오디오·주간보고서·실험 결과는 만든 날부터 30일 동안 '만든 항목'에서 다시 볼 수 있어요. 다시 보기는 사용량을 쓰지 않아요."],
+  ["지운 메모를 되살릴 수 있나요?", "사이드바 휴지통에서 복원할 수 있어요. 종목을 빼도 그 종목의 메모는 남아 있다가, 종목을 다시 추가하면 함께 돌아와요."],
+  ["투자 권유를 하나요?", "아니요. MEMO'S는 공시·뉴스·시세를 모아 보여 줄 뿐 매수·매도를 권하거나 주가를 예측하지 않아요."],
+];
+function Faq() {
+  const [open, setOpen] = useState<number | null>(0);
+  return (
+    <div data-faq className="flex w-[860px] flex-col rounded-[16px] border border-[#e5e8eb] bg-white px-6 py-2">
+      {FAQ.map(([q, a], i) => (
+        <div key={q} className={cx("flex flex-col", i < FAQ.length - 1 && "border-b border-[#efeff2]")}>
+          <button aria-expanded={open === i} onClick={() => setOpen(open === i ? null : i)} className="flex h-[60px] items-center justify-between text-left"><span className="text-[17px] font-bold leading-[26px] text-[#191f28]">{q}</span><Chev dir={open === i ? "up" : "down"} /></button>
+          <div className={cx("grid transition-[grid-template-rows]", open === i ? "grid-rows-[1fr]" : "grid-rows-[0fr]")} style={{ transitionDuration: "calc(.3s * var(--k))" }}><div className="overflow-hidden"><p className="break-keep pb-5 text-[15px] leading-[24px] text-[#4e5968]">{a}</p></div></div>
+        </div>
+      ))}
+    </div>
   );
 }

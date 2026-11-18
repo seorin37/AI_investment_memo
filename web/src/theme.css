@@ -49,5 +49,24 @@ html.dark .dk-keep .dk-keep { filter: none; }
 .u021.is-night .u021-stars{opacity:1;transform:none}
 @keyframes u021-tw{50%{opacity:.3;transform:scale(.6)}}
 @media (prefers-reduced-motion: reduce){ .u021 *, .u021 *::before { transition: none !important; animation: none !important; } }
-/* 메모지 접힌 귀퉁이: 배경과 같은 색 (메모지는 원래 색으로 두므로 어두운 배경 색을 직접 지정) */
-html.dark .memo-fold { fill: var(--dk-page, #191a1b); }
+/* 다크 모드 메모지 (11.18): 종이는 data.ts PAPER[].dk 색, 글자·플러그는 밝게, 새 소식 배지 테두리는 화면 배경색 */
+html.dark .memo-card .mi-1 { color: #f2f2f4; }
+html.dark .memo-card .mi-2 { color: rgba(255,255,255,.80); }
+html.dark .memo-card .mi-3 { color: rgba(255,255,255,.62); }
+html.dark .memo-card .m-plug path[stroke] { stroke: #f2f2f4; }
+html.dark .memo-card .m-plug path[fill="#16161C"] { fill: #f2f2f4; }
+html.dark .memo-card .m-badge { border-color: #1a1a1a; }
+html.dark .memo-card .m-plug.bg-white\/80 { background: rgba(255,255,255,.22); }
+/* 접힌 귀퉁이: 종이를 잘라서 만들어요(.paper-cut). 잘린 자리에는 실제 화면 배경이 보여서 다크 모드에서도 흰 선이 생기지 않아요.
+   다크 모드 접힌 부분 색은 PAPER[].dk.accent */
+.paper-cut { clip-path: polygon(0 0, 100% 0, 100% calc(100% - 30px), calc(100% - 30px) 100%, 0 100%); }
+
+/* 메모지 색 변수 (11.18). --pk-*: 원래 색을 지키는 요소(.dk-keep)용, --pp-*: 화면 반전을 그대로 받는 요소용.
+   다크 모드에서 둘 다 data.ts PAPER[].dk.bg 색으로 보여요 (--pp-* 값은 반전 필터를 거친 뒤 그 색이 되도록 계산한 값) */
+:root { --pp-yellow: #fceaaa; --pk-yellow: #fceaaa; --pp-green: #cdefd9; --pk-green: #cdefd9; --pp-blue: #cfe0ff; --pk-blue: #cfe0ff; --pp-purple: #d2beff; --pk-purple: #d2beff; --pp-pink: #f7c6f0; --pk-pink: #f7c6f0; }
+html.dark { --pp-yellow: #c4b486; --pk-yellow: #5f5128; --pp-green: #9ccab5; --pk-green: #2a5240; --pp-blue: #b0caf5; --pk-blue: #2b4268; --pp-purple: #cfc2ff; --pk-purple: #433870; --pp-pink: #f6bfee; --pk-pink: #5e2d57; }
+/* 팝업 뒤 어둡게 깔리는 막: 화면 반전 때문에 다크 모드에서 오히려 밝게 덮이던 것을 어둡게 (11.18) */
+html.dark .m-scrim { background: rgba(255,255,255,.5) !important; }
+/* 접힌 부분 색 (.dk-keep 안쪽용) */
+:root { --pka-yellow: #efbf2a; }
+html.dark { --pka-yellow: #b39339; }

@@ -44,8 +44,9 @@
 .m-odo > span > span { height: 1.3em; }
 
 /* 선 그리기 */
-.m-line { stroke-dasharray: 400; stroke-dashoffset: 400; animation: m-draw calc(1s * var(--k)) var(--ease) forwards; }
-@keyframes m-draw { to { stroke-dashoffset: 0; } }
+/* 11.18: 선 그리기는 왼쪽→오른쪽으로 걷어내듯 보여 줌. 예전 점선(dasharray 400) 방식은 화면 길이가 400px을 넘는 선(1년 그래프 등)에서 중간이 끊겨 보였음 */
+.m-line { clip-path: inset(-6px 100% -6px -6px); animation: m-draw calc(1s * var(--k)) var(--ease) forwards; }
+@keyframes m-draw { to { clip-path: inset(-6px -6px -6px -6px); } }
 
 /* 체크 */
 .m-check { transition: background var(--t-fast), box-shadow .2s, transform var(--t-pop) var(--spring); }

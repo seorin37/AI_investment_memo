@@ -1,32 +1,63 @@
 # web/ — MEMO'S 웹 (Vite + React 19 + TypeScript + Tailwind)
 
-웹 시연 v2를 옮겨 온 웹 전용 프론트엔드. `frontend/`(Expo 앱)와 따로 돈다.
+웹 시연 v2를 옮겨 온 웹 전용 프론트엔드예요. `frontend/`(Expo 앱)와 따로 돌아요.
 
 | 명령 | 하는 일 |
 |---|---|
 | `npm ci` | 설치 (package-lock.json 기준) |
-| `npm run dev` | 개발 서버 http://localhost:8081 (백엔드 CORS·로그인 복귀 주소가 8081 기준) |
-| `npm run build` | `dist/`에 빌드 |
+| `npm run dev` | 개발 서버 http://localhost:8081 (백엔드 CORS와 로그인 복귀 주소가 8081 기준) |
+| `npm run build` | 타입 검사 후 `dist/`에 빌드 |
 | `npm run preview` | 빌드 결과를 8081에서 확인 |
+| `npm run lint` | oxlint |
 
-- 주의: Expo 개발 서버(`frontend`의 `npm run web`)도 8081을 써서 둘을 동시에 띄울 수 없음.
-- 결정 기록: `DECISIONS.md`, 화면 명세: `SPEC.md`
+- Expo 개발 서버(`frontend`의 `npm run web`)도 8081을 써요. 그래서 둘을 동시에 띄울 수 없어요.
 
-## 두 가지 모드
+## 데이터 구조 (11.18~)
+- 화면 코드에는 예시 데이터가 없어요. 화면은 `src/api/index.ts`의 `api` 객체로만 데이터를 받아요.
+- 지금은 **가상 서버**(`src/api/mock/`)가 답해요.
+  - 코스피 시총 상위 50종목마다 시세·차트·재무·공시/뉴스/주가 소식을 날짜 기준으로 만들어요.
+  - 같은 날이면 같은 값이 나와요.
+- 내 데이터는 브라우저 localStorage에 계정(소셜 제공자)별로 저장돼요.
+  - 새로고침하거나 다시 로그인해도 그대로 남아요.
+- **새 가입자는 빈 상태로 시작해요.** 고른 종목만 있고, 메모·기록·만든 항목은 없어요.
+- 백엔드 연결 방법과 데이터 모양은 **`API.md`**에 있어요. 타입은 `src/api/types.ts`에 있어요.
 
-| 모드 | 켜는 법 | 데이터 |
-|---|---|---|
-| 시연 (기본) | 아무것도 안 함 | 예시 데이터(`src/data.ts`). 서버 호출 없음. 화면은 이전과 같음 |
-| API | `cp .env.example .env.local` (`VITE_USE_API=true`, `VITE_API_BASE_URL`) | FastAPI + PostgreSQL |
+```
+src/api/types.ts        API 데이터 모양 (백엔드와의 약속)
+src/api/index.ts        api 객체 — 백엔드 연결 시 여기만 바꿈
+src/api/mock/           가상 서버 (universe 50종목 · market · ai · db(localStorage) · seed(발표용 예시 계정))
+src/store.tsx           내 데이터 상태(ud) + 모든 변경(act.*) + 로그인 세션(useSession)
+```
 
-API 모드에서 서버와 연결된 것 (나머지는 예시 데이터로 남고, 화면 위에 '예시 데이터' 안내가 뜸):
+## 시연 도구
+- 키보드 `` ` `` 키나 왼쪽 아래 '시연' 버튼으로 열어요.
+- **예시 계정으로 보기**: 메모 8개, 체크리스트, 투자 기록, 만든 항목이 채워진 발표용 계정이에요.
+- **처음 상태로 초기화**: 모든 계정을 지우고 첫 화면부터 시작해요.
+- 실패, 사용량 소진, 인터넷 끊김 같은 상황도 여기서 켤 수 있어요.
 
-- 로그인: 카카오·네이버·구글 버튼 → `GET /auth/{provider}/start?client=web` → 돌아오면 쿠키 세션으로 `GET /auth/me`. 로그아웃 `POST /auth/logout`
-- 내 종목: 목록·검색·추가·삭제·보유/관심 바꾸기 (`/stocks`, `/stocks/search`)
-- 메모 보드: 메모 만들기·고치기·색·고정·삭제(휴지통, 6초 뒤 서버에서 지움 — '되돌리기' 5초 안이면 안 지움)·AI 연결 켜기/끄기, 종목마다 체크리스트 하나
-- AI 업데이트: 메모를 열면 `GET /memos/{id}/timeline`, 빨간 숫자를 지우면 `POST /ai-updates/{id}/read`
+## 전체 흐름 테스트
+```
+npm i -D playwright && npx playwright install chromium   # 한 번만
+npm run dev                                               # 다른 터미널에서
+node e2e/full-flow.cjs                                    # 85개 항목 · 실패하면 e2e/out/fail_*.png
+```
+테스트는 아래 흐름을 확인해요.
+1. 가입하고 종목을 골라요.
+2. 종목별 체크리스트와 메모를 써요.
+3. AI 연결, 타임라인, 배지를 확인해요.
+4. 수정 이력을 확인해요.
+5. 휴지통으로 보내고 복원해요.
+6. 종목을 뺐다가 복원해요.
+7. 스튜디오 4종이 내 종목으로 만들어지는지 확인해요.
+8. 업데이트 화면과 기업정보를 확인해요.
+9. 새로고침과 재로그인 뒤에도 데이터가 남는지 확인해요.
+10. 다른 계정으로 로그인해요.
+11. 알림, 검색, 프로필, 알림 끄기를 확인해요.
+12. 다크 모드와 맞춤 홈을 확인해요.
+13. 전체 삭제와 탈퇴를 확인해요.
+14. 다크 모드 메모지 색, 이름 꺾임, 그래프 선, 메모·체크리스트 끌어서 옮기기(마우스·터치)를 확인해요.
 
-코드 위치: `src/api/` (`config` 환경변수 · `http` 쿠키+CSRF 클라이언트 · `client` 엔드포인트 · `map` 응답→화면 모양 · `sync` 상태 변화→API), `src/apimode.tsx`(오류 알림·예시 안내).
-화면 컴포넌트는 지금처럼 `setStocks`·`setMemos`로 상태만 바꾸고, `store.tsx`가 서버에 저장된 값과 비교해 필요한 요청만 보낸다. 요청이 실패하면 알림을 띄우고 서버 상태로 다시 불러온다.
-
-백엔드 쪽 필요 설정 (`.env`, 값은 프론트에 넣지 않음): `AUTH_JWT_SECRET`, `AUTH_PUBLIC_BASE_URL`, `AUTH_WEB_RETURN_URLS=http://localhost:8081`, `AUTH_MOBILE_RETURN_URLS`, `{KAKAO,NAVER,GOOGLE}_OAUTH_CLIENT_ID/SECRET`, 로컬 http면 `AUTH_COOKIE_SECURE=false`. CORS 기본값이 `http://localhost:8081`이라 개발 서버는 8081 그대로 쓴다.
+## 문서
+- 결정 기록: `DECISIONS.md`
+- 화면 명세: `SPEC.md`
+- 백엔드 API: `API.md`

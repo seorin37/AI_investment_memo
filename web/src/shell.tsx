@@ -1,10 +1,11 @@
+import { api } from "./api";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { DarkRail, DarkRow } from "./theme";
 import { cx } from "./kit";
-import { useApp, useProfile } from "./store";
-import { API_MODE } from "./api/config";
+import { useApp } from "./store";
 import { Icon, SLogo, type IconName } from "./fig";
-import { WORDMARK, AVATAR } from "./assets_wm";
+import { WORDMARK } from "./assets_wm";
+import { Avatar } from "./screens/overlays";
 import { BellBtn, CtxMenu, matchKo } from "./x";
 import { useStockActions } from "./screens/mine";
 import type { Stock } from "./data";
@@ -14,9 +15,9 @@ const LABEL = "text-[17px] leading-[26px] text-[#1c1c1c]";
 
 function Row({ icon, label, on, onClick, w = 218, children }: { icon?: IconName; label: string; on?: boolean; onClick?: () => void; w?: number; children?: ReactNode }) {
   return (
-    <button onClick={onClick} className={cx("flex h-10 shrink-0 items-center gap-2 rounded-[8px] px-3 text-left", on ? "bg-[#f3f1ef]" : "bg-white hover:bg-[#f9f9f9]")} style={{ width: w }}>
-      {icon && <Icon n={icon} c={on ? "#5E5668" : "#333333"} />}
-      <span className={cx(LABEL, on && "font-bold !text-[#5e5668]")}>{label}</span>
+    <button onClick={onClick} className={cx("flex h-10 shrink-0 items-center gap-2 rounded-[8px] px-3 text-left", on ? "bg-[#FBF8FF]" : "bg-white hover:bg-[#f9f9f9]")} style={{ width: w }}>
+      {icon && <Icon n={icon} c={on ? "#6A42AB" : "#333333"} />}
+      <span className={cx(LABEL, on && "font-bold !text-[#6A42AB]")}>{label}</span>
       {children}
     </button>
   );
@@ -24,7 +25,6 @@ function Row({ icon, label, on, onClick, w = 218, children }: { icon?: IconName;
 
 export function Sidebar() {
   const { route, go, stocks, memos, setOverlay, openSettings, sideOpen, setSideOpen } = useApp();
-  const profile = useProfile();
   const [open, setOpen] = useState({ mine: true, 보유: true, 관심: true });
   const [fly, setFly] = useState(false);
   const [q, setQ] = useState("");
@@ -35,10 +35,10 @@ export function Sidebar() {
   useEffect(() => { const k = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setSideOpen(true); setTimeout(() => qRef.current?.focus(), 60); } }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [setSideOpen]);
   const isStock = (c: string) => route.name === "stock" && route.code === c;
   const homeOn = route.name === "home" || route.name === "custom" || route.name === "start";
-  const { journal, x, setX } = useApp();
+  const { journal, ud, act } = useApp();
   const res = q.trim()
-    ? [...stocks.filter((s) => matchKo(s.name, q) || s.code.includes(q)).map((s) => ({ k: "s" + s.code, t: s.name, sub: s.code, go: () => { setX((v) => ({ ...v, recent: [s.name, ...v.recent.filter((r) => r !== s.name)].slice(0, 5) })); go({ name: "stock", code: s.code, tab: "board" }); } })),
-       ...memos.filter((m) => (m.title + m.body).includes(q)).slice(0, 4).map((m) => ({ k: "m" + m.id, t: m.title, sub: `${stocks.find((s) => s.code === m.code)?.name ?? ""} 메모`, go: () => go({ name: "stock", code: m.code, tab: "board" }) })),
+    ? [...stocks.filter((s) => matchKo(s.name, q) || s.stock_code.includes(q)).map((s) => ({ k: "s" + s.stock_code, t: s.name, sub: s.stock_code, go: () => { act.recent(s.name); go({ name: "stock", code: s.stock_code, tab: "board" }); } })),
+       ...memos.filter((m) => (m.title + m.body).includes(q)).slice(0, 4).map((m) => ({ k: "m" + m.id, t: m.title, sub: `${stocks.find((s) => s.stock_code === m.stock_code)?.name ?? ""} 메모`, go: () => go({ name: "stock", code: m.stock_code, tab: "board" }) })),
        ...journal.filter((j) => (j.title + j.body.join(" ")).includes(q)).slice(0, 3).map((j) => ({ k: "j" + j.id, t: j.title || "제목 없음", sub: "투자 기록", go: () => go({ name: "journal" }) }))]
     : [];
   const [focus, setFocus] = useState(false);
@@ -80,7 +80,7 @@ export function Sidebar() {
             {Support}
           </div>
           <span className="h-px w-10 bg-[#f9f9f9]" />
-          <button aria-label="내 프로필" onClick={() => openSettings("내 프로필")} className="h-10 w-10 overflow-hidden rounded-full"><img src={AVATAR} alt="" className="dk-keep h-full w-full object-cover" /></button>
+          <button aria-label="내 프로필" onClick={() => openSettings("내 프로필")} className="h-10 w-10 overflow-hidden rounded-full"><Avatar size={40} /></button>
         </div>
       </nav>
     );
@@ -106,9 +106,9 @@ export function Sidebar() {
           {!q.trim() && focus && (
             <div data-search-hint className="m-pop absolute left-0 top-12 z-40 w-[218px] rounded-[12px] border border-[#e5e8eb] bg-white p-1.5 shadow-[0_8px_24px_rgba(31,46,84,.10)]">
               <p className="px-[10px] pb-1 pt-2 text-[13px] font-bold text-[#8b95a1]">최근 찾은 종목</p>
-              <div className="flex flex-wrap gap-1 px-2 pb-2">{x.recent.map((r) => <button key={r} onMouseDown={(e) => e.preventDefault()} onClick={() => { const s = stocks.find((y) => y.name === r); if (s) go({ name: "stock", code: s.code, tab: "board" }); else setQ(r); }} className="rounded-full bg-[#f2f3f4] px-[10px] py-1 text-[13px] font-medium text-[#333d4b] hover:bg-[#e9eaec]">{r}</button>)}</div>
+              <div className="flex flex-wrap gap-1 px-2 pb-2">{ud.recent.map((r) => <button key={r} onMouseDown={(e) => e.preventDefault()} onClick={() => { const s = stocks.find((y) => y.name === r); if (s) go({ name: "stock", code: s.stock_code, tab: "board" }); else setQ(r); }} className="rounded-full bg-[#f2f3f4] px-[10px] py-1 text-[13px] font-medium text-[#333d4b] hover:bg-[#e9eaec]">{r}</button>)}</div>
               <p className="px-[10px] pb-1 pt-1 text-[13px] font-bold text-[#8b95a1]">많이 찾는 종목</p>
-              {[["005930", "삼성전자"], ["000660", "SK하이닉스"], ["373220", "LG에너지솔루션"], ["005380", "현대차"]].map(([c, n]) => <button key={c} onMouseDown={(e) => e.preventDefault()} onClick={() => { if (stocks.some((s) => s.code === c)) go({ name: "stock", code: c, tab: "board" }); else setOverlay("addStock"); qRef.current?.blur(); }} className="flex h-9 w-full items-center justify-between rounded-[10px] px-[10px] text-left hover:bg-[#f5f6f8]"><span className="text-[14px] font-medium text-[#191f28]">{n}</span><span className="text-[13px] text-[#8f8f8f]">{stocks.some((s) => s.code === c) ? "내 종목" : "추가"}</span></button>)}
+              {api.market.popular().map((c) => [c, api.market.info(c)?.name ?? c]).map(([c, n]) => <button key={c} onMouseDown={(e) => e.preventDefault()} onClick={() => { if (stocks.some((s) => s.stock_code === c)) go({ name: "stock", code: c, tab: "board" }); else setOverlay("addStock"); qRef.current?.blur(); }} className="flex h-9 w-full items-center justify-between rounded-[10px] px-[10px] text-left hover:bg-[#f5f6f8]"><span className="text-[14px] font-medium text-[#191f28]">{n}</span><span className="text-[13px] text-[#8f8f8f]">{stocks.some((s) => s.stock_code === c) ? "내 종목" : "추가"}</span></button>)}
               <p className="px-[10px] pb-1 pt-2 text-[13px] leading-[20px] text-[#8b95a1]">종목·메모·기록을 한 번에 찾아요</p>
             </div>
           )}
@@ -149,10 +149,10 @@ export function Sidebar() {
                   </button>
                   <div className={cx("grid transition-[grid-template-rows] duration-300", open[g] ? "grid-rows-[1fr]" : "grid-rows-[0fr]")}>
                     <div className="overflow-hidden">
-                      <div className="flex gap-[3px] pl-11">
+                      {list.length ? <div className="flex gap-[3px] pl-11">
                         <span className="w-px shrink-0 bg-[#e5e7eb]" />
                         <SortList list={list} isStock={isStock} onMenu={(st, at) => setSmenu({ s: st, at })} />
-                      </div>
+                      </div> : <p data-group-empty className="pb-1 pl-11 text-[13px] leading-[20px] text-[#9aa0aa]">{g} 종목이 없어요</p>}
                     </div>
                   </div>
                 </div>
@@ -174,8 +174,8 @@ export function Sidebar() {
         <span className="h-px w-[218px] bg-[#f9f9f9]" />
         <div className="flex h-12 w-[218px] items-center justify-between pr-1">
           <button onClick={() => openSettings("내 프로필")} className="flex items-center gap-3 text-left">
-            <img src={AVATAR} alt="" className="dk-keep h-12 w-12 rounded-full object-cover" />
-            <span className="flex flex-col gap-1"><span className={cx(LABEL, API_MODE && "max-w-[140px] truncate")}>{profile.name}</span><span className="text-[13px] leading-[20px] text-[#9f9f9f]">{profile.sub}</span></span>
+            <span className="dk-keep"><Avatar size={48} fs={20} /></span>
+            <span className="flex min-w-0 flex-col gap-1"><span className={cx(LABEL, "max-w-[130px] truncate")}>{ud.profile?.name ?? ""}</span><span className="max-w-[130px] truncate text-[13px] leading-[20px] text-[#9f9f9f]">{ud.profile?.job ?? ""}</span></span>
           </button>
           <button aria-label="로그아웃" title="로그아웃" onClick={() => setOverlay("logout")} className="grid h-[18px] w-[18px] place-items-center"><Icon n="logout" size={18} /></button>
         </div>
@@ -189,10 +189,10 @@ export function Sidebar() {
    끌기는 4px 넘게 움직였을 때만 (그냥 누르면 그 종목으로 이동). 키보드: Alt + ↑/↓ */
 const ROW = 52;
 function SortList({ list, isStock, onMenu }: { list: Stock[]; isStock: (c: string) => boolean; onMenu: (s: Stock, at: { x: number; y: number }) => void }) {
-  const { go, setStocks } = useApp();
+  const { go, act, stocks: allStocks } = useApp();
   const [drag, setDrag] = useState<{ code: string; from: number; dy: number } | null>(null);
   const [moved, setMoved] = useState<Record<string, "up" | "dn">>({});
-  const ids = list.map((s) => s.code);
+  const ids = list.map((s) => s.stock_code);
   const target = drag ? Math.max(0, Math.min(ids.length - 1, Math.round((drag.from * ROW + drag.dy) / ROW))) : -1;
   const order = drag ? (() => { const o = ids.filter((c) => c !== drag.code); o.splice(target, 0, drag.code); return o; })() : ids;
   const commit = (code: string, to: number) => {
@@ -200,17 +200,17 @@ function SortList({ list, isStock, onMenu }: { list: Stock[]; isStock: (c: strin
     const next = ids.filter((c) => c !== code); next.splice(to, 0, code);
     const mv: Record<string, "up" | "dn"> = {}; next.forEach((c, i) => { const was = ids.indexOf(c); if (was > i) mv[c] = "up"; else if (was < i) mv[c] = "dn"; });
     setMoved(mv); window.setTimeout(() => setMoved({}), 1300);
-    setStocks((all) => { const inG = new Set(ids), byCode = new Map(all.map((x) => [x.code, x])); let k = 0; return all.map((x) => (inG.has(x.code) ? byCode.get(next[k++])! : x)); });
+    { const inG = new Set(ids); let k = 0; act.reorder(allStocks.map((x) => (inG.has(x.stock_code) ? next[k++] : x.stock_code))); }
   };
   const down = (s: Stock, i: number) => (e: React.PointerEvent) => {
     if (e.button !== 0) return;
     const y0 = e.clientY; let started = false;
-    const mv = (ev: PointerEvent) => { const dy = ev.clientY - y0; if (!started && Math.abs(dy) < 4) return; started = true; setDrag({ code: s.code, from: i, dy }); };
+    const mv = (ev: PointerEvent) => { const dy = ev.clientY - y0; if (!started && Math.abs(dy) < 4) return; started = true; setDrag({ code: s.stock_code, from: i, dy }); };
     const up = (ev: PointerEvent) => {
       window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up);
       if (!started) return;
       const dy = ev.clientY - y0, to = Math.max(0, Math.min(ids.length - 1, Math.round((i * ROW + dy) / ROW)));
-      setDrag(null); commit(s.code, to);
+      setDrag(null); commit(s.stock_code, to);
       const stop = (ce: MouseEvent) => { ce.stopPropagation(); ce.preventDefault(); window.removeEventListener("click", stop, true); }; window.addEventListener("click", stop, true); window.setTimeout(() => window.removeEventListener("click", stop, true), 50);
     };
     window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
@@ -219,20 +219,20 @@ function SortList({ list, isStock, onMenu }: { list: Stock[]; isStock: (c: strin
   return (
     <div data-sort-list className="relative w-[170px]" style={{ height: list.length * ROW - 12 }}>
       {list.map((s, i) => {
-        const pos = order.indexOf(s.code), me = drag?.code === s.code;
+        const pos = order.indexOf(s.stock_code), me = drag?.code === s.stock_code;
         const y = me ? drag!.from * ROW + drag!.dy : pos * ROW;
-        const st = me ? "lift" : moved[s.code] ?? "";
+        const st = me ? "lift" : moved[s.stock_code] ?? "";
         return (
-          <div key={s.code} data-sort-row={s.code} className={cx("group absolute left-0 top-0 w-[170px] rounded-[8px]", me ? "z-20 shadow-[0_10px_22px_-12px_rgba(17,17,17,.45)]" : st === "up" ? "z-10 shadow-[0_10px_22px_-12px_rgba(17,17,17,.35)]" : st === "dn" ? "z-0 opacity-90" : "")}
+          <div key={s.stock_code} data-sort-row={s.stock_code} className={cx("group absolute left-0 top-0 w-[170px] rounded-[8px]", me ? "z-20 shadow-[0_10px_22px_-12px_rgba(17,17,17,.45)]" : st === "up" ? "z-10 shadow-[0_10px_22px_-12px_rgba(17,17,17,.35)]" : st === "dn" ? "z-0 opacity-90" : "")}
             style={{ transform: `translateY(${y}px)${me ? " scale(1.03)" : ""}`, transition: me ? "box-shadow .3s" : "transform calc(.6s * var(--k)) cubic-bezier(.3,1.1,.4,1), box-shadow .3s, opacity .3s", background: me ? "#fff" : undefined }}
             onContextMenu={(e) => { e.preventDefault(); onMenu(s, { x: e.clientX, y: e.clientY }); }}>
-            <button data-stock={s.code} onPointerDown={down(s, i)} onClick={() => go({ name: "stock", code: s.code, tab: "board" })}
-              onKeyDown={(e) => { if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) { e.preventDefault(); commit(s.code, i + (e.key === "ArrowUp" ? -1 : 1)); } }}
-              title="끌어서 순서 바꾸기 · Alt + ↑↓" className={cx("m-new flex h-10 w-[170px] touch-none select-none items-center gap-2 rounded-[8px] pl-2 pr-3", me ? "cursor-grabbing bg-white" : isStock(s.code) ? "bg-[#f3f1ef]" : "hover:bg-[#f9f9f9]")}>
-              <SLogo code={s.code} size={24} r={7.2} />
-              <span className={cx("truncate", LABEL, isStock(s.code) && "font-bold !text-[#5e5668]")}>{s.name}</span>
+            <button data-stock={s.stock_code} onPointerDown={down(s, i)} onClick={() => go({ name: "stock", code: s.stock_code, tab: "board" })}
+              onKeyDown={(e) => { if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) { e.preventDefault(); commit(s.stock_code, i + (e.key === "ArrowUp" ? -1 : 1)); } }}
+              title="끌어서 순서 바꾸기 · Alt + ↑↓" className={cx("m-new flex h-10 w-[170px] touch-none select-none items-center gap-2 rounded-[8px] pl-2 pr-3", me ? "cursor-grabbing bg-white" : isStock(s.stock_code) ? "bg-[#FBF8FF]" : "hover:bg-[#f9f9f9]")}>
+              <SLogo code={s.stock_code} size={24} r={7.2} />
+              <span className={cx("truncate", LABEL, isStock(s.stock_code) && "font-bold !text-[#6A42AB]")}>{s.name}</span>
             </button>
-            {!drag && <button aria-label={`${s.name} 메뉴`} data-stock-menu={s.code} onClick={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); onMenu(s, { x: r.left, y: r.bottom + 4 }); }} className="absolute right-1 top-2 grid h-6 w-6 place-items-center rounded-[6px] text-[#8b95a1] opacity-0 transition-opacity hover:bg-[#ececec] focus-visible:opacity-100 group-hover:opacity-100"><svg width="14" height="14" viewBox="0 0 18 18" fill="currentColor"><circle cx="4" cy="9" r="1.5" /><circle cx="9" cy="9" r="1.5" /><circle cx="14" cy="9" r="1.5" /></svg></button>}
+            {!drag && <button aria-label={`${s.name} 메뉴`} data-stock-menu={s.stock_code} onClick={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); onMenu(s, { x: r.left, y: r.bottom + 4 }); }} className="absolute right-1 top-2 grid h-6 w-6 place-items-center rounded-[6px] text-[#8b95a1] opacity-0 transition-opacity hover:bg-[#ececec] focus-visible:opacity-100 group-hover:opacity-100"><svg width="14" height="14" viewBox="0 0 18 18" fill="currentColor"><circle cx="4" cy="9" r="1.5" /><circle cx="9" cy="9" r="1.5" /><circle cx="14" cy="9" r="1.5" /></svg></button>}
           </div>
         );
       })}
@@ -242,18 +242,18 @@ function SortList({ list, isStock, onMenu }: { list: Stock[]; isStock: (c: strin
 
 function RailBtn({ icon, label, on, onClick, plain }: { icon: IconName; label: string; on?: boolean; onClick?: () => void; plain?: boolean }) {
   return (
-    <button aria-label={label} title={label} onClick={onClick} className={cx("grid h-10 w-10 place-items-center rounded-[8px]", on ? "bg-[#f3f1ef]" : plain ? "hover:bg-[#f9f9f9]" : "bg-white hover:bg-[#f9f9f9]")}>
-      <Icon n={icon} c={on ? "#5E5668" : "#333333"} />
+    <button aria-label={label} title={label} onClick={onClick} className={cx("grid h-10 w-10 place-items-center rounded-[8px]", on ? "bg-[#FBF8FF]" : plain ? "hover:bg-[#f9f9f9]" : "bg-white hover:bg-[#f9f9f9]")}>
+      <Icon n={icon} c={on ? "#6A42AB" : "#333333"} />
     </button>
   );
 }
 
-/* 가운데 영역 (배경 #f3f4f6) */
+/* 가운데 영역 (배경 #FDFDFD) */
 export function Main({ children, navKey }: { children: ReactNode; navKey: number }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { ref.current?.scrollTo({ top: 0 }); }, [navKey]);
   return (
-    <main ref={ref} className="relative min-w-0 flex-1 overflow-y-auto bg-[#f3f4f6] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <main ref={ref} className="relative min-w-0 flex-1 overflow-y-auto bg-[#FDFDFD] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <div key={navKey} className="m-in min-h-full">{children}</div>
     </main>
   );
