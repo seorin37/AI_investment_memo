@@ -189,7 +189,7 @@ def enable_test_memos_ai(dst) -> int:
 
 # ------------------------------------------------------------------ 항목 읽기
 ITEMS_SQL = """SELECT ti.id, btrim(m.symbol), ti.type::text, COALESCE(r.description, ti.description),
-       COALESCE(r.keywords, ti.keywords), COALESCE(r.price_threshold, ti.price_threshold), m.content
+       COALESCE(r.keywords, ti.keywords), COALESCE(r.price_threshold, ti.price_threshold), m.content, m.title
 FROM tracking_items ti
 JOIN memos m ON m.id = ti.memo_id
 LEFT JOIN LATERAL (SELECT description, keywords, price_threshold FROM tracking_item_revisions
@@ -204,13 +204,15 @@ REVISIONS_SQL = """SELECT
 
 
 def load_items(conn, symbols) -> list[TrackingItem]:
-    """AI가 켜진 note 메모의 활성 추적 항목 (최신 버전의 설명·핵심어·조건가). item_id는 tracking_items.id 문자열."""
+    """AI가 켜진 note 메모의 활성 추적 항목 (최신 버전의 설명·핵심어·조건가). item_id는 tracking_items.id 문자열.
+    memo_text = 제목 + 본문 (memo_full_text, 메모 분석과 같은 규칙). 2026-11-18 전에는 본문만이라 한 줄 메모는 빈 값이었다."""
     out = []
     params = {"all": symbols is None, "symbols": list(symbols or [])}     # symbols None = 전체 활성 항목
-    for iid, sym, typ, desc, kw, threshold, content in conn.execute(ITEMS_SQL, params).fetchall():
+    for iid, sym, typ, desc, kw, threshold, content, title in conn.execute(ITEMS_SQL, params).fetchall():
         keywords = tuple(k.strip() for k in re.split(r"[,\n]", kw or "") if k.strip())
         out.append(TrackingItem(item_id=str(iid), symbol=sym, type=typ, description=desc, keywords=keywords,
-                                price_threshold=None if threshold is None else int(threshold), memo_text=content or ""))
+                                price_threshold=None if threshold is None else int(threshold),
+                                memo_text=memo_full_text(title, content)))
     return out
 
 
