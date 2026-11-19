@@ -1,4 +1,4 @@
-/* 자동 생성 (scratchpad tools/gen_icons.mjs) — 웹 원본 fig.tsx Icon 세트 + 화면 tsx 인라인 svg (앱 아이콘과 같은 모양은 앱 세트에). 손으로 고치지 말고 생성기를 다시 돌릴 것 */
+/* 자동 생성 (frontend/scripts/ui-v2/gen-icons.mjs) — 웹 원본 fig.tsx Icon 세트 + 화면 tsx 인라인 svg (앱 아이콘과 같은 모양은 앱 세트에). 손으로 고치지 말고 생성기를 다시 돌릴 것 */
 import type { IconDef } from './iconTypes';
 
 export const WEB_ICONS = {

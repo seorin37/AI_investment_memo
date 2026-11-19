@@ -1,6 +1,6 @@
 import React, { type ComponentType } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
-import Svg, { Circle, ClipPath, Defs, Ellipse, G, Line, LinearGradient, Path, Polygon, Polyline, RadialGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Circle, ClipPath, Defs, Ellipse, G, Line, LinearGradient, Mask, Path, Polygon, Polyline, RadialGradient, Rect, Stop } from 'react-native-svg';
 import type { IconAttrs, IconDef, IconNode } from './iconTypes';
 
 const DEFAULT_INK = '#16171A';
@@ -23,6 +23,7 @@ const TAGS: Record<string, AnySvg> = {
   radialGradient: RadialGradient as unknown as AnySvg,
   stop: Stop as unknown as AnySvg,
   clipPath: ClipPath as unknown as AnySvg,
+  mask: Mask as unknown as AnySvg,
 };
 
 function paint(v: string | number, main: string, color: string | undefined): string | number {

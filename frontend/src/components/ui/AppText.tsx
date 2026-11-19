@@ -1,7 +1,7 @@
 /**
  * 앱 화면용 Text · TextInput — style 의 fontWeight 를 Pretendard 굵기 글꼴로 바꿔 줌 (11.18).
  * 받은 앱 UI 코드는 fontWeight 로 굵기를 적어서, RN 기본 Text 그대로면 시스템 글꼴로 보이고 안드로이드는 굵기도 어긋난다.
- * 400 이하 → Regular · 500 → Medium · 600 → SemiBold · 700 이상 → Bold. fontFamily 를 직접 준 곳은 그대로 둔다.
+ * 400 이하 → Regular · 500 → Medium · 600 → SemiBold · 700 → Bold · 800 이상 → ExtraBold (11.19 UI v2). fontFamily 를 직접 준 곳은 그대로 둔다.
  * (웹 겸용 기존 화면은 지금처럼 components/ui/Text.tsx 의 <T> 를 쓴다)
  */
 import type { ComponentProps } from 'react';
@@ -10,6 +10,7 @@ import { fonts } from '@/theme/tokens';
 
 function familyOf(weight: TextStyle['fontWeight']): string {
   const n = weight === 'bold' ? 700 : weight == null || weight === 'normal' ? 400 : Number(weight);
+  if (n >= 800) return fonts.extrabold;
   if (n >= 700) return fonts.bold;
   if (n >= 600) return fonts.semibold;
   if (n >= 500) return fonts.medium;

@@ -1,4 +1,4 @@
-/* 자동 생성 (scratchpad tools/gen_icons.mjs) — 로고. 손으로 고치지 말고 생성기를 다시 돌릴 것 */
+/* 자동 생성 (frontend/scripts/ui-v2/gen-icons.mjs) — 로고. 손으로 고치지 말고 생성기를 다시 돌릴 것 */
 import type { IconDef } from './iconTypes';
 
 export const LOGOS = {
