@@ -3,9 +3,9 @@ import type { AppIconName } from '@/ui/icons/Icon';
 /**
  * 원본 화면별 상단 바 (원본 HTML 실측)
  * 탭 화면: home(.hh 60·로고) · updates(.uh 56) · stocks(.hh 60) · journal(.hh 60) · studio(.sh 56) · start(.hh 56·로고)
- * 밀려 들어오는 화면: board(메모 보드 .hdr 56·흰 바탕) · memoDetail(.dh 56) · company(.ph2 56) · my(.bh 58)
+ * 밀려 들어오는 화면: board(메모 보드 .hdr 56·흰 바탕) · memoDetail(.dh 56) · company(.ph2 56) · my(.bh 58) · market(홈 지수 자세히 .ph2 56·흰 바탕)
  */
-export type TopBarPreset = 'home' | 'updates' | 'stocks' | 'journal' | 'studio' | 'start' | 'board' | 'memoDetail' | 'company' | 'my';
+export type TopBarPreset = 'home' | 'updates' | 'stocks' | 'journal' | 'studio' | 'start' | 'board' | 'memoDetail' | 'company' | 'my' | 'market';
 
 export interface TopBarAction {
   icon: AppIconName;

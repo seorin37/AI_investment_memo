@@ -38,6 +38,7 @@ const SPEC: Record<TopBarPreset, Spec> = {
   memoDetail: { h: 56, padL: 6, padR: 6, bg: appColor.surface, btn: 42, btnGap: 0, avatarGap: 0, back: 42, backIcon: 'back', titleGap: 0, title: { ...ft(17), fontWeight: '600', color: appColor.ink } },
   company: { h: 56, padL: 6, padR: 6, bg: appColor.bg, btn: 40, btnGap: 0, avatarGap: 0, back: 40, backIcon: 'back', titleGap: 4, title: { ...ft(18), fontWeight: '700', color: appColor.ink } },
   my: { h: 58, padL: 10, padR: 10, bg: appColor.bg, btn: 42, btnGap: 0, avatarGap: 0, back: 42, backIcon: 'back', titleGap: 6, title: { ...ft(19), fontWeight: '700', color: appColor.ink } },
+  market: { h: 56, padL: 6, padR: 6, bg: appColor.surface, btn: 42, btnGap: 0, avatarGap: 0, back: 42, backIcon: 'back', titleGap: 0, title: { ...ft(17), fontWeight: '700', color: appColor.ink } },
 };
 
 /**

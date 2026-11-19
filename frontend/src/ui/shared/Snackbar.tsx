@@ -5,7 +5,6 @@ import { Text } from '@/components/ui/AppText';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { appColor, curve, dur, ft, shadow, webColor } from '@/ui/theme';
 
-const ACircle = Animated.createAnimatedComponent(Circle);
 
 export interface SnackbarProps {
   visible: boolean;
@@ -27,6 +26,12 @@ function UndoRing({ variant, run }: { variant: 'app' | 'web'; run: boolean }) {
   const r = app ? 9 : 6;
   const len = 2 * Math.PI * r;
   const [off] = useState(() => new Animated.Value(0));
+  /* 웹에서 Animated SVG 는 DOM 에 collapsable 을 흘려서, 값을 받아 다시 그림 */
+  const [o, setO] = useState(0);
+  useEffect(() => {
+    const id = off.addListener(({ value }) => setO(value));
+    return () => off.removeListener(id);
+  }, [off]);
   useEffect(() => {
     if (!run) return;
     off.setValue(0);
@@ -39,7 +44,7 @@ function UndoRing({ variant, run }: { variant: 'app' | 'web'; run: boolean }) {
   return (
     <Svg width={s} height={s} viewBox={`0 0 ${s} ${s}`}>
       <Circle cx={s / 2} cy={s / 2} r={r} fill="none" stroke={app ? 'rgba(255,255,255,0.2)' : '#E5E7EB'} strokeWidth={app ? 2.4 : 2} />
-      <ACircle cx={s / 2} cy={s / 2} r={r} fill="none" stroke={app ? '#CDBBFF' : webColor.ink} strokeWidth={app ? 2.4 : 2} strokeLinecap={app ? 'round' : 'butt'} strokeDasharray={`${len}`} strokeDashoffset={off} transform={`rotate(-90 ${s / 2} ${s / 2})`} />
+      <Circle cx={s / 2} cy={s / 2} r={r} fill="none" stroke={app ? '#CDBBFF' : webColor.ink} strokeWidth={app ? 2.4 : 2} strokeLinecap={app ? 'round' : 'butt'} strokeDasharray={`${len}`} strokeDashoffset={o} transform={`rotate(-90 ${s / 2} ${s / 2})`} />
     </Svg>
   );
 }
