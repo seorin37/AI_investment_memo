@@ -170,7 +170,9 @@ def cumulative_table(title: str, text: str) -> bool:
     사업의 내용 표(주요 제품 현황·매출실적 등)는 열 이름 없이 기준일까지 누적 금액을 적는다."""
     text = text or ""
     head = text.split("]", 1)[0]                      # "[셀트리온 2026 3분기 | II. 사업의 내용 > 2. 주요 제품 및 서비스]"
-    return ((title or "").startswith(("분기보고서", "반기보고서")) and ("사업의 내용" in head or "요약재무정보" in head)
+    # [기재정정]·[첨부정정] 같은 앞머리는 떼고 본다 (DB 제목 "[기재정정]분기보고서 (2026.09) · …", 2026-11-19)
+    report = re.sub(r"^(\[[^\]]*\]\s*)+", "", (title or "").strip())
+    return (report.startswith(("분기보고서", "반기보고서")) and ("사업의 내용" in head or "요약재무정보" in head)
             and "[표]" in text and bool(_MONEY_UNIT.search(text))
             and "3개월" not in text and "누적" not in text and "재무상태표" not in text)
 

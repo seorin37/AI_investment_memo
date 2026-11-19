@@ -18,6 +18,12 @@ class CumulativeNoteTest(unittest.TestCase):
     def test_business_table_in_quarterly_report_gets_note(self):
         self.assertTrue(cumulative_table("분기보고서 (2026.09)", PRODUCT))
         self.assertTrue(cumulative_table("반기보고서 (2026.06)", PRODUCT))
+        # 정정 보고서 제목 앞머리 (DB 제목 그대로, 2026-11-19)
+        self.assertTrue(cumulative_table("[기재정정]분기보고서 (2026.09) · II. 사업의 내용 > 2. 주요 제품 및 서비스", PRODUCT))
+        self.assertTrue(cumulative_table("[기재정정] 반기보고서 (2026.06)", PRODUCT))
+        self.assertTrue(cumulative_table("[첨부정정][기재정정]분기보고서 (2026.09)", PRODUCT))
+        self.assertFalse(cumulative_table("[기재정정]사업보고서 (2025.12)", PRODUCT))
+        self.assertFalse(cumulative_table("[수시공시] [기재정정]주요사항보고서(자기주식처분결정)", PRODUCT))
 
     def test_no_note_when_columns_say_period_or_other_cases(self):
         self.assertFalse(cumulative_table("분기보고서 (2026.09)", INCOME))      # 3개월·누적 열이 따로 있다
