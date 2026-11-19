@@ -926,5 +926,54 @@ class FactSubjectTest(unittest.TestCase):
         self.assertEqual(out.kind, "update")
 
 
+class AskAnswerFalsePositiveTest(unittest.TestCase):
+    """2026-11-19 두 방식 비교에서 팀원 방식 '자료 없음' 답이 된 카드 (K02·M021): 답은 맞는데 코드 검사가 막았다."""
+
+    def test_coverage_restated_question_unconfirmed(self):
+        # K02 "배당은 계속 늘려주나?" → "다만 배당을 계속 늘리겠다는 계획은 이번 자료로는 확인되지 않아요."
+        cfg = {**CFG, "coverage_terms": ["처음", "줄곧", "계속", "연속"]}
+        e = ev(disc())
+        memo = "배당은 계속 늘려주나?"
+        ok = card(facts=[("보통주 1주당 20,000원 분기배당을 결정했어요.", "E1")],
+                  memo_link="배당을 계속 늘리겠다는 계획은 이번 자료로는 확인되지 않아요.")
+        self.assertNotIn("COVERAGE", check_card_v2(ok, e, [], cfg, memo))
+        self.assertIn("COVERAGE", check_card_v2(ok, e, [], cfg, ""))                     # 메모에 없는 말이면 그대로
+        bad = card(facts=[("보통주 1주당 20,000원 분기배당을 결정했어요.", "E1")],
+                   memo_link="회사는 배당을 계속 늘려 왔어요.")                           # 확인 안 됨 답이 아닌 단정
+        self.assertIn("COVERAGE", check_card_v2(bad, e, [], cfg, memo))
+        mixed = card(facts=[("보통주 1주당 20,000원 분기배당을 결정했어요.", "E1")],
+                     memo_link="배당을 계속 늘렸어요. 다만 이후 계획은 확인되지 않아요.")  # 문장마다 본다
+        self.assertIn("COVERAGE", check_card_v2(mixed, e, [], cfg, memo))
+
+    TABLE = ("[삼성바이오로직스 2026 3분기 | II. 사업의 내용 > 4. 매출 및 수주상황]\n[표] 마. 수주상황\n(단위: 백만달러)\n"
+             "열: 사업부문 | 품목 | 구분 | 수주총액 | 기납품액 | 수주잔고\n"
+             "사업부문: CDMO | 품목: 항체의약품 | 구분: 현 최소구매물량 기준 | 수주총액: 21,982 | 기납품액: 12,547 | 수주잔고: 9,435\n"
+             "사업부문: CDMO | 품목: 항체의약품 | 구분: 고객사 수요 증가 시 예상물량 기준 (제품개발 성공 등) | 수주총액: 24,591 | "
+             "기납품액: 12,547 | 수주잔고: 12,044")
+
+    def test_fx_multiplier_unit(self):
+        from pipelines.updates.checks import evidence_number_sets
+        nums = evidence_number_sets(self.TABLE)
+        self.assertTrue(nums.supports("수주잔고는 현 최소구매물량 기준 9,435백만달러예요."))
+        self.assertTrue(nums.supports("수주잔고는 94억3500만달러예요."))
+        self.assertFalse(nums.supports("수주잔고는 9,435억달러예요."))                       # 배수가 다르면 실패
+        self.assertTrue(evidence_number_sets("(단위: 천USD)\n구분: 매출 | 금액: 1,200").supports("매출은 1,200천USD예요."))
+        # 외화와 원화가 한 머리에 섞이면 모르는 단위 (USD 칸을 백만원으로 보지 않게)
+        mixed = evidence_number_sets("(외화단위: 천USD, 원화단위: 백만원)\n구분: 차입금 | 금액: 3,000")
+        self.assertFalse(mixed.supports("차입금은 30억원이에요."))
+
+    def test_expected_volume_label_is_not_prediction(self):
+        from pipelines.common.config import load_config
+        for path in ("configs/updates.yaml", "configs/updates_exp.yaml"):
+            cfg = {**CFG, **load_config(path)["topic"]}
+            c = card(headline="수주잔고 9,435백만달러", when="2026-10-28",
+                     facts=[("공시는 고객사 수요 증가 시 예상물량 기준 수주잔고를 12,044백만달러로 제시했어요.", "E1")])
+            codes = check_card_v2(c, ev(disc(text=self.TABLE)), [], cfg)
+            self.assertNotIn("PREDICTION", codes, path)
+            self.assertNotIn("NUMBER", codes, path)
+            fc = card(headline="수주잔고 전망", facts=[("내년 수주잔고는 늘어날 것으로 예상돼요.", "E1")])
+            self.assertIn("PREDICTION", check_card_v2(fc, ev(disc(text=self.TABLE)), [], cfg), path)
+
+
 if __name__ == "__main__":
     unittest.main()

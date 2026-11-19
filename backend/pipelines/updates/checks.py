@@ -201,6 +201,10 @@ def _compound(run: str) -> list[float]:
 
 # 숫자 종류: 단위(조·억·만·백만…)나 "원"이 붙은 금액 / % / 맨숫자 / 개수 단위(명·주·건·개)가 붙은 수 ("30,853천 명" = 30,853,000명)
 UNIT, PCT, BARE, COUNT = "unit", "pct", "bare", "count"
+# 외화 금액 (2026-11-19): 숫자(배수 포함) 바로 뒤에 달러·USD·엔 … 이 붙은 값. 원화 금액(UNIT)과 따로 대조한다
+# ("(단위: 백만달러)" 표의 9,435 → "9,435백만달러"는 통과, "(단위 : USD)" 표의 5,000 → "5,000원"은 실패)
+FX = "fx"
+_FX_AFTER = re.compile(r"\s*(?:달러|USD|유로|EUR|엔|JPY|위안|CNY)(?![A-Za-z])")
 
 
 def _scan(text: str, combine: bool) -> list[tuple[float, str]]:
@@ -210,13 +214,15 @@ def _scan(text: str, combine: bool) -> list[tuple[float, str]]:
     out = []
     if combine:
         def take(m):
-            kind = COUNT if _COUNT_AFTER.match(m.string, m.end()) else UNIT
+            kind = (COUNT if _COUNT_AFTER.match(m.string, m.end())
+                    else FX if _FX_AFTER.match(m.string, m.end()) else UNIT)
             out.extend((v, kind) for v in _compound(m.group(0)))
             return " "
         text = _RUN.sub(take, text)
     for m in _NUM.finditer(text):
         raw, unit, pct, won, count = m.groups()
         kind = (COUNT if count and not won and not pct
+                else FX if not won and not pct and _FX_AFTER.match(text, m.end())
                 else UNIT if unit or won or _WON_LABEL.search(text[max(0, m.start() - 12):m.start()])
                 else PCT if pct else BARE)
         out.append((float(raw.replace(",", "")) * _UNIT.get(unit, 1), kind))
@@ -245,8 +251,13 @@ def all_numbers(text: str) -> set[float]:
 _MONEY_FACTOR = {"원": 1.0, "천원": 1e3, "백만원": 1e6, "억원": 1e8, "십억원": 1e9, "조원": 1e12}
 _COUNT_MULT = {"": 1.0, "천": 1e3, "만": 1e4, "십만": 1e5, "백만": 1e6, "천만": 1e7, "억": 1e8}
 _COUNT_FACTOR = {m + b: f for m, f in _COUNT_MULT.items() for b in ("명", "주", "건", "개")}
+# 외화 + 배수 ("(단위: 백만달러)"·"천USD"·"억엔", 2026-11-19 M021 삼성바이오로직스 수주잔고 표 "9,435" → 카드 "9,435백만달러").
+# 숫자 검사는 통화를 가리지 않고 배수만 맞춘다 (카드 쪽도 "백만"·"억"만 값으로 읽는다). 원화 단위와 한 머리에 섞이면 모르는 단위
+_FX_CODES = ("달러", "USD", "유로", "EUR", "엔", "JPY", "위안", "CNY")
+_FX_FACTOR = {m + c: f for m, f in {**_COUNT_MULT, "십억": 1e9}.items() for c in _FX_CODES}
+_MONEY_FACTOR_ALL = {**_MONEY_FACTOR, **_FX_FACTOR}
 _OTHER_UNITS = ("%", "배", "회")
-_UNITS_RE = "|".join(sorted([*_MONEY_FACTOR, *_COUNT_FACTOR, *_OTHER_UNITS], key=len, reverse=True))
+_UNITS_RE = "|".join(sorted([*_MONEY_FACTOR_ALL, *_COUNT_FACTOR, *_OTHER_UNITS], key=len, reverse=True))
 # 표 머리 "(단위 : 백만원)"·"(단위: 원, %)"·"(단위 : 천명)" (쉼표 뒤는 무시하고 첫 단위만).
 # 쌍점 뒤 단위를 모르면("(단위 : USD)"·"(단위 : 천)"·"(단위 : 백만)"·"(단위 : 천단위)") _UNKNOWN: 앞 표 단위 범위를 끊는다 (2026-11-18)
 _UNKNOWN = "?"
@@ -265,6 +276,8 @@ _LABEL_CURRENCY = re.compile(r"\[\s*[A-Z]{3}\s*[,\]]")                   # 이�
 
 def table_unit(unit: str) -> tuple[str, float] | None:
     """표 단위 문자열 → (종류, 배수). 숫자 검사가 모르는 단위면 None. ("백만원" → (UNIT, 1e6), "천명" → (COUNT, 1e3), "%" → (PCT, 1))"""
+    if unit in _FX_FACTOR:
+        return FX, _FX_FACTOR[unit]
     if unit in _MONEY_FACTOR:
         return UNIT, _MONEY_FACTOR[unit]
     if unit in _COUNT_FACTOR:
@@ -302,12 +315,13 @@ def _segments(text: str):
         heads = _UNIT_HEADER.findall(line) if cut < 0 or _HEAD_CELL.search(line) else []
         if heads:
             # 한 머리에 모르는 단위가 섞이면 모르는 단위 ("(외화단위: 천USD, …, 원화단위: 백만원)"의 USD 칸을 백만원으로 보지 않게)
-            header = _UNKNOWN if any(not a for a, _ in heads) else heads[-1][0]
+            fx = {a in _FX_FACTOR for a, _ in heads if a in _MONEY_FACTOR_ALL}
+            header = _UNKNOWN if any(not a for a, _ in heads) or len(fx) > 1 else heads[-1][0]
         units = [a or b or _UNKNOWN for a, b, _ in _LABEL_UNIT.findall(label)]
         if _LABEL_CURRENCY.search(label):                         # "기초통화금액, USD [USD, 천]"
             units = [_UNKNOWN]
         # 행 안 칸에 모르는 단위가 적힌 줄("한도단위: USD | 한도액: 350,000")은 그 줄만 모르는 단위 (2026-11-18 실제 공시 확인)
-        if not units and cut >= 0 and any(not a and b for a, b in _UNIT_HEADER.findall(rest)):
+        if not units and cut >= 0 and any((not a and b) or a in _FX_FACTOR for a, b in _UNIT_HEADER.findall(rest)):
             units = [_UNKNOWN]
         # 숫자가 없는 열 머리 행의 이름표 단위는 표 머리 ("구분(단위 : 천명) | SO수 | 가입자 | 점유율")
         # (데이터 행은 "칸: 값" 꼴이라 뺀다: "주당배당금(원) | 당기: - | 전기: -")
@@ -327,26 +341,28 @@ class EvidenceNumbers:
       환산한 값, 그 밖의 맨숫자 원래 값 (배수 붙은 개수 단위 표만 빼고). 개수 환산값은 plain·unit에 넣지 않는다
       ("30,853천명"으로 "30,853,000원"·"30,853명" 불가)"""
 
-    __slots__ = ("plain", "unit", "count")
+    __slots__ = ("plain", "unit", "count", "fx")
 
     def __init__(self, plain: set[float] | None = None, unit: set[float] | None = None,
-                 count: set[float] | None = None):
+                 count: set[float] | None = None, fx: set[float] | None = None):
         self.plain = set(plain or ())
         self.unit = set(unit or ())
         self.count = set(count or ())
+        self.fx = set(fx or ())          # 외화 금액 (2026-11-19): 달러·USD·엔이 붙은 값, 외화 단위 표 숫자를 배수로 환산한 값
 
     def copy(self) -> "EvidenceNumbers":
-        return EvidenceNumbers(self.plain, self.unit, self.count)
+        return EvidenceNumbers(self.plain, self.unit, self.count, self.fx)
 
     def __ior__(self, other: "EvidenceNumbers") -> "EvidenceNumbers":
         self.plain |= other.plain
         self.unit |= other.unit
         self.count |= other.count
+        self.fx |= other.fx
         return self
 
     def supports(self, text: str) -> bool:
         """답변 글의 숫자가 모두 근거에 있나. 금액은 unit, 개수는 count, 나머지는 plain과 대조한다."""
-        pick = {UNIT: self.unit, COUNT: self.count}
+        pick = {UNIT: self.unit, COUNT: self.count, FX: self.fx}
         return all(v in pick.get(kind, self.plain) for v, kind in _card_scan(text))
 
 
@@ -362,17 +378,22 @@ def evidence_number_sets(text: str) -> EvidenceNumbers:
         for v, kind in _scan(seg, True) + _scan(seg, False):
             v = round(v, 6)
             out.plain.add(v)
-            if kind == UNIT or (free and kind != COUNT):
+            if kind == UNIT or (free and kind not in (COUNT, FX)):
                 out.unit.add(v)
+            if kind == FX or (free and kind not in (COUNT, UNIT)):
+                out.fx.add(v)
             # 맨숫자 원래 값을 개수로도 인정한다. 단 표 단위가 배수 붙은 개수 단위(천명·백만주…)면 환산값만.
             # 금액 표의 맨숫자는 개수로 둔다: "(단위 : 백만원)" 자기주식 소각 표의 "소각수량: 18,162,721"(주)처럼 열마다 단위가 다르다
-            if kind == COUNT or (kind == BARE and unit != _UNKNOWN and not (kind_u == COUNT and factor != 1)):
+            if kind == COUNT or (kind == BARE and unit != _UNKNOWN and kind_u != FX and not (kind_u == COUNT and factor != 1)):
                 out.count.add(v)
             if kind == BARE and kind_u == UNIT:
                 out.plain.add(round(v * factor, 6))
                 out.unit.add(round(v * factor, 6))
             elif kind == BARE and kind_u == COUNT:
                 out.count.add(round(v * factor, 6))
+            elif kind == BARE and kind_u == FX:
+                out.plain.add(round(v * factor, 6))
+                out.fx.add(round(v * factor, 6))
     return out
 
 
@@ -501,6 +522,15 @@ _ISO = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _KDATE = re.compile(r"(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일")
 _SENT_END = re.compile(r"[.!?。](?=\s|$)")
 _QUOTED = re.compile(r"[‘'“\"「]([^‘’'“”\"「」]{1,80})[’'”\"」]")
+
+
+# 메모의 질문을 되풀이하며 근거에 없다고 답하는 문장 (2026-11-19 K02 "다만 배당을 계속 늘리겠다는 계획은 이번 자료로는 확인되지 않아요")
+_UNCONFIRMED = re.compile(r"(확인되지\s*않|확인할\s*수\s*없|확인이\s*어렵|찾지\s*못했|찾을\s*수\s*없|나와\s*있지\s*않|없었어요|없어요)")
+
+
+def _restates_unconfirmed(sentence: str, term: str, memo_text: str) -> bool:
+    """자료 범위 낱말(term, "계속" 등)이 메모 원문에서 온 말이고, 그 문장이 '자료로는 확인되지 않는다'는 답이면 범위 밖 단정이 아니다."""
+    return bool(memo_text) and term in memo_text and bool(_UNCONFIRMED.search(sentence))
 
 
 def strip_memo_quotes(text: str, memo_text: str) -> str:
@@ -640,7 +670,8 @@ def check_card_v2(card, evidence: list[Evidence], banned: list[str], cfg: dict |
         codes.append("ATTRIBUTION")
     # 자료 범위 밖을 전제로 한 말 ("처음", "줄곧" …): 그 말이 쓴 근거에 그대로 있을 때만 (2026-11-11, 범위 밖 원인·추이를 단정하지 않게)
     def outside(text: str, hay: str) -> bool:
-        return any(term in text and term not in hay for term in cfg["coverage_terms"])
+        return any(term in s and term not in hay and not _restates_unconfirmed(s, term, memo_text)
+                   for s in re.split(r"(?<=[.!?])\s+", text or "") for term in cfg["coverage_terms"])
     all_ev = " ".join(_ev_text(e) for e in cited)
     if (any(eid in ids and outside(t, _ev_text(ids[eid])) for t, eid in facts)
             or outside(card.headline, all_ev) or outside(strip_memo_quotes(card.memo_link, memo_text), all_ev)
