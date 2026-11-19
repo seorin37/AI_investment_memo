@@ -32,7 +32,12 @@ _FINAL_NOUNS = frozenset({
 # 같은 글자로 끝나지만 문장이 이어지는 연결 표현
 _NOT_FINAL_SUFFIX = re.compile(r"(니까|보다|마다|에다|[는은ㄴ인던할을갈뭔건런]지|아까"
                                # 2026-11-16 "유상증자 한다던데"·"미국 해군 MRO"가 잘렸다 (자·군으로 끝나는 금융·업종 명사)
-                               r"|증자|감자|출자|융자|해군|육군|공군|장군)$")
+                               r"|증자|감자|출자|융자|해군|육군|공군|장군"
+                               # 2026-11-19 "LG전자 인도 법인 …"이 "LG전자"에서 잘렸다 (별칭 사전에 없는 회사 이름 끝의 '전자')
+                               r"|전자)$")
+# 로마자 + 한글 회사 이름 꼴이 '자'로 끝나면(LG전자, SK증자…) 문장 끝이 아니다. 별칭 사전(tracking_lexicon)에 없는
+# 코스피 종목도 많아서 (2026-11-19). TSMC다·ETF인데요처럼 다른 문장 끝은 그대로 본다
+_LATIN_NAME_JA = re.compile(r"^[A-Za-z][A-Za-z0-9&]*[가-힣]*자$")
 # 같은 글자로 끝나는 흔한 명사
 _NOT_FINAL_WORDS = frozenset({
     "다음", "처음", "마음", "얼음", "소음", "포함", "수요", "필요", "중요", "주요", "투자", "이자", "적자",
@@ -51,6 +56,8 @@ def _is_final(word: str, alias_pattern=None) -> bool:
         hit = alias_pattern.search(core)
         if hit and hit.end() == len(core):  # "삼성전자"·"6만전자"는 "자"로 끝나도 문장 끝이 아니다
             return False
+    if _LATIN_NAME_JA.match(core):
+        return False
     return bool(_FINAL.search(core))
 
 
