@@ -106,6 +106,71 @@ def event_lines(conn, symbol: str, limit: int = 5) -> list[str]:
     return out
 
 
+# 배당 지표 (2026-11-19): 정기보고서 '배당에 관한 사항'의 주요배당지표 표. 검색은 정책 문단만 가져와
+# "현대차 배당성향이 어느 정도야?"(M009)에 실제 배당성향을 못 답했다. 질문에 '배당'이 있을 때만 넣는다.
+DIVIDEND_SQL = """SELECT d.title, d.kind::text, d.period_end, c.chunk_text FROM disclosure_chunks c
+JOIN disclosures d ON d.rcept_no = c.rcept_no
+WHERE d.rcept_no = (SELECT d2.rcept_no FROM disclosures d2 JOIN disclosure_chunks c2 ON c2.rcept_no = d2.rcept_no
+                    WHERE d2.symbol = %(s)s AND d2.kind::text IN ('annual', 'half', 'quarterly')
+                      AND c2.section LIKE '%%배당에 관한 사항%%' AND c2.chunk_text LIKE '%%현금배당성향%%'
+                    ORDER BY d2.period_end DESC, d2.rcept_dt DESC LIMIT 1)
+  AND c.section LIKE '%%배당에 관한 사항%%' ORDER BY c.chunk_index"""
+FY_SQL = "SELECT period_end FROM financials WHERE symbol = %(s)s AND period_type = 'annual' ORDER BY period_end DESC LIMIT 1"
+DIVIDEND_ROWS = (  # (표의 구분 이름, 주식 종류, 보일 이름, 단위). 현금배당성향은 연결 > 별도 > 구분 없음 중 첫 번째 하나만
+    ("(연결)현금배당성향(%)", None, "현금배당성향(연결)", "%"),
+    ("(별도)현금배당성향(%)", None, "현금배당성향(별도)", "%"),
+    ("현금배당성향(%)", None, "현금배당성향", "%"),
+    ("주당 현금배당금(원)", "보통주", "보통주 주당 현금배당금", "원"),
+    ("현금배당수익률(%)", "보통주", "보통주 현금배당수익률", "%"))
+_DIV_CELL = re.compile(r"(전전기|전기|당기)\s*/\s*[^:|]*:\s*([-\d.,]+)")
+
+
+def _div_row(text: str, name: str, stock: str | None) -> dict | None:
+    """'구 분: 이름 | (주식의 종류: 보통주 |) 당기 / …: 값 | 전기 / …: 값 | 전전기 / …: 값' 한 줄 → {당기: 값, …}.
+    줄 모양이 다르거나 세 칸이 다 없으면 None (틀리게 읽느니 뺀다)."""
+    for line in text.splitlines():
+        head = line.split("|", 1)[0].replace(" ", "")
+        if "구분:" not in head or head.split("구분:", 1)[1] != name.replace(" ", ""):
+            continue
+        if stock and f"주식의 종류: {stock}" not in line:
+            continue
+        cells = dict(_DIV_CELL.findall(line))
+        if set(cells) == {"당기", "전기", "전전기"}:
+            return cells
+    return None
+
+
+def dividend_lines(conn, symbol: str) -> list[str]:
+    """최신 정기보고서 주요배당지표 한 줄: 현금배당성향·보통주 주당 현금배당금·배당수익률 (당기와 직전 2개 사업연도).
+    분기·반기 보고서의 당기 값은 그해 그 분기까지 누적이라 연간 값과 바로 비교하지 않게 기간을 붙인다."""
+    rows = conn.execute(DIVIDEND_SQL, {"s": symbol}).fetchall()
+    if not rows:
+        return []
+    title, kind, end, _ = rows[0]
+    text = "\n".join(r[3] for r in rows)
+    fy = conn.execute(FY_SQL, {"s": symbol}).fetchone()
+    dec = bool(end and fy and fy[0].month == 12)          # 12월 결산이면 '전기'를 연도로 바꿔 보인다
+    if kind == "annual":
+        cur = f"{end.year}년 연간" if dec else "최근 사업연도"
+    else:
+        cur = f"{end.year}년 {end.month // 3}분기까지 누적" if dec else "이번 사업연도 누적"
+    labels = {"당기": cur, "전기": f"{end.year - 1}년 연간" if dec else "직전 사업연도",
+              "전전기": f"{end.year - 2}년 연간" if dec else "전전 사업연도"}
+    parts, payout = [], False
+    for name, stock, label, unit in DIVIDEND_ROWS:
+        if payout and label.startswith("현금배당성향"):
+            continue
+        cells = _div_row(text, name, stock)
+        if not cells or all(v == "-" for v in cells.values()):
+            continue
+        payout = payout or label.startswith("현금배당성향")
+        vals = " · ".join(f"{labels[k]} {cells[k]}{'' if cells[k] == '-' else unit}" for k in ("당기", "전기", "전전기"))
+        parts.append(f"{label}: {vals}")
+    if not parts:
+        return []
+    return [f"- 배당 지표 ({title} 주요배당지표, 회사 공시 값): " + " / ".join(parts)]
+
+
 # 주가 요약 (2026-11-18): 질문 답이 공시·뉴스와 함께 주가도 근거로 쓰게. 등락률·52주 고저는 코드가 계산 (LLM 계산 금지 원칙 유지)
 PRICE_SQL = """SELECT trade_date, close, market_cap FROM prices_daily
 WHERE symbol = %(s)s AND trade_date >= CURRENT_DATE - 400 AND close IS NOT NULL ORDER BY trade_date DESC LIMIT 260"""
@@ -140,7 +205,8 @@ def _qlabel(period_end, quarter) -> str:
     return f"{period_end.year}년 {quarter}분기" if quarter else str(period_end)
 
 
-def company_table(conn, symbol: str, name: str, max_quarters: int = 6, max_years: int = 3) -> str | None:
+def company_table(conn, symbol: str, name: str, max_quarters: int = 6, max_years: int = 3,
+                  question: str = "") -> str | None:
     rows = conn.execute(Q_SQL, {"s": symbol, "n": max_quarters}).fetchall()
     # 금융사(은행·보험·증권)는 영업이익률·부채비율이 뜻이 달라 빼고 금액만 (11-16 기업정보 UI 결정과 같게)
     fin_co = conn.execute(FIN_CO_SQL, {"s": symbol}).fetchone() is not None
@@ -192,6 +258,8 @@ def company_table(conn, symbol: str, name: str, max_quarters: int = 6, max_years
                      + ("" if fin_co else f" · 연간 영업이익률 {_pct(op, rev)}") + growth)
     lines += event_lines(conn, symbol)                     # 사건 공시 표준 비율 (0018)
     lines += price_lines(conn, symbol)                     # 주가 요약 (2026-11-18, 질문 답에 주가도 근거로)
+    if "배당" in (question or ""):
+        lines += dividend_lines(conn, symbol)              # 배당 지표 (2026-11-19, 배당 질문만)
     bs = conn.execute(BS_SQL, {"s": symbol}).fetchone()
     if bs:
         end, ptype, fs, ta, tl, te = bs
@@ -235,15 +303,17 @@ def fin_evidence(conn, symbol: str, name: str, question: str, start_index: int, 
         for a in alts:
             if a in text and real not in text:
                 text = text.replace(a, real)
-    parts = [company_table(conn, symbol, name)]
-    parts += [company_table(conn, s, n) for s, n in other_symbols(conn, text, symbol)]
+    parts = [company_table(conn, symbol, name, question=text)]
+    parts += [company_table(conn, s, n, question=text) for s, n in other_symbols(conn, text, symbol)]
     body = "\n\n".join(p for p in parts if p)
     if not body:
         return []
     body = ("코드가 재무 DB에서 꺼낸 값이에요. 분기 이익률·ROE·부채비율·유동비율·당좌비율·이자보상배율·유보율은 재무 지표 표"
             "(기업정보 페이지와 같은 값)이고, 전년 대비 증감률·연간 영업이익률·잠정 영업이익률은 코드가 계산했어요. "
             "사건 공시 줄의 비율(희석률·시가총액 대비 등)은 사건 비율 표 값이고, "
-            "주가 줄의 등락률·52주 고저는 시세 DB로 코드가 계산했어요.\n" + body)
+            "주가 줄의 등락률·52주 고저는 시세 DB로 코드가 계산했어요. "
+            "배당 지표 줄은 정기보고서 주요배당지표 표의 회사 공시 값이고, '누적'은 그해 그 분기까지라 연간 값과 바로 비교하지 않아요.\n"
+            + body)
     dates = re.findall(r"\d{4}-\d{2}-\d{2}", body)
     c = Candidate(ref=f"{FIN_PREFIX}{symbol}", kind="disclosure", symbol=symbol, date=max(dates) if dates else "",
                   title="재무 표", text=body,
