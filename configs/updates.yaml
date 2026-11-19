@@ -74,6 +74,9 @@ topic:
   min_similarity: 0.5        # 종류별 값이 없을 때 쓰는 기본 임계값
   # 2026-11-05 최신순 하향식 비교(updates_t1~t4) 중 조합 ③ 엄격을 채택. 형식적 공시 근거 0건, 붙은 근거의 관련성이 가장 높았다
   min_similarity_news: 0.58
+  # 2026-11-19 원문 청크 검색(news.search: chunks) 기준값. 코스피 8종목 16개 항목·LLM 판정 395건으로 calibrate 추천 0.59
+  # (정밀도 80%), 다른 종목 바닥선 p95 코스피 0.48·시범 4종목 0.55. 0.55면 하루 후보 2.1배·정밀도 71→64%라 지금 값을 유지
+  min_similarity_news_chunks: 0.58
   min_similarity_disclosure: 0.64
   strong_similarity_news: 0.63       # 날짜를 거슬러 가다 이 이상인 후보가 나오면 그 날짜에서 멈춘다
   strong_similarity_disclosure: 0.68 # 끝까지 없으면 lookback_days 전체에서 유사도 높은 순으로 고른다

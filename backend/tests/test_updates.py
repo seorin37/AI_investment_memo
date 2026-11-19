@@ -1293,7 +1293,10 @@ class NewsChunkSearchTest(unittest.TestCase):
         cfg = load_config("configs/updates.yaml")
         self.assertEqual(cfg["news"]["search"], "chunks")                         # 2026-11-10 기본값 전환
         self.assertEqual(cfg["topic"]["card_schema"], "v2")                        # 2026-11-10 미리보기 확인 후 v2
-        self.assertNotIn("min_similarity_news_chunks", cfg["topic"])              # 임계값은 아직 보정 전 (그대로)
+        # 2026-11-19 원문 청크 기준값 보정 (calibrate 0.59·바닥선 p95 0.48~0.55 → 뉴스 값과 같은 0.58 유지)
+        self.assertEqual(cfg["topic"]["min_similarity_news_chunks"], 0.58)
+        from pipelines.updates.news_search import check_mode
+        self.assertFalse(check_mode("chunks", cfg["topic"]))                       # 보정 전 경고가 더 나오지 않는다
         self.assertTrue(cfg["news"]["chunks"]["fallback_headline"])               # 청크 없는 기사는 제목+요약 벡터로 보충
 
     def test_used_refs_skip_news_by_article(self):
