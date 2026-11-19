@@ -822,5 +822,43 @@ class PreviewTest(unittest.TestCase):
             self.assertIn("M01:0:0 카드로 합쳤어요", page)
 
 
+class CoverageMemoQuoteTest(unittest.TestCase):
+    """memo_link가 메모 표현을 따옴표로 옮긴 부분은 자료 범위(COVERAGE) 검사에서 뺀다 (2026-11-19).
+    코스피 메모 dry-run K02:1:0 현대차 배당 카드: "메모의 '배당은 계속 늘려주나'…"의 '계속'으로 COVERAGE가 걸려 버려졌다."""
+
+    MEMO = "로봇(아틀라스) 사업이 실제로 매출이 되는지 궁금함. 배당은 계속 늘려주나?"
+    E1 = ("[현대자동차 2026-10-29 수시공시 | 현금ㆍ현물배당결정]\n1. 배당구분: 분기배당\n2. 배당종류: 현금배당\n"
+          "3. 1주당 배당금(원) > 보통주식: 2,500\n6. 배당기준일: 2026-11-30\n7. 배당금지급 예정일자: 2026-12-30")
+    E2 = ("기준 공시: 현금ㆍ현물배당결정 (2026-10-29 접수), 이번 배당: 분기배당 보통주 1주당 2,500원 (배당기준일 2026-11-30).\n"
+          "- 작년 같은 시기(배당기준일 2025-11-30 전후) 배당 공시는 DB에서 찾지 못했어요 (DB의 배당 공시는 2026-10-21 접수분부터 있어요).")
+    CFG = {**CFG, "coverage_terms": ["처음", "최초", "줄곧", "계속", "꾸준히", "연속", "여전히"]}
+
+    def _codes(self, memo_link, memo=MEMO):
+        e = [Evidence("E1", disc(ref="disc:20261029800269#0", text=self.E1, day="2026-10-29"), self.E1),
+             Evidence("E2", Candidate("cmp:20261029800269", "disclosure", "005380", "2026-10-29",
+                                      "직전 같은 기간 비교 · 현금ㆍ현물배당결정", self.E2, None, "DART", 1.0, "compare"), self.E2)]
+        c = card(headline="현대차, 보통주 분기배당 2,500원 결정", when="2026-10-29",
+                 facts=[("현대차는 보통주 1주당 분기 현금배당금을 2,500원으로 결정했어요.", "E1"),
+                        ("배당기준일은 2026-11-30이에요.", "E1"),
+                        ("작년 같은 시기 배당 공시는 DB에서 찾지 못했어요.", "E2")],
+                 memo_link=memo_link, sources=["E1", "E2"], confidence=0.99)
+        return check_card_v2(c, e, [], self.CFG, memo)
+
+    def test_hyundai_dividend_card_passes(self):
+        self.assertEqual(self._codes("메모의 ‘배당은 계속 늘려주나’와 관련된 분기배당 결정 공시예요."), [])
+        self.assertEqual(self._codes("메모의 '배당은 계속 늘려주나'와 관련된 분기배당 결정 공시예요."), [])
+        self.assertEqual(self._codes("메모의 “배당은 계속 늘려 주나”와 관련된 공시예요."), [])      # 띄어쓰기만 다른 인용
+
+    def test_quote_not_in_memo_or_outside_quote_still_checked(self):
+        self.assertIn("COVERAGE", self._codes("메모의 ‘배당은 계속 늘려주나’와 관련된 분기배당 결정 공시예요.", memo=""))
+        self.assertIn("COVERAGE", self._codes("메모의 ‘배당은 줄곧 늘었나’와 관련된 공시예요."))      # 메모에 없는 인용
+        self.assertIn("COVERAGE", self._codes("메모의 ‘배당’과 관련해 계속 늘려 온 배당 공시예요."))   # 따옴표 밖 '계속'
+
+    def test_strip_memo_quotes(self):
+        from pipelines.updates.checks import strip_memo_quotes
+        self.assertEqual(strip_memo_quotes("‘a b’와 ‘c’", "ab"), " 와 ‘c’")
+        self.assertEqual(strip_memo_quotes("‘계속’", ""), "‘계속’")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -458,6 +458,17 @@ def check_card(card: Card, evidence: list[Evidence], banned: list[str], cfg: dic
 _ISO = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _KDATE = re.compile(r"(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일")
 _SENT_END = re.compile(r"[.!?。](?=\s|$)")
+_QUOTED = re.compile(r"[‘'“\"「]([^‘’'“”\"「」]{1,80})[’'”\"」]")
+
+
+def strip_memo_quotes(text: str, memo_text: str) -> str:
+    """따옴표 안의 글이 메모 원문에 그대로 있으면(띄어쓰기 무시) 지운다. memo_link가 메모 표현을 옮긴 부분은
+    카드가 한 말이 아니라서 자료 범위(COVERAGE) 검사에서 뺀다 (2026-11-19 현대차 "메모의 '배당은 계속 늘려주나'" 카드).
+    메모에 없는 따옴표 글(카드가 지어낸 인용)은 그대로 두고 검사한다."""
+    memo = re.sub(r"\s+", "", memo_text or "")
+    if not memo:
+        return text or ""
+    return _QUOTED.sub(lambda m: " " if re.sub(r"\s+", "", m.group(1)) in memo else m.group(0), text or "")
 
 
 def text_dates(text: str) -> set[str]:
@@ -583,7 +594,8 @@ def check_card_v2(card, evidence: list[Evidence], banned: list[str], cfg: dict |
         return any(term in text and term not in hay for term in cfg["coverage_terms"])
     all_ev = " ".join(_ev_text(e) for e in cited)
     if (any(eid in ids and outside(t, _ev_text(ids[eid])) for t, eid in facts)
-            or outside(card.headline, all_ev) or outside(card.memo_link, all_ev) or outside(exp, all_ev)):
+            or outside(card.headline, all_ev) or outside(strip_memo_quotes(card.memo_link, memo_text), all_ev)
+            or outside(exp, all_ev)):
         codes.append("COVERAGE")
     # 비교 판단·선택 권유 ("KB가 더 나아요", "갈아타는 게 좋아요"): 두 대상의 사실만 나란히 보여 주고 판단은 하지 않는다 (2026-11-10)
     judges = [re.compile(p) for p in cfg["judgment_patterns"]]
