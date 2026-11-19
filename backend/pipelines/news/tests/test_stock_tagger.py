@@ -254,6 +254,48 @@ def test_timer_first_night_with_project_config():    # 2026-11-19 매시 태깅 
     assert r_role.person_role_re.match("이마트 커뮤니케이션실장은", 3) is None                # 긴 붙은 말은 가르지 않는다
 
 
+def test_large_cap_aliases_with_project_config():   # 2026-11-19 대형사 별칭 (종목명과 기사 표기가 다른 곳)
+    cfg = yaml.safe_load(Path("configs/stock_aliases.yaml").read_text(encoding="utf-8"))
+    stocks = {"005490": "POSCO홀딩스", "003670": "포스코퓨처엠", "010950": "S-Oil", "018260": "삼성에스디에스",
+              "055550": "신한지주", "086790": "하나금융지주", "316140": "우리금융지주", "138040": "메리츠금융지주",
+              "010120": "LS ELECTRIC", "006260": "LS", "015760": "한국전력", "001440": "대한전선", "105560": "KB금융"}
+    r = st.build_rules(stocks, cfg)
+    t = lambda title, body=None: {h.symbol for h in st.match_article(title, body, r)}   # noqa: E731
+    pad = "업계 소식이다. " * 2
+    # 별칭으로 붙는다
+    assert t("포스코홀딩스, 3분기 영업익 9천400억원") == {"005490"}
+    assert t("포스코, 中CATL에 리튬 공급") == {"005490"}
+    assert t("에쓰오일, 3분기 영업익 1조4천억원") == {"010950"}
+    assert t("하나증권, S-OIL 목표가 하향") == {"010950"}
+    assert t("삼성SDS, 구미 AI 데이터센터 착공") == {"018260"}
+    assert t("신한금융, 누적 순이익 '5조 클럽' 첫 입성") == {"055550"}
+    assert t("하나·우리금융, 3분기 순이익 1조 돌파") == {"316140"}                   # "하나·"는 별칭이 아니다
+    assert t("하나금융, 첫 개인주주 간담회") == {"086790"}
+    assert t("LS일렉트릭, 100분기 연속 흑자") == {"010120"}
+    assert t("LS일렉, 베트남 2공장 준공") == {"010120"}                               # 지주사 LS로 붙지 않는다
+    assert t("중동전쟁 여파에 한전 3분기 영업익 70% 뚝") == {"015760"}
+    assert t("송전망", pad + "한국전력공사는 변전소 용지를 확정했다.") == {"015760"}   # "공사" 뒤 글자 규칙에 걸리지 않는다
+    # 포스코: 그룹 이름 규칙 (계열사·그룹 이야기는 빼고, 상장 계열사는 긴 이름이 이긴다)
+    assert t("포스코이앤씨, 고창 해상풍력 2974억 투입") == set()
+    assert t("포스코그룹 회장 신년사") == set()
+    assert t("포스코DX, 로봇 자동화 수주") == set()
+    assert t("포스코퓨처엠, 양극재 공급 계약") == {"003670"}
+    # 금융지주 별칭을 품은 다른 회사 · 자회사 은행은 붙이지 않는다
+    assert t("신한금융투자 리서치센터 전망") == set()
+    assert t("우리금융캐피탈, 자동차 할부 금리 인하") == set()
+    assert t("우리금융저축銀, 지주 계열 수익성 1위") == set()
+    assert t("하나금융연구소 보고서") == set()
+    assert t("신한은행, 소상공인 대출 확대") == set()
+    # 한전: 더 긴 다른 이름의 일부 · 영문이 붙은 자회사
+    assert t("대한전선, 해저케이블 수주") == {"001440"}
+    assert t("대한전문건설협회 회장 선거") == set()
+    assert t("한전KDN, 전력 ICT 사업 확대") == set()
+    # 골프 대회 후원·선수 소속
+    assert t("[KLPGA 최종순위] 에쓰오일 챔피언십") == set()
+    assert t("이예원, KLPGA 에쓰오일 대회 2라운드서 단독 선두") == set()
+    assert t("제네시스 대상 레이스", pad + "장유빈(신한금융그룹)이 KPGA 투어에서 준우승했다.") == set()
+
+
 def test_project_config_loads():
     cfg = yaml.safe_load(Path("configs/stock_aliases.yaml").read_text(encoding="utf-8"))
     rules = st.build_rules({**STOCKS, "005380": "현대차"}, cfg)
