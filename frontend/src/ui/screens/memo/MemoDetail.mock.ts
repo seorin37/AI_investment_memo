@@ -26,6 +26,7 @@ const NEWS_HBM = { kind: '뉴스' as const, headline: 'HBM4 공급 확대 소식
 const DART_Q3 = {
   kind: '공시' as const,
   headline: '3분기 실적 발표가 예정돼 있어요',
+  report: '기업설명회(IR) 개최 · 3분기 경영실적 발표(잠정)',
   source: 'DART · 2026. 10. 13. 17:05',
   url: 'https://dart.fss.or.kr',
   quote: '2026년 3분기 경영실적 발표(잠정) — 일시: 2026년 10월 24일',
@@ -35,12 +36,12 @@ const DART_Q3 = {
 /* AI 업데이트 — 원본 feed. 안 읽음 수는 보드의 배지(unread_updates)와 같음 */
 export const mockFeed: Record<string, MemoFeedItem[]> = {
   m1: [
-    { ...NEWS_HBM, id: 'f1', at: at('10-15', '08:40'), summary: '메모에서 확인하려던 "실적 발표 내용" 관련 뉴스예요.', source: '한국경제 · 2026. 10. 15. 08:40', memo_version: 1, unread: true },
+    { ...NEWS_HBM, id: 'f1', at: at('10-15', '08:40'), summary: '메모에서 확인하려던 "실적 발표 내용" 관련 뉴스예요.', source: '한국경제 · 2026. 10. 15. 08:40', provider: '한국경제 · 네이버 뉴스', memo_version: 1, unread: true },
     { ...DART_Q3, id: 'f2', at: at('10-13', '17:05'), summary: '10월 24일 3분기 경영실적 발표(잠정) 예정 공시가 올라왔어요.', memo_version: 1, unread: false },
   ],
-  m2: [{ ...NEWS_HBM, id: 'f3', at: at('10-15', '08:40'), summary: '메모에서 확인하려던 "HBM 수요" 관련 뉴스예요.', source: '한국경제 · 2026. 10. 15. 08:40', memo_version: 1, unread: true }],
+  m2: [{ ...NEWS_HBM, id: 'f3', at: at('10-15', '08:40'), summary: '메모에서 확인하려던 "HBM 수요" 관련 뉴스예요.', source: '한국경제 · 2026. 10. 15. 08:40', provider: '한국경제 · 네이버 뉴스', memo_version: 1, unread: true }],
   m3: [
-    { ...NEWS_HBM, id: 'f4', at: at('10-15', '08:40'), summary: '메모에서 확인하려던 "15만원 조건가" 관련 뉴스예요.', source: '네이버 뉴스 · 2026. 10. 15. 08:40', memo_version: 2, unread: false },
+    { ...NEWS_HBM, id: 'f4', at: at('10-15', '08:40'), summary: '메모에서 확인하려던 "15만원 조건가" 관련 뉴스예요.', source: '네이버 뉴스 · 2026. 10. 15. 08:40', provider: '네이버 뉴스', memo_version: 2, unread: false },
     {
       id: 'f5',
       kind: '주가',
@@ -49,6 +50,7 @@ export const mockFeed: Record<string, MemoFeedItem[]> = {
       summary: '종가 180,500원 · 조건가보다 30,500원(20.3%) 높아요. 아직 설정한 15만원 조건에 도달하지 않았어요.',
       source: 'KIS · 2026. 10. 11. 종가',
       url: null,
+      price: { close: 180500, cond: 150000, direction: '이하', gap: '+30,500원 (+20.3%)', tone: 'far', closes: [156800, 158200, 161000, 163500, 166900, 170200, 172800, 176400, 178900, 180500], from: '10.02', to: '10.11' },
       memo_version: 2,
       unread: false,
     },
@@ -60,6 +62,7 @@ export const mockFeed: Record<string, MemoFeedItem[]> = {
       summary: '최근 5거래일 동안 6.2% 내렸어요. 종가 156,800원으로, 설정한 15만원보다 6,800원(4.5%) 높아요.',
       source: 'KIS · 2026. 10. 02. 종가',
       url: null,
+      price: { close: 156800, cond: 150000, direction: '이하', gap: '+6,800원 (+4.5%)', tone: 'near', closes: [167200, 166100, 164500, 163800, 161900, 160400, 158700, 157900, 156800], from: '09.22', to: '10.02' },
       memo_version: 1,
       unread: false,
     },

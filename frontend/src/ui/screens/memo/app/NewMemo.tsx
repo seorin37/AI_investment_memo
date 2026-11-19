@@ -16,7 +16,7 @@ import type { NewMemoProps } from '../MemoDetail.types';
  * 노란 종이 (최소 250) + 예시 글(비면 보임: 제목 21px · 본문 15.5px 줄 1.8 · 점선 아래 안내 12.5px) · 안내 12.5px #9A9EA7
  * AI 연결 칸 (#F6F6F8 라운드 16 · 안쪽 14·16 · 위 14). 저장: 첫 줄 = 제목 (splitMemo)
  */
-export function AppNewMemo({ stockName, initialText, onCancel, onSave }: NewMemoProps) {
+export function AppNewMemo({ stockName, initialText, onCancel, onEmpty, onSave }: NewMemoProps) {
   const insets = useSafeAreaInsets();
   const [text, setText] = useState(initialText ? `${initialText}\n` : '');
   const [ai, setAi] = useState(false);
@@ -37,7 +37,7 @@ export function AppNewMemo({ stockName, initialText, onCancel, onSave }: NewMemo
   }, [onCancel]);
   const save = () => {
     ed.current?.blur();
-    if (empty) return onCancel();
+    if (empty) return (onEmpty ?? onCancel)();
     const r = splitMemo(text);
     onSave({ ...r, color: 'yellow', ai });
   };

@@ -65,6 +65,36 @@ export function FeedKindIcon({ kind, color }: { kind: '뉴스' | '공시' | '주
   );
 }
 
+/** 앱 근거 상세 카드 머리 그림 (원본 openEv .ix 안: 16 · 2) — 공시 문서 · 뉴스 상자 · 판정 근거 선 */
+export function EvIcon({ k, color }: { k: 'doc' | 'news' | 'line'; color: string }) {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" style={svgStyle}>
+      {k === 'doc' ? (
+        <>
+          <Path d="M6 3h8l4 4v14H6z" />
+          <Path d="M9 12h6M9 16h6" />
+        </>
+      ) : k === 'news' ? (
+        <>
+          <Rect x={4} y={4} width={16} height={16} rx={3} />
+          <Path d="M8 9h8M8 13h8M8 17h5" />
+        </>
+      ) : (
+        <Path d="M4 18l5-6 4 3 7-8" />
+      )}
+    </Svg>
+  );
+}
+
+/** 수정 이력 펼침 화살 (원본 CV: 16 · 2.2) */
+export function ChevDown16({ color = '#9A9EA7' }: C) {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" style={svgStyle}>
+      <Path d="M6 9l6 6 6-6" />
+    </Svg>
+  );
+}
+
 /** 앱 메모 기록: 고침 (ICP) · 첫 메모 (ICN) — 16 */
 export function RevIcon({ first, color = '#6A42AB', size = 16 }: C & { first: boolean }) {
   return first ? (

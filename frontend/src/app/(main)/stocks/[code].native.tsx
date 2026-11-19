@@ -17,7 +17,10 @@ import { mockBoardChecklist, mockBoardMemos, mockBoardStock, mockEmptyStock } fr
  * 메모 상세 · 새 메모 · AI 연결 = UI v2 (④ · app/(detail)/memo). 체크리스트 화면은 아직 옛 화면.
  */
 export default function StockDetail() {
-  const { code, tab: tabParam } = useLocalSearchParams<{ code: string; tab?: string }>();
+  const { code, tab: tabParam, notice: noticeParam, t: noticeKey } = useLocalSearchParams<{ code: string; tab?: string; notice?: string; t?: string }>();
+  /* 새 메모에서 돌아올 때 보드 스낵바 (원본 saveNew) */
+  const NOTICE: Record<string, string> = { empty: '빈 메모는 저장하지 않았어요', saved: '메모를 저장했어요' };
+  const boardNotice = noticeParam && noticeKey && NOTICE[noticeParam] ? { message: NOTICE[noticeParam], key: noticeKey } : undefined;
   const router = useRouter();
   const notice = useMockNotice();
   const setTabBarHidden = useUI((s) => s.setTabBarHidden);
@@ -47,6 +50,7 @@ export default function StockDetail() {
       stock={stock}
       memos={memos}
       checklist={checklist}
+      notice={boardNotice}
       onOpenMemo={(id, t) => router.push({ pathname: '/memo/[id]', params: { id, tab: t } })}
       onOpenChecklist={() => router.push({ pathname: '/checklist/[id]', params: { id: checklist?.id ?? 'new' } })}
       onNewMemo={(first) => router.push({ pathname: '/memo/new', params: { code: stock.stock_code, name: stock.name, first_line: first ?? '' } })}

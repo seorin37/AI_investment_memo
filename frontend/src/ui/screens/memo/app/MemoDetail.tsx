@@ -44,6 +44,12 @@ export function AppMemoDetail(p: MemoDetailProps) {
   const ed = useRef<{ focus: () => void; blur: () => void }>(null);
   const seen = useRef(false);
   const unread = p.feed.filter((f) => f.unread).length;
+  /* 근거 상세 [메모 보기] → 메모 탭 (원본 popOv → setDTab('memo')) */
+  const [reqKey, setReqKey] = useState(p.tabRequest?.key);
+  if (p.tabRequest && p.tabRequest.key !== reqKey) {
+    setReqKey(p.tabRequest.key);
+    setTab(p.tabRequest.tab);
+  }
 
   const toast = (msg: string) => setSnack((s) => ({ id: (s?.id ?? 0) + 1, msg }));
   useEffect(() => {

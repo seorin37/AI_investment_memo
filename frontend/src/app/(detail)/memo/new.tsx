@@ -9,7 +9,7 @@ import { mockDetailStockName } from '@/ui/screens/memo/MemoDetail.mock';
  * AI 연결을 켜고 저장하면 AI 연결 창으로 (원본 saveNew → openAIF(fromNew)).
  */
 export default function NewMemoScreen() {
-  const { name, first_line } = useLocalSearchParams<{ code?: string; name?: string; first_line?: string }>();
+  const { code, name, first_line } = useLocalSearchParams<{ code?: string; name?: string; first_line?: string }>();
   const router = useRouter();
   const toast = useUI((s) => s.showToast);
   const cancel = useCallback(() => router.back(), [router]);
@@ -18,13 +18,17 @@ export default function NewMemoScreen() {
       stockName={name || mockDetailStockName}
       initialText={first_line || undefined}
       onCancel={cancel}
+      onEmpty={() => (code ? router.dismissTo({ pathname: '/stocks/[code]', params: { code, notice: 'empty', t: String(Date.now()) } }) : cancel())}
       onSave={({ title, body, ai }) => {
         if (ai) {
           router.replace({ pathname: '/memo/link', params: { id: 'new', title, body, from: 'new' } });
           return;
         }
-        toast('메모를 저장했어요');
-        router.back();
+        if (code) router.dismissTo({ pathname: '/stocks/[code]', params: { code, notice: 'saved', t: String(Date.now()) } });
+        else {
+          toast('메모를 저장했어요');
+          router.back();
+        }
       }}
     />
   );

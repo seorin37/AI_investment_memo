@@ -30,6 +30,31 @@ export function revSummary(cur: MemoVersion, prev?: MemoVersion): string {
   return '내용을 고쳤어요';
 }
 
+/**
+ * 이전 버전 → 이 버전 글 비교 (원본 수정 이력 .vbody: <del> 빨강 지운 글 · <ins> 초록 더한 글).
+ * 앞뒤 같은 부분을 빼고 가운데만 지움·더함으로 (어절 경계까지 넓힘).
+ */
+export function diffParts(prev: string | undefined, cur: string): { t: string; k: 'same' | 'del' | 'ins' }[] {
+  if (prev == null || prev === cur) return [{ t: cur, k: 'same' }];
+  let a = 0;
+  while (a < prev.length && a < cur.length && prev[a] === cur[a]) a++;
+  let b = 0;
+  while (b < prev.length - a && b < cur.length - a && prev[prev.length - 1 - b] === cur[cur.length - 1 - b]) b++;
+  /* 어절 중간에서 끊기지 않게 앞쪽은 빈칸·줄바꿈까지 되돌림 */
+  while (a > 0 && !/\s/.test(cur[a - 1])) a--;
+  const out: { t: string; k: 'same' | 'del' | 'ins' }[] = [];
+  const head = cur.slice(0, a);
+  const del = prev.slice(a, prev.length - b);
+  const ins = cur.slice(a, cur.length - b);
+  const tail = cur.slice(cur.length - b);
+  if (head) out.push({ t: head, k: 'same' });
+  if (del) out.push({ t: del, k: 'del' });
+  if (del && ins) out.push({ t: ' ', k: 'same' });
+  if (ins) out.push({ t: ins, k: 'ins' });
+  if (tail) out.push({ t: tail, k: 'same' });
+  return out;
+}
+
 /** 'YYYY-MM-DD…' → 'YYYY년 M월 D일' (원본 앱 .ddate '2026년 10월 1일 작성') */
 export function koDate(iso: string): string {
   const m = iso.match(/^(\d{4})-(\d\d)-(\d\d)/);

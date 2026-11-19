@@ -24,7 +24,7 @@ const md = (iso: string) => {
  * 기록 줄 (AI 연결 시작 점 · 메모 고침/첫 메모 펼치면 그때 메모) · 소식 카드 (종류 바탕 · 왼쪽 막대 3 · 자세히)
  * 넛지 (소식 2개 이상) · 'AI가 요약했어요' · 투자 권유 아님 안내. AI 연결이 꺼져 있으면 첫 메모 줄만.
  */
-export function WebFeed({ memo, versions, feed, trackItems, onOpenSource, onNudge }: { memo: Memo; versions: MemoVersion[]; feed: MemoFeedItem[]; trackItems: AiTrackItem[]; onOpenSource?: (f: MemoFeedItem) => void; onNudge?: () => void }) {
+export function WebFeed({ memo, versions, feed, trackItems, onOpenSource, onOpenEvidence, onNudge }: { memo: Memo; versions: MemoVersion[]; feed: MemoFeedItem[]; trackItems: AiTrackItem[]; onOpenSource?: (f: MemoFeedItem) => void; onOpenEvidence?: (f: MemoFeedItem) => void; onNudge?: () => void }) {
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [nudge, setNudge] = useState(true);
   const rows = buildTimeline(memo, versions, feed).filter((r) => memo.ai_linked || (r.t === 'rev' && r.first));
@@ -144,6 +144,12 @@ export function WebFeed({ memo, versions, feed, trackItems, onOpenSource, onNudg
                   </View>
                   <View style={st.src}>
                     <Text style={st.srcT}>{f.source}</Text>
+                    {/* ④-2: 앱과 같은 근거 상세로 (원본 웹에는 근거 화면이 없음) */}
+                    {onOpenEvidence ? (
+                      <Pressable onPress={() => onOpenEvidence(f)} accessibilityRole="button">
+                        <Text style={st.srcA}>근거 자세히 보기 ›</Text>
+                      </Pressable>
+                    ) : null}
                     {f.kind !== '주가' ? (
                       <Pressable onPress={() => onOpenSource?.(f)} accessibilityRole="link">
                         <Text style={st.srcA}>원문 열기 ↗</Text>

@@ -75,6 +75,12 @@ export function AppMemoBoard(p: MemoBoardProps & { header: React.ReactNode }) {
     return () => clearTimeout(t);
   }, [snack]);
   const toast = (msg: string, undo?: string[]) => setSnack((s) => ({ id: (s?.id ?? 0) + 1, msg, undo }));
+  /* 돌아올 때 받은 알림 (새 메모 저장 · 빈 메모) */
+  const [noticeKey, setNoticeKey] = useState(p.notice?.key);
+  if (p.notice && p.notice.key !== noticeKey) {
+    setNoticeKey(p.notice.key);
+    toast(p.notice.message);
+  }
 
   /* 안드로이드 뒤로: 시트(모달이 먼저 받음) → 열린 줄 → 부채꼴 → 고르기 → 화면 */
   useEffect(() => {

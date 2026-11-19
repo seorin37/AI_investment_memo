@@ -10,7 +10,7 @@ import { mockDetailStockName, mockFeed, mockLastChecked, mockMemoById, mockToday
  * AI 연결 켜기 → AI 연결 창 (/memo/link) · 근거 상세 · 원문 · 주간보고서 넛지는 다음 묶음.
  */
 export default function MemoDetailScreen() {
-  const { id, tab } = useLocalSearchParams<{ id: string; tab?: string }>();
+  const { id, tab, t } = useLocalSearchParams<{ id: string; tab?: string; t?: string }>();
   const router = useRouter();
   const notice = useMockNotice();
   const [memo, setMemo] = useState<Memo>(() => mockMemoById(id));
@@ -25,6 +25,7 @@ export default function MemoDetailScreen() {
       trackItems={mockTrackItems[memo.id] ?? []}
       lastChecked={mockLastChecked}
       initialTab={tab === 'ai' ? 'ai' : 'memo'}
+      tabRequest={t ? { tab: tab === 'ai' ? 'ai' : 'memo', key: t } : undefined}
       onBack={() => router.back()}
       onSave={({ title, body }) => {
         setVersions((v) => [{ version: (v[0]?.version ?? 0) + 1, title, body, saved_at: mockToday }, ...v]);
@@ -38,7 +39,7 @@ export default function MemoDetailScreen() {
       onDisconnectAi={() => setMemo((m) => ({ ...m, ai_linked: false }))}
       onSeenUpdates={() => setTimeout(() => setFeed((f) => f.map((x) => ({ ...x, unread: false }))), 4000)}
       onOpenSource={() => notice('원문 열기')}
-      onOpenEvidence={() => notice('근거 상세')}
+      onOpenEvidence={(f) => router.push({ pathname: '/memo/evidence', params: { id: memo.id, fid: f.id } })}
       onNudge={() => notice('주간보고서')}
       onSpentAction={(a) => notice(a === 'credit' ? '크레딧 구매' : '플랜 변경')}
     />

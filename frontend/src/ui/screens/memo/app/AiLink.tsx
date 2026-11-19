@@ -61,7 +61,8 @@ export function AppAiLink({ stockName, memo, state, items, fromNew, onConfirm, o
     body = (
       <>
         <Text style={st.aq}>무엇을 계속 확인할까요?</Text>
-        <Text style={st.ad}>메모에서 찾은 항목이에요. 선택한 항목만 연결돼요.</Text>
+        {/* ④ 결정: 원본 '선택한 항목만 연결돼요' → 항목 화면과 같은 문구 (항목은 읽기 전용) */}
+        <Text style={st.ad}>메모에서 찾은 항목이에요. 항목을 골라 받을 수는 없고, 연결하면 이 항목 모두와 관련된 소식을 모아 드려요.</Text>
         {note}
         <View style={st.scan}>
           <Spinner />

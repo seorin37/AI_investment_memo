@@ -18,6 +18,8 @@ export interface MemoBoardProps {
   order?: BoardKey[];
   /** 웹: 사용자가 끌어서 순서를 바꾼 적이 있는지 (없으면 '꾹 눌러 끌면…' 안내를 보여 줌) */
   orderCustomized?: boolean;
+  /** 다른 화면에서 돌아올 때 보드 스낵바로 보여 줄 말 (원본: 새 메모를 닫으면 보드에 '빈 메모는 저장하지 않았어요'). key 가 바뀔 때마다 */
+  notice?: { message: string; key: string };
   /** AI 사용량을 다 씀 (원본 '.spent' · 웹 SpentBox) */
   aiSpent?: boolean;
 

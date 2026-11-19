@@ -10,12 +10,16 @@ import { MemoEditor } from '@/ui/shared/MemoEditor';
 import { Sheet } from '@/ui/shared/Sheet';
 import { SpentBox } from '@/ui/shared/SpentBox';
 import { fpx, paper } from '@/ui/theme';
-import type { MemoDetailProps } from '../MemoDetail.types';
+import { BackChevron } from '@/ui/icons/MemoGlyphs';
+import { EvidenceBody, evidenceActions, evidenceTitle } from '../EvidenceContent';
+import { HistoryContent } from '../HistoryContent';
+import type { MemoDetailProps, MemoFeedItem } from '../MemoDetail.types';
 import { dotDate } from '../memoTimeline';
 import { AI_OFF, Actions, AiFooter, CloseBtn, INK, Swatches, Tabs2, panel } from './parts';
 import { WebFeed } from './WebFeed';
 
 type Hover = { pressed: boolean; hovered?: boolean };
+type Sub = { k: 'ev'; item: MemoFeedItem } | { k: 'hist'; v: number; from?: Sub };
 
 /**
  * 웹 메모 창 (원본 board.tsx MemoDialog: 680 가운데 창 · 막 rgba(14,15,20,.32))
@@ -31,6 +35,8 @@ export function WebMemoDialog(p: MemoDetailProps & { open: boolean }) {
   const [ai, setAi] = useState(m.ai_linked);
   const [text, setText] = useState(joinMemo(m.title, m.body));
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  /* 창 안 근거 상세 · 수정 이력 (이력은 근거에서 열려 뒤로 가면 근거로) */
+  const [sub, setSub] = useState<Sub | null>(null);
   /* AI 연결 창에서 켜고 돌아오면 같이 켜짐 (원본 useEffect [memo.ai]) */
   const [linked, setLinked] = useState(m.ai_linked);
   if (linked !== m.ai_linked) {
@@ -78,8 +84,46 @@ export function WebMemoDialog(p: MemoDetailProps & { open: boolean }) {
           </Pressable>
           <CloseBtn onPress={close} />
         </View>
-        <Tabs2 a="메모" b="AI 업데이트" v={tab} set={pickTab} />
-        {tab === 0 ? (
+        {sub ? (
+          <>
+            {/* ④-2 근거 상세 · 수정 이력: 창 안에서 바뀜 (원본 웹에는 근거 화면이 없어 앱 화면 구조를 옮김) */}
+            <View style={st.subBar}>
+              <Pressable onPress={() => setSub(sub.k === 'hist' && sub.from ? sub.from : null)} accessibilityRole="button" accessibilityLabel="뒤로" style={({ hovered }: Hover) => [st.back, hovered && { backgroundColor: '#F2F3F4' }]}>
+                <BackChevron size={20} color={INK} />
+              </Pressable>
+              <Text style={st.subT}>{sub.k === 'ev' ? evidenceTitle(sub.item) : '메모'}</Text>
+            </View>
+            <ScrollView style={st.aiArea} contentContainerStyle={[st.evIn, sub.k === 'ev' && st.evGray]}>
+              {sub.k === 'ev' ? (
+                <EvidenceBody item={sub.item} memo={m} version={p.versions.find((v) => v.version === sub.item.memo_version)} onOpenSource={(f) => p.onOpenSource?.(f)} onOpenHistory={(v) => setSub({ k: 'hist', v, from: sub })} />
+              ) : (
+                <HistoryContent memo={m} versions={p.versions} openVersion={sub.v} />
+              )}
+            </ScrollView>
+            {sub.k === 'ev' ? (
+              <View style={st.evBar}>
+                {evidenceActions(sub.item).map((a) => (
+                  <Pressable
+                    key={a.label}
+                    onPress={() => {
+                      if (a.a === 'out') return p.onOpenSource?.(sub.item);
+                      setSub(null);
+                      setTab(0);
+                    }}
+                    accessibilityRole="button"
+                    style={({ hovered }: Hover) => [st.evBtn, a.gray ? st.evBtnGray : st.evBtnInk, hovered && a.gray && { backgroundColor: '#E9EAEC' }]}
+                  >
+                    <Text style={[st.evBtnT, !a.gray && { color: '#FFFFFF' }]}>{a.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : (
+              <View style={st.evBarPad} />
+            )}
+          </>
+        ) : null}
+        {sub ? null : <Tabs2 a="메모" b="AI 업데이트" v={tab} set={pickTab} />}
+        {sub ? null : tab === 0 ? (
           <View style={st.memoArea}>
             <View style={[st.paper, { backgroundColor: paper[color].bg }]}>
               <ScrollView showsVerticalScrollIndicator={false}>
@@ -92,10 +136,12 @@ export function WebMemoDialog(p: MemoDetailProps & { open: boolean }) {
           <ScrollView style={st.aiArea} contentContainerStyle={st.aiIn}>
             <FadeIn style={st.aiGap}>
               {p.aiSpent && m.ai_linked ? <SpentBox variant="web" title="AI 연결이 잠시 멈췄어요" body={'이번 달 AI 사용량을 다 썼어요. 다음 달 1일에 다시 찾아요.\n메모는 계속 쓸 수 있어요.'} onCredit={() => p.onSpentAction?.('credit')} onPlan={() => p.onSpentAction?.('plan')} /> : null}
-              <WebFeed memo={view} versions={p.versions} feed={p.feed} trackItems={p.trackItems} onOpenSource={p.onOpenSource} onNudge={p.onNudge} />
+              <WebFeed memo={view} versions={p.versions} feed={p.feed} trackItems={p.trackItems} onOpenSource={p.onOpenSource} onOpenEvidence={(item) => setSub({ k: 'ev', item })} onNudge={p.onNudge} />
             </FadeIn>
           </ScrollView>
         )}
+        {sub ? null : (
+          <>
         <AiFooter
           on={ai}
           set={(v) => {
@@ -106,6 +152,8 @@ export function WebMemoDialog(p: MemoDetailProps & { open: boolean }) {
           sub={ai ? (tab === 1 ? `이 메모를 AI가 지켜보고 있어요${tracks ? ` · ${tracks}` : ''}` : `이 메모에서 ${p.trackItems.length || 1}개 항목을 지켜봐요.`) : AI_OFF}
         />
         <Actions note="연결하지 않아도 메모는 그대로 남아요" ok="메모 저장" onCancel={close} onOk={save} />
+          </>
+        )}
       </View>
       <ContextMenu at={menu} items={items} onClose={() => setMenu(null)} />
     </Sheet>
@@ -123,4 +171,15 @@ const st = StyleSheet.create({
   aiArea: { flexShrink: 1, minHeight: 0 },
   aiIn: { paddingTop: 8, paddingHorizontal: 24, paddingBottom: 16 },
   aiGap: { gap: 16 },
+  subBar: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 20, paddingBottom: 8 },
+  back: { width: 32, height: 32, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  subT: { ...fpx(17, 26), fontWeight: '700', color: INK },
+  evIn: { marginHorizontal: 24, padding: 16, borderRadius: 20 },
+  evGray: { backgroundColor: '#F3F4F6' },
+  evBar: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, paddingTop: 16, paddingHorizontal: 24, paddingBottom: 24 },
+  evBarPad: { height: 24 },
+  evBtn: { minHeight: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20, paddingVertical: 10 },
+  evBtnGray: { backgroundColor: '#F2F3F4' },
+  evBtnInk: { backgroundColor: '#14171C' },
+  evBtnT: { ...fpx(15, 23), fontWeight: '500', color: INK },
 });

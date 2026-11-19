@@ -48,7 +48,7 @@ export function WebConnectDialog({ open, memo, state, items, onConfirm, onCancel
         </View>
         <View style={st.q}>
           <Text style={st.qT}>무엇을 계속 확인할까요?</Text>
-          <Text style={st.qD}>메모에서 찾은 항목이에요. 이 항목과 관련된 공시·뉴스·종가 변화만 모아 드려요.</Text>
+          <Text style={st.qD}>메모에서 찾은 항목이에요. 항목을 골라 받을 수는 없고, 연결하면 이 항목 모두와 관련된 소식을 모아 드려요.</Text>
         </View>
         <View style={[st.memo, { backgroundColor: paper.yellow.bg }]}>
           <Text style={st.memoT} numberOfLines={1}>
