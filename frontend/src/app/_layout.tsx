@@ -5,10 +5,13 @@ import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApiError } from '@/api';
+import { setMotionEnabled } from '@/components/motion/motion';
 import { useAuth } from '@/store/auth';
 import { colors } from '@/theme/tokens';
 
 void SplashScreen.preventAutoHideAsync();
+/* 11.18 결정: 화면 전환·페이드 등 모션 켬 (기기 '동작 줄이기'가 켜져 있으면 그대로 따름) */
+setMotionEnabled(true);
 
 export default function RootLayout() {
   const [queryClient] = useState(
