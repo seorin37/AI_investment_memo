@@ -40,6 +40,8 @@ class AnalysisResult:
     confirmations: list[dict] = field(default_factory=list)  # {sentence_index, text, question, reason, options[]}
     out_of_scope: bool = False
     llm_calls: int = 0
+    # 실험(2026-11-16): 한 번 답하면 끝나는 질문 {sentence_index, text, question, kind}. 추적 항목·요금제 한도와 따로 센다
+    questions: list[dict] = field(default_factory=list)
 
 
 @lru_cache(maxsize=1)
@@ -144,4 +146,7 @@ def analyze_memo(memo_id: int, revision_no: int, text: str, symbol: str, stock_n
             options.append(option)
         confirmations.append({"sentence_index": r.sentence_index, "text": r.text, "question": r.question,
                               "reason": r.reason, "options": options})
-    return AnalysisResult(items, confirmations, any(r.type == "out_of_scope" and r.scope == "memo" for r in responses), calls)
+    questions = [{"sentence_index": j.sentence_index, "text": j.cleaned_text or j.text, **a}
+                 for j in judged for a in (getattr(j, "asks", None) or [])]
+    return AnalysisResult(items, confirmations, any(r.type == "out_of_scope" and r.scope == "memo" for r in responses), calls,
+                          questions)

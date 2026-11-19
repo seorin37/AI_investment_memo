@@ -1,0 +1,193 @@
+# 실험 설정 (2026-11-16): 공시 하이브리드 검색 + 공시 관련성 판정 + 재료·출력 늘리기 + 설명 문단. 원본 updates.yaml은 그대로
+daily:
+  run_at: 06:30
+  max_usd_per_day: 1.0
+  lock_key: 581094101
+store: file
+news:
+  variant: hybrid
+  lookback_days: 30
+  top_k: 8
+  search: chunks
+  chunks:
+    dense_k: 100
+    sparse_k: 100
+    rerank_k: 30
+    colbert: true
+    weights:
+      dense: 0.4
+      sparse: 0.2
+      colbert: 0.4
+    dedup_body_hash: true
+    fallback_headline: true
+disclosure:
+  top_k: 4
+  search: hybrid
+  hybrid:
+    weights:
+      dense: 0.6
+      sparse: 0.4
+    k: 8                     # 2026-11-17 비용: 15 → 8 (질문 목차 가산점·낱말 청크 자리 보장은 그대로)
+    max_chunks_per_document: 3
+relevance:
+  enabled: true
+  prompt: configs/candidate_relevance_prompt.md
+  model: gpt-6.1-terra       # 2026-11-17 비용: 관련성 판정은 terra (sol의 절반 값). 답 생성은 sol 그대로
+  max_text: 600              # 2026-11-17 비용: 1200 → 600
+  include_disclosures: true   # 2026-11-17: 모든 항목 공시 판정 (ask만으로 줄였더니 알림 카드 13→6, terra·600자라 비용 작음)
+  prompt_ask: configs/ask_relevance_prompt.md   # 실험(2026-11-17): ask 항목 전용 관련성 판정
+same_event:
+  enabled: false
+  min_similarity: 0.7
+  number_similarity: 0.62
+  days_before: 1
+  days_after: 3
+  event_only: true
+price:
+  near_pct: 3.0
+recent:
+  lookback_days: 365
+  fetch_k: 50
+  include_subsidiary: false
+  filters:
+    periodic_date: period_end
+    latest_version_only: true
+    dedupe_same_text: false
+    news_require_company: false
+    news_company_lead_chars: 150
+  drop_other_company_news: false
+  company_names_file: data/raw/dart/corpCode.xml
+  company_aliases:
+    NAVER:
+    - 네이버
+    KB금융:
+    - KB국민은행
+    - 국민은행
+    - KB
+    SK하이닉스:
+    - 하이닉스
+    - SK닉스
+    - 닉스
+    - 하닉
+    - SK하닉
+    삼성전자:
+    - 삼성
+    - 삼전
+topic:
+  min_similarity: 0.5
+  min_similarity_news: 0.58
+  min_similarity_disclosure: 0.45
+  strong_similarity_news: 0.63
+  strong_similarity_disclosure: 0.68
+  min_similarity_event: 0.5
+  strong_similarity_event: 0.63
+  stop_window_days: 3
+  max_disclosure_evidence: 2
+  max_news_evidence: 3
+  card_schema: v2
+  compare_prior: true
+  judgment_patterns:
+  - (더|가장|훨씬|상대적으로)\s*(나아|낫|나은|좋아|좋은|좋습|우수|매력|싸|저렴|비싸)
+  - (이|가|쪽이|편이)\s*(나아요|낫|나은\s*(선택|편|쪽))
+  - (갈아타|선택하|고르|추천)(세요|는\s*게|기를|할\s*만)
+  - (싸|비싸|저렴해)\s*(보여요|보입니다|보인다)
+  coverage_terms:
+  - 처음
+  - 최초
+  - 사상 첫
+  - 줄곧
+  - 계속
+  - 꾸준히
+  - 그동안
+  - 오랫동안
+  - 연속
+  - 이전부터
+  - 여전히
+  evidence_mode: all
+  max_disclosure_docs: 5
+  max_chunks_per_disclosure: 2   # 2026-11-18: 3 → 2 (운영과 같게. 공시 15청크가 근거를 다 채워 뉴스가 0건이 됐다)
+  max_total: 8               # 2026-11-17 비용: 답 생성 근거 상한 15 → 8
+  min_news: 3                # 2026-11-18: 관련 뉴스가 있으면 근거 중 최소 3자리는 뉴스 (evidence.build_evidence)
+  ask_overrides:              # 2026-11-18: 질문 답은 공시·뉴스·주가를 하나로 잇는 종합 답 (topic._judge_v2). 알림 카드는 위 값 그대로
+    max_sentences: 8          #   facts(검증용, 화면에 안 보임) 최대 개수
+    verify_scope: explanation #   검수는 화면에 보이는 답 본문만 (facts와 같은 내용을 두 번 검수하지 않게)
+    explanation:
+      max_sentences: 7        #   화면에 보이는 답 본문
+      max_chars: 700
+  extra_rules:
+  - 같은 내용이 공시와 뉴스에 있으면 공시 숫자를 쓴다.
+  - 전망·예상·추정을 다룬 기사는 사실 근거로 쓰지 않는다.
+  - 실적 수치를 쓰면 각 문장에 반드시 연결 기준 또는 별도 기준을 밝힌다. 연결재무제표기준영업실적 공시는 연결, 영업실적 공시는 별도다.
+  - 한 카드에서 연결 기준 수치와 별도 기준 수치를 섞지 않는다. 둘 다 있으면 연결 기준을 우선한다.
+  prediction_terms:
+  - 전망
+  - 예상
+  - 추정
+  - 관측
+  - 가능성
+  - 예측
+  - 내다봤
+  - 내다본
+  - 내다보
+  prediction_exempt:
+  - (예상|전망|추정)치를?\s*(상회|하회|웃돌|밑돌|넘|넘어|넘었|넘겼)
+  - (시장|컨센서스)\s*(예상|전망)을?\s*(상회|하회|웃돌|밑돌|넘)
+  - (예상|전망)보다
+  - (예상|전망)(과|와)\s*(같|달리|비슷)
+  - (예상|전망|추정)(액|치)?(이|가)?\s*아니   # 실험(2026-11-17): "예상액이 아니라 집행한 규모"처럼 예측이 아님을 밝힌 문장 (N08)
+  - (취득|처분|소각|발행|교부|상환|매입|매각|지급|납입|계약)\s*(예상|예정)\s*(기간|일자|일|금액|주식|수량)   # 2026-11-19: 공시 항목 이름 "취득예상기간"(M027)은 예측이 아니다
+  related_news_min_similarity: 0.6
+  news_dup_similarity: 0.7
+  max_text_chars_news: 1200
+  max_text_chars_disclosure: 1200
+  format_retry: 1
+  on_check_fail: drop
+  verify_call: true
+  verify_model: gpt-6.1-terra   # 2026-11-17 비용: 검수 호출은 terra (experiment가 검수 프롬프트만 이 모델로 보냄)
+  verify_retry: 1               # 2026-11-18: 검수에서 막히면 막힌 문장·이유를 주고 한 번 다시 쓴다 (topic._verify_repair_prompt)
+  title_max: 30
+  max_sentences: 5
+  sentence_max_chars: 90
+  min_confidence: 0.7
+  require_financial_basis: true
+  min_fact_overlap: 0.6
+  min_fact_overlap_event: 0.4
+  reason_max: 120
+  fact_max: 200
+  max_evidence: 3
+  banned_patterns:
+  - (오를|내릴|올라갈|떨어질|상승할|하락할|회복될|반등할)\s*(거|것|가능성|전망|듯)
+  - 가능성이?\s*(높|큽|커)
+  - (할|될)\s*전망
+  - (전망|예상|추정|관측|기대)(돼요|되어요|됩니다|돼|이에요|입니다)
+  - (전망|예상|추정|관측|기대)되고\s*있(어요|습니다|다)
+  - 것으로\s*(보여요|보입니다|보인다)
+  explanation:
+    enabled: true
+    max_sentences: 4
+    max_chars: 400
+  prompt_path_v2: configs/update_judge_prompt_v2_explain.md
+  prompt_path_ask: configs/ask_answer_prompt.md   # 실험(2026-11-16): category ask 항목 전용
+  ask_fin_table: true   # 실험(2026-11-16): ask 항목에 재무 표 근거 (fin_table.py)
+banned:
+- 사세요
+- 파세요
+- 매수 기회
+- 매도 기회
+- 담을 때
+- 손절하세요
+- 오를 거
+- 상승할 가능성
+- 회복될 전망
+- 호재
+- 악재
+- 긍정적
+- 부정적
+- 저평가
+- 고평가
+- 유망
+- 유리
+- 불리
+- 확실히
+- 반드시
+- 틀림없이

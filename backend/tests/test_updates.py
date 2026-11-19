@@ -2017,6 +2017,23 @@ class ResponseTest(unittest.TestCase):
         from pipelines.updates.response import item_response
         return item_response(item, kind, list(codes), card, has_data, "M07", "2026-11-10T09:00:00+09:00")
 
+    def test_ask_no_answer(self):
+        """실험(2026-11-17): 한 번 답하기 질문은 답을 못 만들면 '자료 없음' 답을 보인다. 시스템 실패는 숨긴 채 다시 본다."""
+        ask = replace(ITEM, category="ask", description="HBM이 무엇인지")
+        for kind, codes, reason in (("no_update", (), "llm_no_update"), ("no_relevant_candidates", (), "no_relevant_candidates"),
+                                    ("no_candidates", (), "no_candidates"), ("no_update", ("VERIFY_UNSUPPORTED",), "verify_failed")):
+            r = self.resp(kind, codes, item=ask)
+            self.assertEqual((r.type, r.reason, r.user_visible, r.question), ("ask_no_answer", reason, True, "HBM이 무엇인지"))
+            self.assertIn("확인되지 않았어요", r.message)
+        r = self.resp("no_update", item=ask, has_data=False)
+        self.assertEqual((r.type, r.reason), ("ask_no_answer", "no_source_data"))
+        for kind, codes in (("no_update", ("CALL_FAILED:Timeout",)), ("relevance_failed", ()), ("not_called", ())):
+            r = self.resp(kind, codes, item=ask)
+            self.assertEqual((r.type, r.user_visible), ("no_new_info", False))
+        r = self.resp("update", card={"title": "HBM 설명", "origin": "llm"}, item=ask)
+        self.assertEqual(r.type, "update_card")
+        self.assertEqual(self.resp("no_update").type, "no_new_info")                  # 추적 항목은 그대로
+
     def test_item_types_and_reasons(self):
         r = self.resp("update", card={"title": "HBM 매출 8.0% 증가", "origin": "llm"})
         self.assertEqual((r.type, r.user_visible, r.message), ("update_card", True, "HBM 매출 8.0% 증가"))

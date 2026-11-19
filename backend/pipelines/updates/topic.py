@@ -82,6 +82,10 @@ def check_topic(item: TrackingItem, candidates: list[Candidate], call: Callable[
     """extra_evidence(근거 목록) → 덧붙일 근거 (v2 compare_prior.prior_evidence, DB 연결은 호출자가 가진다)."""
     cfg = cfg or {}
     floor, strong = thresholds(cfg)
+    if item.category == "ask" and cfg.get("prompt_path_ask"):
+        # 실험(2026-11-16): 한 번 답하기 질문은 '최신 강한 후보에서 멈추기'를 하지 않는다. 답이 오래된 공시(3분기 잠정실적 등)에
+        # 있어도 최근 기사에서 멈춰 빠지던 문제 (N03). 기간 전체에서 유사도 순으로 고른다 (build_evidence 상한은 그대로)
+        strong = {k: 1.01 for k in strong}
     passed = pick_recent(candidates, floor, strong, cfg.get("stop_window_days", 0))
     grouped: list[tuple[Candidate, str]] = []
     options = evidence_options(cfg)
@@ -90,7 +94,7 @@ def check_topic(item: TrackingItem, candidates: list[Candidate], call: Callable[
     evidence = build_evidence(passed, cfg.get("max_disclosure_evidence", 2), cfg.get("max_news_evidence", 3),
                               cfg.get("news_dup_similarity", 0.7), cfg.get("max_text_chars_news", 600),
                               cfg.get("max_text_chars_disclosure", 800), floor, **options)
-    if extra_evidence is not None and evidence:
+    if extra_evidence is not None and (evidence or item.category == "ask"):   # ask: 재무 표만으로도 답할 수 있다
         evidence = evidence + extra_evidence(evidence)
     schema = cfg.get("card_schema", "v1")
     out = _judge_v2(item, evidence, call, banned, cfg) if schema == "v2" else _judge(item, evidence, call, banned, cfg)
@@ -182,6 +186,11 @@ _REPAIR_REASON_V2 = {"FORMAT_TITLE": "headline이 {title_max}자(공백 포함)�
 _COMPARE_WORDS = ("대비", "보다", "비교", "전년", "작년", "직전", "지난", "전기")
 
 
+def _sentences(text: str) -> list[str]:
+    """검수용 문장 분리. `2026.05.` 같은 숫자 날짜의 마침표는 문장 끝으로 보지 않는다."""
+    return [s.strip() for s in re.split(r"(?<!\d\.)(?<=[.!?])\s+", text or "") if s.strip()]
+
+
 def _repair_prompt_v2(prompt: str, raw: str, codes: list[str], cfg: dict) -> str:
     limits = _limits(cfg)
     reasons = "\n".join("- " + _REPAIR_REASON_V2[c].format(**limits) for c in dict.fromkeys(codes))
@@ -194,6 +203,16 @@ def card_v2_json(card) -> dict:
     return {"status": card.status, "headline": card.headline, "when": card.when,
             "facts": [{"text": t, "evidence_id": eid} for t, eid in card.facts], "explanation": card.explanation,
             "memo_link": card.memo_link, "sources": list(card.sources), "confidence": card.confidence}
+
+
+def _verify_repair_prompt(prompt: str, raw: str, notes: list[str]) -> str:
+    """실험(2026-11-18) 검수에서 막힌 문장과 이유를 알려 주고 한 번 다시 쓰게 한다 (topic.verify_retry).
+    '# 수정 요청' 머리말이라 usage.stage_of가 format_retry로 세고, 검수 모델이 아니라 카드 모델로 간다."""
+    blocked = "\n".join(f"- {n}" for n in notes)
+    return (f"{prompt}\n\n# 수정 요청\n직전 답변의 아래 문장이 근거로 뒷받침되지 않는다고 검수에서 막혔어요 (문장 → 이유).\n{blocked}\n\n"
+            f"직전 답변:\n{raw}\n\n"
+            "막힌 문장은 근거에 적힌 표현 그대로(조건·범위·기준·단위를 빼지 말고) 고치거나, 근거로 확인되지 않으면 빼세요. "
+            "근거에 없는 짐작·해석을 덧붙이지 말고, 막히지 않은 문장은 그대로 두고, 같은 근거만 써서 JSON 하나로 다시 작성하세요.")
 
 
 def _judge_v2(item: TrackingItem, evidence, call: Callable[[str], str] | None, banned: list[str], cfg: dict) -> TopicOutcome:
@@ -220,6 +239,12 @@ def _judge_v2_run(item: TrackingItem, evidence, call: Callable[[str], str] | Non
     from .judge import NO_COMPARISON, parse_card_v2, wants_comparison
     from .models import Card
 
+    if item.category == "ask" and cfg.get("ask_overrides"):
+        # 실험(2026-11-18): 질문 답은 공시·뉴스·주가를 하나로 이어 쓰는 종합 답이라 문장 수·설명 길이를 따로 둔다
+        ov = cfg["ask_overrides"]
+        cfg = {**cfg, **{k: v for k, v in ov.items() if k != "explanation"},
+               "explanation": {**(cfg.get("explanation") or {}), **(ov.get("explanation") or {})}}
+
     if not evidence or all(e.candidate.doc == "compare" for e in evidence):
         return TopicOutcome("no_candidates", evidence)
     if item.already_shown_ids and all(e.candidate.ref in set(item.already_shown_ids)
@@ -241,6 +266,8 @@ def _judge_v2_run(item: TrackingItem, evidence, call: Callable[[str], str] | Non
     explain = bool((cfg.get("explanation") or {}).get("enabled"))
     from .judge import load_guide
     guide = load_guide(cfg["prompt_path_v2"]) if cfg.get("prompt_path_v2") else None   # 시험용 프롬프트 파일 (기본: v2 파일)
+    if item.category == "ask" and cfg.get("prompt_path_ask"):   # 실험(2026-11-16): 한 번 답하기 질문은 전용 답변 지시문
+        guide = load_guide(cfg["prompt_path_ask"])
     prompt = build_prompt(item, evidence, guide=guide, limits=_limits(cfg), rules=cfg.get("extra_rules"), schema="v2",
                           coverage=cfg.get("coverage"), explain=explain)
     try:
@@ -281,17 +308,58 @@ def _judge_v2_run(item: TrackingItem, evidence, call: Callable[[str], str] | Non
         rec("format_retry", card, codes)
     if codes:
         return replace(codes, card, retried=retried)
-    facts = [(t, eid) for t, eid in card.facts if eid]          # "비교 자료 없음"은 검수하지 않는다
-    if cfg.get("verify_call"):
-        extra = [s.strip() for s in re.split(r"(?<=[.!?])\s+", card.explanation) if s.strip()] if explain else []
-        vcard = Card("update", card.headline, [t for t, _ in facts] + extra, card.memo_link, [(e, t) for t, e in facts],
-                     card.confidence)   # 설명 문단 문장도 근거와 대조한다
+
+    def verify(card, stage="verify"):
+        facts = [(t, eid) for t, eid in card.facts if eid]      # "비교 자료 없음"은 검수하지 않는다
+        extra = _sentences(card.explanation) if explain else []
+        if cfg.get("verify_scope") == "explanation" and extra:
+            sents = extra   # 실험(2026-11-18): 화면에 보이는 답 본문만 검수. facts는 같은 내용을 숨겨 둔 검증용이라 두 번 검수하지 않는다
+        else:
+            sents = [t for t, _ in facts] + extra               # 설명 문단 문장도 근거와 대조한다
+        vcard = Card("update", card.headline, sents, card.memo_link, [(e, t) for t, e in facts], card.confidence)
         vcodes, notes = _verify(vcard, evidence, call, item.company_name or item.symbol, item.description)
-        rec("verify", card, vcodes, notes=list(notes))
+        rec(stage, card, vcodes, notes=list(notes))
+        return vcodes, notes
+
+    if cfg.get("verify_call"):
+        vcodes, notes = verify(card)
+        if vcodes == ["VERIFY_UNSUPPORTED"] and cfg.get("verify_retry", 0):
+            # 실험(2026-11-18): 막힌 문장·이유를 주고 한 번 다시 쓴다. 다시 쓴 카드도 코드 검사·검수를 똑같이 거친다
+            retried = True
+            try:
+                raw = call(_verify_repair_prompt(prompt, raw, notes))
+            except CreditsExhausted:
+                raise
+            except Exception as exc:
+                out = replace([f"CALL_FAILED:{type(exc).__name__}"], card, retried=True)
+                out.verify_notes = notes
+                return out
+            card2 = parse_card_v2(raw)
+            if card2 is None:
+                rec("format_retry", None, ["FORMAT_PARSE"])
+                out = replace(["FORMAT_PARSE"], card, retried=True)
+                out.verify_notes = notes
+                return out
+            card = card2
+            if card.status == "no_update":
+                bad = check_no_update_v2(card)
+                rec("format_retry", card, bad)
+                out = replace(bad, card, retried=True) if bad else TopicOutcome("no_update", evidence, card, raw=raw, retried=True)
+                out.verify_notes = notes
+                return out
+            codes = check_card_v2(card, evidence, banned, cfg, item.memo_text)
+            rec("format_retry", card, codes)
+            if codes:
+                out = replace(codes, card, retried=True)
+                out.verify_notes = notes
+                return out
+            vcodes, notes2 = verify(card)
+            notes = notes + [f"(다시 쓴 뒤) {n}" for n in notes2]
         if vcodes:
             out = replace(vcodes, card, retried=retried)
             out.verify_notes = notes
             return out
+    facts = [(t, eid) for t, eid in card.facts if eid]
     by_id = {e.eid: e for e in evidence}
     fact_rows = [{"text": t, "ref": by_id[eid].candidate.ref} for t, eid in facts]
     has_no_cmp = any(t == NO_COMPARISON and not eid for t, eid in card.facts)
@@ -315,7 +383,37 @@ def _judge_v2_run(item: TrackingItem, evidence, call: Callable[[str], str] | Non
                         reason=card.memo_link, sources=sources, related_news=related,
                         card_schema="v2", when=card.when, facts=fact_rows, explanation=card.explanation if explain else "",
                         coverage=coverage_text(cfg.get("coverage"), any(by_id[eid].candidate.kind == "news" for _, eid in facts)))
+    if item.category == "ask" and card.calc:                  # 실험(2026-11-17): 코드가 값을 근거와 대조한 뒤 계산 (calc.py)
+        from .calc import compute
+        draft.calculations = compute(card.calc, evidence)
+    if item.category == "ask":                               # 실험(2026-11-18): 답 아래에 모아 보일 출처 (답에 쓴 근거만)
+        draft.source_list = source_list(evidence, {eid for _, eid in facts}
+                                        | {c.get(k, {}).get("evidence_id") for c in card.calc for k in ("a", "b")})
     return TopicOutcome("update", evidence, card, [], draft, raw, retried)
+
+
+_KIND_ORDER = {"disclosure": 0, "news": 1}
+
+
+def source_list(evidence, used_ids: set) -> list[dict]:
+    """답에 쓴 근거 → 화면 출처 목록 [{kind, title, date, source, url, ref}]. 공시 → 뉴스 → 재무 표·시세 DB 순, 같은 공시 중복 제거."""
+    seen, out = set(), []
+    for e in evidence:
+        if e.eid not in used_ids:
+            continue
+        c = e.candidate
+        if c.doc == "fintable":
+            kind, key = "data", "fintable"
+            title = "재무·주가 데이터 (DART 재무제표·시세 DB, 코드 계산)"
+        else:
+            kind = c.kind
+            key = c.ref.split("#")[0]                          # 같은 공시의 여러 조각은 하나로
+            title = c.title
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({"kind": kind, "title": title, "date": c.date, "source": c.source, "url": c.url, "ref": c.ref})
+    return sorted(out, key=lambda s: (_KIND_ORDER.get(s["kind"], 2), s["date"] or ""), reverse=False)
 
 
 def coverage_text(coverage: dict | None, uses_news: bool) -> str:
