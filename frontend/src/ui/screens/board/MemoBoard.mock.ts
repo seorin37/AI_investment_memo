@@ -66,4 +66,5 @@ export const mockBoardChecklist: Checklist = {
 export const mockBoardOrder = ['cl', 'm4', 'm3', 'm1', 'm2', 'm5'];
 
 /** 메모가 없는 종목 (빈 보드) */
-export const mockEmptyStock: StockHeadProps = { ...mockBoardStock, stock_code: '105560', name: 'KB금융', status: 'watching', logo: 'KB', logo_bg: '#FFB400', price: 78300, change: 900, change_pct: 1.16, closes: [76100, 76500, 75900, 76800, 77200, 76900, 77600, 78000, 77400, 78300] };
+/* ⑤: 웹 예시 계정 시세(11.18 종가 78,300 · 전일 78,700)와 맞춤 — 기업정보 탭과 같은 값 */
+export const mockEmptyStock: StockHeadProps = { ...mockBoardStock, stock_code: '105560', name: 'KB금융', status: 'watching', logo: 'KB', logo_bg: '#FFBC00', logo_ink: '#16171A', price: 78300, change: -400, change_pct: -0.51, closes: [79600, 79200, 79900, 79400, 78800, 79300, 79100, 78900, 78700, 78300] };

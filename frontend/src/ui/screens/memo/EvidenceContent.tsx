@@ -19,8 +19,9 @@ const md = (iso: string) => {
 };
 /* 원본 evk 칩 */
 const KCHIP = { 공시: { bg: '#FFE9E9', ink: '#B42318' }, 뉴스: { bg: '#E4ECFF', ink: '#2F6BDB' }, 주가: { bg: '#E3F5EA', ink: '#1B7A45' } } as const;
-/* 원본 가격 판정 배지: 근접 #C98A00 · 멀어짐 #8A8F98 · (기본) #1B7A45 */
-const TONE = { near: { bg: '#C98A00', t: '조건 근접' }, far: { bg: '#8A8F98', t: '조건과 멀어짐' }, reached: { bg: '#1B7A45', t: '조건 도달' } } as const;
+/* 가격 상태 배지 색 (원본: 근접 #C98A00 · 기본 #1B7A45). ④-2 결정: 배지 글은 '조건까지 +4.5%'처럼 숫자로만 */
+const TONE = { near: '#C98A00', reached: '#1B7A45' } as const;
+const toCond = (gap: string) => `조건까지 ${gap.match(/\(([^)]+)\)/)?.[1] ?? gap}`;
 
 /** 머리 제목 (원본 #evt) */
 export const evidenceTitle = (f: MemoFeedItem) => (f.kind === '공시' ? '업데이트 근거' : f.kind === '뉴스' ? '뉴스 근거' : '가격 조건');
@@ -39,7 +40,7 @@ export function EvidenceBody({ item: f, memo, version, onOpenSource, onOpenHisto
   const memoCard = <MemoCard memo={memo} version={version} onPress={() => onOpenHistory(version?.version ?? 1)} />;
   if (f.kind === '주가' && f.price) {
     const p = f.price;
-    const tone = TONE[p.tone];
+    const tone = { bg: TONE[p.tone], t: toCond(p.gap) };
     return (
       <Rv>
         <View style={[st.ecd, st.priceTop]}>

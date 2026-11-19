@@ -1,14 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Page } from '@/components/layout/Page';
-import { Loading, PillTabs } from '@/components/ui/primitives';
-import { T } from '@/components/ui/Text';
-import { CompanyInfo } from '@/features/company/CompanyInfo';
-import { StockHeader } from '@/features/stock/StockHeader';
-import { useMyStocks, useProfile, useStock } from '@/hooks/queries';
-import { colors } from '@/theme/tokens';
 import type { Checklist, Memo, MemoColor, MemoVersion } from '@/types/models';
+import { mockCompanyByCode } from '@/ui/screens/company/CompanyInfo.mock';
+import { WebCompanyInfo } from '@/ui/screens/company/web/CompanyInfo';
 import { mockBoardChecklist, mockBoardMemos, mockBoardOrder, mockBoardStock, mockEmptyStock } from '@/ui/screens/board/MemoBoard.mock';
 import { WebMemoBoard } from '@/ui/screens/board/web/MemoBoard';
 import { mockExtract, mockFeed, mockToday, mockTrackItems, mockVersions } from '@/ui/screens/memo/MemoDetail.mock';
@@ -18,7 +12,7 @@ import { WebMemoDialog } from '@/ui/screens/memo/web/MemoDialog';
 import { WebNewMemoDialog } from '@/ui/screens/memo/web/NewMemoDialog';
 
 /**
- * 웹 종목: 보드 = UI v2 (ui/screens/board/web) · 기업 정보 = 아직 옛 화면 (⑤에서 교체) — /stocks/000660?tab=info
+ * 웹 종목: 보드 = UI v2 (ui/screens/board/web) · 기업 정보 = UI v2 (ui/screens/company/web · ⑤) — /stocks/000660?tab=info
  * mock 단계: 000660 은 예시 메모, 105560(KB금융) 은 빈 보드. 변화는 이 화면 안에서만.
  * 메모 창 · 새 메모 · AI 연결 창 = UI v2 (④ ui/screens/memo/web).
  */
@@ -193,36 +187,8 @@ function BoardTab({ code }: { code: string }) {
   );
 }
 
-/* 기업 정보: 옛 화면 그대로 (⑤에서 교체) */
+/* 기업 정보 = UI v2 (ui/screens/company/web · ⑤). mock: 000660 일반 종목 · 105560 금융업 */
 function InfoTab({ code }: { code: string }) {
   const router = useRouter();
-  const { data: mine } = useMyStocks();
-  const { data: master, isError: masterFailed, error: masterError } = useStock(code);
-  const { data: profile } = useProfile(code);
-  const my = mine?.find((s) => s.code === code);
-  const stock = my ?? master ?? (profile ? { code: profile.code, name: profile.name, market: profile.market } : null);
-  if (!stock && masterFailed) {
-    return (
-      <Page>
-        <T color={colors.danger}>{masterError instanceof Error ? masterError.message : '종목 정보를 불러오지 못했어요.'}</T>
-      </Page>
-    );
-  }
-  if (!stock) return <Loading height={400} />;
-  return (
-    <Page top={56}>
-      <StockHeader stock={stock} mine={my} large />
-      <View style={{ marginTop: 44, marginBottom: 24 }}>
-        <PillTabs
-          items={[
-            { key: 'board', label: '보드' },
-            { key: 'info', label: '기업 정보' },
-          ]}
-          value="info"
-          onChange={(k) => router.setParams({ tab: k })}
-        />
-      </View>
-      <CompanyInfo stockCode={code} stockName={stock.name} />
-    </Page>
-  );
+  return <WebCompanyInfo {...mockCompanyByCode(code)} onBack={() => router.back()} onChangeTab={(t) => router.setParams({ tab: t === 'company' ? 'info' : 'board' })} onNudge={() => {}} />;
 }

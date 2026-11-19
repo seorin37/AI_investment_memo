@@ -1,18 +1,17 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { MobileScreen, useMockNotice } from '@/components/layout/MobileScreen';
-import { TopBar as OldTopBar } from '@/components/layout/TopBar';
-import { CompanyOverview } from '@/features/company/CompanyOverview';
-import { mockCompanyOverviewProps } from '@/features/company/CompanyOverview.mock';
+import { useMockNotice } from '@/components/layout/MobileScreen';
 import { useUI } from '@/store/ui';
-import type { ChartRange, Checklist, Memo } from '@/types/models';
+import type { Checklist, Memo } from '@/types/models';
+import { AppCompanyInfo } from '@/ui/screens/company/app/CompanyInfo';
+import { mockCompanyByCode } from '@/ui/screens/company/CompanyInfo.mock';
 import { TopBar } from '@/ui/layout/app/TopBar';
 import { AiOffSheet } from '@/ui/shared/AiOffSheet';
 import { AppMemoBoard } from '@/ui/screens/board/app/MemoBoard';
 import { mockBoardChecklist, mockBoardMemos, mockBoardStock, mockEmptyStock } from '@/ui/screens/board/MemoBoard.mock';
 
 /**
- * 앱 종목 상세: 메모 보드 = UI v2 (ui/screens/board/app) · 기업정보 = 아직 옛 화면 (⑤에서 교체).
+ * 앱 종목 상세: 메모 보드 = UI v2 (ui/screens/board/app) · 기업정보 = UI v2 (ui/screens/company/app · ⑤).
  * mock 단계: 000660 은 예시 메모, 105560(KB금융) 은 빈 보드. 변화는 이 화면 안에서만.
  * 메모 상세 · 새 메모 · AI 연결 = UI v2 (④ · app/(detail)/memo). 체크리스트 화면은 아직 옛 화면.
  */
@@ -31,17 +30,11 @@ export default function StockDetail() {
   const [checklist, setChecklist] = useState<Checklist | null>(empty ? null : mockBoardChecklist);
   const removed = useRef<Memo[]>([]);
   const [offFor, setOffFor] = useState<Memo | null>(null);
-  const [range, setRange] = useState<ChartRange>(mockCompanyOverviewProps.range);
   /* 다른 화면으로 가면 고르기 때문에 숨긴 탭바를 다시 보이게 */
   useFocusEffect(useCallback(() => () => setTabBarHidden(false), [setTabBarHidden]));
   const onSelectionChange = useCallback((n: number) => setTabBarHidden(n > 0), [setTabBarHidden]);
 
-  if (tab === 'company')
-    return (
-      <MobileScreen bar={<OldTopBar left="back" title={stock.name} onBack={() => router.back()} />}>
-        <CompanyOverview {...mockCompanyOverviewProps} onChangeTab={(t) => setTab(t === 'company' ? 'company' : 'board')} onGoBoard={() => setTab('board')} range={range} onChangeRange={setRange} onHelp={() => notice('지표 설명')} />
-      </MobileScreen>
-    );
+  if (tab === 'company') return <AppCompanyInfo {...mockCompanyByCode(code)} onBack={() => router.back()} onMore={() => notice('종목 메뉴')} onChangeTab={setTab} onNudge={() => notice('주간보고서')} />;
 
   return (
     <>

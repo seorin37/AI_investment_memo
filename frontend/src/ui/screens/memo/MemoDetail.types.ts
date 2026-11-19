@@ -36,8 +36,8 @@ export interface MemoFeedItem {
     direction: '이하' | '미만' | '이상';
     /** 조건과의 차이 '+30,500원 (+20.3%)' */
     gap: string;
-    /** near = 조건 근접 · far = 조건과 멀어짐 · reached = 도달 */
-    tone: 'near' | 'far' | 'reached';
+    /** 팀 11.09 결정: 가격 소식은 near = 가까워졌어요 · reached = 도달했어요 두 가지만 */
+    tone: 'near' | 'reached';
     /** 차트 종가 (오래된 → 최근) */
     closes: number[];
     /** 차트 처음 · 끝 날짜 'MM.DD' */
