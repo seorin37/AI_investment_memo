@@ -44,22 +44,32 @@ class FakeConn:
 
 
 BUY = ("treasury_buy", date(2026, 10, 27), {"amount_krw": 450_000_000_000, "amount_to_market_cap_pct": 1.12,
-                                            "shares_pct": 1.12}, {})
+                                            "shares_pct": 1.12}, {},
+       {"amount_common": 450_000_000_000, "shares_common": 5263157, "method": "장내매수"})
 CANCEL = ("share_cancel", date(2026, 10, 27), {"amount_krw": 450_000_000_000, "cancel_pct": 1.12,
-                                               "amount_to_market_cap_pct": 1.12}, {})
+                                               "amount_to_market_cap_pct": 1.12}, {},
+          {"amount_krw": 450_000_000_000, "shares_common": 5263157, "method": "장내매수"})
 
 
 class TreasuryCancelTest(unittest.TestCase):
-    def test_same_day_same_amount_is_one_line(self):
+    def test_same_day_same_amount_is_one_line_with_source_facts(self):
         lines = fin_table.event_lines(FakeConn([BUY, CANCEL]), "055550")
         self.assertEqual(len(lines), 1)
         self.assertIn("자사주 취득", lines[0])
-        self.assertIn("같은 날 같은 금액의 주식 소각 결정도 공시 · 발행주식 대비 소각 비율 1.1%", lines[0])
+        self.assertIn("취득 예정 보통주 5,263,157주 · 취득 방법 장내매수", lines[0])
+        self.assertIn("같은 날 주식 소각 결정 공시도 있음: 금액 4,500억원 · 소각 보통주 5,263,157주", lines[0])
+        self.assertIn("(두 공시에서 같은 값: 금액·보통주 주식 수)", lines[0])
+
+    def test_same_only_what_code_checked(self):
+        cancel = CANCEL[:4] + ({"amount_krw": 450_000_000_000, "shares_common": 5000000},)
+        line = fin_table.event_lines(FakeConn([BUY, cancel]), "X")[0]
+        self.assertIn("(두 공시에서 같은 값: 금액)", line)      # 주식 수가 다르면 '같음'에 넣지 않는다
+        self.assertIn("소각 보통주 5,000,000주", line)
 
     def test_different_amount_or_day_stays_separate(self):
-        other = ("share_cancel", date(2026, 10, 27), {"amount_krw": 100_000_000_000, "cancel_pct": 0.3}, {})
+        other = ("share_cancel", date(2026, 10, 27), {"amount_krw": 100_000_000_000, "cancel_pct": 0.3}, {}, {})
         self.assertEqual(len(fin_table.event_lines(FakeConn([BUY, other]), "X")), 2)
-        later = ("share_cancel", date(2026, 12, 1), CANCEL[2], {})
+        later = ("share_cancel", date(2026, 12, 1), CANCEL[2], {}, CANCEL[4])
         lines = fin_table.event_lines(FakeConn([BUY, later]), "X")
         self.assertEqual(len(lines), 2)
         self.assertNotIn("같은 날", lines[0])

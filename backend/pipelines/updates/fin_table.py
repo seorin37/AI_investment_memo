@@ -69,7 +69,8 @@ def _metrics(conn, symbol: str) -> dict:
 
 
 # 사건 공시 표준 비율 (0018 disclosure_event_metrics, 2026-11-17 배포). 정정된 원본은 빼고 최근 1년 사건만
-EVENT_METRICS_SQL = """SELECT m.event_type, m.base_date, m.metrics, m.inputs FROM disclosure_event_metrics m
+EVENT_METRICS_SQL = """SELECT m.event_type, m.base_date, m.metrics, m.inputs, COALESCE(e.fields, '{}'::jsonb)
+FROM disclosure_event_metrics m LEFT JOIN disclosure_events e ON e.rcept_no = m.rcept_no
 WHERE m.symbol = %(s)s AND m.base_date >= CURRENT_DATE - 365 AND m.metrics <> '{}'::jsonb
   AND NOT EXISTS (SELECT 1 FROM disclosure_events c WHERE c.corrects = m.rcept_no)
 ORDER BY m.base_date DESC, m.rcept_no DESC LIMIT %(n)s"""
@@ -84,18 +85,29 @@ EVENT_METRIC_LABELS = (  # (키, 이름, 단위) 단위: krw 금액 | % | 배
     ("payout_ratio_pct", "배당성향(직전 사업연도 지배주주 순이익 대비)", "%"))
 
 
+def _event_facts(etype: str, f: dict) -> list[str]:
+    """공시 원문 필드에서 바로 옮기는 사실 (주식 수·방법). 계산·해석은 넣지 않는다."""
+    out = []
+    if etype in ("treasury_buy", "share_cancel") and f.get("shares_common"):
+        out.append(f"{'취득 예정' if etype == 'treasury_buy' else '소각'} 보통주 {int(f['shares_common']):,}주")
+    if etype in ("treasury_buy", "share_cancel") and f.get("method"):
+        out.append(f"{'취득' if etype == 'treasury_buy' else '소각 주식 취득'} 방법 {f['method']}")
+    return out
+
+
 def event_lines(conn, symbol: str, limit: int = 5) -> list[str]:
     """최근 1년 사건 공시의 표준 비율 줄. 표가 없거나(0018 전 DB) 사건이 없으면 빈 목록."""
     if conn.execute("SELECT to_regclass('public.disclosure_event_metrics')").fetchone()[0] is None:
         return []
     out = []
     rows = conn.execute(EVENT_METRICS_SQL, {"s": symbol, "n": limit}).fetchall()
-    # 같은 날·같은 금액의 자사주 취득 + 주식 소각 결정은 한 묶음 (사서 소각). 2026-11-19 M027 신한지주: 따로 보여
-    # "취득 규모" 질문 답이 소각 계획을 빠뜨렸다. 취득 줄에 소각을 붙이고 소각 줄은 뺀다
-    cancels = {(base, m.get("amount_krw")): m for etype, base, m, _ in rows
+    # 같은 날·같은 금액의 자사주 취득 + 주식 소각 결정은 한 줄로 (2026-11-19 M027 신한지주: 따로 보여 "취득 규모" 답이
+    # 소각 결정을 빠뜨렸다). 두 공시의 금액·주식 수·방법은 원문 값 그대로 적고, "같다"는 코드가 값을 비교해 맞을 때만 적는다
+    cancels = {(base, m.get("amount_krw")): (m, f or {}) for etype, base, m, _, f in rows
                if etype == "share_cancel" and m.get("amount_krw") is not None}
-    bought = {(base, m.get("amount_krw")) for etype, base, m, _ in rows if etype == "treasury_buy"}
-    for etype, base, m, inputs in rows:
+    bought = {(base, m.get("amount_krw")) for etype, base, m, _, _ in rows if etype == "treasury_buy"}
+    for etype, base, m, inputs, fields in rows:
+        fields = fields or {}
         if etype == "share_cancel" and (base, m.get("amount_krw")) in bought:
             continue
         parts = []
@@ -104,17 +116,25 @@ def event_lines(conn, symbol: str, limit: int = 5) -> list[str]:
                 continue
             v = m[key]
             parts.append(f"{label} {korean_won(v) if unit == 'krw' else _num(v, unit)}")
-        cancel = cancels.get((base, m.get("amount_krw"))) if etype == "treasury_buy" else None
-        if cancel is not None:
-            parts.append("같은 날 같은 금액의 주식 소각 결정도 공시"
-                         + (f" · 발행주식 대비 소각 비율 {_num(cancel['cancel_pct'], '%')}" if cancel.get("cancel_pct") is not None else ""))
+        parts += _event_facts(etype, fields)
         basis = []
         if "prev_op_income" in inputs and "raise_to_prev_op_income_x" in m:
             basis.append(f"영업이익은 {inputs['prev_op_income'].get('period_end', '')[:4]}년 연간")
         if "market_cap" in inputs and any(k.endswith("market_cap_pct") for k in m):
             basis.append(f"시가총액은 {inputs['market_cap'].get('trade_date')} 기준")
-        out.append(f"- {base} {EVENT_NAMES.get(etype, etype)} 공시 (사건 비율 표): " + " · ".join(parts)
-                   + (f" ({', '.join(basis)})" if basis else ""))
+        line = (f"- {base} {EVENT_NAMES.get(etype, etype)} 공시 (사건 비율 표): " + " · ".join(parts)
+                + (f" ({', '.join(basis)})" if basis else ""))
+        pair = cancels.get((base, m.get("amount_krw"))) if etype == "treasury_buy" else None
+        if pair is not None:
+            cm, cf = pair
+            cparts = [f"금액 {korean_won(cm['amount_krw'])}"] + _event_facts("share_cancel", cf)
+            if cm.get("cancel_pct") is not None:
+                cparts.append(f"발행주식 대비 소각 비율 {_num(cm['cancel_pct'], '%')}")
+            same = ["금액"] + (["보통주 주식 수"] if cf.get("shares_common") and cf.get("shares_common") == fields.get("shares_common")
+                              else [])
+            line += (f" / 같은 날 주식 소각 결정 공시도 있음: " + " · ".join(cparts)
+                     + f" (두 공시에서 같은 값: {'·'.join(same)})")
+        out.append(line)
     return out
 
 
