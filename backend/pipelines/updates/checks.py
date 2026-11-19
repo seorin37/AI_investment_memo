@@ -486,6 +486,11 @@ def _ev_text(e: Evidence) -> str:
 _EARNINGS_METRIC = re.compile(r"(매출(?:액)?|영업이익|순이익|세전이익|법인세비용차감전)")
 
 
+def _earnings_figure(text: str) -> bool:
+    """실적 숫자(금액·%)가 있는 글인가. 제품 이름 속 맨숫자("CT-P13 바이오시밀러 외" 매출, 2026-11-19 M023)는 실적이 아니다."""
+    return any(kind in (UNIT, PCT) for _, kind in _card_scan(text))
+
+
 def _earnings_basis(e: Evidence) -> str:
     """DART 잠정실적 보고서명의 연결/별도 기준.
 
@@ -562,13 +567,13 @@ def check_card_v2(card, evidence: list[Evidence], banned: list[str], cfg: dict |
         fact_bases: list[str] = []
         for text, eid in facts:
             basis = _earnings_basis(ids[eid]) if eid in ids else ""
-            if basis and _EARNINGS_METRIC.search(text) and numbers(text):
+            if basis and _EARNINGS_METRIC.search(text) and _earnings_figure(text):
                 fact_bases.append(basis)
                 if basis not in text:
                     codes.append("FINANCIAL_BASIS")
         if len(set(fact_bases)) > 1:
             codes.append("FINANCIAL_BASIS")
-        if exp and _EARNINGS_METRIC.search(exp) and numbers(exp) and len(set(fact_bases)) == 1:
+        if exp and _EARNINGS_METRIC.search(exp) and _earnings_figure(exp) and len(set(fact_bases)) == 1:
             if fact_bases[0] not in exp:
                 codes.append("FINANCIAL_BASIS")
     if cfg["prediction_terms"] and prediction_text(texts, cfg, names):
