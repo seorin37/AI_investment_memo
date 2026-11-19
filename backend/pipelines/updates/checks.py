@@ -203,15 +203,76 @@ def _compound(run: str) -> list[float]:
 UNIT, PCT, BARE, COUNT = "unit", "pct", "bare", "count"
 
 
-def _scan(text: str, combine: bool) -> list[tuple[float, str]]:
-    """(값, 종류). combine이면 나눠 쓴 금액·개수("3,085만 3천 명")를 먼저 한 값으로 읽고 그 자리는 지운다."""
+# 부호 (2026-11-19 M019 LG화학 경영진단 표 "석유화학 사업부문 | (356,378) | (104,182) | (242.1%)").
+# 값은 언제나 크기(양수)로 읽고 부호는 따로 둔다: NEG(음수) / POS(이익·흑자) / NONE(모름). 부호는 금액(UNIT) 대조에만 쓴다.
+# - 괄호 음수: "(" 앞이 줄 처음·띄어쓰기·"|"·":"이고 괄호 안이 숫자(와 %)만. 쉼표·소수점·%가 있거나 10~999인 정수만
+#   ("(단위: 백만원)"·"(2026년)"·"(2026)"·"(005930)"·"(373220)"·각주 "(1)"·"(주)"·"부문(104,182)"은 음수가 아니다)
+# - 바로 앞 "-"·"−"·"△"·"▽" (앞 글자가 숫자·글자면 범위 "3-4%"라 아니다. △·▽는 한 칸 띄어도)
+# - 말: 바로 뒤 "(원)(의) (영업·순)손실·적자" / 앞 20자 안(문장·"|" 경계 안) 가장 가까운 손실·적자 → NEG, 이익·흑자 → POS.
+#   그 사이에 다른 지표 낱말(매출·자산·배당…)이 더 가까우면 모름 ("영업손실 3,000억, 매출 5조"의 5조)
+NEG, NONE, POS = -1, 0, 1
+_BOTH = frozenset((NEG, POS))
+_LOSS_W, _GAIN_W = r"손실|적자|순손|마이너스", r"이익|흑자|순익|영업익"
+_SIGN_WORD = re.compile(rf"({_LOSS_W})|({_GAIN_W})|(매출|자산|부채|자본|차입|현금|배당|투자|수주|계약|시가총액|주가|가격|비용)")
+_SIGN_AFTER = re.compile(rf"\s*원?\s*(?:의\s*|규모의\s*)?(?:영업|순|당기순|세전)?(?:({_LOSS_W})|({_GAIN_W}))")
+_CLAUSE_END = re.compile(r"[.!?。\n|]")
+
+
+def _paren_negative(text: str, m: re.Match) -> bool:
+    """_NUM 자리 m이 공시 표 꼴 괄호 음수 "(104,182)"·"( 104,182 )"·"(242.1%)"인가."""
+    raw, unit, pct, won, count = m.groups()
+    if unit or won or count:
+        return False
+    k = len(text[:m.start()].rstrip(" "))
+    if k == 0 or text[k - 1] != "(" or (k >= 2 and not (text[k - 2].isspace() or text[k - 2] in "|:：(")):
+        return False
+    j = m.end()
+    while j < len(text) and text[j] == " ":
+        j += 1
+    if j >= len(text) or text[j] != ")":
+        return False
+    if "," in raw or "." in raw or pct:
+        return True
+    return not raw.startswith("0") and 10 <= int(raw) < 1000
+
+
+def _minus_before(text: str, a: int) -> bool:
+    i = a - 1
+    if i >= 1 and text[i] == " " and text[i - 1] in "△▽":
+        return True
+    return i >= 0 and text[i] in "-−△▽" and (i == 0 or not text[i - 1].isalnum())
+
+
+def _word_sign(text: str, a: int, b: int, window: int = 20) -> int:
+    m = _SIGN_AFTER.match(text, b)
+    if m:
+        return NEG if m.group(1) else POS
+    seg = text[max(0, a - window):a]
+    seg = seg[max((x.end() for x in _CLAUSE_END.finditer(seg)), default=0):]
+    last = None
+    for last in _SIGN_WORD.finditer(seg):
+        pass
+    if not last or last.group(3):
+        return NONE
+    return NEG if last.group(1) else POS
+
+
+def _sign(text: str, a: int, b: int, m: re.Match | None = None) -> int:
+    if _minus_before(text, a) or (m is not None and _paren_negative(text, m)):
+        return NEG
+    return _word_sign(text, a, b)
+
+
+def _scan_signed(text: str, combine: bool) -> list[tuple[float, str, int]]:
+    """(값, 종류, 부호). 값은 크기. combine이면 나눠 쓴 금액·개수("3,085만 3천 명")를 먼저 한 값으로 읽고 그 자리는 지운다."""
     text = _TAG.sub(" ", text or "")
     text = _DATE.sub(lambda m: " ".join(g for g in m.groups() if g), text)
     out = []
     if combine:
         def take(m):
             kind = COUNT if _COUNT_AFTER.match(m.string, m.end()) else UNIT
-            out.extend((v, kind) for v in _compound(m.group(0)))
+            sign = _sign(m.string, m.start(), m.end())
+            out.extend((v, kind, sign) for v in _compound(m.group(0)))
             return " "
         text = _RUN.sub(take, text)
     for m in _NUM.finditer(text):
@@ -219,13 +280,23 @@ def _scan(text: str, combine: bool) -> list[tuple[float, str]]:
         kind = (COUNT if count and not won and not pct
                 else UNIT if unit or won or _WON_LABEL.search(text[max(0, m.start() - 12):m.start()])
                 else PCT if pct else BARE)
-        out.append((float(raw.replace(",", "")) * _UNIT.get(unit, 1), kind))
+        out.append((float(raw.replace(",", "")) * _UNIT.get(unit, 1), kind, _sign(text, m.start(), m.end(), m)))
     return out
 
 
+def _scan(text: str, combine: bool) -> list[tuple[float, str]]:
+    """(값, 종류). 값은 크기 (부호는 _scan_signed)."""
+    return [(v, kind) for v, kind, _ in _scan_signed(text, combine)]
+
+
+def _card_scan_signed(text: str) -> list[tuple[float, str, int]]:
+    """답변 쪽 숫자 (값, 종류, 부호). 한 자리 맨숫자(3분기 등)·한 자리 개수("1주당"의 1주)는 비교에서 뺀다."""
+    return [(round(v, 6), kind, s) for v, kind, s in _scan_signed(text, True) if v >= 10 or kind not in (BARE, COUNT)]
+
+
 def _card_scan(text: str) -> list[tuple[float, str]]:
-    """답변 쪽 숫자 (값, 종류). 한 자리 맨숫자(3분기 등)·한 자리 개수("1주당"의 1주)는 비교에서 뺀다."""
-    return [(round(v, 6), kind) for v, kind in _scan(text, True) if v >= 10 or kind not in (BARE, COUNT)]
+    """답변 쪽 숫자 (값, 종류)."""
+    return [(v, kind) for v, kind, _ in _card_scan_signed(text)]
 
 
 def numbers(text: str) -> set[float]:
@@ -325,29 +396,46 @@ class EvidenceNumbers:
       앞 표 머리)로 환산한 값 (표의 706,565를 "706,565원"으로 쓰면 걸리게). 표 머리·이름표가 없는 글의 맨숫자는 그대로 넣는다.
     - count: 답변에서 명·주·건·개가 붙은 수와 대조. 근거에 개수 단위와 함께 적힌 값, 표 숫자를 개수 단위(천명·백만주…)로
       환산한 값, 그 밖의 맨숫자 원래 값 (배수 붙은 개수 단위 표만 빼고). 개수 환산값은 plain·unit에 넣지 않는다
-      ("30,853천명"으로 "30,853,000원"·"30,853명" 불가)"""
+      ("30,853천명"으로 "30,853,000원"·"30,853명" 불가)
+    - signs: unit 값(크기)마다 근거가 허락하는 부호 {NEG, POS}. 괄호 음수·"-"·"△"·손실 말이면 NEG만, 이익·흑자 말이면 POS만,
+      표시가 없으면 둘 다 (2026-11-19). 여기 없는 unit 값은 둘 다"""
 
-    __slots__ = ("plain", "unit", "count")
+    __slots__ = ("plain", "unit", "count", "signs")
 
     def __init__(self, plain: set[float] | None = None, unit: set[float] | None = None,
-                 count: set[float] | None = None):
+                 count: set[float] | None = None, signs: dict[float, set[int]] | None = None):
         self.plain = set(plain or ())
         self.unit = set(unit or ())
         self.count = set(count or ())
+        self.signs = {v: set(s) for v, s in (signs or {}).items()}
 
     def copy(self) -> "EvidenceNumbers":
-        return EvidenceNumbers(self.plain, self.unit, self.count)
+        return EvidenceNumbers(self.plain, self.unit, self.count, self.signs)
 
     def __ior__(self, other: "EvidenceNumbers") -> "EvidenceNumbers":
         self.plain |= other.plain
         self.unit |= other.unit
         self.count |= other.count
+        for v, s in other.signs.items():
+            self.signs.setdefault(v, set()).update(s)
         return self
 
+    def add_unit(self, v: float, sign: int) -> None:
+        self.unit.add(v)
+        self.signs.setdefault(v, set()).update(_BOTH if sign == NONE else (sign,))
+
     def supports(self, text: str) -> bool:
-        """답변 글의 숫자가 모두 근거에 있나. 금액은 unit, 개수는 count, 나머지는 plain과 대조한다."""
+        """답변 글의 숫자가 모두 근거에 있나. 금액은 unit, 개수는 count, 나머지는 plain과 대조한다.
+        금액은 부호도 본다: 답변이 음수("-104,182백만원"·"104,182백만원 적자"·"순손실 1,041억 8,200만원")나 이익("이익 104,182백만원")을
+        밝혔으면 근거가 그 부호를 허락해야 한다. 부호를 밝히지 않은 금액("1,041억 8,200만원")은 크기만 맞으면 된다.
+        %·맨숫자·개수는 크기만 본다 ("(242.1%)"를 "242.1% 늘었다"로 쓰는 것처럼 증감률 부호는 말로 바뀐다)"""
         pick = {UNIT: self.unit, COUNT: self.count}
-        return all(v in pick.get(kind, self.plain) for v, kind in _card_scan(text))
+        for v, kind, s in _card_scan_signed(text):
+            if v not in pick.get(kind, self.plain):
+                return False
+            if kind == UNIT and s != NONE and s not in self.signs.get(v, _BOTH):
+                return False
+        return True
 
 
 def evidence_number_sets(text: str) -> EvidenceNumbers:
@@ -359,18 +447,18 @@ def evidence_number_sets(text: str) -> EvidenceNumbers:
     for seg, unit in _segments(text):
         free = unit is _NO_CONTEXT
         kind_u, factor = (None, None) if free else (table_unit(unit) or (None, None))
-        for v, kind in _scan(seg, True) + _scan(seg, False):
+        for v, kind, sign in _scan_signed(seg, True) + _scan_signed(seg, False):
             v = round(v, 6)
             out.plain.add(v)
             if kind == UNIT or (free and kind != COUNT):
-                out.unit.add(v)
+                out.add_unit(v, sign)
             # 맨숫자 원래 값을 개수로도 인정한다. 단 표 단위가 배수 붙은 개수 단위(천명·백만주…)면 환산값만.
             # 금액 표의 맨숫자는 개수로 둔다: "(단위 : 백만원)" 자기주식 소각 표의 "소각수량: 18,162,721"(주)처럼 열마다 단위가 다르다
             if kind == COUNT or (kind == BARE and unit != _UNKNOWN and not (kind_u == COUNT and factor != 1)):
                 out.count.add(v)
-            if kind == BARE and kind_u == UNIT:
+            if kind == BARE and kind_u == UNIT:                  # 표 머리 환산값도 같은 부호 ("(104,182)" → -104,182백만원)
                 out.plain.add(round(v * factor, 6))
-                out.unit.add(round(v * factor, 6))
+                out.add_unit(round(v * factor, 6), sign)
             elif kind == BARE and kind_u == COUNT:
                 out.count.add(round(v * factor, 6))
     return out

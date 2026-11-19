@@ -547,6 +547,64 @@ class CountUnitTest(unittest.TestCase):
         self.assertIsNone(table_unit("톤"))
 
 
+class ParenNegativeTest(unittest.TestCase):
+    """괄호 음수 (2026-11-19 M019 'LG화학 석유화학 부문 실적이 얼마나 나빠졌는지'). 공시 표의 "(104,182)"는 -104,182이고
+    표 머리 "(단위 : 백만원, %)" 환산값도 음수다. 카드가 음수·손실로 쓰면 통과, 이익으로 쓰면 NUMBER, 부호를 안 밝히면 크기만 본다.
+    v1·v2·즉시 답변 셋 다. 근거는 LG화학 2025 사업보고서(20260313001195) 경영진단 청크 그대로."""
+
+    M019 = ("[LG화학 2025 사업보고서 | IV. 이사의 경영진단 및 분석의견 > 3. 재무상태 및 영업실적]\n[표]\n(단위 : 백만원, %)\n"
+            "구 분 | 영업이익 | 증감율(%)\n구 분 | 제25기 | 제24기 | 증감율(%)\n"
+            "석유화학 사업부문 | (356,378) | (104,182) | (242.1%)\n첨단소재 사업부문 | 146,388 | 436,722 | (66.5%)\n"
+            "생명과학 사업부문 | 127,587 | 110,263 | 15.7%")
+    PASS = ["석유화학 부문 영업손익은 -104,182백만원이에요.", "석유화학 부문은 104,182백만원 적자였어요.",
+            "석유화학 부문 영업손실은 1,041억 8,200만원이에요.", "석유화학 부문 순손실 1,041억 8,200만원이에요.",
+            "석유화학 부문은 △104,182백만원이에요.", "석유화학 부문은 △104,182였어요.",
+            "석유화학 부문은 1,041억 8,200만원의 영업손실을 냈어요.",
+            "석유화학 부문 영업손실이 1,041억 8,200만원에서 3,563억 7,800만원으로 커졌어요.",
+            "석유화학 부문 실적은 1,041억 8,200만원이었어요.",                          # 부호를 안 밝히면 크기만
+            "석유화학 부문 영업손실 증감률은 242.1%예요.",                               # %는 크기만
+            "첨단소재 부문 영업이익은 1,463억 8,800만원이에요.",
+            # 한계: 표의 표시 없는 양수는 부호를 모른다고 본다 ("당기순손실 | 5,000"처럼 손실을 양수로 적는 표가 있어서)
+            "첨단소재 부문 영업손익은 -1,463억 8,800만원이에요."]
+    FAIL = ["석유화학 부문 영업이익은 104,182백만원이에요.", "석유화학 부문은 이익 104,182백만원을 냈어요.",
+            "석유화학 부문은 1,041억 8,200만원 흑자였어요.",
+            "석유화학 부문 영업손실은 1,041억원이에요."]                                 # 크기가 다른 숫자는 그대로 실패
+
+    @staticmethod
+    def _cases(fact):
+        from pipelines.updates.checks import check_answer, check_card
+        from pipelines.updates.models import Answer, Card
+        e = ev(disc(text=ParenNegativeTest.M019))
+        v2 = card(headline="LG화학 석유화학 실적", when="2026-03-13", facts=[(fact, "E1")])
+        v1 = Card("update", "LG화학 석유화학 실적", [f"{fact} [E1]"], "메모의 실적 관심사와 연결돼요.", [("E1", "사업보고서")], 0.9)
+        a = Answer("answer", "none", [f"{fact} [E1]"], [("E1", "사업보고서")], 0.9)
+        return {"v2": "NUMBER" in check_card_v2(v2, e, [], CFG),
+                "v1": "NUMBER" in check_card(v1, e, [], {"min_fact_overlap": 0}),
+                "answer": "NUMBER" in check_answer(a, e, [], {"min_fact_overlap": 0})}
+
+    def test_m019_sign(self):
+        for fact in self.PASS:
+            for name, failed in self._cases(fact).items():
+                self.assertFalse(failed, f"{name} 통과해야 함: {fact}")
+        for fact in self.FAIL:
+            for name, failed in self._cases(fact).items():
+                self.assertTrue(failed, f"{name} 실패해야 함: {fact}")
+
+    def test_paren_reading(self):
+        from pipelines.updates.checks import NEG, NONE, _scan_signed, evidence_number_sets, evidence_numbers, numbers
+        s = evidence_number_sets(self.M019)
+        self.assertEqual(s.signs[104182e6], {NEG})                    # 표 머리 백만원 환산값도 음수
+        self.assertIn(104182.0, s.plain)                              # 맨숫자·% 묶음은 크기 그대로
+        self.assertIn(242.1, s.plain)
+        self.assertIn(104182e6, evidence_numbers(self.M019))          # 값만 쓰는 곳(calc·compare_prior·same_event)은 그대로 크기
+        self.assertEqual(numbers("-104,182백만원"), {104182e6})
+        # 괄호가 음수가 아닌 경우
+        for text in ("(단위: 백만원) 1,000", "(2026년)", "(2026)", "삼성전자(005930)", "(373220)", "(주)한화 1,000",
+                     "주석 (1)", "부문(104,182)", "매출 3-4%", "2026-11-19"):
+            self.assertTrue(all(sign == NONE for *_, sign in _scan_signed(text, False)), text)
+        self.assertEqual([x[2] for x in _scan_signed("| (1,234) | ( 56 ) | (3.5%) | -78 | △ 90 |", False)], [NEG] * 5)
+
+
 # 녹십자 2025 1분기 (20250515002021 청크 27) 외화 자산·부채 표: 외화와 원화 단위가 한 머리에 섞여 있다
 GREENCROSS_FX = ("[녹십자 2025 1분기 | II. 사업의 내용 > 5. 위험관리 및 파생거래]\n"
                  "[표] 당분기말과 전기말 현재 당사의 환율변동 위험에 노출된 원화로 환산한 화폐성 외화 자산 및 부채는 다음과 같습니다. / ① 당분기말\n"
