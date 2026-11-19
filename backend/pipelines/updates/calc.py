@@ -11,7 +11,6 @@ op: div(a ÷ b, "약 1.36배") | pct(a ÷ b × 100, "136.2%") | change(b 대비 
 
 from __future__ import annotations
 
-import re
 
 from .checks import _ev_text, evidence_numbers, numbers
 
@@ -19,21 +18,19 @@ OPS = ("div", "pct", "change")
 MAX_CALCS = 3
 
 
-_SCALED_UNIT = re.compile(r"\d\s*(백만|십억)\s*원")
-_FACTOR = {"백만": 1e6, "십억": 1e9}
 # 같은 원 단위 금액끼리 나눴는데 이 범위를 벗어나면 단위가 어긋났을 가능성이 커서 계산하지 않는다 (2026-11-17 "약 0.00배")
 RATIO_RANGE = (1e-3, 1e4)
 
 
 def _value(text: str) -> tuple[float, float] | None:
-    """값 글 → (글에 적힌 숫자, 원 단위로 환산한 숫자). "3조 893억 2,018만 1,000원"처럼 나눠 쓴 금액은 합친 값(가장 큰 값).
-    checks.numbers는 '백만원'을 환산하지 않아("60,512,857백만원" → 60,512,857) 여기서 곱한다. 근거 대조는 적힌 숫자로 한다."""
+    """값 글 → (근거와 대조할 숫자, 계산에 쓸 원 단위 숫자). "3조 893억 2,018만 1,000원"처럼 나눠 쓴 금액은 합친 값(가장 큰 값).
+    checks.numbers가 '백만원·십억원'도 원 단위로 바꿔 읽고("60,512,857백만원" → 60,512,857,000,000),
+    근거 쪽 evidence_numbers도 표 머리 "(단위 : 백만원)"을 환산한 값을 넣으므로 두 값이 같다 (2026-11-19 서린님 숫자 검사 변경에 맞춤)."""
     vals = numbers(text or "")
     if not vals:
         return None
     raw = max(vals)
-    m = _SCALED_UNIT.search(text or "")
-    return raw, raw * (_FACTOR[m.group(1)] if m and not re.search(r"[조억]", text) else 1)
+    return raw, raw
 
 
 def _is_won(text: str) -> bool:
