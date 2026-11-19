@@ -89,13 +89,25 @@ def event_lines(conn, symbol: str, limit: int = 5) -> list[str]:
     if conn.execute("SELECT to_regclass('public.disclosure_event_metrics')").fetchone()[0] is None:
         return []
     out = []
-    for etype, base, m, inputs in conn.execute(EVENT_METRICS_SQL, {"s": symbol, "n": limit}).fetchall():
+    rows = conn.execute(EVENT_METRICS_SQL, {"s": symbol, "n": limit}).fetchall()
+    # 같은 날·같은 금액의 자사주 취득 + 주식 소각 결정은 한 묶음 (사서 소각). 2026-11-19 M027 신한지주: 따로 보여
+    # "취득 규모" 질문 답이 소각 계획을 빠뜨렸다. 취득 줄에 소각을 붙이고 소각 줄은 뺀다
+    cancels = {(base, m.get("amount_krw")): m for etype, base, m, _ in rows
+               if etype == "share_cancel" and m.get("amount_krw") is not None}
+    bought = {(base, m.get("amount_krw")) for etype, base, m, _ in rows if etype == "treasury_buy"}
+    for etype, base, m, inputs in rows:
+        if etype == "share_cancel" and (base, m.get("amount_krw")) in bought:
+            continue
         parts = []
         for key, label, unit in EVENT_METRIC_LABELS:
             if m.get(key) is None:
                 continue
             v = m[key]
             parts.append(f"{label} {korean_won(v) if unit == 'krw' else _num(v, unit)}")
+        cancel = cancels.get((base, m.get("amount_krw"))) if etype == "treasury_buy" else None
+        if cancel is not None:
+            parts.append("같은 날 같은 금액의 주식 소각 결정도 공시"
+                         + (f" · 발행주식 대비 소각 비율 {_num(cancel['cancel_pct'], '%')}" if cancel.get("cancel_pct") is not None else ""))
         basis = []
         if "prev_op_income" in inputs and "raise_to_prev_op_income_x" in m:
             basis.append(f"영업이익은 {inputs['prev_op_income'].get('period_end', '')[:4]}년 연간")

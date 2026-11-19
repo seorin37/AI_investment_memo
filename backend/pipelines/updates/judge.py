@@ -158,6 +158,23 @@ def load_guide(path: str = PROMPT_PATH) -> str:
     return resolve_path(path).read_text(encoding="utf-8").strip()
 
 
+# 분기·반기 보고서 표의 "제36기 3분기"·"제59기 반기" 열은 그해 1월부터 그 분기 말까지 누적 (2026-11-19 M023 셀트리온
+# "3분기 보고서의 매출 4,114,227백만원"을 한 분기 매출처럼 씀). '3개월'·'누적' 열이 따로 있는 표는 열 이름으로 구분되니 안내하지 않는다.
+CUMULATIVE_NOTE = ("이 표의 이번 기간 매출·이익 같은 기간 금액은 그해 1월부터 보고서 기준일까지 누적이에요 "
+                   "(3개월 값이 아니에요). 잔액(자산·부채 등)은 기준일 시점 값이에요.")
+_MONEY_UNIT = re.compile(r"단위\s*:\s*[^)\n]*원")
+
+
+def cumulative_table(title: str, text: str) -> bool:
+    """분기·반기 보고서의 금액 표 발췌인데 '3개월'·'누적' 열 구분이 없는가 (재무상태표는 시점 잔액이라 뺀다).
+    사업의 내용 표(주요 제품 현황·매출실적 등)는 열 이름 없이 기준일까지 누적 금액을 적는다."""
+    text = text or ""
+    head = text.split("]", 1)[0]                      # "[셀트리온 2026 3분기 | II. 사업의 내용 > 2. 주요 제품 및 서비스]"
+    return ((title or "").startswith(("분기보고서", "반기보고서")) and ("사업의 내용" in head or "요약재무정보" in head)
+            and "[표]" in text and bool(_MONEY_UNIT.search(text))
+            and "3개월" not in text and "누적" not in text and "재무상태표" not in text)
+
+
 def evidence_block(evidence: list[Evidence]) -> str:
     """근거 블록 (지침서 1-2 예시 모양). 연결/별도 구분은 DB에 없어 넣지 않는다."""
     parts = []
@@ -168,7 +185,8 @@ def evidence_block(evidence: list[Evidence]) -> str:
         elif c.doc == "fintable":                    # 실험(2026-11-16) fin_table: ask 질문용 재무 표 (코드가 DB에서 꺼내고 비율 계산)
             parts.append(f"{e.eid} [재무 표]\n{e.shown_text}")
         elif c.kind == "disclosure":
-            parts.append(f"{e.eid} [공시]\n- 보고서명: {c.title}\n- 접수일: {c.date}\n- 원문 발췌: {e.shown_text}")
+            note = "\n- 기간 안내: " + CUMULATIVE_NOTE if cumulative_table(c.title, e.shown_text) else ""
+            parts.append(f"{e.eid} [공시]\n- 보고서명: {c.title}\n- 접수일: {c.date}{note}\n- 원문 발췌: {e.shown_text}")
         else:
             parts.append(f"{e.eid} [뉴스]\n- 제목: {c.title}\n- 언론사: {c.source}\n- 게시 일자: {c.date}\n- 제공 요약: {e.shown_text}")
     return "\n\n".join(parts)
