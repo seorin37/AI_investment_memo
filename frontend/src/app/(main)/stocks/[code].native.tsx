@@ -7,13 +7,14 @@ import { mockCompanyOverviewProps } from '@/features/company/CompanyOverview.moc
 import { useUI } from '@/store/ui';
 import type { ChartRange, Checklist, Memo } from '@/types/models';
 import { TopBar } from '@/ui/layout/app/TopBar';
+import { AiOffSheet } from '@/ui/shared/AiOffSheet';
 import { AppMemoBoard } from '@/ui/screens/board/app/MemoBoard';
 import { mockBoardChecklist, mockBoardMemos, mockBoardStock, mockEmptyStock } from '@/ui/screens/board/MemoBoard.mock';
 
 /**
  * 앱 종목 상세: 메모 보드 = UI v2 (ui/screens/board/app) · 기업정보 = 아직 옛 화면 (⑤에서 교체).
  * mock 단계: 000660 은 예시 메모, 105560(KB금융) 은 빈 보드. 변화는 이 화면 안에서만.
- * 메모 상세 · AI 연결 · 체크리스트 화면은 아직 옛 화면 (④에서 교체).
+ * 메모 상세 · 새 메모 · AI 연결 = UI v2 (④ · app/(detail)/memo). 체크리스트 화면은 아직 옛 화면.
  */
 export default function StockDetail() {
   const { code, tab: tabParam } = useLocalSearchParams<{ code: string; tab?: string }>();
@@ -26,6 +27,7 @@ export default function StockDetail() {
   const [memos, setMemos] = useState<Memo[]>(empty ? [] : mockBoardMemos);
   const [checklist, setChecklist] = useState<Checklist | null>(empty ? null : mockBoardChecklist);
   const removed = useRef<Memo[]>([]);
+  const [offFor, setOffFor] = useState<Memo | null>(null);
   const [range, setRange] = useState<ChartRange>(mockCompanyOverviewProps.range);
   /* 다른 화면으로 가면 고르기 때문에 숨긴 탭바를 다시 보이게 */
   useFocusEffect(useCallback(() => () => setTabBarHidden(false), [setTabBarHidden]));
@@ -39,6 +41,7 @@ export default function StockDetail() {
     );
 
   return (
+    <>
     <AppMemoBoard
       header={<TopBar preset="board" title={stock.name} onBack={() => router.back()} actions={[{ icon: 'moreV2', label: '종목 메뉴', onPress: () => notice('종목 메뉴') }]} />}
       stock={stock}
@@ -50,10 +53,12 @@ export default function StockDetail() {
       onNewChecklist={() => router.push({ pathname: '/checklist/[id]', params: { id: 'new' } })}
       onToggleChecklistItem={(iid) => setChecklist((c) => (c ? { ...c, items: c.items.map((i) => (i.id === iid ? { ...i, done: !i.done } : i)) } : c))}
       onPin={(ids, pinned) => setMemos((all) => all.map((m) => (ids.includes(m.id) ? { ...m, pinned } : m)))}
+      onTogglePin={(pinned) => setChecklist((c) => (c ? { ...c, pinned } : c))}
       onToggleAi={(id) => {
         const m = memos.find((x) => x.id === id);
-        if (m?.ai_linked) setMemos((all) => all.map((x) => (x.id === id ? { ...x, ai_linked: false } : x)));
-        else if (m) router.push({ pathname: '/memo/link', params: { title: m.title, body: m.body } });
+        /* 원본 aiToggle: 켜져 있으면 해제 확인 시트, 꺼져 있으면 AI 연결 창 */
+        if (m?.ai_linked) setOffFor(m);
+        else if (m) router.push({ pathname: '/memo/link', params: { id: m.id } });
       }}
       onDelete={(ids) => {
         removed.current = [...removed.current, ...memos.filter((m) => ids.includes(m.id))];
@@ -71,5 +76,18 @@ export default function StockDetail() {
       onSelectionChange={onSelectionChange}
       onSpentAction={(a) => notice(a === 'credit' ? '크레딧 구매' : '플랜 변경')}
     />
+    <AiOffSheet
+      open={!!offFor}
+      stockName={stock.name}
+      title={offFor?.title ?? ''}
+      itemCount={2}
+      onClose={() => setOffFor(null)}
+      onConfirm={() => {
+        const id = offFor?.id;
+        setOffFor(null);
+        setMemos((all) => all.map((x) => (x.id === id ? { ...x, ai_linked: false } : x)));
+      }}
+    />
+    </>
   );
 }

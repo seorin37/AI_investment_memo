@@ -154,6 +154,8 @@ export interface ChecklistItem {
 export interface Checklist extends BoardItemBase {
   kind: 'checklist';
   items: ChecklistItem[];
+  /** 보드 상단 고정 (백엔드 memos 표의 pinned 칸 · 2026-11-19 UI v2 ③ 결정, 저장 연결은 API 단계) */
+  pinned?: boolean;
 }
 
 export type ReferenceType = 'ir' | 'news' | 'report' | 'disclosure' | 'etc';

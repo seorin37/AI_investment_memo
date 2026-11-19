@@ -11,4 +11,6 @@ export interface SheetProps {
   width?: number;
   /** 접근성 이름 */
   label: string;
+  /** 웹: 막 색 (원본 메모 창 rgba(14,15,20,.32) · 기본 rgba(0,0,0,.45)) */
+  scrim?: string;
 }

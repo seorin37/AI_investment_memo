@@ -3,9 +3,10 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
 import type { Checklist, ChecklistItem } from '@/types/models';
-import { CheckMark, CkiMark } from '@/ui/icons/BoardGlyphs';
+import { AppPin, CheckMark, CkiMark } from '@/ui/icons/BoardGlyphs';
 import { appColor, checklistColor, fpx, ft } from '@/ui/theme';
 import { SelCircle } from './MemoCard';
+import { AppTape } from './MemoPaper';
 import { ListCheck } from './MemoRow';
 
 /**
@@ -63,7 +64,7 @@ export function AppChecklistCard({ checklist, width, height, selecting, selected
         <View style={st.ckl}>
           {L ? (
             ord.slice(0, 3).map((x) => (
-              <Pressable key={x.id} onPress={() => (selecting ? onPress() : onToggleItem(x.id))} accessibilityRole="checkbox" accessibilityState={{ checked: x.done }} accessibilityLabel={x.text} style={({ pressed }) => [st.cr, pressed && { backgroundColor: 'rgba(255,122,26,0.12)' }]}>
+              <Pressable key={x.id} onPress={() => (selecting ? onPress() : onToggleItem(x.id))} onLongPress={onLongPress} delayLongPress={480} accessibilityRole="checkbox" accessibilityState={{ checked: x.done }} accessibilityLabel={x.text} style={({ pressed }) => [st.cr, pressed && { backgroundColor: 'rgba(255,122,26,0.12)' }]}>
                 <View style={[st.cc, x.done ? st.ccOn : st.ccOff]}>{x.done ? <CheckMark kind="cki" size={11} stroke={1.9} /> : null}</View>
                 <Text style={[st.ct, x.done && st.ctDone]} numberOfLines={1}>
                   {x.text}
@@ -76,6 +77,8 @@ export function AppChecklistCard({ checklist, width, height, selecting, selected
           {L > 3 ? <Text style={st.cmore}>+{L - 3}개 더</Text> : null}
         </View>
       </Pressable>
+      {/* 원본 renderCheck: 고정하면 귤색 테이프 (메모와 같은 자리) */}
+      {checklist.pinned ? <AppTape color={checklistColor.tape} /> : null}
       <SelCircle visible={selecting} on={selected} style={st.gchk} />
     </View>
   );
@@ -93,9 +96,12 @@ export function AppChecklistRow({ checklist, width, selecting, selected, onPress
         <CkiMark size={18} />
       </View>
       <View style={st.lt}>
-        <Text style={st.aT} numberOfLines={1}>
-          {checklist.title || '체크리스트'}
-        </Text>
+        <View style={st.aRow}>
+          {checklist.pinned ? <AppPin size={14} color={appColor.ink2} /> : null}
+          <Text style={st.aT} numberOfLines={1}>
+            {checklist.title || '체크리스트'}
+          </Text>
+        </View>
         <Text style={st.b} numberOfLines={1}>
           {L ? `${d}/${L} 완료 · ${next}` : '확인할 일을 추가해 보세요'}
         </Text>
@@ -173,7 +179,8 @@ const st = StyleSheet.create({
   row: { height: 64, flexDirection: 'row', alignItems: 'center', gap: 12, paddingLeft: 20, paddingRight: 16, borderBottomWidth: 1, borderBottomColor: appColor.line },
   ckiBig: { width: 36, height: 36, borderRadius: 11, backgroundColor: '#FFDCC4', alignItems: 'center', justifyContent: 'center' },
   lt: { flex: 1, minWidth: 0 },
-  aT: { ...ft(15.5), fontWeight: '800', color: appColor.ink },
+  aRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  aT: { ...ft(15.5), fontWeight: '800', color: appColor.ink, flexShrink: 1 },
   b: { ...ft(12.5), color: appColor.ink2, marginTop: 2 },
   ring: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
   ringT: { ...fpx(11, 16), fontWeight: '500', color: '#777080' },

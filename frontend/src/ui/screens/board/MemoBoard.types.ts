@@ -29,6 +29,8 @@ export interface MemoBoardProps {
   onNewChecklist: () => void;
   onToggleChecklistItem: (itemId: string) => void;
   onPin: (ids: string[], pinned: boolean) => void;
+  /** 체크리스트 고정 (원본 앱: 꾹 눌러 고른 뒤 고정 · 체크리스트 화면 [고정]). 저장 연결은 API 단계 */
+  onTogglePin?: (pinned: boolean) => void;
   /** AI 연결 켜기·끄기 (켜기는 ④ AI 연결 창, 끄기는 확인) */
   onToggleAi: (id: string) => void;
   onDelete: (ids: string[]) => void;

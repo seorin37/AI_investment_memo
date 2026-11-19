@@ -53,7 +53,7 @@ export function AppMemoBoard(p: MemoBoardProps & { header: React.ReactNode }) {
     const ms: Item[] = p.memos
       .filter((m) => filter === 'all' || (filter === 'ai' ? m.ai_linked : m.unread_updates > 0))
       .map((m) => ({ key: m.id, memo: m, pinned: m.pinned, at: m.updated_at }));
-    const cl: Item[] = filter === 'all' && p.checklist ? [{ key: CL, checklist: p.checklist, pinned: false, at: p.checklist.updated_at }] : [];
+    const cl: Item[] = filter === 'all' && p.checklist ? [{ key: CL, checklist: p.checklist, pinned: !!p.checklist.pinned, at: p.checklist.updated_at }] : [];
     return [...ms, ...cl].sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.at.localeCompare(a.at));
   }, [p.memos, p.checklist, filter]);
 
@@ -119,13 +119,17 @@ export function AppMemoBoard(p: MemoBoardProps & { header: React.ReactNode }) {
   const selMemos = (sel ?? []).filter((k) => k !== CL);
   const one = sel?.length === 1;
   const hasCk = (sel ?? []).includes(CL);
-  const allPinned = selMemos.length > 0 && selMemos.every((id) => byId(id)?.pinned);
+  /* 원본 togglePin: 체크리스트도 메모처럼 고정 (③ 결정) */
+  const allPinned = (sel ?? []).length > 0 && (sel ?? []).every((k) => (k === CL ? !!p.checklist?.pinned : byId(k)?.pinned));
   const onAction = (a: AppSelAction) => {
     const ids = selMemos;
     if (a === 'pin') {
-      p.onPin(ids, !allPinned);
+      if (ids.length) p.onPin(ids, !allPinned);
+      if (hasCk) p.onTogglePin?.(!allPinned);
+      const n = sel?.length ?? 0;
       setSel(null);
-      toast(allPinned ? `${ids.length}개 고정을 풀었어요` : `${ids.length}개를 고정했어요`);
+      if (n === 1 && hasCk) toast(allPinned ? '고정을 풀었어요' : '체크리스트를 고정했어요');
+      else toast(allPinned ? `${n}개 고정을 풀었어요` : `${n}개를 고정했어요`);
     } else if (a === 'color') setColorFor(ids);
     else if (a === 'ai') {
       setSel(null);
@@ -262,7 +266,7 @@ export function AppMemoBoard(p: MemoBoardProps & { header: React.ReactNode }) {
         visible={selecting}
         pinLabel={allPinned ? '고정 해제' : '고정'}
         aiLabel={one && !hasCk && byId(sel![0])?.ai_linked ? 'AI 끄기' : 'AI 연결'}
-        disabled={{ pin: selMemos.length === 0, ai: !one || hasCk, color: hasCk, copy: !one || hasCk }}
+        disabled={{ pin: false, ai: !one || hasCk, color: hasCk, copy: !one || hasCk }}
         onAction={onAction}
       />
       <Sheet open={!!colorFor} onClose={() => setColorFor(null)} title={colorFor && colorFor.length > 1 ? `${colorFor.length}개 메모 색상` : '메모 색상'} label="메모 색상">
