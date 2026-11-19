@@ -179,7 +179,7 @@ def run(d: Path, method: str, max_usd: float, memos: str = "") -> int:
         (out / "extra_memos.json").write_text(json.dumps(sorted(keep)), encoding="utf-8")
     symbols = ",".join(sorted({m["symbol"] for m in _jsonl(d / "dataset.jsonl")}))
     cmd = [sys.executable, "-m", "pipelines.updates.experiment", "--gold", str(gold),
-           "--config", str(REPO_ROOT / CONFIGS[method]), "--symbols", symbols, "--llm", "openai", "--store", "file",
+           "--config", str(out / "config.yaml") if (out / "config.yaml").exists() else str(REPO_ROOT / CONFIGS[method]), "--symbols", symbols, "--llm", "openai", "--store", "file",
            "--save-llm-io", "--max-usd", str(max_usd), "--job", "dryrun", "--out-dir", str(out / ("cards_extra" if memos else "cards"))]
     env = {**os.environ, "PYTHONPATH": str(REPO_ROOT / "backend")}
     env.pop("TRACKING_PROMPT_PATH", None)
@@ -222,6 +222,32 @@ def freeze_check(d: Path) -> int:
            "last_price_before": meta.get("last_price"), "last_price_after": last_price}
     (d / "freeze_check.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps({k: (len(v) if isinstance(v, list) else v) for k, v in res.items()}, ensure_ascii=False))
+    return 0
+
+
+def derive(d: Path, src: str, dst: str, memos: str, sets: list[str]) -> int:
+    """다른 방식의 메모 분석 결과(analysis·gold)를 그대로 쓰고 설정만 바꾼 방식을 만든다 (예: 조합 C = 팀원 방식 +
+    관련성 판정 모델 sol). sets: "relevance.model=gpt-6.1-sol"처럼 점으로 이은 키=값. 원래 설정은 src의 CONFIGS."""
+    import yaml
+
+    keep = set(memos.split(",")) if memos else None
+    out = d / dst
+    out.mkdir(parents=True, exist_ok=True)
+    for name in ("analysis.jsonl", "gold.jsonl"):
+        rows = [r for r in _jsonl(d / src / name) if keep is None or r["memo_id"] in keep]
+        (out / name).write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
+    cfg = yaml.safe_load((REPO_ROOT / CONFIGS[src]).read_text(encoding="utf-8"))
+    for kv in sets:
+        key, val = kv.split("=", 1)
+        node = cfg
+        *path, last = key.split(".")
+        for k in path:
+            node = node.setdefault(k, {})
+        node[last] = yaml.safe_load(val)
+    (out / "config.yaml").write_text(yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    (out / "derived.json").write_text(json.dumps({"from": src, "set": sets, "memos": sorted(keep) if keep else None},
+                                                  ensure_ascii=False), encoding="utf-8")
+    print(f"{dst}: {src} 메모 분석 {len(_jsonl(out / 'gold.jsonl'))}개 + 설정 {sets}")
     return 0
 
 
@@ -336,12 +362,18 @@ def main(argv: list[str] | None = None) -> int:
     for name in ("analyze", "run"):
         s = sub.add_parser(name)
         s.add_argument("--dir", required=True)
-        s.add_argument("--method", choices=list(PROMPTS), required=True)
+        s.add_argument("--method", required=True, help="seorin | minyi | derive로 만든 이름 (예: combo_c)")
         s.add_argument("--max-usd", type=float, required=True)
         if name == "run":
             s.add_argument("--memos", default="", help="이 메모만 다시 (cards_extra)")
     s = sub.add_parser("freeze-check")
     s.add_argument("--dir", required=True)
+    s = sub.add_parser("derive")
+    s.add_argument("--dir", required=True)
+    s.add_argument("--from", dest="src", choices=list(PROMPTS), required=True)
+    s.add_argument("--to", dest="dst", required=True)
+    s.add_argument("--memos", default="")
+    s.add_argument("--set", dest="sets", action="append", default=[])
     s = sub.add_parser("costs")
     s.add_argument("--dir", required=True)
     args = ap.parse_args(argv)
@@ -368,6 +400,8 @@ def main(argv: list[str] | None = None) -> int:
         return analyze(d, args.method, args.max_usd)
     if args.cmd == "run":
         return run(d, args.method, args.max_usd, args.memos)
+    if args.cmd == "derive":
+        return derive(d, args.src, args.dst, args.memos, args.sets)
     if args.cmd == "costs":
         costs(d)
         return 0

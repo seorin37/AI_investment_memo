@@ -152,8 +152,11 @@ document.querySelectorAll('.memo-row').forEach(row=>{
 });
 function count(){const n=Object.values(picks).filter(p=>p.choice).length;document.getElementById('picked').textContent=n}
 count();
-document.getElementById('diffonly').addEventListener('change',e=>{
-  document.querySelectorAll('.memo-row').forEach(r=>{r.hidden=e.target.checked&&r.dataset.diff!=='1'})});
+function filt(){const d=document.getElementById('diffonly').checked,x=document.getElementById('extraonly');
+  const xo=x&&x.checked;document.querySelectorAll('.memo-row').forEach(r=>{
+  r.hidden=(d&&r.dataset.diff!=='1')||(xo&&r.dataset.extra!=='1')})}
+document.getElementById('diffonly').addEventListener('change',filt);
+if(document.getElementById('extraonly'))document.getElementById('extraonly').addEventListener('change',filt);
 document.getElementById('csv').addEventListener('click',()=>{
   const q=s=>'"'+String(s||'').replace(/"/g,'""')+'"';
   const rows=[['memo_id','set','company','results_differ','choice','note'].join(',')];
@@ -364,22 +367,38 @@ def _ev_blocks(text: str) -> list[str]:
     return [re.sub(r"^E\d+ ", "", b).strip() for b in blocks]
 
 
+EXTRA_METHODS = (("combo_c", "조합 C · 팀원 방식 + 관련성 판정 sol"),)   # method_compare derive로 만든 방식 (있으면 칸을 더한다)
+
+
+def _extra_methods(d: Path) -> list[tuple[str, str]]:
+    out = []
+    for k, label in EXTRA_METHODS:
+        if sorted((d / k / "cards").glob("run_*")):
+            info = json.loads((d / k / "derived.json").read_text(encoding="utf-8")) if (d / k / "derived.json").exists() else {}
+            out.append((k, label + (f" ({', '.join(info.get('set') or [])})" if info.get("set") else "")))
+    return out
+
+
 def build_methods(d: Path) -> str:
-    data = {k: load_method(d, k) for k, _ in METHODS}
+    methods = list(METHODS) + _extra_methods(d)
+    data = {k: load_method(d, k) for k, _ in methods}
     memos = _read_jsonl(d / "dataset.jsonl")
     meta = json.loads((d / "meta.json").read_text(encoding="utf-8")) if (d / "meta.json").exists() else {}
     freeze = json.loads((d / "freeze_check.json").read_text(encoding="utf-8")) if (d / "freeze_check.json").exists() else None
-    stats = {k: {"alert": 0, "ask": 0, "price": 0, "reasons": {}} for k, _ in METHODS}
+    stats = {k: {"alert": 0, "ask": 0, "price": 0, "reasons": {}, "memos": 0} for k, _ in methods}
+    sub = {k: {"alert": 0, "ask": 0, "price": 0, "memo_with_card": 0} for k, _ in methods}   # 추가 방식이 돈 메모만
+    extra_ids = set().union(*[set(data[k]["gold"]) for k, _ in methods[2:]]) if len(methods) > 2 else set()
     rows_html, differ = [], 0
     for memo in memos:
         mid = memo["memo_id"]
+        active = [(k, label) for k, label in methods if k in ("seorin", "minyi") or mid in data[k]["gold"]]
         cols, sig = [], {}
-        for k, label in METHODS:
+        for k, label in active:
             m = data[k]
-            items = _items_of(m, mid)
+            stats[k]["memos"] += 1
             parts = [f'<div class="colhead">{escape(label)}</div>', _analysis_note(m["analysis"].get(mid))]
             heads = []
-            for it in items:
+            for it in _items_of(m, mid):
                 kind_lab = "한 번 답하기" if it["kind"] == "ask" else ("알림 · 가격" if it["type"] != "topic" else "알림")
                 parts.append(f'<div class="itemlab"><span class="kind {it["kind"]}">{kind_lab}</span>{escape(it["description"])}'
                              + (f" ({it['price']:,}원)" if it.get("price") else "") + "</div>")
@@ -387,76 +406,92 @@ def build_methods(d: Path) -> str:
                 if c is not None:
                     parts.append(_vcard(c, m["refs"], it["kind"]))
                     heads.append(c.get("headline") or c.get("title") or "")
-                    if (c.get("update_type") or "") == "price_condition":
-                        stats[k]["price"] += 1
-                    else:
-                        stats[k][it["kind"]] += 1
+                    kind = "price" if (c.get("update_type") or "") == "price_condition" else it["kind"]
+                    stats[k][kind] += 1
+                    if mid in extra_ids:
+                        sub[k][kind] += 1
                 else:
                     html, key = _no_card(m, it, memo["text"])
                     parts.append(html)
-                    stats[k]["reasons"][key.split(":")[0] if key.startswith("check_failed") else key] = \
-                        stats[k]["reasons"].get(key.split(":")[0] if key.startswith("check_failed") else key, 0) + 1
+                    key = key.split(":")[0] if key.startswith("check_failed") else key
+                    stats[k]["reasons"][key] = stats[k]["reasons"].get(key, 0) + 1
+            if mid in extra_ids and heads:
+                sub[k]["memo_with_card"] += 1
             sig[k] = sorted(heads)
             cols.append("<div>" + "".join(parts) + "</div>")
-        # 근거 원문: 두 방식이 LLM에 넘긴 근거 블록 (같으면 하나만)
-        blocks = {k: [] for k, _ in METHODS}
-        for k, _ in METHODS:
+        # 근거 원문: 방식마다 LLM에 넘긴 근거 블록 (모두 같으면 하나만)
+        blocks = {k: [] for k, _ in active}
+        for k, _ in active:
             for it in _items_of(data[k], mid):
                 for b in _ev_blocks(data[k]["evidence"].get(it["item_id"], "")):
                     if b not in blocks[k]:
                         blocks[k].append(b)
         evh = ['<div class="colhead">근거 원문 (LLM이 받은 그대로)</div>']
+        sets_ = [set(v) for v in blocks.values()]
         if not any(blocks.values()):
-            evh.append('<div class="why">두 방식 모두 카드 작성 LLM에 넘긴 근거가 없어요</div>')
-        elif set(blocks["seorin"]) == set(blocks["minyi"]):
-            evh.append(f'<div class="anal"><span class="same">두 방식 같은 근거 {len(blocks["seorin"])}건</span></div>')
+            evh.append('<div class="why">모든 방식이 카드 작성 LLM에 넘긴 근거가 없어요</div>')
+        elif all(x == sets_[0] for x in sets_):
+            first = next(iter(blocks.values()))
+            evh.append(f'<div class="anal"><span class="same">모든 방식 같은 근거 {len(first)}건</span></div>')
             evh += [f'<details class="ev"><summary>{escape(b.splitlines()[0][:70])} · {escape(_ev_title(b))}</summary>'
-                    f"<pre>{escape(b)}</pre></details>" for b in blocks["seorin"]]
+                    f"<pre>{escape(b)}</pre></details>" for b in first]
         else:
-            for k, label in METHODS:
-                only = [b for b in blocks[k] if b not in blocks["minyi" if k == "seorin" else "seorin"]]
+            for k, label in active:
+                others = set().union(*[set(v) for kk, v in blocks.items() if kk != k])
+                only = [b for b in blocks[k] if b not in others]
                 evh.append(f'<div class="itemlab">{escape(label)} · {len(blocks[k])}건 (이 방식에만 {len(only)}건)</div>')
                 evh += [f'<details class="ev"><summary>{"★ " if b in only else ""}{escape(b.splitlines()[0][:60])} · '
                         f'{escape(_ev_title(b))}</summary><pre>{escape(b)}</pre></details>' for b in blocks[k]]
         diff = sig["seorin"] != sig["minyi"]
         differ += diff
+        choices = ("서린", "팀원") + tuple(label.split(" · ")[0] for _, label in active[2:]) + ("같음", "둘 다 별로")
         pick = ('<div class="pick">' + "".join(f'<button type="button" data-v="{v}" aria-pressed="false">{v}</button>'
-                                              for v in ("서린", "팀원", "같음", "둘 다 별로"))
+                                              for v in choices)
                 + '<textarea placeholder="메모 (선택)" aria-label="메모"></textarea></div>')
+        grid = f' style="grid-template-columns:repeat({len(active) + 1},minmax(0,1fr))"' if len(active) > 2 else ""
+        extra_tag = (f'<span class="same">{escape(" · ".join(lab.split(" · ")[0] for _, lab in active[2:]))} 함께</span>'
+                     if len(active) > 2 else "")
         rows_html.append(
             f'<section class="memo-row" data-memo="{escape(mid)}" data-set="{escape(memo["set"])}" '
-            f'data-company="{escape(memo["company"])}" data-diff="{int(diff)}">'
+            f'data-company="{escape(memo["company"])}" data-diff="{int(diff)}" data-extra="{int(len(active) > 2)}">'
             f'<div class="memo-head"><b>{escape(mid)} · {escape(memo["company"])}</b><span>{escape(memo["set"])}</span>'
-            f'<span>{"결과 다름" if diff else "결과 같음"}</span></div>'
+            f'<span>{"결과 다름" if diff else "결과 같음"}</span>{extra_tag}</div>'
             f'<div class="memo-text">{escape(memo["text"])}</div>'
-            f'<div class="cols">{cols[0]}{cols[1]}<div>{"".join(evh)}</div></div>{pick}</section>')
+            f'<div class="cols"{grid}>{"".join(cols)}<div>{"".join(evh)}</div></div>{pick}</section>')
     boxes = []
-    for k, label in METHODS:
-        s, m = stats[k], data[k]
+    for k, label in methods:
+        st, m = stats[k], data[k]
         reasons = "".join(f'<tr><td>{escape(REASON_KO.get(r, r))}</td><td class="n">{n}</td></tr>'
-                          for r, n in sorted(s["reasons"].items(), key=lambda x: -x[1]))
-        boxes.append(f'<div class="box"><b>{escape(label)}</b> · {escape(m["run"])}<table>'
-                     f'<tr><td>알림 카드</td><td class="n">{s["alert"]}</td></tr>'
-                     f'<tr><td>질문 답 카드</td><td class="n">{s["ask"]}</td></tr>'
-                     f'<tr><td>가격 카드</td><td class="n">{s["price"]}</td></tr>'
+                          for r, n in sorted(st["reasons"].items(), key=lambda x: -x[1]))
+        boxes.append(f'<div class="box"><b>{escape(label)}</b> · {escape(m["run"])} · 메모 {st["memos"]}개<table>'
+                     f'<tr><td>알림 카드</td><td class="n">{st["alert"]}</td></tr>'
+                     f'<tr><td>질문 답 카드</td><td class="n">{st["ask"]}</td></tr>'
+                     f'<tr><td>가격 카드</td><td class="n">{st["price"]}</td></tr>'
                      f'<tr><td>비용 (메모 분석 + 카드)</td><td class="n">${m["cost_analysis"]:.2f} + ${m["cost_cards"]:.2f} = '
                      f'${m["cost_analysis"] + m["cost_cards"]:.2f}</td></tr></table>'
                      f'<div class="label">카드가 안 나온 이유</div><table>{reasons}</table></div>')
+    if extra_ids:
+        rows = "".join(f'<tr><td>{escape(label.split(" (")[0])}</td><td class="n">{sub[k]["alert"]}</td>'
+                       f'<td class="n">{sub[k]["ask"]}</td><td class="n">{sub[k]["memo_with_card"]}</td></tr>'
+                       for k, label in methods)
+        boxes.append(f'<div class="box"><b>추가 방식을 돌린 메모 {len(extra_ids)}개만</b><table><tr><td></td>'
+                     f'<td class="n">알림</td><td class="n">질문 답</td><td class="n">카드 있는 메모</td></tr>{rows}</table></div>')
     sets = " · ".join(f"{escape(k)} {v}" for k, v in (meta.get("sets") or {}).items())
     fz = ""
     if freeze:
         fz = (f" · 같은 DB 자료 확인: 후보 뉴스 {freeze['news_candidates']}·공시 {freeze['disclosure_candidates']}건 중 기준 시각 뒤에 "
               f"들어온 뉴스 {len(freeze['late_news'])}·공시 {len(freeze['late_disclosures'])}건, 주가 마지막 날 "
               f"{freeze['last_price_before']} → {freeze['last_price_after']}")
+    extra_filter = '<label><input type="checkbox" id="extraonly"> 조합 C를 돌린 메모만</label>' if extra_ids else ""
+    title = "두 방식 카드 비교 · 서린(운영) / 팀원(updates_exp)" + (" / 조합 C" if extra_ids else "")
     return ('<!doctype html><html lang="ko"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width,initial-scale=1">'
             f"<title>두 방식 카드 비교</title><style>{CSS}{METHODS_CSS}</style></head>"
-            f'<body data-run="{escape(d.name)}"><main>'
-            f"<h1>두 방식 카드 비교 · 서린(운영) / 팀원(updates_exp)</h1>"
+            f'<body data-run="{escape(d.name)}"><main><h1>{escape(title)}</h1>'
             f'<p class="meta">메모 {len(memos)}개 ({sets}) · 기준 시각 {escape(meta.get("as_of", ""))} · 첫 확인(조회 기간 전체) · '
-            f"결과가 다른 메모 {differ}개{escape(fz)}</p>"
+            f"서린·팀원 결과가 다른 메모 {differ}개{escape(fz)}</p>"
             f'<div class="top">{"".join(boxes)}</div>'
-            f'<div class="bar"><label><input type="checkbox" id="diffonly"> 두 방식 결과가 다른 메모만</label>'
+            f'<div class="bar"><label><input type="checkbox" id="diffonly"> 두 방식 결과가 다른 메모만</label>{extra_filter}'
             f'<span>고른 메모 <b id="picked">0</b>/{len(memos)}</span><button type="button" id="csv">고른 결과 CSV 내려받기</button>'
             f'<span class="meta" style="margin:0">고른 결과는 이 브라우저에만 저장돼요</span></div>'
             f'{"".join(rows_html)}</main><script>{METHODS_JS}</script></body></html>')

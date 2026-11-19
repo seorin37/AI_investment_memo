@@ -64,7 +64,7 @@ class MethodsPageTest(unittest.TestCase):
         self.assertIn('카카오, 카톡 의견 접수 기능 추가', page)                 # 서린 알림 카드
         self.assertIn('한 번 답하기', page)                                     # 팀원 항목 구분
         self.assertIn('자료 없음 답', page)
-        self.assertIn('두 방식 같은 근거 1건', page)                            # 같은 근거는 하나만
+        self.assertIn('모든 방식 같은 근거 1건', page)                            # 같은 근거는 하나만
         self.assertIn('data-diff="1"', page)                                  # K03은 결과가 다르다
         self.assertIn('data-diff="0"', page)                                  # K10은 둘 다 카드 없음
         self.assertIn('범위 밖 안내', page)
