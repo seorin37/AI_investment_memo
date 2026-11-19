@@ -82,7 +82,7 @@ def _field(prompt: str, name: str) -> str:
 
 def judge(client, prompt: str, memo: str, cfg: dict, banned: list[str], verify: bool, spent: list[float]) -> dict:
     """카드 호출 → 코드 검사(형식만 어긋나면 한 번 재요청) → (통과하면) 검수 호출. spent[0]에 비용을 더한다."""
-    from .topic import _FORMAT_CODES, _repair_prompt_v2, _verify
+    from .topic import _FORMAT_CODES_V2 as _FORMAT_CODES, _repair_prompt_v2, _verify
 
     def call(p: str) -> str:
         before = len(client.calls)

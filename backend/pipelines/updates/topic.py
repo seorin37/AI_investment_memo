@@ -25,6 +25,8 @@ from .models import Candidate, CreditsExhausted, TopicOutcome, TrackingItem, Upd
 # 형식만 어긴 카드는 한 번 고쳐 달라고 한다. FORMAT_REASON(memo_link·reason 길이·한 문장)은 2026-11-18부터
 # (memo_link가 두 문장으로 나온 카드가 4번 중 1번 떨어졌다)
 _FORMAT_CODES = {"FORMAT_TITLE", "FORMAT_SUMMARY", "FORMAT_EXPLANATION", "FORMAT_REASON"}
+# v2는 사실 문장 주체 빠짐(ATTRIBUTION, 2026-11-19)도 한 번 고쳐 달라고 한다 (빠진 주체는 근거에 있는 경우가 대부분)
+_FORMAT_CODES_V2 = _FORMAT_CODES | {"ATTRIBUTION"}
 _REPAIR_REASON = {"FORMAT_TITLE": "title이 {title_max}자(공백 포함)를 넘었어요",
                   "FORMAT_REASON": "reason이 비었거나 {reason_max}자(공백 포함)를 넘었어요",
                   "FORMAT_SUMMARY": "summary가 {max_sentences}문장을 넘었거나, 한 문장이 [E#]를 뺀 {sentence_max_chars}자를 넘었거나, 문장 끝에 [E#]가 없어요"}
@@ -182,7 +184,9 @@ def _judge(item: TrackingItem, evidence, call: Callable[[str], str] | None, bann
 _REPAIR_REASON_V2 = {"FORMAT_TITLE": "headline이 {title_max}자(공백 포함)를 넘었거나 비었어요",
                      "FORMAT_SUMMARY": "facts가 1~{max_sentences}개가 아니거나, 한 문장이 {sentence_max_chars}자를 넘었거나, text에 [E#] 표시가 있어요",
                      "FORMAT_EXPLANATION": "explanation이 비었거나, {explanation_max_sentences}문장·{explanation_max_chars}자를 넘었거나, [E#] 표시가 있어요",
-                     "FORMAT_REASON": "memo_link가 비었거나, {reason_max}자(공백 포함)를 넘었거나, 한 문장이 아니에요"}
+                     "FORMAT_REASON": "memo_link가 비었거나, {reason_max}자(공백 포함)를 넘었거나, 한 문장이 아니에요",
+                     "ATTRIBUTION": "facts·explanation의 전망·분석·설명·발언 문장 중 누가 말했는지(증권사·언론·회사·기관 이름이나 이름 있는 사람) "
+                                    "주어가 없는 문장이 있어요. 앞 문장에 주체가 있어도 그 문장마다 주체를 다시 쓰세요"}
 _COMPARE_WORDS = ("대비", "보다", "비교", "전년", "작년", "직전", "지난", "전기")
 
 
@@ -287,7 +291,7 @@ def _judge_v2_run(item: TrackingItem, evidence, call: Callable[[str], str] | Non
     codes = check_card_v2(card, evidence, banned, cfg, item.memo_text)
     rec("card", card, codes)
     retried = False
-    if codes and cfg.get("format_retry", 0) and set(codes) <= _FORMAT_CODES:
+    if codes and cfg.get("format_retry", 0) and set(codes) <= _FORMAT_CODES_V2:
         retried = True
         try:
             raw = call(_repair_prompt_v2(prompt, raw, codes, cfg))

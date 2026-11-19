@@ -108,6 +108,48 @@ def forecast_subjects(texts) -> set[str]:
     return out
 
 
+# 사실 문장마다 주체 (2026-11-19): 전망·분석·설명·발언을 전하는 문장은 그 문장 안에 누가 말했는지가 있어야 한다.
+# 앞 문장에 주체가 있어도 문장마다 따로 본다 (카드 사실 문장은 접혀서 한 줄씩 보이고, 근거도 문장마다 다를 수 있다).
+_REPORT_ACT = re.compile(rf"{_FORECAST_ACT.pattern}|{_SAY_ACT.pattern}|(고|며)\s*(밝혔|발표|전했|설명|덧붙였|강조)|"
+                         r"(보도|평가|진단|지적|주장|언급|예고|제기)(했|한다고|하며)|내놨|내놓았")
+_ACTOR = re.compile(r"([가-힣A-Za-z0-9&·]+)(은|는|이|가)\s")
+# 주체가 될 수 없는 말: 지표·수량·때 ("출하량은 ~로 예상했어요", "올해는 ~로 전망했어요"는 누가 예상했는지 없다)
+_NOT_ACTOR = re.compile(rf"{_NOT_SUBJECT.pattern}|(량|률|율|액|전망치|예상치|추정치|수치|폭|규모|비중|기간|시점|단계|계획|일정|요인|"
+                        r"이유|원인|목표|기준|올해|내년|작년|지난해|분기|반기|연간|이번|향후|앞으로|최근|당분간)$")
+_ADNOMINAL = re.compile(r"(라|다|하|되|있|없|겠|이라)$")   # "단계라는"·"늘었다는"·"증가하는"의 는은 주어 조사가 아니다
+
+
+def _according_source(t: str) -> bool:
+    """"○○에 따르면"·"KB증권 분석을 전한 기사에 따르면": '에 따르면' 앞에 이름 있는 출처가 있는가 (문장 어디든)."""
+    for m in re.finditer(r"에\s*따르면", t):
+        before = t[:m.start()]
+        words = re.findall(r"[가-힣A-Za-z0-9&·]+", before)
+        if words and _named_word(words[-1], " ".join(words[:-1])) and not _NOT_ACTOR.search(words[-1]) \
+                and not _VAGUE_SUBJECT.search(words[-1]) and words[-1] not in ("기사", "보도", "자료", "발표"):
+            return True
+        if any(_SOURCE_WORD.search(w) and _named_word(w, "") for w in words[-6:]):
+            return True
+    return False
+
+
+def missing_subject(text: str) -> bool:
+    """전달 문장(전망·분석·설명·발언)인데 그 문장에 이름 있는 주체가 없는가.
+    주체: 은·는 주어(막연한 말·지표·때 말 제외), 출처 낱말(증권·신문·회사 …)이 붙은 이·가 주어, "○○에 따르면".
+    이·가 주어는 출처 낱말일 때만 인정한다 ("아틀라스가 아직 매출 이전 단계라는 분석을 전했어요"의 아틀라스는 분석한 쪽이 아니다)."""
+    t = _TAG.sub("", text or "").strip()
+    act = _REPORT_ACT.search(t)
+    if not act:
+        return False
+    head = t[:act.start()]
+    for m in _ACTOR.finditer(head):
+        word, particle = m.group(1), m.group(2)
+        if not _named(m, t) or _NOT_ACTOR.search(word) or (particle == "는" and _ADNOMINAL.search(word)):
+            continue
+        if particle in ("은", "는") or _SOURCE_WORD.search(word):
+            return False
+    return not _according_source(t)
+
+
 def attributed_forecast(text: str, headline: bool = False, names=frozenset()) -> bool:
     """주체를 밝힌 전망 전달 문장인가 (위 설명). headline이면 "출처, …" 제목 형식도 본다.
     names: 카드 사실 문장의 전망 주체 이름 (forecast_subjects). 제목 맨 앞·소유격 주체로 인정한다."""
@@ -587,8 +629,15 @@ def check_card_v2(card, evidence: list[Evidence], banned: list[str], cfg: dict |
         if exp and _EARNINGS_METRIC.search(exp) and _earnings_figure(exp) and len(set(fact_bases)) == 1:
             if fact_bases[0] not in exp:
                 codes.append("FINANCIAL_BASIS")
-    if cfg["prediction_terms"] and prediction_text(texts, cfg, names):
+    # 사실 문장·설명 문장마다 주체 (제목은 "출처, …" 형식을 따로 보고, memo_link는 메모와의 연결이라 보지 않는다)
+    subject_on = cfg.get("fact_subject", True)
+    no_subject = [t for t in [t for t, _ in facts] + [s for s in re.split(r"(?<=[.!?])\s+", exp) if s.strip()]
+                  if subject_on and missing_subject(t)]
+    # "~로 전망했어요"처럼 주체만 빠진 전망 전달은 예측(PREDICTION)이 아니라 주체 빠짐(ATTRIBUTION)으로 본다 (한 번 고쳐 쓸 수 있게)
+    if cfg["prediction_terms"] and prediction_text([t for t in texts if t not in no_subject], cfg, names):
         codes.append("PREDICTION")
+    if no_subject:
+        codes.append("ATTRIBUTION")
     # 자료 범위 밖을 전제로 한 말 ("처음", "줄곧" …): 그 말이 쓴 근거에 그대로 있을 때만 (2026-11-11, 범위 밖 원인·추이를 단정하지 않게)
     def outside(text: str, hay: str) -> bool:
         return any(term in text and term not in hay for term in cfg["coverage_terms"])

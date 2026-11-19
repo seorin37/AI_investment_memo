@@ -652,9 +652,9 @@ class ForecastAttributionTest(unittest.TestCase):
 
     def test_attributed_pass_unattributed_fail(self):
         for s in self.PASS:
-            self.assertFalse(self._codes(fact=s) & {"PREDICTION", "BANNED"}, s)
-        for s in self.FAIL:
-            self.assertTrue(self._codes(fact=s) & {"PREDICTION", "BANNED"}, s)
+            self.assertFalse(self._codes(fact=s) & {"PREDICTION", "BANNED", "ATTRIBUTION"}, s)
+        for s in self.FAIL:   # 2026-11-19부터 주체만 빠진 전망 전달("영업이익은 ~로 전망했어요")은 ATTRIBUTION으로 걸린다
+            self.assertTrue(self._codes(fact=s) & {"PREDICTION", "BANNED", "ATTRIBUTION"}, s)
 
     def test_headline(self):
         self.assertFalse(self._codes(headline="KB증권, 4분기 영업이익 1조 2,000억원 전망") & {"PREDICTION", "BANNED"})
@@ -858,6 +858,72 @@ class CoverageMemoQuoteTest(unittest.TestCase):
         from pipelines.updates.checks import strip_memo_quotes
         self.assertEqual(strip_memo_quotes("‘a b’와 ‘c’", "ab"), " 와 ‘c’")
         self.assertEqual(strip_memo_quotes("‘계속’", ""), "‘계속’")
+
+
+class FactSubjectTest(unittest.TestCase):
+    """사실·설명 문장마다 주체 (2026-11-19). 전망·분석·설명·발언을 전하는 문장은 그 문장 안에 누가 말했는지 있어야 한다.
+    안 A 재실행 항목 3 "구체적으로 4분기 D램 출하량은 3분기보다 24% … 증가할 것으로 예상했어요." 같은 문장이 통과했다."""
+
+    MISSING = ["2027년 출하량을 11만5000t으로 전망했어요.",
+               "출하량은 11만5000t으로 예상했어요.",                                   # 지표는 주체가 아니다
+               "아틀라스가 아직 대규모 매출 이전 단계라는 분석을 전했어요.",            # 안긴 문장의 주어
+               "SK하이닉스 M15X 가동 확대 등을 출하 증가 요인으로 꼽았어요.",
+               "4분기 출하량이 늘 것이라고 밝혔어요.",
+               "구체적으로 4분기 D램 출하량은 3분기보다 24%, 낸드플래시 출하량은 5% 증가할 것으로 예상했어요.",
+               "증권가는 1조원으로 전망했어요.", "올해는 1조원으로 전망했어요.", "외신은 주관사를 선정했다고 전했어요.",
+               "기사에 따르면 영업이익은 1조원으로 예상했어요.", "수요가 늘었다는 분석을 내놨어요."]
+    OK = ["DS투자증권은 2027년 과산화수소 출하량을 11만5000t으로 전망했어요.",
+          "DS투자증권은 SK하이닉스 M15X 가동 확대 등을 출하 증가 요인으로 꼽았어요.",
+          "한국경제는 아틀라스가 아직 대규모 매출 이전 단계라는 분석을 전했어요.",
+          "회사는 4분기 출하량이 늘 것이라고 밝혔어요.", "카카오는 이용자 의견 수렴 과정을 공유할 계획이라고 밝혔어요.",
+          "김동원 KB증권 애널리스트는 1조원으로 전망했어요.", "KB증권에 따르면 영업이익은 1조원으로 추정했어요.",
+          "KB증권 분석을 전한 기사에 따르면 삼성전자 주가는 6월 고점보다 약 50% 낮아졌어요.",
+          "카운터포인트리서치는 현재 D램 시장이 성장하는 국면이라고 분석했어요.", "매일경제가 하락 원인을 분석했어요.",
+          # 전달 문장이 아닌 사실 문장은 보지 않는다
+          "대한항공은 합병기일을 2026년 12월 16일로 공시했어요.", "3분기 총 미수금은 14조6천451억원으로 집계됐어요.",
+          "현대차그룹은 2030년까지 아틀라스 2만5000대를 투입할 계획이에요.", "배당기준일은 2026-11-30이에요."]
+
+    def test_missing_subject(self):
+        from pipelines.updates.checks import missing_subject
+        for s in self.MISSING:
+            self.assertTrue(missing_subject(s), s)
+        for s in self.OK:
+            self.assertFalse(missing_subject(s), s)
+
+    def _card(self, facts, explanation="", **cfg):
+        e = ev(news(text="DS투자증권은 2027년 과산화수소 출하량을 11만5000t으로 전망했다. SK하이닉스 M15X 가동 확대 등을 요인으로 꼽았다."))
+        c = card(headline="DS투자증권, 2027년 과산화수소 출하 증가 전망", when="2026-10-29",
+                 facts=[(t, "E1") for t in facts], explanation=explanation, sources=["E1"])
+        conf = {**CFG, "prediction_terms": ["전망", "예상"], "prediction_exempt": [],
+                "explanation": {"enabled": bool(explanation), "max_chars": 400, "max_sentences": 4}, **cfg}
+        return check_card_v2(c, e, [], conf)
+
+    def test_card_sentence_level(self):
+        good = ["DS투자증권은 2027년 과산화수소 출하량을 11만5000t으로 전망했어요.",
+                "DS투자증권은 SK하이닉스 M15X 가동 확대 등을 출하 증가 요인으로 꼽았어요."]
+        self.assertNotIn("ATTRIBUTION", self._card(good))
+        # 둘째 문장이 앞 문장의 주체에 기대면 실패 (제목 "DS투자증권, …전망"은 그대로 둔다)
+        self.assertIn("ATTRIBUTION", self._card([good[0], "SK하이닉스 M15X 가동 확대 등을 출하 증가 요인으로 꼽았어요."]))
+        self.assertIn("ATTRIBUTION", self._card(good, explanation="DS투자증권은 출하가 늘 것으로 전망했어요. 가동 확대를 요인으로 꼽았어요."))
+        self.assertNotIn("ATTRIBUTION", self._card([good[0], "SK하이닉스 M15X 가동 확대 등을 출하 증가 요인으로 꼽았어요."],
+                                                   fact_subject=False))
+
+    def test_attribution_gets_one_repair(self):
+        from pipelines.updates.topic import _FORMAT_CODES, _FORMAT_CODES_V2, _repair_prompt_v2
+        self.assertIn("ATTRIBUTION", _FORMAT_CODES_V2)
+        self.assertNotIn("ATTRIBUTION", _FORMAT_CODES)                       # v1 카드에는 없는 코드
+        p = _repair_prompt_v2("P", "{}", ["ATTRIBUTION"], {**CFG, "explanation": {}})
+        self.assertIn("문장마다 주체를 다시 쓰세요", p)
+        bad = {"status": "update", "headline": "DS투자증권, 2027년 과산화수소 출하 증가 전망", "when": "2026-10-29",
+               "facts": [{"text": "2027년 출하량을 11만5000t으로 전망했어요.", "evidence_id": "E1"}],
+               "memo_link": "메모의 과산화수소 수요 관심과 연결돼요.", "sources": ["E1"], "confidence": 0.9}
+        fixed = {**bad, "facts": [{"text": "DS투자증권은 2027년 출하량을 11만5000t으로 전망했어요.", "evidence_id": "E1"}]}
+        replies = iter([json.dumps(bad, ensure_ascii=False), json.dumps(fixed, ensure_ascii=False)])
+        src = [news(text="DS투자증권은 2027년 과산화수소 출하량을 11만5000t으로 전망했다.")]
+        out = check_topic(ITEM, src, lambda p: next(replies), [],
+                          {**CFG, "format_retry": 1, "prediction_terms": ["전망"], "prediction_exempt": []})
+        self.assertEqual([c["codes"] for c in out.checks], [["ATTRIBUTION"], []])
+        self.assertEqual(out.kind, "update")
 
 
 if __name__ == "__main__":
