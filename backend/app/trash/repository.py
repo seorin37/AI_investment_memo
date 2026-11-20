@@ -41,6 +41,47 @@ class TrashRepository:
         ).mappings().all()
         return [dict(row) for row in rows]
 
+    # ─── 투자 기록 (journal_entries.deleted_at). blocks(0020) 칸은 쓰지 않아 0020 전에도 동작한다
+    def deleted_journals(self, user_id: int) -> list[dict[str, Any]]:
+        rows = self.db.execute(
+            text(
+                """
+                SELECT id, title, left(body, 200) AS content, deleted_at
+                FROM journal_entries
+                WHERE user_id = :user_id AND deleted_at IS NOT NULL
+                """
+            ),
+            {"user_id": user_id},
+        ).mappings().all()
+        return [dict(row) for row in rows]
+
+    def restore_journal(self, user_id: int, entry_id: int) -> bool:
+        return self.db.execute(
+            text(
+                """
+                UPDATE journal_entries SET deleted_at = NULL, updated_at = now()
+                WHERE id = :id AND user_id = :user_id AND deleted_at IS NOT NULL
+                RETURNING id
+                """
+            ),
+            {"id": entry_id, "user_id": user_id},
+        ).first() is not None
+
+    def purge_journal(self, user_id: int, entry_id: int) -> bool:
+        """영구 삭제. journal_entry_stocks·후속 기록(parent_id) FK 가 NO ACTION 이라 먼저 정리한다."""
+        owned = self.db.execute(
+            text("SELECT 1 FROM journal_entries WHERE id = :id AND user_id = :user_id AND deleted_at IS NOT NULL"),
+            {"id": entry_id, "user_id": user_id},
+        ).first()
+        if not owned:
+            return False
+        self.db.execute(text("DELETE FROM journal_entry_stocks WHERE entry_id = :id"), {"id": entry_id})
+        self.db.execute(text("UPDATE journal_entries SET parent_id = NULL WHERE parent_id = :id"), {"id": entry_id})
+        return self.db.execute(
+            text("DELETE FROM journal_entries WHERE id = :id AND user_id = :user_id AND deleted_at IS NOT NULL RETURNING id"),
+            {"id": entry_id, "user_id": user_id},
+        ).first() is not None
+
     def restore_memo(self, user_id: int, memo_id: int) -> str | None:
         """복원한 메모의 종목 코드. 종목이 빠져 있으면 보드에 보이도록 종목도 되살린다."""
         row = self.db.execute(

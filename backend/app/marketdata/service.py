@@ -129,6 +129,8 @@ class MarketDataService:
                 "source": row["source"],
                 "url": row["url"],
                 "published_at": _iso(row["published_at"]),
+                # 덧붙인 필드: 연결된 종목 코드 (관련성 점수 높은 순)
+                "stock_codes": list(row.get("stock_codes") or []),
             }
             for row in self.repo.latest_news(limit)
         ]

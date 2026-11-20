@@ -506,6 +506,23 @@ export const mockApi: Api = {
       linked_stocks: new Set(linked.map((m) => m.stock_code)).size,
     });
   },
+  getUsage: async () => {
+    // 실제 규칙(backend/app/credits): 매달 1일 0시(한국 시간)에 갱신, 사용량 % = 쓴 양 ÷ (쓴 양 + 남은 양)
+    const now = new Date();
+    const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const last = new Date(next.getTime() - 86_400_000);
+    const used = Math.min(30, db.aiUpdates.length);
+    const balance = 30 - used;
+    return wait({
+      usage_percent: Math.round((used * 100) / 30),
+      used,
+      balance,
+      period_start: ymd(new Date(now.getFullYear(), now.getMonth(), 1)),
+      renews_at: next.toISOString(),
+      renew_label: `${String(last.getMonth() + 1).padStart(2, '0')}.${String(last.getDate()).padStart(2, '0')} 갱신`,
+      paused: balance <= 0,
+    });
+  },
   getDataStats: async () => wait({ memos: memosOf().length, journals: db.journal.length, stocks: db.stocks.length }),
   exportData: async (format) => wait({ url: `data:text/${format === 'csv' ? 'csv' : 'json'};charset=utf-8,` }),
   deleteAllData: async () => {

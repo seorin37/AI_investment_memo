@@ -154,6 +154,7 @@ export interface ChecklistItem {
 export interface Checklist extends BoardItemBase {
   kind: 'checklist';
   items: ChecklistItem[];
+  pinned?: boolean; // 보드 고정(테이프). mock 시드에는 없음
 }
 
 export type ReferenceType = 'ir' | 'news' | 'report' | 'disclosure' | 'etc';
@@ -425,6 +426,17 @@ export interface AiStats {
   linked_memos: number;
   updates_this_month: number;
   linked_stocks: number;
+}
+
+/** 이번 기간 AI 크레딧 사용량 (GET /me/usage, backend/app/credits/ledger.py Usage). 화면에는 %만 보인다 */
+export interface CreditUsage {
+  usage_percent: number; // 0~100
+  used: number;
+  balance: number;
+  period_start: string; // 'YYYY-MM-DD'
+  renews_at: ISODate;
+  renew_label: string; // '11.30 갱신'
+  paused: boolean; // 남은 크레딧 0 → AI 업데이트 멈춤
 }
 
 export interface DataStats {

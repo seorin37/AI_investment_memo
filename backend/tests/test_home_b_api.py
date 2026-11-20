@@ -291,9 +291,19 @@ class FakeTrashRepo:
         self.stocks = {"035420": {"symbol": "035420", "stock_name": "네이버", "deleted_at": t(2)}}
         self.usage = set()
         self.restored_stocks_for_memo = []
+        self.journals: dict[int, dict] = {}
 
     def deleted_memos(self, user_id):
         return list(self.memos.values())
+
+    def deleted_journals(self, user_id):
+        return list(self.journals.values())
+
+    def restore_journal(self, user_id, entry_id):
+        return self.journals.pop(entry_id, None) is not None
+
+    def purge_journal(self, user_id, entry_id):
+        return self.journals.pop(entry_id, None) is not None
 
     def deleted_stocks(self, user_id):
         return list(self.stocks.values())

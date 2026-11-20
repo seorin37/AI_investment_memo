@@ -79,7 +79,10 @@ export function ChecklistCard({ item, onPress, onToggle }: { item: Checklist; on
             하나씩 확인해 보세요
           </T>
         </View>
-        <ProgressRing done={done} total={item.items.length} size={32} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          {item.pinned && <Icon name="pin" size={14} color="#8E8A97" />}
+          <ProgressRing done={done} total={item.items.length} size={32} />
+        </View>
       </Pressable>
       {item.items.map((it, i) => (
         <View key={it.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7, borderTopWidth: i === 0 ? 1 : 0, borderBottomWidth: 1, borderColor: colors.borderSoft }}>

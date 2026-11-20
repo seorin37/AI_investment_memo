@@ -24,11 +24,6 @@ const hybridApi: Api = {
  * 백엔드에 생기면 여기서 빼면 real.ts 구현으로 바뀐다.
  */
 const MOCK_ONLY = [
-  // 투자 기록 /journal
-  'listJournal',
-  'createJournal',
-  'updateJournal',
-  'deleteJournal',
   // /insights/*
   'listMemoBacktests',
   'listCompareMemos',

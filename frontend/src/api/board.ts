@@ -53,6 +53,7 @@ export function normalizeBoardItem(row: RawBoardItem): BoardItem {
     return {
       ...common(row),
       kind: 'checklist',
+      pinned: Boolean(row.pinned), // 2026-11-20 백엔드가 체크리스트 고정(테이프)을 저장·응답
       items: Array.isArray(row.items)
         ? row.items.map((item) => {
             const value = item as Record<string, unknown>;

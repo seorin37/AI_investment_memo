@@ -7,7 +7,7 @@ from typing import Any
 
 from .repository import TrashRepository
 
-_ID = re.compile(r"^(memo)-(\d{1,18})$|^(stock)-([0-9A-Z]{6})$")
+_ID = re.compile(r"^(memo|journal)-(\d{1,18})$|^(stock)-([0-9A-Z]{6})$")
 
 _KIND = {"note": "memo", "checklist": "checklist", "reference": "reference"}
 _KIND_LABEL = {"memo": "메모", "checklist": "체크리스트", "reference": "참고자료"}
@@ -26,7 +26,7 @@ def parse_id(trash_id: str) -> tuple[str, str]:
     if not match:
         raise TrashItemNotFoundError(trash_id)
     if match.group(1):
-        return "memo", match.group(2)
+        return match.group(1), match.group(2)
     return "stock", match.group(4)
 
 
@@ -71,6 +71,16 @@ class TrashService:
                     "deleted_at": row["deleted_at"],
                 }
             )
+        for row in self.repo.deleted_journals(user_id):          # mock deleteJournal 과 같은 제목·설명
+            items.append(
+                {
+                    "id": f"journal-{row['id']}",
+                    "kind": "journal",
+                    "title": (row.get("title") or "").strip() or "제목 없는 기록",
+                    "context": "투자 기록",
+                    "deleted_at": row["deleted_at"],
+                }
+            )
         items.sort(key=lambda item: item["deleted_at"], reverse=True)
         return [{**item, "deleted_at": _iso(item["deleted_at"])} for item in items]
 
@@ -78,6 +88,8 @@ class TrashService:
         kind, key = parse_id(trash_id)
         if kind == "memo":
             ok = self.repo.restore_memo(user_id, int(key)) is not None
+        elif kind == "journal":
+            ok = self.repo.restore_journal(user_id, int(key))
         else:
             ok = self.repo.restore_stock(user_id, key)
         if not ok:
@@ -87,6 +99,10 @@ class TrashService:
         kind, key = parse_id(trash_id)
         if kind == "stock":
             if not self.repo.purge_stock(user_id, key):
+                raise TrashItemNotFoundError(trash_id)
+            return
+        if kind == "journal":
+            if not self.repo.purge_journal(user_id, int(key)):
                 raise TrashItemNotFoundError(trash_id)
             return
         memo_id = int(key)

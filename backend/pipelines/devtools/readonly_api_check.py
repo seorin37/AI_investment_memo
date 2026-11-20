@@ -71,6 +71,8 @@ def main(argv: list[str] | None = None) -> int:
         "checklist-items": lambda db, uid: HomeService(HomeRepository(db)).list_checklist(uid),
         "price-conditions": lambda db, uid: HomeService(HomeRepository(db)).list_price_conditions(uid),
         "updates": lambda db, uid: UpdatesService(UpdatesRepository(db)).market_updates(uid),
+        "trash": lambda db, uid: __import__("app.trash.service", fromlist=["TrashService"]).TrashService(
+            __import__("app.trash.repository", fromlist=["TrashRepository"]).TrashRepository(db)).list(uid),
     }
     try:
         from app.journal.repository import JournalRepository
@@ -88,7 +90,9 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"  {name}: {len(items)}건" + (f", 키 {sorted(items[0])}" if items else ""))
                 except Exception as exc:  # noqa: BLE001
                     failures += 1
-                    print(f"  {name} 실패: {type(exc).__name__}: {exc}")
+                    print(f"  {name} 실패: {type(exc).__name__}: {str(exc).splitlines()[0][:160]}")
+                    db.rollback()                              # 실패한 트랜잭션을 풀고 다음 사용자로
+                    db.execute(text("SET TRANSACTION READ ONLY"))
             db.rollback()
 
     failures += _explain_writes()
@@ -116,7 +120,8 @@ def _explain_writes() -> int:
             if re.match(r"\s*(INSERT|UPDATE|DELETE)\b", block) and "{" not in block:
                 statements.append((module.__name__, block))
     params = {
-        "user_id": -1, "memo_id": -1, "item_id": -1, "entry_id": -1, "checklist_id": -1, "symbol": "000000",
+        "user_id": -1, "memo_id": -1, "item_id": -1, "entry_id": -1, "checklist_id": -1, "id": -1, "symbol": "000000",
+        "blocks": "[]",
         "label": "x", "status": "paused", "title": "x", "body": "x", "layout": "{}", "pinned": False,
         "kind": "note", "entry_status": "draft",
     }
