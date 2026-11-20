@@ -66,6 +66,11 @@
 - 고정 px 폭 금지 (flex, %, useWindowDimensions). 412·360 모두
 - safe area insets, 입력 화면은 KeyboardAvoidingView
 - 한국어 줄바꿈은 어절 단위, 1px 구분선은 원본 두께·색 그대로
+- 어절 줄바꿈은 '@/components/ui/AppText'의 `<Text keepAll>` (기본 꺼짐. 안드로이드는 단어 결합자 U+2060, 웹은 CSS keep-all)
+  - 고정 문구(제목·설명·버튼·안내)에만 켠다
+  - 사용자 입력·메모 본문·TextInput에는 쓰지 않는다 (복사하면 U+2060이 같이 따라감)
+  - 안쪽 `<Text>`(굵은 글자 등)는 바깥 설정을 물려받지 않으니 따로 켠다
+  - RN 0.88 안드로이드에는 어절 줄바꿈 네이티브 옵션이 없음(textBreakStrategy만). iOS는 lineBreakStrategyIOS 'hangul-word'가 있음
 
 ## 7. 문구
 - 금지: 매수·매도 권유, 호재·악재, 가격 전망, "장중", "기대감에 강세"류 해석
