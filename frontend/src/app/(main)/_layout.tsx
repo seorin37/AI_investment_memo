@@ -7,6 +7,9 @@ import { WebShell } from '@/ui/layout/web/WebShell';
 import type { SideKey, SideSearchHit, SideStock } from '@/ui/layout/web/WebShell.types';
 import { mockMyStocksData } from '@/ui/screens/stocks/MyStocks.mock';
 import { WebAddStockDialog } from '@/ui/screens/stocks/web/AddStockDialog';
+import { useMyMock } from '@/store/myMock';
+import { mockWithdrawCounts } from '@/ui/screens/my/My.mock';
+import { WebSettings, type SettingsTab } from '@/ui/screens/my/web/Settings';
 import { ConfirmDialog } from '@/ui/shared/ConfirmDialog';
 import { ContextMenu } from '@/ui/shared/ContextMenu';
 import { WebSnackbar } from '@/ui/shared/Snackbar';
@@ -44,6 +47,12 @@ export default function MainLayout() {
   const [addOpen, setAddOpen] = useState(false);
   const [ask, setAsk] = useState<string | null>(null);
   const [snack, setSnack] = useState<{ msg: string; undo?: () => void; check?: boolean } | null>(null);
+  /* ⑨-3a 설정 창(내 프로필) · 사이드바 로그아웃 확인 (mock: 프로필은 화면 상태만) */
+  const [settings, setSettings] = useState<SettingsTab | null>(null);
+  const [logoutAsk, setLogoutAsk] = useState(false);
+  const signOut = useAuth((s) => s.signOut);
+  const myProfile = useMyMock((s) => s.profile);
+  const setMyProfile = useMyMock((s) => s.setProfile);
   const say = (x: { msg: string; undo?: () => void; check?: boolean }) => {
     setSnack(x);
     setTimeout(() => setSnack((c) => (c === x ? null : c)), 4000);
@@ -55,6 +64,10 @@ export default function MainLayout() {
   };
   if (status !== 'signedIn') return <Redirect href="/login" />;
 
+  /* 로그아웃: mock 세션을 지우고 로그인으로 replace (로그인 뒤 화면은 위 Redirect 로 다시 못 들어옴) */
+  const logout = () => {
+    void signOut().finally(() => router.replace('/login'));
+  };
   const openStock = (code: string) => router.navigate({ pathname: '/stocks/[code]', params: { code } });
   const search = (q: string): SideSearchHit[] =>
     mockSideStocks.filter((s) => s.name.includes(q) || s.stock_code.includes(q)).map((s) => ({ key: `s${s.stock_code}`, title: s.name, sub: s.stock_code }));
@@ -68,7 +81,8 @@ export default function MainLayout() {
         onToggle: () => setSideOpen((o) => !o),
         current: sideKeyOf(pathname),
         stocks: sideStocks,
-        profile: mockSideProfile,
+        /* 설정에서 바꾼 이름·소개를 사이드바 프로필에도 (mock 상태) */
+        profile: { ...mockSideProfile, name: myProfile.name, job: myProfile.intro },
         unreadNotifs: mockUnreadNotifs,
         dark,
         recentSearches: mockRecentSearches,
@@ -99,11 +113,11 @@ export default function MainLayout() {
         onBell: () => {},
         onToggleDark: () => setDark((d) => !d),
         onTrash: () => {},
-        onSettings: () => {},
+        onSettings: () => setSettings('내 프로필'),
         onFeedback: () => {},
         onHelp: () => router.navigate('/help'),
-        onProfile: () => {},
-        onLogout: () => {},
+        onProfile: () => setSettings('내 프로필'),
+        onLogout: () => setLogoutAsk(true),
       }}
       studio={{
         open: studioOpen,
@@ -162,6 +176,35 @@ export default function MainLayout() {
         setSideStocks((all) => [...all, { stock_code: u.stock_code, name: u.name, status: hold, logo: u.logo, logo_bg: u.logo_bg, logo_ink: u.logo_ink }]);
         say({ msg: `${u.name}${jo(u.name)} ${hold === 'holding' ? '보유' : '관심'} 종목에 추가했어요`, check: true });
       }}
+    />
+    <WebSettings
+      open={!!settings}
+      tab={settings ?? '내 프로필'}
+      profile={myProfile}
+      counts={mockWithdrawCounts}
+      onTab={setSettings}
+      onClose={() => setSettings(null)}
+      onChangeProfile={({ name, intro }) => {
+        if (!name) return say({ msg: '이름은 비워 둘 수 없어요' });
+        if (name !== myProfile.name || intro !== myProfile.intro) {
+          setMyProfile({ name, intro });
+          say({ msg: '프로필을 저장했어요', check: true });
+        }
+      }}
+      onPhoto={() => say({ msg: '사진 올리기는 아직 준비 중이에요' })}
+      onPhotoDelete={() => say({ msg: '지울 사진이 없어요' })}
+      onLogout={() => { setSettings(null); logout(); }}
+      onWithdraw={() => say({ msg: '아직 탈퇴 기능은 연결되지 않았어요 · 데이터는 그대로예요' })}
+    />
+    <ConfirmDialog
+      variant="web"
+      danger
+      open={logoutAsk}
+      title="로그아웃할까요?"
+      body="이 기기에서 로그아웃해요."
+      confirmLabel="로그아웃"
+      onCancel={() => setLogoutAsk(false)}
+      onConfirm={() => { setLogoutAsk(false); logout(); }}
     />
     <WebSnackbar visible={!!snack} message={snack?.msg ?? ''} onUndo={snack?.undo} check={snack?.check} style={{ position: 'absolute', bottom: 30, alignSelf: 'center' }} />
     </View>
