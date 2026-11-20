@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Platform } from 'react-native';
-import { useRouter, type Href } from 'expo-router';
+import { Redirect, useRouter, type Href } from 'expo-router';
+import { useAuth } from '@/store/auth';
 import { mockAppPopularStocks, mockOnboardingStocks } from '@/ui/screens/onboarding/Onboarding.mock';
 import type { HomeMode, OnboardingSelection, OnboardingStep, StockStatus } from '@/ui/screens/onboarding/Onboarding.types';
 import { AppOnboardingFlow } from '@/ui/screens/onboarding/app/OnboardingFlow';
@@ -18,6 +19,8 @@ export default function PickScreen() {
   const [step, setStep] = useState<OnboardingStep>('pick');
   const [holdingOpen, setHoldingOpen] = useState(false);
   const [homeMode, setHomeMode] = useState<HomeMode>('template');
+  /* 로그아웃 뒤 뒤로가기로 들어오지 못하게 (가입 흐름도 로그인한 사람만) */
+  const status = useAuth((s) => s.status);
   const finish = (mode = homeMode) => {
     const encoded = Object.entries(selected).map(([code, status]) => `${code}:${status}`).join(',');
     router.replace({ pathname: '/', params: { onboarding: 'welcome', home_mode: mode, selected: encoded } } as Href);
@@ -62,5 +65,6 @@ export default function PickScreen() {
     },
     onFinish: () => finish(),
   };
+  if (status === 'signedOut') return <Redirect href={(Platform.OS === 'web' ? '/login' : '/intro') as Href} />;
   return Platform.OS === 'web' ? <WebOnboardingFlow {...props} /> : <AppOnboardingFlow {...props} />;
 }
