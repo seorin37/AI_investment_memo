@@ -49,6 +49,13 @@ class BoardService:
         self._require_stock(user_id, symbol)
         return [self._response(row) for row in self.repository.list_board(user_id, symbol)]
 
+    def list_pinned(self, user_id: int) -> list[dict[str, Any]]:
+        """PinnedMemo = Memo + stock_name (frontend/src/api/types.ts)."""
+        return [
+            {**self._response(row), "stock_name": row["stock_name"]}
+            for row in self.repository.list_pinned(user_id)
+        ]
+
     def get(self, user_id: int, memo_id: int) -> dict[str, Any]:
         return self._response(self._require_item(user_id, memo_id))
 

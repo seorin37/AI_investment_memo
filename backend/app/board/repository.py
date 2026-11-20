@@ -35,6 +35,29 @@ class BoardRepository:
         ).mappings().all()
         return [dict(row) for row in rows]
 
+    def list_pinned(self, user_id: int) -> list[dict[str, Any]]:
+        """홈 '고정한 메모': 지금 보유·관심 중인 종목의 고정된 일반 메모. 종목 보드 순서(position)도 같이 계산."""
+        rows = self.db.execute(
+            text(
+                """
+                SELECT * FROM (
+                  SELECT m.*, s.name AS stock_name,
+                         (row_number() OVER (PARTITION BY m.symbol ORDER BY m.created_at, m.id) - 1)::integer
+                           AS position
+                  FROM memos m
+                  JOIN user_stocks us
+                    ON us.user_id = m.user_id AND us.symbol = m.symbol AND us.deleted_at IS NULL
+                  JOIN stocks s ON s.symbol = m.symbol
+                  WHERE m.user_id = :user_id AND m.deleted_at IS NULL
+                ) t
+                WHERE t.kind = 'note' AND t.is_pinned
+                ORDER BY t.updated_at DESC, t.id DESC
+                """
+            ),
+            {"user_id": user_id},
+        ).mappings().all()
+        return [dict(row) for row in rows]
+
     def get_owned(self, user_id: int, memo_id: int) -> dict[str, Any] | None:
         row = self.db.execute(
             text(
