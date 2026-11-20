@@ -35,6 +35,27 @@ class MarketDataRepository:
         )
         return list(reversed(rows))
 
+    def recent_candles(self, code: str, limit: int, *, adjusted: bool) -> list[dict[str, Any]]:
+        """차트용 일봉. adjusted=True 면 수정주가(adjusted_prices_daily) OHLC, 그 날 수정값이 없으면 원시값.
+        거래량은 수정 테이블에 없어 항상 prices_daily 값. 반환은 날짜 오름차순."""
+        if not adjusted:
+            return self.recent_prices(code, limit)
+        rows = self._rows(
+            """
+            SELECT p.trade_date,
+                   COALESCE(a.open, p.open) AS open, COALESCE(a.high, p.high) AS high,
+                   COALESCE(a.low, p.low) AS low, COALESCE(a.close, p.close) AS close,
+                   p.volume
+            FROM prices_daily p
+            LEFT JOIN adjusted_prices_daily a ON a.symbol = p.symbol AND a.trade_date = p.trade_date
+            WHERE p.symbol = :code
+            ORDER BY p.trade_date DESC
+            LIMIT :limit
+            """,
+            {"code": code, "limit": limit},
+        )
+        return list(reversed(rows))
+
     def latest_news(self, limit: int) -> list[dict[str, Any]]:
         # 원문(news_article_bodies)·청크(news_chunks)는 쓰지 않는다.
         return self._rows(

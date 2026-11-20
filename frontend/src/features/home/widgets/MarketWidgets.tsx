@@ -40,7 +40,11 @@ export function MarketWidget({ showMacro = true }: { showMacro?: boolean }) {
               </T>
               <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
                 <T size={14} weight="bold" tabular>
-                  {m.unit === '$' ? `$${num(m.value, m.value < 100 ? 1 : 0)}` : `${m.value.toFixed(2)}${m.unit}`}
+                  {m.unit === '$'
+                    ? `$${num(m.value, m.value < 100 ? 1 : 0)}`
+                    : m.unit === '%'
+                      ? `${m.value.toFixed(2)}%`
+                      : `${num(m.value, 0)}${m.unit}`}
                 </T>
                 <T size={11} color={mc.of(m.change)} tabular>
                   {m.change === 0 ? '보합' : `${m.change > 0 ? '+' : '−'}${Math.abs(m.change).toFixed(m.unit === '%' ? 2 : 1)}${m.unit === '%' ? '%p' : '%'}`}

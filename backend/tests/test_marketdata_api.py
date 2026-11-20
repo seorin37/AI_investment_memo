@@ -54,9 +54,17 @@ class FakeRepo:
             },
         ]
         self.news_limits: list[int] = []
+        self.candle_calls: list[bool] = []
 
     def recent_prices(self, code, limit):
         return self.prices.get(code, [])[-limit:]
+
+    def recent_candles(self, code, limit, *, adjusted):
+        self.candle_calls.append(adjusted)
+        rows = self.recent_prices(code, limit)
+        if adjusted:  # 가짜 수정주가: 원시의 절반
+            rows = [{**r, **{k: r[k] / 2 for k in ("open", "high", "low", "close")}} for r in rows]
+        return rows
 
     def latest_news(self, limit):
         self.news_limits.append(limit)
@@ -112,7 +120,14 @@ class MarketDataApiTest(unittest.TestCase):
         self.assertEqual(set(body[0]), {"date", "open", "high", "low", "close", "volume"})
         self.assertEqual([c["date"] for c in body], sorted(c["date"] for c in body))
         self.assertEqual(body[-1]["date"], "2026-10-27")
-        self.assertEqual(body[-1]["close"], 129_900)
+        self.assertEqual(body[-1]["close"], 129_900 / 2)                # 기본은 수정주가
+
+    def test_candles_adjusted_param(self):
+        raw = self.client.get("/api/v1/stocks/005930/candles", params={"range": "1W", "adjusted": "false"}).json()
+        self.assertEqual(raw[-1]["close"], 129_900)
+        self.assertEqual(raw[-1]["volume"], 1_000 + 299)
+        self.client.get("/api/v1/stocks/005930/candles", params={"range": "1W"})
+        self.assertEqual(self.repo.candle_calls, [False, True])
 
     def test_candles_reject_unknown_range(self):
         res = self.client.get("/api/v1/stocks/005930/candles", params={"range": "5Y"})

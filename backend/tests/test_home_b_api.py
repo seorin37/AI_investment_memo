@@ -215,8 +215,9 @@ class ProfileFinancialsOverviewTest(unittest.TestCase):
         # 데이터가 없는 지표(US10Y, WTI)는 빠진다
         self.assertEqual(set(macro), {"BASE_RATE", "KR3Y", "GOLD"})
         self.assertEqual(macro["BASE_RATE"], {"key": "BASE_RATE", "label": "기준금리", "value": 3.0, "unit": "%", "change": 0.25})
-        self.assertEqual(macro["GOLD"]["unit"], "원")
-        self.assertEqual(macro["GOLD"]["change"], -2340.0)
+        self.assertEqual((macro["GOLD"]["label"], macro["GOLD"]["unit"]), ("금", "원/g"))
+        # % 가 아닌 단위는 등락률(%): (159750 - 162090) / 162090 = -1.44%
+        self.assertEqual(macro["GOLD"]["change"], -1.44)
 
     def test_requires_authentication(self):
         app = FastAPI()

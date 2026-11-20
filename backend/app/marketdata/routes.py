@@ -55,11 +55,12 @@ def get_quote(
 def get_candles(
     code: str = StockCode,
     range: Literal["1W", "1M", "3M", "1Y"] = Query(default="3M"),
+    adjusted: bool = Query(default=True, description="true: 수정주가(기본), false: 원시 주가"),
     _current: dict = Depends(get_current_user),
     service: MarketDataService = Depends(get_marketdata_service),
 ):
     try:
-        return service.candles(code, range)
+        return service.candles(code, range, adjusted)
     except _LOOKUP_ERRORS as exc:
         raise _not_found(exc) from exc
 

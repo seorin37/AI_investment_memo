@@ -32,7 +32,7 @@ MACROS = [
     ("BASE_RATE", "기준금리", "%", "observation", "KR_POLICY_RATE"),
     ("KR3Y", "국고채 3년", "%", "observation", "KR_GOV_3Y"),
     ("US10Y", "미 국채 10년", "%", "observation", "US_TREASURY_10Y"),
-    ("GOLD", "금(1g)", "원", "commodity", "04020000"),
+    ("GOLD", "금", "원/g", "commodity", "04020000"),           # KRX 금 99.99K, 1g 원화 가격
     ("WTI", "WTI 유가", "$", "observation", "WTI_SPOT"),
 ]
 
@@ -112,8 +112,9 @@ class MarketDataService:
             "spark": [num(row["close"]) for row in rows],
         }
 
-    def candles(self, code: str, range_: str) -> list[dict[str, Any]]:
-        rows = self.repo.recent_prices(code, RANGE_SIZES[range_])
+    def candles(self, code: str, range_: str, adjusted: bool = True) -> list[dict[str, Any]]:
+        """차트는 기본이 수정주가(분할·병합으로 끊기지 않게). 현재가·전일비(quote·profile)는 원시 주가."""
+        rows = self.repo.recent_candles(code, RANGE_SIZES[range_], adjusted=adjusted)
         if not rows:
             raise PriceDataNotFoundError(code)
         return [candle(row) for row in rows]
@@ -257,13 +258,18 @@ class MarketDataService:
                 continue
             last = Decimal(rows[-1]["value"])
             prev = Decimal(rows[-2]["value"]) if len(rows) >= 2 else last
+            # 화면(MarketWidgets)과 mock 의 약속: 단위가 % 인 지표는 %p 차이, 그 밖(원/g·$)은 등락률(%)
+            if unit == "%":
+                change = float(round(last - prev, 2))
+            else:
+                change = float(round((last - prev) / prev * 100, 2)) if prev else 0.0
             macro.append(
                 {
                     "key": key,
                     "label": label,
                     "value": float(round(last, 2)),
                     "unit": unit,
-                    "change": float(round(last - prev, 2)),
+                    "change": change,
                 }
             )
         as_of = _close_time(max(latest_days)) if latest_days else datetime.now(KST).isoformat()
