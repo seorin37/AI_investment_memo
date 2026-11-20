@@ -1,0 +1,152 @@
+"""크레딧 (2026-11-20, 0019). 실제 SQL이 핵심이라 로컬 테스트 DB(TEST_DATABASE_URL, 0019 이상)에서 돈다. 없으면 건너뛴다."""
+
+from __future__ import annotations
+
+import os
+import re
+from datetime import datetime
+
+import pytest
+from sqlalchemy import create_engine, text
+
+from app.credits import ledger
+
+SEOUL = ledger.SEOUL
+EMAIL = "credits-test@example.test"
+SYMBOL = "C00001"
+NOV = datetime(2026, 11, 20, 12, 0, tzinfo=SEOUL)
+DEC = datetime(2026, 12, 2, 9, 0, tzinfo=SEOUL)
+
+
+def _url():
+    url = os.getenv("TEST_DATABASE_URL", "")
+    if not url or "test" not in url:
+        pytest.skip("로컬 테스트 DB(TEST_DATABASE_URL)가 없습니다")
+    return url
+
+
+def _engine():
+    return create_engine(re.sub(r"^postgres(ql)?(\+\w+)?://", "postgresql+psycopg://", _url()))
+
+
+def _cleanup(c):
+    c.execute(text("DELETE FROM memos WHERE symbol = :s"), {"s": SYMBOL})
+    c.execute(text("DELETE FROM users WHERE email = :e"), {"e": EMAIL})
+    c.execute(text("DELETE FROM stocks WHERE symbol = :s"), {"s": SYMBOL})
+
+
+@pytest.fixture()
+def db():
+    engine = _engine()
+    with engine.connect() as c:
+        tx = c.begin()
+        if c.execute(text("SELECT to_regclass('credit_grants')")).scalar() is None:
+            pytest.skip("0019 전 DB")
+        uid = c.execute(text("INSERT INTO users (email, display_name) VALUES (:e, '크레딧') RETURNING id"), {"e": EMAIL}).scalar()
+        yield c, uid
+        tx.rollback()
+    engine.dispose()
+
+
+def test_monthly_grant_once_and_usage(db):
+    c, uid = db
+    assert ledger.ensure_monthly(c, uid, NOV) == 30                 # free 기본량 (configs/credits.yaml)
+    assert ledger.ensure_monthly(c, uid, NOV) == 0                  # 같은 달 두 번 X
+    u = ledger.usage(c, uid, NOV)
+    assert (u.balance, u.used, u.usage_percent, u.paused) == (30, 0, 0, False)
+    assert u.to_dict()["renew_label"] == "11.30 갱신"
+
+
+def test_spend_monthly_first_then_purchase_and_never_negative(db):
+    c, uid = db
+    ledger.grant_purchase(c, uid, 10, "pay-1", NOV)
+    assert ledger.spend(c, uid, 25, "card", "tracking_update", 1, NOV) == 25
+    rows = dict(c.execute(text("SELECT source, remaining FROM credit_grants WHERE user_id = :u"), {"u": uid}).all())
+    assert rows == {"monthly": 5, "purchase": 10}                   # 기본량 먼저, 산 크레딧은 나중
+    assert ledger.spend(c, uid, 100, "answer", "tracking_update", 2, NOV) == 15   # 잔액까지만
+    assert ledger.balance(c, uid, NOV) == 0
+    assert ledger.usage(c, uid, NOV).paused is True
+    assert ledger.spend(c, uid, 1, "card", "tracking_update", 1, NOV) == 0        # 같은 카드는 한 번만
+
+
+def test_month_change_expires_monthly_keeps_purchase(db):
+    c, uid = db
+    ledger.ensure_monthly(c, uid, NOV)
+    ledger.grant_purchase(c, uid, 10, "pay-2", NOV)
+    ledger.spend(c, uid, 4, "card", "tracking_update", 3, NOV)
+    u = ledger.usage(c, uid, DEC)                                    # 12월: 11월 기본량 26 만료, 새 기본량 30, 산 크레딧 10 이월
+    assert u.balance == 40 and u.used == 0
+    assert c.execute(text("SELECT -sum(delta) FROM credit_ledger WHERE user_id = :u AND reason = 'expire'"), {"u": uid}).scalar() == 26
+    assert ledger.grant_purchase(c, uid, 10, "pay-2", DEC) is None   # 같은 결제번호 두 번 X
+
+
+def _seed_items(c):
+    c.execute(text("INSERT INTO stocks (symbol, name, market) VALUES (:s, '크레딧전자', 'KOSPI') ON CONFLICT DO NOTHING"), {"s": SYMBOL})
+    uid = c.execute(text("INSERT INTO users (email, display_name) VALUES (:e, '크레딧') RETURNING id"), {"e": EMAIL}).scalar()
+    mid = c.execute(text("""INSERT INTO memos (user_id, symbol, kind, title, content, ai_linked)
+        VALUES (:u, :s, 'note', 't', 'b', true) RETURNING id"""), {"u": uid, "s": SYMBOL}).scalar()
+    ids = {}
+    for typ, desc, price in (("topic", "소식", None), ("ask", "얼마야", None), ("price_below", "7만원", 70000)):
+        ids[typ] = c.execute(text("""INSERT INTO tracking_items (memo_id, type, description, price_threshold)
+            VALUES (:m, CAST(:t AS tracking_type), :d, :p) RETURNING id"""), {"m": mid, "t": typ, "d": desc, "p": price}).scalar()
+    return uid, ids
+
+
+def test_daily_skips_paused_users_but_keeps_price_and_charges_cards():
+    from app.credits.daily import charge_run, eligible_item_ids
+    engine = _engine()
+    url = _url()
+    try:
+        with engine.begin() as c:
+            if c.execute(text("SELECT to_regclass('credit_grants')")).scalar() is None:
+                pytest.skip("0019 전 DB")
+            _cleanup(c)
+            uid, ids = _seed_items(c)
+        keep, info = eligible_item_ids(url, (SYMBOL,))
+        assert sorted(keep) == sorted(str(i) for i in ids.values()) and info["paused_users"] == []
+        with engine.begin() as c:
+            ups = [c.execute(text("""INSERT INTO tracking_updates (tracking_item_id, type, title, summary)
+                VALUES (:i, CAST(:t AS update_type), 'x', 'y') RETURNING id"""), {"i": ids[k], "t": t}).scalar()
+                   for k, t in (("topic", "news"), ("ask", "answer"))]
+            c.execute(text("UPDATE credit_grants SET remaining = 1 WHERE user_id = :u"), {"u": uid})   # 잔액 1
+        out = charge_run(url, ups)
+        assert out == {"cards": 2, "charged": 1, "short": 1}       # 잔액까지만 빼고 모자란 양 기록
+        assert charge_run(url, ups) == {"cards": 1, "charged": 0, "short": 1}   # 다시 돌려도 이미 뺀 카드는 안 뺌 (못 뺀 카드만 다시 시도)
+        keep, info = eligible_item_ids(url, (SYMBOL,))
+        assert keep == [str(ids["price_below"])] and info["paused_users"] == [uid]   # 멈춰도 가격 조건은 돈다
+    finally:
+        with engine.begin() as c:
+            _cleanup(c)
+        engine.dispose()
+
+
+def test_usage_api():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from sqlalchemy.orm import Session
+
+    from app.auth.routes import get_current_user
+    from app.credits.routes import router
+    from app.db import get_db
+    engine = _engine()
+    try:
+        with engine.begin() as c:
+            if c.execute(text("SELECT to_regclass('credit_grants')")).scalar() is None:
+                pytest.skip("0019 전 DB")
+            _cleanup(c)
+            uid = c.execute(text("INSERT INTO users (email, display_name) VALUES (:e, '크레딧') RETURNING id"), {"e": EMAIL}).scalar()
+
+        def session():
+            with Session(engine) as s:
+                yield s
+                s.commit()
+        app = FastAPI()
+        app.include_router(router)
+        app.dependency_overrides[get_db] = session
+        app.dependency_overrides[get_current_user] = lambda: {"id": str(uid)}
+        body = TestClient(app).get("/api/v1/me/usage").json()
+        assert body["balance"] == 30 and body["usage_percent"] == 0 and body["paused"] is False and "갱신" in body["renew_label"]
+    finally:
+        with engine.begin() as c:
+            _cleanup(c)
+        engine.dispose()
