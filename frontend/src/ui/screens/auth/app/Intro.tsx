@@ -3,9 +3,10 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/AppText';
 import { Logo } from '@/ui/icons/Icon';
-import { IntroArtwork } from '@/ui/screens/auth/IntroArtwork';
+import { AppIntroArtwork } from '@/ui/screens/auth/app/IntroArtwork';
+import { keepAll } from '@/ui/shared/keepAll';
 import type { IntroProps } from '@/ui/screens/auth/Auth.types';
-import { appColor, ft } from '@/ui/theme';
+import { appColor } from '@/ui/theme';
 
 export function AppIntro({ pages, page, onPageChange, onDone }: IntroProps) {
   const insets = useSafeAreaInsets();
@@ -22,10 +23,10 @@ export function AppIntro({ pages, page, onPageChange, onDone }: IntroProps) {
           <Pressable onPress={onDone} accessibilityRole="button" hitSlop={10}><Text style={st.skip}>건너뛰기</Text></Pressable>
         </View>
       </View>
-      <View key={current.key} style={st.art}><IntroArtwork page={current.key} compact /></View>
+      <View key={current.key} style={st.art}><AppIntroArtwork page={current.key} /></View>
       <View style={st.copy}>
-        <Text style={st.title}>{current.title}</Text>
-        <Text style={st.description}>{current.description}</Text>
+        <Text style={st.title}>{keepAll(current.title)}</Text>
+        <Text style={st.description}>{keepAll(current.description)}</Text>
       </View>
       <View style={st.actions}>
         {page > 0 ? (
@@ -41,19 +42,22 @@ export function AppIntro({ pages, page, onPageChange, onDone }: IntroProps) {
 
 const st = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#FFFFFF', paddingHorizontal: 20 },
-  header: { height: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 22 },
+  /* 원본 .ihd 56 · .idots margin-right 18 + .iskip padding 0 4 · .u042-pane padding-top 8 */
+  header: { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 18 },
   dots: { height: 6, flexDirection: 'row', alignItems: 'center', gap: 6 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#D5D8DD' },
   dotOn: { width: 18, backgroundColor: appColor.accent },
-  skip: { ...ft(15), color: '#667085' },
-  art: { height: 340, overflow: 'hidden', borderRadius: 20, backgroundColor: '#F4F5F7' },
-  copy: { marginTop: 27 },
-  title: { ...ft(26, 1.48), color: '#18181C', fontWeight: '700' },
-  description: { ...ft(15, 1.55), marginTop: 8, color: '#9AA0AA' },
-  actions: { marginTop: 'auto', flexDirection: 'row', gap: 8 },
+  skip: { fontSize: 15, lineHeight: 22, color: '#667085', paddingHorizontal: 4 },
+  art: { height: 340, marginTop: 8, overflow: 'hidden', borderRadius: 20, backgroundColor: '#F4F5F7' },
+  /* .u042-pane h2 26/36 800 -0.6 #16171A · p 15/23 #8B919C */
+  copy: { marginTop: 28 },
+  title: { fontSize: 26, lineHeight: 36, letterSpacing: -0.6, color: '#16171A', fontWeight: '800' },
+  description: { fontSize: 15, lineHeight: 23, marginTop: 8, color: '#8B919C' },
+  /* .u042-b 56 · r16 · 16.5px 800 */
+  actions: { marginTop: 'auto', paddingTop: 12, flexDirection: 'row', gap: 8 },
   prev: { width: 96, minHeight: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F2F2F5', paddingVertical: 14 },
-  prevText: { ...ft(17), color: '#18181C', fontWeight: '700' },
+  prevText: { fontSize: 16.5, lineHeight: 24, color: '#16171A', fontWeight: '800' },
   next: { minHeight: 56, flex: 1, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: appColor.accent, paddingVertical: 14 },
-  nextText: { ...ft(17), color: '#FFFFFF', fontWeight: '700' },
+  nextText: { fontSize: 16.5, lineHeight: 24, color: '#FFFFFF', fontWeight: '800' },
 });

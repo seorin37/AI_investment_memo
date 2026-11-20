@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo } from 'react';
-import { BackHandler, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { BackHandler, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { BackGlyph, CheckGlyph } from '@/ui/screens/auth/AuthGlyphs';
@@ -27,6 +27,9 @@ function Pick(p: OnboardingFlowProps & { top: number; bottom: number }) {
   const picked = Object.keys(p.selected);
   const q = p.query.trim().toLowerCase();
   const filtered = useMemo(() => p.stocks.filter((s) => !q || s.name.toLowerCase().includes(q) || s.stock_code.includes(q)), [p.stocks, q]);
+  /* 3열 고정: 좌우 16 + 간격 9×2를 뺀 폭 (% 폭은 360에서 반올림으로 2열로 줄어듦) */
+  const { width } = useWindowDimensions();
+  const cardW = Math.floor((width - 32 - 18) / 3);
   return (
     <View style={[st.screen, { paddingTop: p.top }]}>
       <View style={st.top}>
@@ -43,7 +46,7 @@ function Pick(p: OnboardingFlowProps & { top: number; bottom: number }) {
           {p.query ? <Pressable onPress={() => p.onQueryChange('')} accessibilityLabel="검색어 지우기"><Text style={st.clear}>×</Text></Pressable> : null}
         </View>
         {filtered.length ? (
-          <View style={st.grid}>{filtered.map((s) => <StockCard key={s.stock_code} stock={s} on={!!p.selected[s.stock_code]} onPress={() => p.onToggle(s.stock_code)} />)}</View>
+          <View style={st.grid}>{filtered.map((s) => <StockCard key={s.stock_code} stock={s} width={cardW} on={!!p.selected[s.stock_code]} onPress={() => p.onToggle(s.stock_code)} />)}</View>
         ) : (
           <View style={st.empty}><Text style={st.emptyB}>‘{p.query}’ 종목을 찾지 못했어요</Text><Text style={st.emptyS}>체험판에는 준비된 종목만 검색할 수 있어요.</Text></View>
         )}
@@ -62,12 +65,13 @@ function Pick(p: OnboardingFlowProps & { top: number; bottom: number }) {
   );
 }
 
-function StockCard({ stock, on, onPress }: { stock: OnboardingStock; on: boolean; onPress: () => void }) {
+function StockCard({ stock, width, on, onPress }: { stock: OnboardingStock; width: number; on: boolean; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} accessibilityRole="checkbox" accessibilityState={{ checked: on }} style={({ pressed }) => [st.stock, on && st.stockOn, pressed && { transform: [{ scale: 0.97 }] }]}>
+    <Pressable onPress={onPress} accessibilityRole="checkbox" accessibilityState={{ checked: on }} style={({ pressed }) => [st.stock, { width }, on && st.stockOn, pressed && { transform: [{ scale: 0.97 }] }]}>
       <View style={st.checkPos}><View style={[st.check, on && st.checkOn]}>{on ? <CheckGlyph /> : null}</View></View>
       <StockLogo logo={stock.logo} bg={stock.logo_bg} ink={stock.logo_ink} size={42} variant="app" />
-      <Text style={st.stockName} numberOfLines={2}>{stock.name}</Text>
+      {/* 원본처럼 한 줄 + 말줄임 (글자 중간 줄바꿈 방지) */}
+      <Text style={[st.stockName, { alignSelf: 'stretch', flexShrink: 1 }]} numberOfLines={1}>{stock.name}</Text>
       <Text style={st.stockMeta}>{stock.market}</Text>
     </Pressable>
   );
@@ -123,7 +127,7 @@ const st = StyleSheet.create({
   skip: { minWidth: 64, minHeight: 44, alignItems: 'flex-end', justifyContent: 'center' }, skipT: { ...ft(14), color: '#8A8F98', fontWeight: '600' },
   title: { ...ft(27, 1.43), marginTop: 9, color: '#18181C', fontWeight: '800' }, sub: { ...ft(14, 1.5), marginTop: 7, color: '#9297A2' },
   search: { height: 48, marginTop: 22, borderRadius: 14, backgroundColor: '#F2F2F5', paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center' }, searchIcon: { fontSize: 24, color: '#6E737D', transform: [{ rotate: '-20deg' }] }, input: { flex: 1, height: 48, paddingHorizontal: 9, color: '#18181C', fontSize: 15 }, clear: { width: 28, textAlign: 'center', fontSize: 24, color: '#9A9EA7' },
-  grid: { marginTop: 16, flexDirection: 'row', flexWrap: 'wrap', gap: 9 }, stock: { width: '31.6%', minHeight: 126, borderRadius: 17, borderWidth: 1.5, borderColor: '#EAEBEE', paddingHorizontal: 10, paddingTop: 16, alignItems: 'center', backgroundColor: '#FFFFFF' }, stockOn: { borderColor: appColor.accent, backgroundColor: '#FBF9FF' }, checkPos: { position: 'absolute', top: 9, right: 9 }, check: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#E0E2E7', alignItems: 'center', justifyContent: 'center' }, checkOn: { backgroundColor: appColor.accent }, stockName: { ...ft(13, 1.25), minHeight: 33, marginTop: 9, color: '#1B1C20', fontWeight: '700', textAlign: 'center' }, stockMeta: { ...ft(10), marginTop: 2, color: '#A4A8B3' },
+  grid: { marginTop: 16, flexDirection: 'row', flexWrap: 'wrap', gap: 9 }, stock: { minHeight: 126, borderRadius: 17, borderWidth: 1.5, borderColor: '#EAEBEE', paddingHorizontal: 10, paddingTop: 16, alignItems: 'center', backgroundColor: '#FFFFFF' }, stockOn: { borderColor: appColor.accent, backgroundColor: '#FBF9FF' }, checkPos: { position: 'absolute', top: 9, right: 9 }, check: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#E0E2E7', alignItems: 'center', justifyContent: 'center' }, checkOn: { backgroundColor: appColor.accent }, stockName: { ...ft(13, 1.25), minHeight: 33, marginTop: 9, color: '#1B1C20', fontWeight: '700', textAlign: 'center' }, stockMeta: { ...ft(10), marginTop: 2, color: '#A4A8B3' },
   empty: { marginTop: 56, alignItems: 'center' }, emptyB: { ...ft(16), color: '#3F434A', fontWeight: '700' }, emptyS: { ...ft(13), marginTop: 8, color: '#9A9EA7' },
   bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 16, paddingTop: 10, gap: 9, backgroundColor: '#FFFFFF', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#ECEEF1' }, selectedBar: { height: 46, borderRadius: 14, backgroundColor: '#F2F2F5', paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center' }, stack: { flexDirection: 'row' }, selectedText: { ...ft(13), flex: 1, marginLeft: 10, color: '#575B63', fontWeight: '700' }, chev: { fontSize: 24, color: '#8A8F98' },
   cta: { minHeight: 56, borderRadius: 16, backgroundColor: '#D0D3D9', alignItems: 'center', justifyContent: 'center' }, ctaOn: { backgroundColor: appColor.accent }, ctaT: { ...ft(17), color: '#FFFFFF', fontWeight: '800' },

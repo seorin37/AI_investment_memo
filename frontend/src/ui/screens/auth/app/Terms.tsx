@@ -6,6 +6,7 @@ import { BackGlyph, CheckGlyph, ChevronGlyph } from '@/ui/screens/auth/AuthGlyph
 import { allTermsChecked, requiredComplete, type TermsProps } from '@/ui/screens/auth/Auth.types';
 import { LegalDocumentView } from '@/ui/screens/auth/LegalDocumentView';
 import { ConfirmDialog } from '@/ui/shared/ConfirmDialog';
+import { keepAll } from '@/ui/shared/keepAll';
 import { appColor, ft } from '@/ui/theme';
 
 export function AppTerms(p: TermsProps) {
@@ -55,15 +56,15 @@ export function AppTerms(p: TermsProps) {
               <View key={item.key} style={st.item}>
                 <Pressable onPress={() => p.onToggle(item.key)} style={st.itemMain} accessibilityRole="checkbox" accessibilityState={{ checked: on }}>
                   <View style={[st.check, on && st.checkOn]}>{on ? <CheckGlyph /> : null}</View>
-                  <Text numberOfLines={2} style={st.itemText}>{item.label}</Text>
+                  <Text numberOfLines={2} style={st.itemText} accessibilityLabel={item.label}>{keepAll(item.label)}</Text>
                 </Pressable>
-                {item.document ? <Pressable onPress={() => p.onOpenDocument(item.document!)} style={st.viewLink}><Text style={st.viewText}>보기</Text><ChevronGlyph /></Pressable> : null}
+                {item.document ? <Pressable onPress={() => p.onOpenDocument(item.document!)} style={st.viewLink} hitSlop={{ top: 4, bottom: 4 }}><Text style={st.viewText}>보기</Text><ChevronGlyph /></Pressable> : null}
               </View>
             );
           })}
         </View>
       </ScrollView>
-      <View style={[st.bottom, { paddingBottom: Math.max(insets.bottom, 14) }]}>
+      <View style={[st.bottom, { paddingBottom: Math.max(insets.bottom, 30) }]}>
         <Pressable onPress={() => p.onOpenDocument('privacy')} style={st.privacy}><Text style={st.privacyText}>개인정보 처리방침 확인하기</Text><ChevronGlyph color={appColor.deepPurple} /></Pressable>
         <Pressable disabled={!ready} onPress={p.onContinue} style={[st.cta, ready && st.ctaOn]}>
           <Text style={st.ctaText}>동의하고 시작하기</Text>
@@ -86,33 +87,39 @@ export function AppTerms(p: TermsProps) {
 const st = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#FFFFFF' },
   content: { paddingHorizontal: 16 },
-  top: { height: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  back: { width: 44, height: 44, marginLeft: -10, alignItems: 'center', justifyContent: 'center', borderRadius: 22 },
-  progress: { flexDirection: 'row', alignItems: 'center', gap: 6, marginRight: 6 },
+  /* 원본 .hd 56 · .ib 42 (화면 왼쪽 6) · .prog margin-right 16 */
+  top: { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  back: { width: 42, height: 42, marginLeft: -10, alignItems: 'center', justifyContent: 'center', borderRadius: 21 },
+  progress: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   progressDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#D5D8DD' },
   progressOn: { width: 18, backgroundColor: appColor.accent },
-  title: { ...ft(26, 1.48), marginTop: 9, color: '#18181C', fontWeight: '700' },
-  sub: { ...ft(14, 1.5), marginTop: 6, color: '#A4A8B3' },
-  all: { minHeight: 58, marginTop: 26, borderRadius: 16, backgroundColor: '#F2F2F5', paddingHorizontal: 16, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  allOn: { backgroundColor: '#F0ECFF' },
+  /* .tt 25 / 1.4 · 800 · margin 10 18 6 · .ts 14 / 1.6 ink3 · margin-bottom 24 */
+  title: { fontSize: 25, lineHeight: 35, marginTop: 10, marginHorizontal: 2, color: '#16171A', fontWeight: '800' },
+  sub: { fontSize: 14, lineHeight: 22.4, marginTop: 6, marginHorizontal: 2, color: '#9A9EA7' },
+  /* .all 58 · r16 · #F4F0FF · gap 12 · 16.5 800 */
+  all: { minHeight: 58, marginTop: 24, borderRadius: 16, backgroundColor: '#F4F0FF', paddingHorizontal: 16, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  allOn: {},
   check: { width: 26, height: 26, borderRadius: 13, backgroundColor: '#D5D8DD', alignItems: 'center', justifyContent: 'center' },
-  checkOn: { backgroundColor: appColor.accent },
-  allText: { ...ft(17), color: '#18181C', fontWeight: '700' },
+  checkOn: { backgroundColor: appColor.accent, transform: [{ scale: 1.08 }] },
+  allText: { fontSize: 16.5, lineHeight: 24, color: '#16171A', fontWeight: '800' },
+  /* .tr min-height 54 · padding 0 20 0 26 (화면 기준) · 14.5 #2E2E38 · .tx line 1.5 padding 8 0 */
   items: { marginTop: 8 },
-  item: { minHeight: 54, flexDirection: 'row', alignItems: 'center', paddingVertical: 13, paddingLeft: 9 },
+  item: { minHeight: 54, flexDirection: 'row', alignItems: 'center', paddingLeft: 10, paddingRight: 4 },
   itemMain: { minWidth: 0, flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  itemText: { ...ft(15, 1.5), minWidth: 0, flex: 1, color: '#575B63' },
-  viewLink: { minHeight: 44, paddingLeft: 10, flexDirection: 'row', alignItems: 'center', gap: 2 },
-  viewText: { ...ft(13), color: '#A4A8B3' },
-  bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingTop: 8, gap: 14 },
-  privacy: { alignSelf: 'center', minHeight: 30, flexDirection: 'row', alignItems: 'center', gap: 2 },
-  privacyText: { ...ft(14), color: appColor.deepPurple, fontWeight: '500' },
-  cta: { minHeight: 56, borderRadius: 16, backgroundColor: '#D0D3D9', paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
+  itemText: { fontSize: 14.5, lineHeight: 22, paddingVertical: 8, minWidth: 0, flex: 1, color: '#2E2E38' },
+  /* .tr .v ink3 13 · padding 8 0 8 10 (터치는 hitSlop으로 44) */
+  viewLink: { paddingVertical: 8, paddingLeft: 10, flexDirection: 'row', alignItems: 'center', gap: 2 },
+  viewText: { fontSize: 13, lineHeight: 19, color: '#9A9EA7' },
+  /* .pvl bottom 100 · 13.5 600 #6A42AB · padding 12 8 · .bottom bottom 30 */
+  bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingTop: 8, gap: 2 },
+  privacy: { alignSelf: 'center', minHeight: 44, paddingVertical: 12, paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center', gap: 2 },
+  privacyText: { fontSize: 13.5, lineHeight: 20, color: appColor.deepPurple, fontWeight: '600' },
+  cta: { minHeight: 56, borderRadius: 16, backgroundColor: '#D5D8DD', paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
   ctaOn: { backgroundColor: appColor.accent },
-  ctaText: { ...ft(17), color: '#FFFFFF', fontWeight: '700' },
+  ctaText: { fontSize: 16.5, lineHeight: 24, color: '#FFFFFF', fontWeight: '800' },
   docHeader: { height: 58, paddingHorizontal: 22, flexDirection: 'row', alignItems: 'center', gap: 2 },
   docTitle: { ...ft(17), color: '#18181C', fontWeight: '700' },
   docBottom: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 14, backgroundColor: '#FFFFFF' },
   docClose: { minHeight: 56, borderRadius: 16, backgroundColor: '#16171A', alignItems: 'center', justifyContent: 'center' },
-  docCloseText: { ...ft(17), color: '#FFFFFF', fontWeight: '700' },
+  docCloseText: { fontSize: 16.5, lineHeight: 24, color: '#FFFFFF', fontWeight: '800' },
 });

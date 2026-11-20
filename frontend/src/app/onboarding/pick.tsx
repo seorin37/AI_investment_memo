@@ -47,8 +47,10 @@ export default function PickScreen() {
     onOpenHolding: () => setHoldingOpen(true),
     onCloseHolding: () => setHoldingOpen(false),
     onBack: () => {
-      if (step === 'pick') router.back();
-      else setStep('pick');
+      /* 약관 → 종목 고르기는 replace라 돌아갈 화면이 없을 수 있다 → 약관으로 */
+      if (step !== 'pick') setStep('pick');
+      else if (router.canGoBack()) router.back();
+      else router.replace('/terms');
     },
     onSkip: () => setStep('setup'),
     onContinue: () => setStep('setup'),
