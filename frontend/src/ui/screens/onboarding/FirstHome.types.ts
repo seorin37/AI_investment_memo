@@ -31,7 +31,7 @@ export interface AppFirstHomeProps {
   onPickStock: (stock: FirstHomeStock) => void;
   /** 고른 종목이 없을 때 [첫 메모 쓰기] */
   onNoStocks: () => void;
-  /** [체험판 홈으로 이어서 보기 →] */
+  /** [홈으로 이어서 보기 →] */
   onContinue: () => void;
 }
 

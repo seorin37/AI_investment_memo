@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, BackHandler, Easing, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Animated, BackHandler, Easing, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View, type ScrollViewInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Line, Path } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
@@ -15,7 +15,7 @@ import { FirstStockSheet } from './FirstHome';
 /**
  * 앱 첫 메모 = 원본 app/start.html #nm (흰 전체 화면)
  * 머리 56 (좌우 16 · 간격 8): [취소] 15.5 · 가운데 종목 칩(.stkb 34 · 로고 24 · '종목 · 새 메모' 14.5 700 · ▾) · [완료] 15.5 800 #7356D6
- * 노란 종이(최소 250 · 라운드 22 · 접힘 28) + 예시 글 · '빈 메모 · 예시 글은 저장되지 않아요' · [예시로 채워 보기 (체험판)]
+ * 노란 종이(최소 250 · 라운드 22 · 접힘 28) + 예시 글 · '빈 메모 · 예시 글은 저장되지 않아요' · [예시로 채워 보기]
  * AI 연결 칸 ('켜고 완료하면 추적할 항목을 함께 확인해요') · 처음 쓰기 시작하면 0.6초 뒤 안내 말풍선(.tip)
  */
 const C = { a2: '#7356D6', aa: '#6A42AB', ink: '#16171A', ink3: '#8A8F98' };
@@ -34,7 +34,14 @@ export function AppFirstMemo({ stocks, stock_code, onCancel, onEmpty, onSave }: 
   const [tip, setTip] = useState<'none' | 'open' | 'done'>('none');
   const [typing, setTyping] = useState(false);
   const ed = useRef<{ focus: () => void; blur: () => void }>(null);
+  const scroll = useRef<ScrollViewInstance>(null);
   const empty = !text.trim();
+  /* 말풍선이 뜨면 끝까지 내려 키보드 위로 보이게 (360 에서 키보드에 가려짐) */
+  useEffect(() => {
+    if (tip !== 'open') return;
+    const t = setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 80);
+    return () => clearTimeout(t);
+  }, [tip]);
 
   /* 원본: 열리고 0.4초 뒤 편집 시작 */
   useEffect(() => {
@@ -94,7 +101,7 @@ export function AppFirstMemo({ stocks, stock_code, onCancel, onEmpty, onSave }: 
         <Pressable onPress={save} accessibilityRole="button" style={st.hb}><Text style={[st.hbT, st.ok]}>완료</Text></Pressable>
       </View>
       <KeyboardAvoidingView style={st.flex} behavior="padding">
-        <ScrollView style={st.flex} contentContainerStyle={[st.nmb, { paddingBottom: 120 + insets.bottom }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <ScrollView ref={scroll} style={st.flex} contentContainerStyle={[st.nmb, { paddingBottom: 120 + insets.bottom }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <PaperBox bg={Y.bg} accent={Y.accent} radius={22} cut={28} style={st.paper}>
             {empty ? (
               <View pointerEvents="none" style={st.phd}>
@@ -113,7 +120,7 @@ export function AppFirstMemo({ stocks, stock_code, onCancel, onEmpty, onSave }: 
           </PaperBox>
           <Text style={st.ecap}>빈 메모 · 예시 글은 저장되지 않아요</Text>
           <Pressable onPress={() => { setText(''); setTyping(true); }} disabled={typing} style={st.fill} accessibilityRole="button" hitSlop={{ top: 8, bottom: 8 }}>
-            <Text style={st.fillT}>예시로 채워 보기 (체험판)</Text>
+            <Text style={st.fillT}>예시로 채워 보기</Text>
           </Pressable>
           <View style={st.aisw}>
             <View style={st.flex}>

@@ -12,7 +12,7 @@ import type { AppFirstHomeProps, FirstMemoSummary, FirstStockSheetProps } from '
 /**
  * 앱 첫 홈 = 원본 app/start.html #scr (고른 종목만 있는 빈 홈).
  *  빈 상태: 인사 카드(.hero · 진행 막대 3칸) · 내 종목(.w · .sr · [+ 메모]) · 업데이트(빈 칸 점선)
- *  저장 후: 지켜보기 카드(.watch) · 내 메모(.mnote) · 진행 막대 · 내 종목 · [체험판 홈으로 이어서 보기 →] · 안내
+ *  저장 후: 지켜보기 카드(.watch) · 내 메모(.mnote) · 진행 막대 · 내 종목 · [홈으로 이어서 보기 →] · 안내
  *  종목 시트(.sheet · .pk 라디오 · [이 종목에 메모 쓰기])
  * 색: start.html :root — --a #8569E3 · --aa #6A42AB · --ink3 #8A8F98 (login.html 과 다름)
  */
@@ -74,7 +74,7 @@ export function AppFirstHome(p: AppFirstHomeProps) {
       {m ? (
         <Rv i={4}>
           <View style={st.next}>
-            <Pressable onPress={p.onContinue} style={({ pressed }) => [st.nextB, pressed && { transform: [{ scale: 0.97 }] }]} accessibilityRole="button"><Text style={st.nextT}>체험판 홈으로 이어서 보기 →</Text></Pressable>
+            <Pressable onPress={p.onContinue} style={({ pressed }) => [st.nextB, pressed && { transform: [{ scale: 0.97 }] }]} accessibilityRole="button"><Text style={st.nextT}>홈으로 이어서 보기 →</Text></Pressable>
           </View>
           <Text style={st.disc}>여기부터는 예시 데이터가 채워진 홈이에요</Text>
         </Rv>
