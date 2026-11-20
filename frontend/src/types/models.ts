@@ -154,6 +154,7 @@ export interface ChecklistItem {
 export interface Checklist extends BoardItemBase {
   kind: 'checklist';
   items: ChecklistItem[];
+  pinned?: boolean; // 보드 고정(테이프). mock 시드에는 없음
 }
 
 export type ReferenceType = 'ir' | 'news' | 'report' | 'disclosure' | 'etc';

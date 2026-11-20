@@ -63,7 +63,7 @@ export interface ReferenceInput {
 
 export type BoardItemPatch =
   | Partial<Pick<Memo, 'title' | 'body' | 'tags' | 'color' | 'pinned' | 'position'>>
-  | Partial<Pick<Checklist, 'title' | 'items' | 'position'>>
+  | Partial<Pick<Checklist, 'title' | 'items' | 'position' | 'pinned'>>
   | Partial<Pick<ReferenceBoard, 'title' | 'links' | 'position'>>;
 
 export interface JournalInput {
