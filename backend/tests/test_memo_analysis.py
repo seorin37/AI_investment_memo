@@ -135,7 +135,7 @@ class FakeTracking:
     def changed_since_analysis(self, memo_id):
         return self.changed
 
-    def sync(self, memo_id, new_items, confirmations):
+    def sync(self, memo_id, new_items, confirmations, questions=None):
         created = [{**i, "id": 100 + n, "status": "active"} for n, i in enumerate(new_items)]
         self.items_list = created
         return {"kept": [], "created": created, "done": []}

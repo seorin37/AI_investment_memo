@@ -283,7 +283,7 @@ class BoardService:
             log.exception("memo analysis error memo=%s", memo_id)
             return failed(f"internal_error:{type(exc).__name__}")
         try:
-            changes = self.tracking.sync(memo_id, result.items, result.confirmations)
+            changes = self.tracking.sync(memo_id, result.items, result.confirmations, result.questions)
             self._commit()
         except Exception as exc:
             self.repository.db.rollback()                       # 메모는 이미 커밋돼 있다
@@ -295,6 +295,7 @@ class BoardService:
                 "items": [self._item_out(e) for e in self.tracking.items(memo_id, ("active",))],
                 "created": len(changes["created"]), "done": len(changes["done"]),
                 "confirmations": result.confirmations, "out_of_scope": result.out_of_scope,
+                "questions": result.questions,                  # 한 번 답할 질문 (type=ask 항목으로 저장, 다음 매일 실행에서 답)
                 "next_update_at": next_update_at()}
 
     def delete(self, user_id: int, memo_id: int) -> None:

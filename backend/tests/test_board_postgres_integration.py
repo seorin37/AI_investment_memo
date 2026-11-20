@@ -202,3 +202,24 @@ def test_postgres_board_order_new_front_after_pinned_and_reorder(isolated_db):
 
     current["id"] = str(user_b)
     assert client.put(f"/api/v1/stocks/{SYMBOLS[0]}/board-order", json={"ids": [a]}).status_code == 404
+
+
+def test_postgres_memo_questions_saved_as_ask_items_once(isolated_db):
+    """메모 분석이 찾은 질문(0019): type=ask 항목으로 저장, 답해서 done이 된 같은 질문은 다시 저장해도 새로 만들지 않는다."""
+    from app.board.tracking import TrackingRepository
+    engine, (user_a, _user_b) = isolated_db
+    with Session(engine) as session:
+        memo_id = session.execute(text("INSERT INTO memos (user_id, symbol, kind, title, content) VALUES (:u, :s, 'note', '실적', '얼마야?') RETURNING id"),
+                                  {"u": user_a, "s": SYMBOLS[0]}).scalar_one()
+        repo = TrackingRepository(session)
+        first = repo.sync(memo_id, [{"type": "topic", "description": "실적 소식", "keywords": []}], [],
+                          [{"question": "3분기 영업이익률이 얼마인지", "kind": "check"}])
+        assert sorted(e["type"] for e in first["created"]) == ["ask", "topic"]
+        ask_id = next(e["id"] for e in first["created"] if e["type"] == "ask")
+        session.execute(text("UPDATE tracking_items SET status = 'done' WHERE id = :i"), {"i": ask_id})   # 매일 실행이 답함
+        again = repo.sync(memo_id, [{"type": "topic", "description": "실적 소식", "keywords": []}], [],
+                          [{"question": "3분기  영업이익률이 얼마인지", "kind": "check"}])
+        assert again["created"] == []                                   # 이미 답한 질문은 다시 만들지 않는다
+        new_q = repo.sync(memo_id, [], [], [{"question": "배당은 얼마인지", "kind": "check"}])
+        assert [e["type"] for e in new_q["created"]] == ["ask"]
+        session.rollback()

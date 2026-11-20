@@ -106,7 +106,8 @@ def main(argv: list[str] | None = None) -> int:
             print(status["detail"])
             return 0
         from .experiment import main as experiment_main
-        argv2 = ["--llm", "openai", "--store", "db", "--symbols", args.symbols, "--max-usd", str(remaining), "--job", "daily"]
+        argv2 = ["--llm", "openai", "--store", "db", "--symbols", args.symbols, "--max-usd", str(remaining), "--job", "daily",
+                 "--config", args.config]                       # 2026-11-20: 질문 답 설정(updates_exp.yaml 등)도 같은 실행기로
         if args.allow_shared_write:
             argv2.append("--allow-shared-write")
         code = experiment_main(argv2)
