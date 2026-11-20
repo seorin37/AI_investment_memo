@@ -1,7 +1,12 @@
 import React from 'react';
 import { View } from 'react-native';
-import { Redirect, Tabs } from 'expo-router';
+import { Redirect, Tabs, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/store/auth';
+import { chapterAt, fmt, useStudioPlayer } from '@/store/studioPlayer';
+import { mockAudioEpisode } from '@/ui/screens/studio/Studio.mock';
+import { AppMiniPlayer } from '@/ui/screens/studio/app/MiniPlayer';
+import { size } from '@/ui/theme';
 import { useUI } from '@/store/ui';
 import { BottomTabBar } from '@/ui/layout/app/BottomTabBar';
 import { mockTabBadges } from '@/ui/layout/app/BottomTabBar.mock';
@@ -44,6 +49,29 @@ export default function MainTabsLayout() {
         <Tabs.Screen name="studio/index" />
         <Tabs.Screen name="help" options={{ href: null }} />
       </Tabs>
+      <Mini hidden={hidden} />
     </View>
+  );
+}
+
+/* ⑧-8b 미니 플레이어: 탭 바 위 10 (원본 .mini bottom 88). 탭을 바꿔도 남고, 위로 쌓이는 화면이 덮으면 가려짐 */
+function Mini({ hidden }: { hidden: boolean }) {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const p = useStudioPlayer();
+  const item = p.made.find((m) => m.id === p.cur);
+  const ch = mockAudioEpisode.chapters[chapterAt(p.t)][1].split(' ·')[0];
+  return (
+    <AppMiniPlayer
+      visible={p.mini && !!item && !hidden}
+      bottom={1 + 65 + Math.max(size.tabBarPadBottom, insets.bottom) + 10}
+      title={item?.title ?? ''}
+      sub={`${ch} · ${fmt(p.t)} / ${fmt(mockAudioEpisode.dur)}`}
+      progress={p.t / mockAudioEpisode.dur}
+      playing={p.playing}
+      onOpen={() => router.push('/studio-player')}
+      onToggle={p.toggle}
+      onClose={p.closeMini}
+    />
   );
 }

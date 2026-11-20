@@ -1,15 +1,19 @@
-import React from 'react';
-import { Platform } from 'react-native';
-import { Redirect, useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import { Platform, View } from 'react-native';
+import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useStudioPlayer } from '@/store/studioPlayer';
 import { useUI } from '@/store/ui';
 import { TopBar } from '@/ui/layout/app/TopBar';
 import { mockMyProfile, mockMyUsage } from '@/ui/screens/my/My.mock';
-import { mockMade, mockStudioCounts, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
+import { mockAudioPeriods, mockAudioStocks, mockStudioCounts, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
+import { AppAudioSheet } from '@/ui/screens/studio/app/AudioSheet';
 import { AppStudioHome } from '@/ui/screens/studio/app/StudioHome';
 
 /**
- * 앱 스튜디오 탭 = UI v2 (원본 app/studio.html · ⑧-8a). 옛 화면 features/studio/StudioHome 은 라우트에서만 뺌.
- * 사용량·갱신일은 My.mock. 오디오·실험실은 ⑧-8b·8d 전까지 안내, 퀴즈·주간보고서는 옛 화면으로.
+ * 앱 스튜디오 탭 = UI v2 (원본 app/studio.html · ⑧). 옛 화면 features/studio/StudioHome 은 라우트에서만 뺌.
+ * 사용량·갱신일은 My.mock. 오디오(8b): 시트 → 만드는 중 → 플레이어 · 미니 플레이어(탭 레이아웃).
+ * 주간보고서·실험실·퀴즈는 8c·8d 전까지 안내만 (옛 화면으로 보내지 않음).
+ * mock: ?fail=1 이면 다음 만들기가 실패로 끝남 (실패 화면 확인용). ?make=audio 면 시트를 열고 시작.
  * 웹은 오른쪽 스튜디오 열을 쓰므로 홈으로.
  */
 const NOT_YET = '아직 연결되지 않았어요 · 데이터는 그대로예요';
@@ -17,26 +21,57 @@ const NOT_YET = '아직 연결되지 않았어요 · 데이터는 그대로예�
 export default function StudioTab() {
   const router = useRouter();
   const toast = useUI((s) => s.showToast);
+  const { fail, make } = useLocalSearchParams<{ fail?: string; make?: string }>();
+  const p = useStudioPlayer();
+  const [sheet, setSheet] = useState(false);
+  const [mk, setMk] = useState(make);
+  if (make !== mk) {
+    setMk(make);
+    if (make === 'audio') setSheet(true);
+  }
   if (Platform.OS === 'web') return <Redirect href="/" />;
   return (
-    <AppStudioHome
-      header={
-        <TopBar
-          preset="studio"
-          title="스튜디오"
-          actions={[{ icon: 'bell', label: '알림', onPress: () => router.push('/my-inbox') }]}
-          avatar={{ name: mockMyProfile.name, onPress: () => router.push('/my') }}
-        />
-      }
-      features={mockStudioFeatures}
-      made={mockMade}
-      usage_pct={mockMyUsage.usage_pct}
-      usage_refill={mockMyUsage.usage_refill}
-      {...mockStudioCounts}
-      onFeature={(k) => (k === 'quiz' ? router.push('/studio/quiz') : k === 'report' ? router.push('/studio/report') : toast(NOT_YET))}
-      onOpenMade={(m) => (m.kind === 'report' ? router.push('/studio/report') : toast(NOT_YET))}
-      onBuyCredit={() => router.push('/studio-charge')}
-      onChangePlan={() => router.push('/my-plans')}
-    />
+    <View style={{ flex: 1 }}>
+      <AppStudioHome
+        header={
+          <TopBar
+            preset="studio"
+            title="스튜디오"
+            actions={[{ icon: 'bell', label: '알림', onPress: () => router.push('/my-inbox') }]}
+            avatar={{ name: mockMyProfile.name, onPress: () => router.push('/my') }}
+          />
+        }
+        features={mockStudioFeatures}
+        made={p.made}
+        job={p.job}
+        bottomPad={p.mini ? 72 : 0}
+        onJob={() => {
+          if (p.job?.status === 'fail') p.retry();
+          router.push('/studio-gen');
+        }}
+        usage_pct={mockMyUsage.usage_pct}
+        usage_refill={mockMyUsage.usage_refill}
+        {...mockStudioCounts}
+        onFeature={(k) => (k === 'audio' ? setSheet(true) : toast(NOT_YET))}
+        onOpenMade={(m) => {
+          if (m.kind !== 'audio') return toast(NOT_YET);
+          p.select(m.id);
+          router.push('/studio-player');
+        }}
+        onBuyCredit={() => router.push('/studio-charge')}
+        onChangePlan={() => router.push('/my-plans')}
+      />
+      <AppAudioSheet
+        open={sheet}
+        stocks={mockAudioStocks}
+        periods={mockAudioPeriods}
+        onClose={() => setSheet(false)}
+        onMake={({ codes, period, market }) => {
+          setSheet(false);
+          p.startAudio({ sub: `${codes.length}종목 · ${period} · ${market ? '증시 요약 포함' : '증시 요약 없음'}`, n: codes.length }, fail === '1');
+          setTimeout(() => router.push('/studio-gen'), 220);
+        }}
+      />
+    </View>
   );
 }

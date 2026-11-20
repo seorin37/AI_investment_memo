@@ -42,7 +42,14 @@ const Chev = ({ c = '#B7BBC3' }: { c?: string }) => <Svg width={18} height={18} 
 const Bolt = ({ c, s = 11 }: { c: string; s?: number }) => <Svg width={s} height={s * 13 / 11} viewBox="0 0 11 13"><Path d="M6.5 0 0 7.5h4.5L3.5 13 11 4.8H6.3z" fill={c} /></Svg>;
 const WAVE = [8, 14, 10, 18, 12, 20, 9, 16, 22, 13, 17, 10, 19, 12, 8, 15, 11, 18, 9, 14, 12, 7];
 
-export function AppStudioHome({ header, ...p }: StudioHomeProps & { header: React.ReactNode }) {
+export function AppStudioHome({ header, job, onJob, bottomPad = 0, ...p }: StudioHomeProps & {
+  header: React.ReactNode;
+  /** 만드는 중 · 실패 줄 (원본 madeRow prog / fail) */
+  job?: { kind: Exclude<StudioKind, 'quiz'>; pct: number; status: 'run' | 'fail' | 'done' } | null;
+  onJob?: () => void;
+  /** 미니 플레이어가 떠 있으면 스크롤 끝 빈 자리 (원본 .withmini) */
+  bottomPad?: number;
+}) {
   const [sheet, setSheet] = useState(false);
   const full = p.usage_pct >= 100;
   const top = p.made.find((m) => m.kind === 'audio');
@@ -50,7 +57,7 @@ export function AppStudioHome({ header, ...p }: StudioHomeProps & { header: Reac
   return (
     <View style={st.root}>
       {header}
-      <ScrollView contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 24 + bottomPad }} showsVerticalScrollIndicator={false}>
         <View style={st.subr}>
           <Text style={st.subrT}>쌓인 소식을 듣고, 읽고, 실험해 보세요</Text>
           <PressScale scaleTo={0.93} onPress={() => setSheet(true)} accessibilityRole="button" accessibilityLabel={`AI 사용량 ${p.usage_pct}%`} style={[st.cred, full && st.credZero]}>
@@ -74,10 +81,28 @@ export function AppStudioHome({ header, ...p }: StudioHomeProps & { header: Reac
         ))}
         <View style={st.secr}><Text style={st.secrT}>만든 항목</Text><Text style={st.secrS}>30일 보관 · 다시 보기 무료</Text></View>
         {top ? <RadioCard m={top} onPress={() => p.onOpenMade(top)} /> : null}
-        {rest.length ? (
+        {rest.length || job ? (
           <View style={st.made}>
+            {job ? (
+              job.status === 'fail' ? (
+                <Pressable onPress={onJob} accessibilityRole="button" style={st.mi}>
+                  <View style={[st.failIc]}><Svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="#E5484D" strokeWidth={2} strokeLinecap="round"><Path d="M12 8v5M12 16.5h.01" /><Circle cx={12} cy={12} r={9} /></Svg></View>
+                  <View style={{ flex: 1 }}><Text style={st.miB}>만들지 못했어요</Text><Text style={st.miS}>사용량은 되돌렸어요</Text></View>
+                  <Text style={[st.miR, { color: C.a2, fontWeight: '700' }]}>다시 시도</Text>
+                </Pressable>
+              ) : (
+                <Pressable onPress={onJob} accessibilityRole="button" style={st.mi}>
+                  <FeatIcon k={job.kind} size={38} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={st.miB}>{p.features.find((f) => f.key === job.kind)?.title} 만드는 중</Text>
+                    <View style={st.pbar}><View style={[st.pbarI, { width: `${job.pct}%` }]} /></View>
+                  </View>
+                  <Text style={st.miR}>{job.pct}%</Text>
+                </Pressable>
+              )
+            ) : null}
             {rest.map((m, i) => (
-              <Pressable key={m.id} onPress={() => p.onOpenMade(m)} accessibilityRole="button" style={[st.mi, i > 0 && st.miLine]}>
+              <Pressable key={m.id} onPress={() => p.onOpenMade(m)} accessibilityRole="button" style={[st.mi, (i > 0 || !!job) && st.miLine]}>
                 <FeatIcon k={m.kind} size={38} />
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={st.miB} numberOfLines={1}>{m.title}</Text>
@@ -88,7 +113,7 @@ export function AppStudioHome({ header, ...p }: StudioHomeProps & { header: Reac
             ))}
           </View>
         ) : null}
-        {!p.made.length ? <View style={st.made}><Text style={st.empty}>{'아직 만든 항목이 없어요\n위에서 오디오·보고서·실험을 만들어 보세요'}</Text></View> : null}
+        {!p.made.length && !job ? <View style={st.made}><Text style={st.empty}>{'아직 만든 항목이 없어요\n위에서 오디오·보고서·실험을 만들어 보세요'}</Text></View> : null}
         <Text style={st.sdisc}>스튜디오는 투자 권유나 주가 예측을 하지 않아요.</Text>
       </ScrollView>
       <Sheet open={sheet} onClose={() => setSheet(false)} label="AI 사용량">
@@ -155,6 +180,9 @@ const st = StyleSheet.create({
   miB: { fontSize: 14.5, lineHeight: 20, fontWeight: '700', color: C.ink },
   miS: { fontSize: 12, lineHeight: 17, color: C.ink3 },
   miR: { fontSize: 12, lineHeight: 17, color: C.ink3 },
+  failIc: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#FFE4E4', alignItems: 'center', justifyContent: 'center' },
+  pbar: { height: 6, borderRadius: 3, backgroundColor: '#ECEDF1', marginTop: 7, overflow: 'hidden', width: 180 },
+  pbarI: { height: '100%', borderRadius: 3, backgroundColor: C.a },
   empty: { fontSize: 13, lineHeight: 20, color: C.ink3, textAlign: 'center', paddingVertical: 20 },
   mfeat: { backgroundColor: '#FFFFFF', borderRadius: 20, marginHorizontal: 16, marginBottom: 10, padding: 16 },
   mh: { flexDirection: 'row', alignItems: 'center', gap: 6 },

@@ -14,7 +14,9 @@ type Hover = { hovered?: boolean; pressed?: boolean };
  * (다 썼으면 SpentBox) · 설명 14 · 기능 줄(아이콘 44/13 · 제목 17 · 설명 15 · ›) · '만든 항목' 17 + 30일 보관 ·
  * 목록(라운드 18 · 줄 72 · 오디오는 바로 재생 36) · 아래 안내 13
  */
-export function WebStudioHome({ features, made, spent, refill, onFeature, onOpenMade, onQuickPlay, onBuyCredit, onChangePlan }: {
+export function WebStudioHome({ features, made, spent, refill, bottomPad = 0, onFeature, onOpenMade, onQuickPlay, onBuyCredit, onChangePlan }: {
+  /** 미니 플레이어가 떠 있으면 아래 빈 자리 (원본 pb-[84px]) */
+  bottomPad?: number;
   features: StudioFeatureItem[];
   made: MadeItem[];
   spent: boolean;
@@ -26,7 +28,7 @@ export function WebStudioHome({ features, made, spent, refill, onFeature, onOpen
   onChangePlan: () => void;
 }) {
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={st.page} showsVerticalScrollIndicator={false}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={[st.page, { paddingBottom: 24 + bottomPad }]} showsVerticalScrollIndicator={false}>
       {spent ? <SpentBox variant="web" title="이번 달 AI 사용량을 다 썼어요" body={`${refill}에 새로 채워져요.\n이미 만든 결과와 오늘의 퀴즈는 계속 쓸 수 있어요.`} onCredit={onBuyCredit} onPlan={onChangePlan} /> : null}
       <Text style={st.lead}>쌓인 소식을 듣고, 읽고, 실험해 보세요</Text>
       {features.map((f) => (

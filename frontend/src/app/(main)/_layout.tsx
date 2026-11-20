@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, useWindowDimensions } from 'react-native';
-import { Redirect, Stack, usePathname, useRouter } from 'expo-router';
+import { Redirect, Stack, useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
 import { useAuth } from '@/store/auth';
 import { mockPopular, mockRecentSearches, mockSideProfile, mockSideStocks, mockStudioHead } from '@/ui/layout/web/WebShell.mock';
 import { WebShell } from '@/ui/layout/web/WebShell';
@@ -15,7 +15,10 @@ import { WebFeedback } from '@/ui/screens/my/web/Feedback';
 import { WebInbox } from '@/ui/screens/my/web/Inbox';
 import { WebSettings, type SettingsTab } from '@/ui/screens/my/web/Settings';
 import { WebTrash } from '@/ui/screens/my/web/Trash';
-import { mockMade, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
+import { chapterAt, fmt, useStudioPlayer } from '@/store/studioPlayer';
+import { mockAudioEpisode, mockAudioGen, mockAudioPeriods, mockAudioStocks, mockLastClose, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
+import { WebFail, WebGen, WebMini, WebPlayer } from '@/ui/screens/studio/web/Audio';
+import { WebAudioPopup } from '@/ui/screens/studio/web/AudioPopup';
 import type { StudioKind } from '@/ui/screens/studio/Studio.types';
 import { WebChargePopup, WebCreditPopup, WebUsageSheet } from '@/ui/screens/studio/web/Credit';
 import { WebStudioHome } from '@/ui/screens/studio/web/StudioHome';
@@ -79,12 +82,17 @@ export default function MainLayout() {
   const readAll = useMyMock((s) => s.readAll);
   const uiToast = useUI((s) => s.toast);
   /* ⑧-8a 스튜디오: 사용량 창 · PLUS 창(다 쓴 뒤 만들기) · 충전 창. 결제·만들기는 연결 안 됨 */
-  const [studioPop, setStudioPop] = useState<'usage' | 'credit' | 'charge' | null>(null);
+  const [studioPop, setStudioPop] = useState<'usage' | 'credit' | 'charge' | 'audio' | null>(null);
   const usageSpent = mockMyUsage.usage_pct >= 100;
   const studioFeat = (k: StudioKind) => {
     if (k !== 'quiz' && usageSpent) return setStudioPop('credit');
+    if (k === 'audio') return setStudioPop('audio');
     say({ msg: NOT_YET });
   };
+  /* ⑧-8b 오디오: 만들기 · 재생 mock 상태 (store/studioPlayer). ?studio_fail=1 이면 다음 만들기가 실패 (확인용) */
+  const sp = useStudioPlayer();
+  const spItem = sp.made.find((m) => m.id === sp.cur);
+  const { studio_fail } = useGlobalSearchParams<{ studio_fail?: string }>();
   const unreadShown = mockInbox.filter((n) => unread.includes(n.id) && (n.kind === 'ai' ? myNoti.ai : myNoti.studio)).length;
   const say = (x: { msg: string; undo?: () => void; check?: boolean }) => {
     setSnack(x);
@@ -162,17 +170,53 @@ export default function MainLayout() {
         onFeature: (k) => { setStudioOpen(true); studioFeat(k); },
         /* ⑧-8a 스튜디오 홈 (원본 studio.tsx Home). 오디오·보고서·실험실·퀴즈 화면은 8b~8d */
         content: (
-          <WebStudioHome
-            features={mockStudioFeatures}
-            made={mockMade}
-            spent={usageSpent}
-            refill={mockMyUsage.usage_refill}
-            onFeature={studioFeat}
-            onOpenMade={() => say({ msg: NOT_YET })}
-            onQuickPlay={() => say({ msg: NOT_YET })}
-            onBuyCredit={() => setStudioPop('charge')}
-            onChangePlan={() => setSettings('사용량')}
-          />
+          <View style={{ flex: 1 }}>
+            {sp.webView === 'gen' && sp.job ? <WebGen job={sp.job} steps={mockAudioGen.steps} />
+              : sp.webView === 'fail' ? <WebFail onHome={() => { sp.dropFailed(); sp.setWebView('home'); }} onRetry={() => { sp.retry(); sp.setWebView('gen'); }} />
+              : sp.webView === 'player' && spItem ? (
+                <WebPlayer
+                  item={spItem}
+                  ep={mockAudioEpisode}
+                  t={sp.t}
+                  playing={sp.playing}
+                  speed={sp.speed}
+                  onBack={() => { sp.leavePlayer(); sp.setWebView('home'); }}
+                  onToggle={sp.toggle}
+                  onSeek={sp.seek}
+                  onSpeed={() => sp.nextSpeed([1, 1.5, 2])}
+                  onRemake={() => setStudioPop('audio')}
+                />
+              ) : (
+                <WebStudioHome
+                  features={mockStudioFeatures}
+                  made={sp.made}
+                  bottomPad={sp.mini && spItem ? 60 : 0}
+                  spent={usageSpent}
+                  refill={mockMyUsage.usage_refill}
+                  onFeature={studioFeat}
+                  onOpenMade={(m) => {
+                    if (m.kind !== 'audio') return say({ msg: NOT_YET });
+                    sp.select(m.id);
+                    sp.setMini(false);
+                    sp.setWebView('player');
+                  }}
+                  onQuickPlay={(m) => { if (sp.cur === m.id && sp.mini) sp.toggle(); else sp.play(m.id); sp.setMini(true); }}
+                  onBuyCredit={() => setStudioPop('charge')}
+                  onChangePlan={() => setSettings('사용량')}
+                />
+              )}
+            {sp.mini && spItem && sp.webView !== 'player' ? (
+              <WebMini
+                title={spItem.title}
+                sub={`지금 · ${mockAudioEpisode.chapters[chapterAt(sp.t)][1]} · ${fmt(sp.t)}`}
+                progress={sp.t / mockAudioEpisode.dur}
+                playing={sp.playing}
+                onOpen={() => { sp.setMini(false); sp.setWebView('player'); }}
+                onToggle={sp.toggle}
+                onClose={sp.closeMini}
+              />
+            ) : null}
+          </View>
         ),
       }}
     >
@@ -278,6 +322,19 @@ export default function MainLayout() {
       }}
       onUndo={undoRestore}
       onPurge={() => say({ msg: '아직 연결되지 않았어요 · 데이터는 그대로예요' })}
+    />
+    <WebAudioPopup
+      open={studioPop === 'audio'}
+      stocks={mockAudioStocks}
+      periods={mockAudioPeriods}
+      lastClose={mockLastClose}
+      onClose={() => setStudioPop(null)}
+      onMake={({ codes, period, market }) => {
+        setStudioPop(null);
+        setStudioOpen(true);
+        sp.setWebView('gen');
+        sp.startAudio({ sub: `${codes.length}종목 · ${period} · ${market ? '증시 요약 포함' : '증시 요약 없음'}`, n: codes.length }, studio_fail === '1');
+      }}
     />
     <WebUsageSheet open={studioPop === 'usage'} pct={mockMyUsage.usage_pct} refill={mockMyUsage.usage_refill} onClose={() => setStudioPop(null)} onBuyCredit={() => setStudioPop('charge')} onChangePlan={() => setSettings('사용량')} />
     <WebCreditPopup open={studioPop === 'credit'} onClose={() => setStudioPop(null)} onPlan={() => { setStudioPop(null); setSettings('사용량'); }} onCharge={() => setStudioPop('charge')} />
