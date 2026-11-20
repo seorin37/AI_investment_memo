@@ -4,7 +4,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/AppText';
 import { Logo } from '@/ui/icons/Icon';
 import { AppIntroArtwork } from '@/ui/screens/auth/app/IntroArtwork';
-import { keepAll } from '@/ui/shared/keepAll';
 import type { IntroProps } from '@/ui/screens/auth/Auth.types';
 import { appColor } from '@/ui/theme';
 
@@ -25,8 +24,8 @@ export function AppIntro({ pages, page, onPageChange, onDone }: IntroProps) {
       </View>
       <View key={current.key} style={st.art}><AppIntroArtwork page={current.key} /></View>
       <View style={st.copy}>
-        <Text style={st.title}>{keepAll(current.title)}</Text>
-        <Text style={st.description}>{keepAll(current.description)}</Text>
+        <Text keepAll style={st.title}>{current.title}</Text>
+        <Text keepAll style={st.description}>{current.description}</Text>
       </View>
       <View style={st.actions}>
         {page > 0 ? (

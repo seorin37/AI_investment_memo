@@ -3,7 +3,6 @@ import { Animated, Easing, StyleSheet, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
-import { keepAll } from '@/ui/shared/keepAll';
 import { appColor } from '@/ui/theme';
 import type { IntroPageKey } from '../Auth.types';
 
@@ -126,7 +125,7 @@ function Attach() {
               </Svg>
             </View>
           </View>
-          <Text style={a2.b}>{keepAll('HBM 수요 계속 갈까?')}</Text>
+          <Text keepAll style={a2.b}>HBM 수요 계속 갈까?</Text>
         </View>
         <View style={a2.fold}>
           <Svg width={28} height={28} viewBox="0 0 30 30" fill="none">
@@ -154,7 +153,7 @@ function Note({ i, kind, text, bg, bar }: { i: number; kind: string; text: strin
     <Rise i={i} style={[a2.nc, { backgroundColor: bg }]}>
       <View style={[a2.ncBar, { backgroundColor: bar }]} />
       <Text style={a2.ncS} numberOfLines={1}>{kind} · AI가 찾아 붙임</Text>
-      <Text style={a2.ncB}>{keepAll(text)}</Text>
+      <Text keepAll style={a2.ncB}>{text}</Text>
     </Rise>
   );
 }

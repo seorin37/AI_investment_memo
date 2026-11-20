@@ -6,7 +6,6 @@ import { BackGlyph, CheckGlyph, ChevronGlyph } from '@/ui/screens/auth/AuthGlyph
 import { allTermsChecked, requiredComplete, type TermsProps } from '@/ui/screens/auth/Auth.types';
 import { LegalDocumentView } from '@/ui/screens/auth/LegalDocumentView';
 import { ConfirmDialog } from '@/ui/shared/ConfirmDialog';
-import { keepAll } from '@/ui/shared/keepAll';
 import { appColor, ft } from '@/ui/theme';
 
 export function AppTerms(p: TermsProps) {
@@ -56,7 +55,7 @@ export function AppTerms(p: TermsProps) {
               <View key={item.key} style={st.item}>
                 <Pressable onPress={() => p.onToggle(item.key)} style={st.itemMain} accessibilityRole="checkbox" accessibilityState={{ checked: on }}>
                   <View style={[st.check, on && st.checkOn]}>{on ? <CheckGlyph /> : null}</View>
-                  <Text numberOfLines={2} style={st.itemText} accessibilityLabel={item.label}>{keepAll(item.label)}</Text>
+                  <Text keepAll numberOfLines={2} style={st.itemText}>{item.label}</Text>
                 </Pressable>
                 {item.document ? <Pressable onPress={() => p.onOpenDocument(item.document!)} style={st.viewLink} hitSlop={{ top: 4, bottom: 4 }}><Text style={st.viewText}>보기</Text><ChevronGlyph /></Pressable> : null}
               </View>
