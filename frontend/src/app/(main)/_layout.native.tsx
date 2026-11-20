@@ -48,6 +48,7 @@ export default function MainTabsLayout() {
         <Tabs.Screen name="journal" />
         <Tabs.Screen name="studio/index" />
         <Tabs.Screen name="help" options={{ href: null }} />
+        <Tabs.Screen name="report" options={{ href: null }} />
       </Tabs>
       <Mini hidden={hidden} />
     </View>

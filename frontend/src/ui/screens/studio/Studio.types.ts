@@ -24,6 +24,9 @@ export interface MadeItem {
   dur?: string;
   /** 앱 라디오 카드 아래 왼쪽 글 */
   foot?: string;
+  /** 주간보고서: 넣은 종목 · 국내 증시 흐름 포함 */
+  codes?: string[];
+  market?: boolean;
 }
 
 export interface StudioHomeProps {

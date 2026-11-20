@@ -26,9 +26,9 @@ export function WebGen({ job, steps }: { job: GenJob; steps: string[] }) {
   const at = cur < 0 ? steps.length : cur;
   return (
     <ScrollView contentContainerStyle={st.center}>
-      <View style={st.big}><FeatIcon f="audio" size={36} /></View>
+      <View style={st.big}><FeatIcon f={job.kind} size={36} /></View>
       <View style={{ alignItems: 'center', gap: 6, alignSelf: 'stretch' }}>
-        <Text style={st.h}>오디오를 만드는 중이에요</Text>
+        <Text style={st.h}>{job.kind === 'report' ? '주간보고서를 만드는 중이에요' : '오디오를 만드는 중이에요'}</Text>
         <Text style={st.sub}>{'다른 화면으로 가도 계속 만들어요.\n끝나면 알려 드릴게요.'}</Text>
       </View>
       <View style={st.bar}><View style={[st.barI, { width: `${job.pct}%` }]} /></View>
@@ -45,12 +45,12 @@ export function WebGen({ job, steps }: { job: GenJob; steps: string[] }) {
 }
 
 /** 웹 만들기 실패 = 원본 studio.tsx Fail(FailLike) */
-export function WebFail({ onHome, onRetry }: { onHome: () => void; onRetry: () => void }) {
+export function WebFail({ kind, onHome, onRetry }: { kind: 'audio' | 'report'; onHome: () => void; onRetry: () => void }) {
   return (
     <ScrollView contentContainerStyle={st.center}>
       <View style={st.big}>{Ico.alert()}</View>
       <View style={{ alignItems: 'center', gap: 6, alignSelf: 'stretch' }}>
-        <Text style={st.h}>오디오를 만들지 못했어요</Text>
+        <Text style={st.h}>{kind === 'report' ? '주간보고서를 만들지 못했어요' : '오디오를 만들지 못했어요'}</Text>
         <Text style={st.sub}>잠시 후 다시 시도해 주세요.</Text>
       </View>
       <View style={{ flexDirection: 'row', gap: 8, alignSelf: 'stretch' }}>

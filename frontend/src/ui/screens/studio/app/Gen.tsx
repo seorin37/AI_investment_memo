@@ -9,7 +9,7 @@ import type { GenJob, StepState } from '@/store/studioPlayer';
 import { Head } from '../../my/app/parts';
 
 /**
- * 앱 만드는 중 = 원본 studio.html #pgGen (07 · 오디오)
+ * 앱 만드는 중 = 원본 studio.html #pgGen (07 · 오디오 / 주간보고서는 빨간 문서 아이콘)
  * 동그라미 90(#DCE7FF · 물결 고리 · 막대 5개 움직임 / 실패면 빨강 !) · 제목 19 · 조건 13 ·
  * 단계 카드(44 줄 · 대기/진행 중/완료/실패) · 안내 12.5 · [다른 화면 보기 | 다시 시도] · 아래 안내 12
  */
@@ -19,15 +19,17 @@ const LABEL: Record<StepState, string> = { wait: '대기', run: '진행 중', do
 export function AppGen({ job, steps, onBack, onAway, onRetry }: { job: GenJob; steps: string[]; onBack: () => void; onAway: () => void; onRetry: () => void }) {
   const insets = useSafeAreaInsets();
   const fail = job.status === 'fail';
+  const doc = job.kind === 'report';
+  const T = doc ? { head: 'AI 주간보고서', ing: '보고서를 만드는 중이에요', bad: '보고서를 만들지 못했어요' } : { head: 'AI 오디오', ing: '오디오를 만드는 중이에요', bad: '오디오를 만들지 못했어요' };
   return (
     <View style={[st.root, { paddingTop: insets.top }]}>
-      <Head title="AI 오디오" onBack={onBack} />
+      <Head title={T.head} onBack={onBack} />
       <View style={st.gw}>
-        <View style={[st.gic, fail && { backgroundColor: '#FFE4E4' }]}>
-          {!fail ? <Ripple /> : null}
-          {fail ? <Svg width={34} height={34} viewBox="0 0 24 24" fill="none" stroke="#E5484D" strokeWidth={2.4} strokeLinecap="round"><Path d="M12 7v6M12 16.5h.01" /></Svg> : <Eq />}
+        <View style={[st.gic, doc && { backgroundColor: '#FFE1E1' }, fail && { backgroundColor: '#FFE4E4' }]}>
+          {!fail ? <Ripple color={doc ? '#FFE1E1' : '#DCE7FF'} /> : null}
+          {fail ? <Svg width={34} height={34} viewBox="0 0 24 24" fill="none" stroke="#E5484D" strokeWidth={2.4} strokeLinecap="round"><Path d="M12 7v6M12 16.5h.01" /></Svg> : doc ? <Doc /> : <Eq />}
         </View>
-        <Text style={st.h}>{fail ? '오디오를 만들지 못했어요' : '오디오를 만드는 중이에요'}</Text>
+        <Text style={st.h}>{fail ? T.bad : T.ing}</Text>
         <Text style={st.gs}>{job.sub}</Text>
         <View style={st.steps}>
           {steps.map((t, i) => {
@@ -72,8 +74,27 @@ function Eq() {
   );
 }
 
+/* .gdoc: 빨간 문서 · 글줄이 차례로 써지는 느낌 (원본 wl 1.4s) */
+function Doc() {
+  const k = useMotionK();
+  const [v] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    const a = Animated.loop(Animated.timing(v, { toValue: 1, duration: 1400 * k, easing: Easing.inOut(Easing.ease), useNativeDriver: NATIVE }));
+    a.start();
+    return () => a.stop();
+  }, [v, k]);
+  return (
+    <View style={{ width: 34, height: 40 }}>
+      <Svg width={34} height={40} viewBox="0 0 34 40" fill="none" style={{ position: 'absolute' }}><Path d="M4 2h18l8 8v28H4z" fill="#fff" stroke="#E5484D" strokeWidth={2.2} strokeLinejoin="round" /></Svg>
+      {[17, 23, 29].map((y, i) => (
+        <Animated.View key={y} style={{ position: 'absolute', left: 9, top: y - 1.2, height: 2.4, width: i === 2 ? 9 : 14, borderRadius: 1.2, backgroundColor: '#E5484D', transformOrigin: 'left', transform: [{ scaleX: v.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.15 + i * 0.1, 1, 0.15 + i * 0.1] }) }] }} />
+      ))}
+    </View>
+  );
+}
+
 /* .gic::after 물결 고리 (1.6s) */
-function Ripple() {
+function Ripple({ color }: { color: string }) {
   const k = useMotionK();
   const [v] = useState(() => new Animated.Value(0));
   useEffect(() => {
@@ -81,7 +102,7 @@ function Ripple() {
     a.start();
     return () => a.stop();
   }, [v, k]);
-  return <Animated.View pointerEvents="none" style={[st.ring, { opacity: v.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }), transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [1, 1.25] }) }] }]} />;
+  return <Animated.View pointerEvents="none" style={[st.ring, { borderColor: color }, { opacity: v.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }), transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [1, 1.25] }) }] }]} />;
 }
 
 function Spin() {

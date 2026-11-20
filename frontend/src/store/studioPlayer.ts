@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { useUI } from '@/store/ui';
-import { mockAudioEpisode, mockAudioGen, mockMade } from '@/ui/screens/studio/Studio.mock';
+import { mockAudioEpisode, mockAudioGen, mockMade, mockReport } from '@/ui/screens/studio/Studio.mock';
 import type { MadeItem } from '@/ui/screens/studio/Studio.types';
 
 /**
@@ -10,15 +10,21 @@ import type { MadeItem } from '@/ui/screens/studio/Studio.types';
  */
 export type StepState = 'wait' | 'run' | 'done' | 'bad';
 export interface GenJob {
-  kind: 'audio';
+  kind: 'audio' | 'report';
   sub: string;
   n: number;
+  codes: string[];
+  market: boolean;
   pct: number;
   steps: StepState[];
   status: 'run' | 'fail' | 'done';
   fail: boolean;
 }
-export type WebStudioView = 'home' | 'gen' | 'fail' | 'player';
+export type WebStudioView = 'home' | 'gen' | 'fail' | 'player' | 'report';
+const KIND_T = {
+  audio: { bad: '오디오를 만들지 못했어요', done: '오디오가 완성됐어요' },
+  report: { bad: '보고서를 만들지 못했어요', done: '주간보고서가 완성됐어요' },
+};
 
 interface StudioPlayerState {
   made: MadeItem[];
@@ -31,9 +37,15 @@ interface StudioPlayerState {
   t: number;
   speed: number;
   mini: boolean;
-  /** 앱: 완성되면 플레이어로 넘어가라는 신호 */
+  /** 앱: 완성되면 결과 화면(플레이어 · 보고서)으로 넘어가라는 신호 */
   openPlayer: number;
-  startAudio(p: { sub: string; n: number }, fail?: boolean): void;
+  /** 지금 보는 주간보고서 */
+  curReport: string | null;
+  /** 방금 완성된 결과 종류 (openPlayer 신호와 같이) */
+  openKind: 'audio' | 'report';
+  startAudio(p: { sub: string; n: number; codes?: string[]; market?: boolean }, fail?: boolean): void;
+  startReport(p: { sub: string; codes: string[]; market: boolean }, fail?: boolean): void;
+  openReport(id: string): void;
   retry(): void;
   dropFailed(): void;
   setGenVisible(v: boolean): void;
@@ -79,7 +91,7 @@ export const useStudioPlayer = create<StudioPlayerState>((set, get) => {
         step(1, 'bad');
         const s = get();
         set({ job: s.job && { ...s.job, status: 'fail' }, webView: s.webView === 'gen' ? 'fail' : s.webView });
-        if (!s.genVisible && s.webView !== 'gen') useUI.getState().showToast('오디오를 만들지 못했어요');
+        if (s.job && !s.genVisible && s.webView !== 'gen') useUI.getState().showToast(KIND_T[s.job.kind].bad);
       }, 3000);
       return;
     }
@@ -91,11 +103,18 @@ export const useStudioPlayer = create<StudioPlayerState>((set, get) => {
       const s = get();
       if (!s.job) return;
       const id = `m${Date.now()}`;
-      const item: MadeItem = { id, kind: 'audio', title: mockAudioGen.result_title, sub: `오디오 · ${s.job.n}종목 · ${fmt(DUR)}`, meta: `오디오 · ${s.job.n}종목 · ${fmt(DUR)}`, left: '30일 뒤 삭제', dur: fmt(DUR), foot: s.job.sub };
       const here = s.genVisible || s.webView === 'gen';
-      set({ made: [item, ...s.made], job: null, cur: id, t: 0, mini: !here, playing: here, webView: s.webView === 'gen' ? 'player' : s.webView, openPlayer: s.genVisible ? s.openPlayer + 1 : s.openPlayer });
+      if (s.job.kind === 'report') {
+        const sub = `주간보고서 · ${s.job.n}종목 · ${mockReport.made_label}`;
+        const rep: MadeItem = { id, kind: 'report', title: mockReport.title, sub, meta: sub, left: '30일 뒤 삭제', codes: s.job.codes, market: s.job.market };
+        set({ made: [rep, ...s.made], job: null, curReport: id, openKind: 'report', webView: s.webView === 'gen' ? 'report' : s.webView, openPlayer: s.genVisible ? s.openPlayer + 1 : s.openPlayer });
+        if (!here) useUI.getState().showToast(KIND_T.report.done);
+        return;
+      }
+      const item: MadeItem = { id, kind: 'audio', title: mockAudioGen.result_title, sub: `오디오 · ${s.job.n}종목 · ${fmt(DUR)}`, meta: `오디오 · ${s.job.n}종목 · ${fmt(DUR)}`, left: '30일 뒤 삭제', dur: fmt(DUR), foot: s.job.sub };
+      set({ made: [item, ...s.made], job: null, cur: id, openKind: 'audio', t: 0, mini: !here, playing: here, webView: s.webView === 'gen' ? 'player' : s.webView, openPlayer: s.genVisible ? s.openPlayer + 1 : s.openPlayer });
       runPlay(here);
-      if (!here) useUI.getState().showToast('오디오가 완성됐어요');
+      if (!here) useUI.getState().showToast(KIND_T.audio.done);
     }, 5500);
   };
   return {
@@ -109,10 +128,17 @@ export const useStudioPlayer = create<StudioPlayerState>((set, get) => {
     speed: 1,
     mini: false,
     openPlayer: 0,
+    curReport: null,
+    openKind: 'audio',
     startAudio: (p, fail = false) => {
-      set({ job: { kind: 'audio', sub: p.sub, n: p.n, pct: 0, steps: mockAudioGen.steps.map(() => 'wait'), status: 'run', fail } });
+      set({ job: { kind: 'audio', sub: p.sub, n: p.n, codes: p.codes ?? [], market: !!p.market, pct: 0, steps: mockAudioGen.steps.map(() => 'wait'), status: 'run', fail } });
       run(fail);
     },
+    startReport: (p, fail = false) => {
+      set({ job: { kind: 'report', sub: p.sub, n: p.codes.length, codes: p.codes, market: p.market, pct: 0, steps: mockReport.steps.map(() => 'wait'), status: 'run', fail } });
+      run(fail);
+    },
+    openReport: (id) => set({ curReport: id }),
     retry: () => {
       const j = get().job;
       if (!j) return;

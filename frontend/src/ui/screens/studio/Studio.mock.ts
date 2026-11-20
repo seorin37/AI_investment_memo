@@ -13,7 +13,7 @@ export const mockStudioFeatures: StudioFeatureItem[] = [
 
 export const mockMade: MadeItem[] = [
   { id: 'm1', kind: 'audio', title: '11.06 내 종목 라디오', sub: '어제 소식과, 그때 내가 남긴 메모', meta: '오디오 · 3종목 · 전날 · 6:42', left: '27일 뒤 삭제', dur: '6:42', foot: '종목 3개 · 전날 기준' },
-  { id: 'm2', kind: 'report', title: '10월 다섯째 주 돌아보기', sub: '주간보고서 · 종목 3개', meta: '주간보고서 · 3종목', left: '23일 뒤 삭제' },
+  { id: 'm2', kind: 'report', title: '10월 다섯째 주 돌아보기', sub: '주간보고서 · 종목 3개', meta: '주간보고서 · 3종목', left: '23일 뒤 삭제', codes: ['000660', '005930', '035420'], market: true },
   { id: 'm3', kind: 'lab', title: '삼성전자 · 환율 하락 실험', sub: '투자 실험실 · 삼성전자', meta: '투자 실험실 · 삼성전자', left: '25일 뒤 삭제' },
 ];
 
@@ -68,6 +68,103 @@ export const mockAudioEpisode = {
     seek: 51,
     count: '공시 1건',
   },
+};
+
+/* ───────── 8c 주간보고서 (원본 app R3 · web ReportSummary/ReportDetail) ─────────
+ * 금지 문구 규칙: 가격 변화는 사실(종가·등락률)만, 해석 없음. 주가는 'MM.DD 종가 기준'.
+ * 원본의 '기대감'·'강세' 표현과 '숫자는 시안용 예시' 문구는 사실 문장으로 바꾸거나 뺌.
+ */
+export interface ReportItem { no: number; kind: '공시' | '뉴스'; date: string; title: string; src: string }
+export interface ReportStock {
+  stock_code: string; name: string; logo: string; logo_bg: string; logo_ink?: string; own: '보유' | '관심';
+  /** 카드 위 줄 · 머리 바탕 */
+  sc: string; st: string;
+  /** 주간 등락률 % · 금요일 종가 · 지난주 종가 · 월~금 종가 */
+  pct: number; close: number; prev: number; closes: [number, number, number, number, number];
+  /** 차트 세로 범위 */
+  yr: [number, number];
+  hi: string; lo: string; vol: string;
+  /** 차트 위 표시 [요일 칸, 소식 번호, 공시 g | 뉴스 n] */
+  events: [number, number, 'g' | 'n'][];
+  /** 시트 · 줄 요약 */
+  counts: { 공시: number; 뉴스: number };
+  story: string;
+  items: ReportItem[];
+  memo?: { bg: string; ink: string; title: string; meta: string; body: string };
+  watch: { text: string; why: string }[];
+}
+export const mockReportStocks: ReportStock[] = [
+  {
+    stock_code: '000660', name: 'SK하이닉스', logo: 'S', logo_bg: '#EA002C', own: '보유', sc: '#E5323B', st: '#FFF0F0',
+    pct: 6.2, close: 180500, prev: 170000, closes: [170000, 172500, 177800, 179300, 180500], yr: [165000, 185000],
+    hi: '182,000', lo: '168,500', vol: '+18%', events: [[1, 1, 'g'], [3, 3, 'n'], [4, 4, 'n']], counts: { 공시: 1, 뉴스: 2 },
+    story: '화요일(11.04) 신규 시설투자 공시[1]가 나왔고, 다음 날(11.05) 종가는 전날보다 3.1% 높았어요. 거래량은 이날이 이번 주 가장 많았어요. 목요일에는 HBM4 공급 확대 보도[3]가 있었고, 11.07 종가 기준 180,500원이에요.',
+    items: [
+      { no: 1, kind: '공시', date: '11.04', title: '신규 시설투자 결정', src: 'DART' },
+      { no: 3, kind: '뉴스', date: '11.06', title: 'HBM4 공급 확대 보도', src: '한국경제' },
+      { no: 4, kind: '뉴스', date: '11.07', title: '반도체 장비 발주 증가', src: '매일경제' },
+    ],
+    memo: { bg: '#FCEAAA', ink: '#3F3A2A', title: 'HBM 수요 계속 확인', meta: '9.25 작성 · AI 연결 중', body: "메모의 추적 항목 'HBM 생산 능력'과 관련된 소식 2건([1], [3])이 이번 주에 붙었어요." },
+    watch: [
+      { text: '11월 말 분기보고서에 HBM 매출이 따로 나오는지', why: '정기 공시 일정' },
+      { text: '메모의 가격 조건 15만 원과 11.07 종가의 차이 (20.3% 위)', why: '내 메모 가격 조건' },
+    ],
+  },
+  {
+    stock_code: '005930', name: '삼성전자', logo: '삼', logo_bg: '#1428A0', own: '관심', sc: '#1428A0', st: '#EEF1FB',
+    pct: 1.4, close: 71400, prev: 70400, closes: [70400, 69800, 71900, 72000, 71400], yr: [69000, 73000],
+    hi: '72,100', lo: '69,800', vol: '-4%', events: [[2, 2, 'g']], counts: { 공시: 1, 뉴스: 0 },
+    story: '수요일(11.05) 자기주식 취득 결정 공시[2]가 나온 날 종가는 전날보다 3.0% 높았어요. 11.07 종가 기준 71,400원이고, 거래량은 지난주보다 4% 적었어요.',
+    items: [{ no: 2, kind: '공시', date: '11.05', title: '자기주식 취득 결정', src: 'DART' }],
+    memo: { bg: '#D9E4FF', ink: '#1E2A4A', title: '자사주 매입 나오면 다시 보기', meta: '10.02 작성 · AI 연결 꺼짐', body: '메모에 적어 둔 자사주 매입이 이번 주 공시[2]로 나왔어요.' },
+    watch: [{ text: '취득 기간 동안 나오는 자기주식 취득 결과 보고', why: '이번 주 공시[2]의 취득 기간 · 추가하면 AI 연결도 켜져요' }],
+  },
+  {
+    stock_code: '035420', name: '네이버', logo: '네', logo_bg: '#03C75A', own: '관심', sc: '#03C75A', st: '#EDFAF2',
+    pct: -0.8, close: 212300, prev: 214000, closes: [214000, 216000, 213800, 212000, 212300], yr: [210000, 218000],
+    hi: '216,000', lo: '211,500', vol: '-9%', events: [], counts: { 공시: 0, 뉴스: 0 },
+    story: '이번 주 새 공시·뉴스는 없었어요. 화요일(11.04) 종가 216,000원이 이번 주 가장 높았고, 11.07 종가 기준 212,300원이에요.',
+    items: [],
+    watch: [{ text: '다음 주 새 공시·뉴스가 나오는지', why: '이번 주 소식 0건 · 추가하면 새 메모로 남겨요' }],
+  },
+];
+export const mockReport = {
+  week: '2026년 11월 2주',
+  title: '11월 2주 주간 보고서',
+  range: '11.03(월) ~ 11.07(금)',
+  period: '최근 7일 · 11.03 ~ 11.09 (거래일 5일)',
+  web_period: '최근 5거래일(11.03 – 11.07) 보고서에 넣을 종목',
+  made_at: '11.09 14:02',
+  /** 만드는 중 화면 조건 줄 */
+  gen_range: '11.03~11.09',
+  made_label: '11.09',
+  days: ['11.03 월', '11.04 화', '11.05 수', '11.06 목', '11.07 금'],
+  days_short: ['월', '화', '수', '목', '금'],
+  market: [
+    { name: '코스피', value: '2,650.35', pct: 2.0 },
+    { name: '코스닥', value: '862.10', pct: 0.6 },
+    { name: '원/달러', value: '1,350.20', pct: -1.6 },
+  ],
+  flow: [
+    { day: '11.04 화', text: '미국 반도체 지수 상승 다음 날 국내 반도체주도 상승 마감', src: '[5]' },
+    { day: '11.05 수', text: '외국인, 사흘 연속 코스피 순매수', src: '[6]' },
+    { day: '11.07 금', text: '원/달러 환율 1,350원대로 하락', src: '[7]' },
+  ],
+  /** 기본 3종목일 때 '이번 주 한눈에' (다른 조합은 화면에서 숫자로 만듦) */
+  summary_default: '내 종목 3곳 중 2곳이 올랐어요. SK하이닉스는 화요일 신규 시설투자 공시[1]가 나왔고 한 주 동안 6.2% 올라 가장 크게 움직였어요. 삼성전자는 메모에 적어 둔 자기주식 취득 공시[2]가 나왔어요. 네이버는 새 공시·뉴스 없이 0.8% 내렸어요.',
+  sources: [
+    { text: '[1] DART · SK하이닉스 신규시설투자 · 2026.11.04', code: '000660' },
+    { text: '[2] DART · 삼성전자 자기주식취득결정 · 2026.11.05', code: '005930' },
+    { text: '[3] 한국경제 · HBM4 공급 확대 보도 · 2026.11.06', code: '000660' },
+    { text: '[4] 매일경제 · 반도체 장비 발주 증가 · 2026.11.07', code: '000660' },
+    { text: '[5] 연합뉴스 · 국내 반도체주 상승 마감 · 2026.11.04', code: '' },
+    { text: '[6] 연합뉴스 · 외국인 코스피 순매수 · 2026.11.05', code: '' },
+    { text: '[7] 연합뉴스 · 원/달러 환율 하락 · 2026.11.07', code: '' },
+  ],
+  source_note: '시세는 KIS, 공시는 DART 원문을 바탕으로 정리했어요. 뉴스는 제목·언론사·날짜만 쓰고 원문 링크로 연결해요.',
+  steps: ['시세·공시·재무 모으기', '종목별 분석 쓰기', '보고서 정리 · 출처 달기'],
+  /** 웹 만드는 중 단계 (원본 studio.tsx STEPS.report) */
+  web_steps: ['업데이트 모으기', '종목별 흐름 정리하기', '보고서 다듬기'],
 };
 
 /** 웹 스튜디오 머리 (내 종목 N · AI 연결 메모 N) */
