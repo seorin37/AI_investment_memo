@@ -7,7 +7,18 @@ import type { MyProfile, WithdrawProps } from './My.types';
 export const mockMyProfile: MyProfile = { name: '김나라', intro: '대학생', provider: 'kakao', email: 'nara@kakao.example' };
 
 /** AI 사용량 (예시) — 90% 이상이면 주의, 100% 면 중단 안내 */
-export const mockMyUsage = { usage_pct: 62, usage_renew: '11.30', plan_name: '무료 플랜' };
+export const mockMyUsage = { usage_pct: 62, usage_renew: '11.30', usage_refill: '12월 1일', plan_name: '무료 플랜' };
+
+/** 크레딧 충전 상품 (원본 studio.html pgCg · web ChargePopup) — 가격은 팀 확정 전이라 원본 자리표시 그대로 */
+export interface CreditPack { credits: number; label: string; price: string; tag?: string }
+export const mockCreditPacks: CreditPack[] = [
+  { credits: 100, label: '100 크레딧', price: '[가격]' },
+  { credits: 300, label: '300 크레딧', price: '[가격]', tag: '많이 쓰는 분께' },
+  { credits: 1000, label: '1,000 크레딧', price: '[가격]' },
+];
+export const mockCreditDefault = 300;
+/** 웹 충전 창 결제 수단 (원본 ChargePopup) */
+export const mockPayMethods = ['카드', '간편결제', '계좌이체'];
 
 /** 지워지는 것 · 데이터 개수 (원본 예시: 메모 8 · 투자 기록 4 · 종목 3 · AI 연결 5) */
 export const mockWithdrawCounts: WithdrawProps['counts'] = { memo: 8, journal: 4, stock: 3, ai: 5 };

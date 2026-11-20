@@ -10,16 +10,22 @@ import { WebAddStockDialog } from '@/ui/screens/stocks/web/AddStockDialog';
 import { useMyMock } from '@/store/myMock';
 import Constants from 'expo-constants';
 import { legalDocument } from '@/ui/screens/auth/Auth.mock';
-import { mockDataSources, mockInbox, mockMyUsage, mockOss, mockPlanCompare, mockPlanDefault, mockPlanNotes, mockPlans, mockReportKinds, mockTracked, mockWithdrawCounts } from '@/ui/screens/my/My.mock';
+import { mockCreditDefault, mockCreditPacks, mockPayMethods, mockDataSources, mockInbox, mockMyUsage, mockOss, mockPlanCompare, mockPlanDefault, mockPlanNotes, mockPlans, mockReportKinds, mockTracked, mockWithdrawCounts } from '@/ui/screens/my/My.mock';
 import { WebFeedback } from '@/ui/screens/my/web/Feedback';
 import { WebInbox } from '@/ui/screens/my/web/Inbox';
 import { WebSettings, type SettingsTab } from '@/ui/screens/my/web/Settings';
 import { WebTrash } from '@/ui/screens/my/web/Trash';
+import { mockMade, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
+import type { StudioKind } from '@/ui/screens/studio/Studio.types';
+import { WebChargePopup, WebCreditPopup, WebUsageSheet } from '@/ui/screens/studio/web/Credit';
+import { WebStudioHome } from '@/ui/screens/studio/web/StudioHome';
 import { useUI } from '@/store/ui';
 import { ConfirmDialog } from '@/ui/shared/ConfirmDialog';
 import { ContextMenu } from '@/ui/shared/ContextMenu';
 import { WebSnackbar } from '@/ui/shared/Snackbar';
 import { size, webColor } from '@/ui/theme';
+
+const NOT_YET = '아직 연결되지 않았어요 · 데이터는 그대로예요';
 
 /** 주소 → 사이드바에서 고른 곳 */
 function sideKeyOf(path: string): SideKey {
@@ -72,6 +78,13 @@ export default function MainLayout() {
   const readNotif = useMyMock((s) => s.read);
   const readAll = useMyMock((s) => s.readAll);
   const uiToast = useUI((s) => s.toast);
+  /* ⑧-8a 스튜디오: 사용량 창 · PLUS 창(다 쓴 뒤 만들기) · 충전 창. 결제·만들기는 연결 안 됨 */
+  const [studioPop, setStudioPop] = useState<'usage' | 'credit' | 'charge' | null>(null);
+  const usageSpent = mockMyUsage.usage_pct >= 100;
+  const studioFeat = (k: StudioKind) => {
+    if (k !== 'quiz' && usageSpent) return setStudioPop('credit');
+    say({ msg: NOT_YET });
+  };
   const unreadShown = mockInbox.filter((n) => unread.includes(n.id) && (n.kind === 'ai' ? myNoti.ai : myNoti.studio)).length;
   const say = (x: { msg: string; undo?: () => void; check?: boolean }) => {
     setSnack(x);
@@ -145,8 +158,22 @@ export default function MainLayout() {
         /* AI 사용량은 설정 창(My.mock)과 같은 값 */
         ...mockStudioHead,
         usagePct: mockMyUsage.usage_pct,
-        onUsage: () => {},
-        onFeature: () => setStudioOpen(true),
+        onUsage: () => setStudioPop('usage'),
+        onFeature: (k) => { setStudioOpen(true); studioFeat(k); },
+        /* ⑧-8a 스튜디오 홈 (원본 studio.tsx Home). 오디오·보고서·실험실·퀴즈 화면은 8b~8d */
+        content: (
+          <WebStudioHome
+            features={mockStudioFeatures}
+            made={mockMade}
+            spent={usageSpent}
+            refill={mockMyUsage.usage_refill}
+            onFeature={studioFeat}
+            onOpenMade={() => say({ msg: NOT_YET })}
+            onQuickPlay={() => say({ msg: NOT_YET })}
+            onBuyCredit={() => setStudioPop('charge')}
+            onChangePlan={() => setSettings('사용량')}
+          />
+        ),
       }}
     >
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: webColor.page }, animation: 'none' }} />
@@ -252,6 +279,9 @@ export default function MainLayout() {
       onUndo={undoRestore}
       onPurge={() => say({ msg: '아직 연결되지 않았어요 · 데이터는 그대로예요' })}
     />
+    <WebUsageSheet open={studioPop === 'usage'} pct={mockMyUsage.usage_pct} refill={mockMyUsage.usage_refill} onClose={() => setStudioPop(null)} onBuyCredit={() => setStudioPop('charge')} onChangePlan={() => setSettings('사용량')} />
+    <WebCreditPopup open={studioPop === 'credit'} onClose={() => setStudioPop(null)} onPlan={() => { setStudioPop(null); setSettings('사용량'); }} onCharge={() => setStudioPop('charge')} />
+    <WebChargePopup open={studioPop === 'charge'} packs={mockCreditPacks} default_credits={mockCreditDefault} methods={mockPayMethods} onClose={() => setStudioPop(null)} onPay={() => say({ msg: '결제는 아직 연결되지 않았어요' })} />
     <WebFeedback open={fbOpen} kinds={mockReportKinds} onClose={() => setFbOpen(false)} onSend={() => say({ msg: '아직 연결되지 않았어요' })} />
     <WebInbox
       open={inboxOpen}

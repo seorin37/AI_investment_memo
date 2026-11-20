@@ -14,12 +14,13 @@ const FEAT: { key: StudioFeature; label: string }[] = [
   { key: 'lab', label: 'AI 투자 실험실' },
 ];
 
-function FeatIcon({ f }: { f: StudioFeature }) {
+/** 스튜디오 기능 아이콘 (접힘 열 · 스튜디오 홈 같이 씀) */
+export function FeatIcon({ f, size = 20 }: { f: StudioFeature; size?: number }) {
   const c = studioFeature[f].ink;
-  if (f === 'audio') return <AppIcon name="waveBlue" size={20} color={c} />;
-  if (f === 'report') return <AppIcon name="reportFile" size={20} color={c} />;
-  if (f === 'quiz') return <WebIcon name="helpRing" size={20} color={c} />;
-  return <WebIcon name="flask" size={20} color={c} />;
+  if (f === 'audio') return <AppIcon name="waveBlue" size={size} color={c} />;
+  if (f === 'report') return <AppIcon name="reportFile" size={size} color={c} />;
+  if (f === 'quiz') return <WebIcon name="helpRing" size={size} color={c} />;
+  return <WebIcon name="flask" size={size} color={c} />;
 }
 
 /**
