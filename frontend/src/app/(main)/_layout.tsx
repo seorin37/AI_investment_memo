@@ -16,9 +16,11 @@ import { WebInbox } from '@/ui/screens/my/web/Inbox';
 import { WebSettings, type SettingsTab } from '@/ui/screens/my/web/Settings';
 import { WebTrash } from '@/ui/screens/my/web/Trash';
 import { chapterAt, fmt, useStudioPlayer } from '@/store/studioPlayer';
-import { mockAudioEpisode, mockAudioGen, mockAudioPeriods, mockAudioStocks, mockLastClose, mockReport, mockReportStocks, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
+import { mockAudioEpisode, mockAudioGen, mockAudioPeriods, mockAudioStocks, mockLabDisclaimer, mockLabNote, mockLabStocks, mockLabVars, mockLastClose, mockQuiz, mockReport, mockReportStocks, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
 import { WebFail, WebGen, WebMini, WebPlayer } from '@/ui/screens/studio/web/Audio';
 import { WebReportPopup, WebReportSum } from '@/ui/screens/studio/web/Report';
+import { WebLab, WebLabResult, WebQuiz } from '@/ui/screens/studio/web/QuizLab';
+import { labGroups, labTitle } from '@/ui/screens/studio/labParts';
 import { WebAudioPopup } from '@/ui/screens/studio/web/AudioPopup';
 import type { StudioKind } from '@/ui/screens/studio/Studio.types';
 import { WebChargePopup, WebCreditPopup, WebUsageSheet } from '@/ui/screens/studio/web/Credit';
@@ -89,13 +91,14 @@ export default function MainLayout() {
     if (k !== 'quiz' && usageSpent) return setStudioPop('credit');
     if (k === 'audio') return setStudioPop('audio');
     if (k === 'report') return setStudioPop('report');
-    say({ msg: NOT_YET });
+    useStudioPlayer.getState().setWebView(k === 'quiz' ? 'quiz' : 'lab');
   };
   /* ⑧-8b 오디오: 만들기 · 재생 mock 상태 (store/studioPlayer). 개발 빌드(__DEV__)에서만 ?studio_fail=1 이면 다음 만들기가 실패 (확인용 · 배포 빌드는 무시) */
   const sp = useStudioPlayer();
   const spItem = sp.made.find((m) => m.id === sp.cur);
   /* ⑧-8c 주간보고서: 스튜디오 열 요약 · 가운데 /report 자세히 */
   const repItem = sp.made.find((m) => m.id === sp.curReport && m.kind === 'report');
+  const labItem = sp.made.find((m) => m.id === sp.curLab && m.kind === 'lab');
   const repStocks = mockReportStocks.filter((s) => (repItem?.codes ?? []).includes(s.stock_code));
   const { studio_fail } = useGlobalSearchParams<{ studio_fail?: string }>();
   const unreadShown = mockInbox.filter((n) => unread.includes(n.id) && (n.kind === 'ai' ? myNoti.ai : myNoti.studio)).length;
@@ -178,6 +181,36 @@ export default function MainLayout() {
           <View style={{ flex: 1 }}>
             {sp.webView === 'gen' && sp.job ? <WebGen job={sp.job} steps={sp.job.kind === 'report' ? mockReport.web_steps : mockAudioGen.steps} />
               : sp.webView === 'fail' ? <WebFail kind={sp.job?.kind ?? 'audio'} onHome={() => { sp.dropFailed(); sp.setWebView('home'); }} onRetry={() => { sp.retry(); sp.setWebView('gen'); }} />
+              : sp.webView === 'quiz' ? <WebQuiz q={mockQuiz} done={sp.quizPick} onBack={() => sp.setWebView('home')} onSubmit={sp.submitQuiz} />
+              : sp.webView === 'lab' ? (
+                <WebLab
+                  vars={mockLabVars}
+                  stocks={mockLabStocks}
+                  code={sp.labCode}
+                  dirs={sp.labDirs}
+                  note={mockLabNote}
+                  onBack={() => sp.setWebView('home')}
+                  onPick={(c) => sp.setLab({ code: c })}
+                  onDir={(i, d) => sp.setLab({ dirs: sp.labDirs.map((x, j) => (j === i ? d : x)) })}
+                  onReset={() => sp.setLab({ dirs: mockLabVars.map(() => '유지') })}
+                  onRun={() => {
+                    const t = labTitle(sp.labCode, sp.labDirs);
+                    sp.addLab({ id: `m${Date.now()}`, kind: 'lab', title: t.title, sub: t.sub, meta: t.sub, left: '30일 뒤 삭제', lab: { code: sp.labCode, dirs: sp.labDirs } });
+                    sp.setWebView('labResult');
+                  }}
+                />
+              )
+              : sp.webView === 'labResult' && labItem?.lab ? (
+                <WebLabResult
+                  stock={mockLabStocks.find((s) => s.stock_code === labItem.lab?.code) ?? mockLabStocks[0]}
+                  vars={mockLabVars}
+                  groups={labGroups(labItem.lab.code, labItem.lab.dirs)}
+                  disclaimer={mockLabDisclaimer}
+                  onBack={() => sp.setWebView('home')}
+                  onMemo={() => openStock(labItem.lab?.code ?? '')}
+                  onAgain={() => { sp.setLab({ code: labItem.lab?.code, dirs: labItem.lab?.dirs }); sp.setWebView('lab'); }}
+                />
+              )
               : sp.webView === 'report' && repItem ? (
                 <WebReportSum
                   rep={mockReport}
@@ -211,6 +244,7 @@ export default function MainLayout() {
                   onFeature={studioFeat}
                   onOpenMade={(m) => {
                     if (m.kind === 'report') { sp.openReport(m.id); return sp.setWebView('report'); }
+                    if (m.kind === 'lab') { sp.openLab(m.id); return sp.setWebView('labResult'); }
                     if (m.kind !== 'audio') return say({ msg: NOT_YET });
                     sp.select(m.id);
                     sp.setMini(false);

@@ -27,6 +27,8 @@ export interface MadeItem {
   /** 주간보고서: 넣은 종목 · 국내 증시 흐름 포함 */
   codes?: string[];
   market?: boolean;
+  /** 투자 실험실: 종목 · 조건 4칸 (상승/유지/하락) */
+  lab?: { code: string; dirs: ('상승' | '유지' | '하락')[] };
 }
 
 export interface StudioHomeProps {

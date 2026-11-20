@@ -14,7 +14,7 @@ export const mockStudioFeatures: StudioFeatureItem[] = [
 export const mockMade: MadeItem[] = [
   { id: 'm1', kind: 'audio', title: '11.06 내 종목 라디오', sub: '어제 소식과, 그때 내가 남긴 메모', meta: '오디오 · 3종목 · 전날 · 6:42', left: '27일 뒤 삭제', dur: '6:42', foot: '종목 3개 · 전날 기준' },
   { id: 'm2', kind: 'report', title: '10월 다섯째 주 돌아보기', sub: '주간보고서 · 종목 3개', meta: '주간보고서 · 3종목', left: '23일 뒤 삭제', codes: ['000660', '005930', '035420'], market: true },
-  { id: 'm3', kind: 'lab', title: '삼성전자 · 환율 하락 실험', sub: '투자 실험실 · 삼성전자', meta: '투자 실험실 · 삼성전자', left: '25일 뒤 삭제' },
+  { id: 'm3', kind: 'lab', title: '삼성전자 · 환율 하락 실험', sub: '투자 실험실 · 삼성전자', meta: '투자 실험실 · 삼성전자', left: '25일 뒤 삭제', lab: { code: '005930', dirs: ['하락', '유지', '유지', '유지'] } },
 ];
 
 /** 오디오 만들기 시트 종목 (원본 STK: 이름 · 새 소식 수 · 보유/관심) */
@@ -166,6 +166,62 @@ export const mockReport = {
   /** 웹 만드는 중 단계 (원본 studio.tsx STEPS.report) */
   web_steps: ['업데이트 모으기', '종목별 흐름 정리하기', '보고서 다듬기'],
 };
+
+/* ───────── 8d 오늘의 퀴즈 (원본 app pgQz · web Quiz) ─────────
+ * 사실 확인형만 (시장 데이터 · 공시 · 용어). '오를 종목'·'살 때' 같은 판단형 문제 없음. 원본 '화면 예시' 표기는 뺌
+ */
+export const mockQuiz = {
+  label: '어제(11.06 금) 증시 퀴즈',
+  day: '11.06',
+  type: '4지선다',
+  q: '어제 코스피에서 거래대금이\n가장 많았던 종목은?',
+  options: ['삼성전자', 'SK하이닉스', '현대차', 'LG에너지솔루션'],
+  answer: 1,
+  exp: 'SK하이닉스가 약 2조 1,000억 원으로 거래대금 1위였어요.',
+  concept: '거래대금은 거래량에 가격을 곱한 값이라, 비싼 종목이 많이 거래될수록 커져요.',
+  src: '출처 · 한국거래소 (11.06 기준)',
+  streak: 3,
+  /** 이번 주 참여 [월~일] 1 참여 · 0 안 함 · 2 오늘 · 3 아직 */
+  week: [['월', 1], ['화', 0], ['수', 1], ['목', 1], ['금', 1], ['오늘', 2], ['일', 3]] as [string, number][],
+};
+
+/* ───────── 8d 투자 실험실 (원본 app pgLab/pgLr · web Lab/LabResultBody) ─────────
+ * 가정에 따른 '영향 경로'만 보여 줌 (실적·주가 예측 아님). 원본 '원화 강세/약세'는 '원화 가치 상승/하락'으로,
+ * '(예시)'·'약 ○○억 원' 같은 자리표시는 뺌. 원본 웹의 '종합 방향 · 긍정/부정'은 해석이라 넣지 않음
+ */
+export type LabDir = '상승' | '유지' | '하락';
+export const mockLabDirs: LabDir[] = ['상승', '유지', '하락'];
+export const mockLabVars = [
+  { name: '원/달러 환율', now: '11.18 종가 기준 1,350.20원', def: '하락' as LabDir, mid: '원화 가치\n변화' },
+  { name: '국제유가(WTI)', now: '11.18 기준 배럴당 71.2달러', def: '유지' as LabDir, mid: '원가·물류비\n변화' },
+  { name: '한국 기준금리', now: '현재 2.50%', def: '유지' as LabDir, mid: '국내 금리\n변화' },
+  { name: '미국 10년물 국채금리', now: '11.18 기준 4.32%', def: '상승' as LabDir, mid: '장기금리\n변화' },
+];
+export const mockLabNote = '지금은 환율·유가·기준금리·미국 10년물 금리 4가지만 바꿀 수 있어요. 실제 주가는 이 밖의 많은 요인으로 움직여요. 예측이 아니라 영향 경로만 보여 드려요.';
+/** 경로 끝 항목 — t 제목 · ev 공시 근거 있음 · why 설명 · base 근거 줄 · note 함께 볼 점 · check 확인할 것 · check_why */
+export interface LabLeaf { t: string; ev: boolean; why: string; base: string; note?: string; check?: string; check_why?: string }
+const fxLeaves = (strong: boolean): LabLeaf[] => [
+  strong
+    ? { t: '달러 매출의 원화 환산액', ev: true, why: '매출 대부분이 달러로 들어와, 환율이 바뀌면 원화로 바꾼 매출 금액도 달라질 수 있어요.', base: '2025 사업보고서 · 환율 변동 시 세전이익 민감도 공시', note: '판매 가격과 물량이 함께 바뀌면 환율 효과만 따로 떼어 보기 어려워요.', check: '다음 분기보고서의 환율 영향 설명', check_why: '공시 민감도의 최신 값' }
+    : { t: '달러 매출의 원화 환산액', ev: false, why: '해외 매출 비중이 크지 않아 이 경로의 영향은 제한적일 수 있어요.', base: '일반적인 경로 · 회사 공시 없음', note: '판매 가격과 물량이 함께 바뀌면 환율 효과만 따로 떼어 보기 어려워요.', check: '해외 매출 비중', check_why: '사업보고서 지역별 매출' },
+  { t: '달러로 사는 원가·장비', ev: false, why: '장비·원재료를 달러로 사는 만큼 원화 비용도 함께 달라져, 앞 항목과 일부 상쇄될 수 있어요.', base: '일반적인 경로 · 달러 매입 비중은 공시로 확인이 필요해요', check: '달러로 사는 원가·장비 비중', check_why: '상쇄 정도를 가늠하려면 필요해요' },
+];
+/** 변수 칸 i · 종목(달러 매출 비중이 큰 종목이면 fxStrong) → 경로 끝 항목 */
+export const mockLabLeaves = (i: number, fxStrong: boolean): LabLeaf[] =>
+  i === 0 ? fxLeaves(fxStrong)
+    : i === 1 ? [{ t: '원재료·물류 비용', ev: false, why: '유가가 바뀌면 원재료와 운송에 드는 비용이 따라 움직일 수 있어요.', base: '일반적인 경로 · 회사 공시 없음', note: '계약 방식에 따라 비용에 반영되는 시점이 늦을 수 있어요.', check: '원가에서 에너지·물류가 차지하는 비중', check_why: '사업보고서 원가 항목' }]
+      : i === 2 ? [{ t: '차입 이자 비용', ev: false, why: '기준금리가 바뀌면 국내에서 빌린 돈의 이자 부담도 달라질 수 있어요.', base: '일반적인 경로 · 회사 공시 없음', note: '고정금리 차입이 많으면 체감이 늦어요.', check: '차입금 만기와 금리 구조', check_why: '사업보고서 차입금 주석' }]
+        : [
+          { t: '설비투자 자금 조달', ev: false, why: '장기금리가 바뀌면 새로 빌리는 돈의 이자 조건도 달라질 수 있어요.', base: '일반적인 경로 · 회사 공시 없음', note: '현금 보유와 차입 구조에 따라 체감 정도가 달라요.', check: '설비투자 계획과 자금 조달 공시', check_why: '차입 구조 확인' },
+          { t: '주식 가치 평가의 할인율', ev: false, why: '장기금리는 미래 이익을 지금 가치로 바꿀 때 쓰는 할인율에 반영되곤 해요.', base: '일반적인 경로 · 이론', note: '실제 주가는 이것 말고도 많은 요인으로 움직여요.' },
+        ];
+/** 실험 종목 (내 종목) · 달러 매출 비중 큰 종목 · 연결 메모 */
+export const mockLabStocks = [
+  { stock_code: '000660', name: 'SK하이닉스', logo: 'S', logo_bg: '#EA002C', hold: '보유' as const, fx_strong: true, memo: 'HBM 점유율 유지되는지 계속 보기', memo_text: '이번 실험의 ①은 실적 숫자에 닿는 경로예요. 메모에서 중요하게 본 HBM 수요·점유율과는 다른 요인이라, 둘을 나눠서 보면 좋아요.' },
+  { stock_code: '005930', name: '삼성전자', logo: '삼', logo_bg: '#1428A0', hold: '관심' as const, fx_strong: true, memo: '자사주 매입 나오면 다시 보기', memo_text: '이번 실험의 경로는 메모에서 중요하게 본 요인과 다른 쪽이에요. 메모의 조건과 나눠서 보면 좋아요.' },
+  { stock_code: '035420', name: '네이버', logo: '네', logo_bg: '#03C75A', hold: '관심' as const, fx_strong: false, memo: '', memo_text: '' },
+];
+export const mockLabDisclaimer = 'AI가 가정을 바탕으로 정리한 결과예요. 실제와 다를 수 있으니 공시와 함께 확인해 주세요.';
 
 /** 웹 스튜디오 머리 (내 종목 N · AI 연결 메모 N) */
 export const mockStudioCounts = { stock_count: 3, ai_memo_count: 5 };

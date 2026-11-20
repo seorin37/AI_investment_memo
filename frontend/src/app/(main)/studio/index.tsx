@@ -54,8 +54,12 @@ export default function StudioTab() {
         usage_pct={mockMyUsage.usage_pct}
         usage_refill={mockMyUsage.usage_refill}
         {...mockStudioCounts}
-        onFeature={(k) => (k === 'audio' ? setSheet(true) : k === 'report' ? setRSheet(true) : toast(NOT_YET))}
+        onFeature={(k) => (k === 'audio' ? setSheet(true) : k === 'report' ? setRSheet(true) : router.push(k === 'quiz' ? '/studio-quiz' : '/studio-lab'))}
         onOpenMade={(m) => {
+          if (m.kind === 'lab') {
+            p.openLab(m.id);
+            return router.push('/studio-lab-result');
+          }
           if (m.kind === 'report') {
             p.openReport(m.id);
             return router.push('/studio-report');

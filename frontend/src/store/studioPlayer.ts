@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { useUI } from '@/store/ui';
-import { mockAudioEpisode, mockAudioGen, mockMade, mockReport } from '@/ui/screens/studio/Studio.mock';
+import { mockAudioEpisode, mockAudioGen, mockLabStocks, mockLabVars, mockMade, mockReport, type LabDir } from '@/ui/screens/studio/Studio.mock';
 import type { MadeItem } from '@/ui/screens/studio/Studio.types';
 
 /**
@@ -20,7 +20,7 @@ export interface GenJob {
   status: 'run' | 'fail' | 'done';
   fail: boolean;
 }
-export type WebStudioView = 'home' | 'gen' | 'fail' | 'player' | 'report';
+export type WebStudioView = 'home' | 'gen' | 'fail' | 'player' | 'report' | 'quiz' | 'lab' | 'labResult';
 const KIND_T = {
   audio: { bad: '오디오를 만들지 못했어요', done: '오디오가 완성됐어요' },
   report: { bad: '보고서를 만들지 못했어요', done: '주간보고서가 완성됐어요' },
@@ -46,6 +46,17 @@ interface StudioPlayerState {
   startAudio(p: { sub: string; n: number; codes?: string[]; market?: boolean }, fail?: boolean): void;
   startReport(p: { sub: string; codes: string[]; market: boolean }, fail?: boolean): void;
   openReport(id: string): void;
+  /** 투자 실험실: 지금 보는 결과 · 실험 실행(크레딧 차감 없음)으로 만든 항목에 추가 */
+  curLab: string | null;
+  addLab(item: MadeItem): void;
+  openLab(id: string): void;
+  /** 실험실 화면에서 고른 종목 · 조건 (원본 labStk · lab) */
+  labCode: string;
+  labDirs: LabDir[];
+  setLab(p: { code?: string; dirs?: LabDir[] }): void;
+  /** 오늘의 퀴즈 제출 (화면 상태만) */
+  quizPick: number | null;
+  submitQuiz(i: number): void;
   retry(): void;
   dropFailed(): void;
   setGenVisible(v: boolean): void;
@@ -139,6 +150,14 @@ export const useStudioPlayer = create<StudioPlayerState>((set, get) => {
       run(fail);
     },
     openReport: (id) => set({ curReport: id }),
+    curLab: null,
+    addLab: (item) => set((s) => ({ made: [item, ...s.made], curLab: item.id })),
+    openLab: (id) => set({ curLab: id }),
+    labCode: mockLabStocks[0].stock_code,
+    labDirs: mockLabVars.map((v) => v.def),
+    setLab: (p) => set((s) => ({ labCode: p.code ?? s.labCode, labDirs: p.dirs ?? s.labDirs })),
+    quizPick: null,
+    submitQuiz: (i) => set({ quizPick: i }),
     retry: () => {
       const j = get().job;
       if (!j) return;
