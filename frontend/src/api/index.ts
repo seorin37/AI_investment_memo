@@ -33,6 +33,8 @@ const MOCK_ONLY = [
   'listMemoBacktests',
   'listCompareMemos',
   'listConcludeCandidates',
+  // /memos/{id}/conclude — 결론을 저장할 칸이 아직 없다 (후보도 mock 이라 가짜 메모 id 로 불린다)
+  'concludeMemo',
   // /calendar
   'listCalendar',
   'createCalendarEvent',
