@@ -114,8 +114,8 @@ export function AppReport({ rep, stocks, market, allDefault, onBack, onOpenMemo,
               <View style={st.lg}>
                 <Text style={st.lgT}><Text style={{ color: '#7C5CE0' }}>● </Text>공시</Text>
                 <Text style={st.lgT}><Text style={{ color: '#3D73F0' }}>● </Text>뉴스</Text>
-                <Text style={st.lgT}>┄ 지난주 종가</Text>
-                <Text style={st.lgT}>번호는 아래 소식·출처 번호예요</Text>
+                <View style={st.lgI}><View style={st.dash} /><Text style={st.lgT}>지난주 종가</Text></View>
+                <Text style={[st.lgT, { width: '100%' }]}>번호는 아래 소식·출처 번호예요</Text>
               </View>
               <Text keepAll style={st.tx}>{r.story}</Text>
               {r.items.length ? (
@@ -233,6 +233,9 @@ const st = StyleSheet.create({
   st4B: { fontSize: 15, lineHeight: 21, fontWeight: '700', color: C.ink },
   lg: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 6 },
   lgT: { fontSize: 11.5, lineHeight: 16, color: C.ink3 },
+  /* ┄ 기호 대신 점선 막대 (412 폭에서 글자 잘림 방지) */
+  lgI: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  dash: { width: 12, height: 0, borderTopWidth: 1, borderColor: '#B5B9C0', borderStyle: 'dashed' },
   tx: { fontSize: 14, lineHeight: 23, color: '#2E2E38', marginTop: 10 },
   sub: { fontSize: 13, lineHeight: 18, fontWeight: '800', color: C.ink, marginTop: 14, marginBottom: 2 },
   ev: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
