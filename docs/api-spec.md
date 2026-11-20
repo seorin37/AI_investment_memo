@@ -76,6 +76,7 @@
 | 계정·설정 | PATCH | `/settings` | updateSettings (real.ts) | 구현됨 |  |  |
 | 종목 | GET | `/stocks` | listMyStocks (stocks.ts) | 구현됨 |  |  |
 | 종목 | POST | `/stocks` | addStock (stocks.ts) | 구현됨 |  |  |
+| 종목 | PUT | `/stocks/order` |  | 백엔드만 있음 | 이민성 | 사이드바 내 종목 전체 순서 저장 (0021 user_stocks.position). 프론트 미연결: 웹 stocks[].order 대신 호출 필요 |
 | 종목 | GET | `/stocks/search` | searchStocks (stocks.ts) | 구현됨 |  |  |
 | 종목 | DELETE | `/stocks/{code}` | removeStock (stocks.ts) | 구현됨 |  |  |
 | 종목 | GET | `/stocks/{code}` | getStock (stocks.ts) | 구현됨 |  |  |
@@ -735,6 +736,7 @@ OpenAPI 응답 스키마 `MyStockResponse[]`
 | `tags` | `string[]` |  |  |
 | `unread_updates` | `integer` |  | 기본 `0` |
 | `added_at` | `string(date-time)` | 예 |  |
+| `position` | `integer` |  | 기본 `0` |
 
 프론트 타입 (mock 기준) `MyStock[]`
 
@@ -798,6 +800,7 @@ OpenAPI 응답 스키마 `MyStockResponse`
 | `tags` | `string[]` |  |  |
 | `unread_updates` | `integer` |  | 기본 `0` |
 | `added_at` | `string(date-time)` | 예 |  |
+| `position` | `integer` |  | 기본 `0` |
 
 프론트 타입 (mock 기준) `MyStock`
 
@@ -830,6 +833,37 @@ OpenAPI 응답 스키마 `MyStockResponse`
 </details>
 
 **에러**: `401` 인증 필요 · 토큰 만료/폐기 (프론트는 /auth/refresh 를 한 번 시도) · `403` 권한 없음 · 쿠키 세션의 쓰기 요청에서 CSRF 불일치 · `404` 대상 없음 (다른 사용자 것 포함) · `422` 요청 검증 실패 (FastAPI 형식 detail 배열)
+
+<a id="put--stocks-order"></a>
+#### `PUT /stocks/order`
+
+사이드바에서 끌어 옮긴 뒤 내 종목 전체 순서를 저장하고, 새 순서의 목록을 돌려준다 (0021).
+
+- 상태: **백엔드만 있음**
+- 인증: 필요 · 구현: `backend/app/stocks/routes.py` `put_stock_order`
+
+**요청 본문** `StockOrderRequest` (필수)
+
+| 필드 | 타입 | 필수 | 설명·제약 |
+|---|---|---|---|
+| `codes` | `string[]` | 예 | 최대 개수 500 |
+
+**응답** `200`
+
+OpenAPI 응답 스키마 `MyStockResponse[]`
+
+| 필드 | 타입 | 필수 | 설명·제약 |
+|---|---|---|---|
+| `code` | `string` | 예 |  |
+| `name` | `string` | 예 |  |
+| `market` | `"KOSPI" \| "KOSDAQ" \| "KONEX"` | 예 |  |
+| `status` | `"holding" \| "watching"` | 예 |  |
+| `tags` | `string[]` |  |  |
+| `unread_updates` | `integer` |  | 기본 `0` |
+| `added_at` | `string(date-time)` | 예 |  |
+| `position` | `integer` |  | 기본 `0` |
+
+**에러**: `401` 인증 필요 · 토큰 만료/폐기 (프론트는 /auth/refresh 를 한 번 시도) · `403` 권한 없음 · 쿠키 세션의 쓰기 요청에서 CSRF 불일치 · `422` 요청 검증 실패 (FastAPI 형식 detail 배열)
 
 <a id="get--stocks-search"></a>
 #### `GET /stocks/search`
@@ -977,6 +1011,7 @@ OpenAPI 응답 스키마 `MyStockResponse`
 | `tags` | `string[]` |  |  |
 | `unread_updates` | `integer` |  | 기본 `0` |
 | `added_at` | `string(date-time)` | 예 |  |
+| `position` | `integer` |  | 기본 `0` |
 
 프론트 타입 (mock 기준) `MyStock`
 
@@ -1904,7 +1939,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 <a id="get--memos-memoid-answers"></a>
 #### `GET /memos/{memo_id}/answers`
 
-- 상태: **백엔드만 있음**
+- 상태: **백엔드만 있음** · 담당: 이민성
 - 인증: 필요 · 구현: `backend/app/answers/routes.py` `get_memo_answers`
 
 **요청 파라미터**
@@ -2119,7 +2154,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse[]
 
 끌어서 옮긴 뒤 보드 카드 전체 순서를 저장하고, 새 순서의 보드를 돌려준다.
 
-- 상태: **백엔드만 있음**
+- 상태: **백엔드만 있음** · 담당: 이민성
 - 인증: 필요 · 구현: `backend/app/board/routes.py` `put_board_order`
 
 **요청 파라미터**
@@ -3079,7 +3114,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 
 이번 기간 사용량. 이번 달 기본량을 아직 안 받았으면 여기서 지급한다(쓰기 세션).
 
-- 상태: **구현됨**
+- 상태: **구현됨** · 담당: 이민성
 - 인증: 필요 · 구현: `backend/app/credits/routes.py` `get_my_usage`
 - 프론트: `getUsage(): Promise<CreditUsage>`
   - 호출: real.ts:80 `getUsage: () => http.get('/me/usage'),`
@@ -3519,7 +3554,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 <a id="get--ai-stats"></a>
 #### `GET /ai/stats`
 
-- 상태: **구현됨**
+- 상태: **구현됨** · 담당: 이민성
 - 인증: 필요 · 구현: `backend/app/stats/routes.py` `get_ai_stats`
 - 프론트: `getAiStats(): Promise<AiStats>`
   - 호출: real.ts:79 `getAiStats: () => http.get('/ai/stats'),`
@@ -3585,7 +3620,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 <a id="get--data-stats"></a>
 #### `GET /data/stats`
 
-- 상태: **구현됨**
+- 상태: **구현됨** · 담당: 이민성
 - 인증: 필요 · 구현: `backend/app/stats/routes.py` `get_data_stats`
 - 프론트: `getDataStats(): Promise<DataStats>`
   - 호출: real.ts:81 `getDataStats: () => http.get('/data/stats'),`
@@ -3619,7 +3654,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 <a id="post--feedback"></a>
 #### `POST /feedback`
 
-- 상태: **구현됨**
+- 상태: **구현됨** · 담당: 이민성
 - 인증: 필요 · 구현: `backend/app/stats/routes.py` `post_feedback`
 - 프론트: `sendFeedback(payload: FeedbackPayload): Promise<void>`
   - 호출: real.ts:84 `sendFeedback: (payload) => http.post('/feedback', payload),`

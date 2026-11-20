@@ -13,9 +13,11 @@ from .schemas import (
     MyStockResponse,
     StockCreateRequest,
     StockMasterResponse,
+    StockOrderRequest,
     StockUpdateRequest,
 )
 from .service import (
+    InvalidStockOrderError,
     StockNotFoundError,
     StockService,
     UnsupportedStockTagsError,
@@ -60,6 +62,19 @@ def list_my_stocks(
     service: StockService = Depends(get_query_service),
 ):
     return service.list_mine(_user_id(current))
+
+
+@router.put("/order", response_model=list[MyStockResponse])
+def put_stock_order(
+    payload: StockOrderRequest,
+    current: dict = Depends(get_current_user),
+    service: StockService = Depends(get_command_service),
+):
+    """사이드바에서 끌어 옮긴 뒤 내 종목 전체 순서를 저장하고, 새 순서의 목록을 돌려준다 (0021)."""
+    try:
+        return service.reorder(_user_id(current), payload.codes)
+    except InvalidStockOrderError as exc:
+        raise HTTPException(422, detail=str(exc)) from exc
 
 
 @router.post("", response_model=MyStockResponse)
