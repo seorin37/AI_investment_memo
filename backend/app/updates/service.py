@@ -33,6 +33,23 @@ def _source(s: dict[str, Any]) -> dict[str, Any]:
             "url": DART_URL.format(s["disclosure_rcept_no"]), "published_at": s["rcept_dt"], "quote": s["quote"]}
 
 
+CONTRACT_TYPES = ("disclosure", "news", "price")
+
+
+def contract_type(db_type: str, sources: list[dict[str, Any]]) -> str:
+    """DB 카드 종류 → 계약 UpdateType(disclosure|news|price). 카드를 내보내는 모든 API가 이 함수 하나를 쓴다.
+
+    - price_condition → price
+    - 0019 질문 답(answer)과 그 밖의 새 종류 → 대표 근거 종류(news|disclosure), 근거가 없으면(답을 못 찾은 카드) news
+    원래 종류는 응답의 card_type 에 그대로 남긴다.
+    """
+    if db_type == "price_condition":
+        return "price"
+    if db_type in CONTRACT_TYPES:
+        return db_type
+    return sources[0]["kind"] if sources else "news"
+
+
 class UpdatesService:
     def __init__(self, repository: UpdatesRepository) -> None:
         self.repository = repository
@@ -59,13 +76,15 @@ class UpdatesService:
         return {
             # 계약 (MarketUpdate + AiUpdate)
             "id": str(r["id"]), "stock_code": r["symbol"], "stock_name": r["stock_name"] or r["symbol"],
-            "type": "price" if is_price else r["type"], "title": title or "", "source": source or "", "url": url,
+            "type": contract_type(r["type"], srcs), "title": title or "", "source": source or "", "url": url,
             "published_at": published or r["created_at"],
             "memo_id": str(r["memo_id"]), "memo_title": r["memo_title"] or "", "memo_version": int(r["memo_version"] or 1),
             "summary": r["summary"], "headline": r["title"], "read": bool(r["is_read"]),
             "relevance": round(max(news_sims), 4) if news_sims else 1.0,
             # 덧붙인 값
             "created_at": r["created_at"], "reason": r["reason"], "card": details,
+            "card_type": r["type"],                             # DB 원래 종류 (answer 등). 계약 type 은 contract_type
+            "answer_status": details.get("answer_status") if r["type"] == "answer" else None,
             "item": {"id": str(r["item_id"]), "type": r["item_type"], "description": r["item_description"],
                      "status": r["item_status"], "last_checked_at": r["last_checked_at"]},
             "sources": srcs,
@@ -123,17 +142,14 @@ class UpdatesService:
         """홈·최신 업데이트 피드 (계약 MarketUpdate[]): 지금 내 종목의 최근 days일 카드, 최신순.
 
         AI 연결을 나중에 끈 메모의 카드도 포함한다. 같은 근거(종목·종류·링크·제목)가 메모 여러 개에 붙은 카드는 하나로 줄인다.
-        0019의 질문 답(answer) 카드는 계약 UpdateType(disclosure|news|price)에 없어 대표 근거 종류(news|disclosure)로 보낸다.
+        answer 카드의 type 변환은 _ai_update(contract_type)가 이미 한다.
         """
         rows = self.repository.cards(user_id, symbol=stock_code, ai_linked_only=False, active_stocks_only=True,
                                      recent_days=days, limit=500)
         out: list[dict[str, Any]] = []
         seen: set[tuple] = set()
         for update in self._ai_updates(rows):
-            if update["type"] not in ("disclosure", "news", "price"):
-                lead = update["sources"][0] if update["sources"] else None
-                update = {**update, "type": lead["kind"] if lead else "news"}
-            key = (update["stock_code"], update["type"], update["url"] or "", update["title"])
+            key =(update["stock_code"], update["type"], update["url"] or "", update["title"])
             if key in seen:
                 continue
             seen.add(key)
