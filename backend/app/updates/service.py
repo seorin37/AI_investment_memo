@@ -118,6 +118,30 @@ class UpdatesService:
         out = [{**v, "memos": list(v["memos"].values())} for v in by_stock.values()]
         return sorted(out, key=lambda v: -v["new_count"])
 
+    def market_updates(self, user_id: int, stock_code: str | None = None, limit: int | None = None,
+                       days: int = 30) -> list[dict[str, Any]]:
+        """홈·최신 업데이트 피드 (계약 MarketUpdate[]): 지금 내 종목의 최근 days일 카드, 최신순.
+
+        AI 연결을 나중에 끈 메모의 카드도 포함한다. 같은 근거(종목·종류·링크·제목)가 메모 여러 개에 붙은 카드는 하나로 줄인다.
+        0019의 질문 답(answer) 카드는 계약 UpdateType(disclosure|news|price)에 없어 대표 근거 종류(news|disclosure)로 보낸다.
+        """
+        rows = self.repository.cards(user_id, symbol=stock_code, ai_linked_only=False, active_stocks_only=True,
+                                     recent_days=days, limit=500)
+        out: list[dict[str, Any]] = []
+        seen: set[tuple] = set()
+        for update in self._ai_updates(rows):
+            if update["type"] not in ("disclosure", "news", "price"):
+                lead = update["sources"][0] if update["sources"] else None
+                update = {**update, "type": lead["kind"] if lead else "news"}
+            key = (update["stock_code"], update["type"], update["url"] or "", update["title"])
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(update)
+            if limit is not None and len(out) >= limit:
+                break
+        return out
+
     def mark_read(self, user_id: int, update_id: int) -> None:
         if not self.repository.mark_read(user_id, update_id):
             raise UpdateNotFoundError(update_id)

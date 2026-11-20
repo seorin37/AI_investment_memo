@@ -43,10 +43,17 @@ class UpdatesRepository:
         self.db = db
 
     def cards(self, user_id: int, *, symbol: str | None = None, memo_id: int | None = None,
-              unread_only: bool = False, ai_linked_only: bool = True, limit: int = 100) -> list[dict[str, Any]]:
+              unread_only: bool = False, ai_linked_only: bool = True, limit: int = 100,
+              active_stocks_only: bool = False, recent_days: int | None = None) -> list[dict[str, Any]]:
         where, params = [], {"user_id": user_id, "limit": limit}
         if ai_linked_only:
             where.append("m.ai_linked")
+        if active_stocks_only:                                  # 2026-11-20 /updates: 지금 내 종목만
+            where.append("EXISTS (SELECT 1 FROM user_stocks us WHERE us.user_id = m.user_id AND us.symbol = m.symbol"
+                         " AND us.deleted_at IS NULL)")
+        if recent_days is not None:
+            where.append("tu.created_at >= now() - make_interval(days => :recent_days)")
+            params["recent_days"] = recent_days
         if symbol is not None:
             where.append("btrim(m.symbol) = :symbol")
             params["symbol"] = symbol

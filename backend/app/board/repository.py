@@ -39,6 +39,39 @@ class BoardRepository:
         ).mappings().all()
         return [{**dict(row), "position": index} for index, row in enumerate(rows)]
 
+    def list_pinned(self, user_id: int) -> list[dict[str, Any]]:
+        """홈 '고정한 메모': 지금 보유·관심 중인 종목의 고정된 일반 메모.
+
+        position 은 list_board 와 같은 보드 안 자리(0부터, _BOARD_ORDER 기준)다. 저장값 memos.position 은
+        빈 번호·NULL 이 있을 수 있어 그대로 내보내지 않는다. 목록 순서는 종목을 추가한 순 → 보드 순서.
+        """
+        rows = self.db.execute(
+            text(
+                f"""
+                SELECT ranked.* FROM (
+                  SELECT m.*, s.name AS stock_name, us.created_at AS stock_added_at,
+                         (row_number() OVER (PARTITION BY m.symbol ORDER BY {self._BOARD_ORDER}) - 1)::integer
+                           AS board_position
+                  FROM memos m
+                  JOIN user_stocks us
+                    ON us.user_id = m.user_id AND us.symbol = m.symbol AND us.deleted_at IS NULL
+                  JOIN stocks s ON s.symbol = m.symbol
+                  WHERE m.user_id = :user_id AND m.deleted_at IS NULL
+                ) ranked
+                WHERE ranked.kind = 'note' AND ranked.is_pinned
+                ORDER BY ranked.stock_added_at, ranked.symbol, ranked.board_position
+                """
+            ),
+            {"user_id": user_id},
+        ).mappings().all()
+        result = []
+        for row in rows:
+            item = dict(row)
+            item["position"] = item.pop("board_position")
+            item.pop("stock_added_at", None)
+            result.append(item)
+        return result
+
     def get_owned(self, user_id: int, memo_id: int) -> dict[str, Any] | None:
         row = self.db.execute(
             text(

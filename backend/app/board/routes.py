@@ -61,6 +61,14 @@ def _handle_error(exc: Exception) -> None:
     raise exc
 
 
+@router.get("/memos/pinned")
+def list_pinned_memos(
+    current: dict = Depends(get_current_user),
+    service: BoardService = Depends(get_query_service),
+):
+    return service.list_pinned(_user_id(current))
+
+
 @router.get("/stocks/{code}/board", response_model=list[BoardResponse])
 def list_board(
     code: str,

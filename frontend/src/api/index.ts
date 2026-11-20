@@ -19,11 +19,50 @@ const hybridApi: Api = {
   ...(env.useRealBoard ? realBoardApi : {}),
 };
 
+/**
+ * 백엔드 API를 아직 만들지 않은 기능(C그룹). USE_MOCK=false 여도 이 함수들만 mock 응답을 쓴다.
+ * 백엔드에 생기면 여기서 빼면 real.ts 구현으로 바뀐다.
+ */
+const MOCK_ONLY = [
+  // 투자 기록 /journal
+  'listJournal',
+  'createJournal',
+  'updateJournal',
+  'deleteJournal',
+  // /insights/*
+  'listMemoBacktests',
+  'listCompareMemos',
+  'listConcludeCandidates',
+  // /memos/{id}/conclude — 결론을 저장할 칸이 아직 없다 (후보도 mock 이라 가짜 메모 id 로 불린다)
+  'concludeMemo',
+  // /calendar
+  'listCalendar',
+  'createCalendarEvent',
+  // /data/*
+  'getDataStats',
+  'exportData',
+  'deleteAllData',
+  // /feedback
+  'sendFeedback',
+  // /mcp/*
+  'disconnectMcpApp',
+  // /files
+  'uploadFile',
+  // /ai/stats
+  'getAiStats',
+] as const satisfies readonly (keyof Api)[];
+
+type MockOnlyKey = (typeof MOCK_ONLY)[number];
+
+const mockOnlyApi = Object.fromEntries(MOCK_ONLY.map((key) => [key, mockApi[key]])) as Pick<Api, MockOnlyKey>;
+
+const realWithMockGapsApi: Api = { ...realApi, ...mockOnlyApi };
+
 export const api: Api = env.useMock
   ? env.useRealStocks || env.useRealBoard
     ? hybridApi
     : mockApi
-  : realApi;
+  : realWithMockGapsApi;
 
 export { ApiError, httpAuth } from './http';
 export type * from './types';
