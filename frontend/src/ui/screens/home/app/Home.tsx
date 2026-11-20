@@ -231,7 +231,8 @@ export function AppHome(p: AppHomeProps) {
           </Pressable>
         </Animated.View>
         <View style={st.wl}>
-          <HeroCard name={p.user_name} total={total} counts={p.counts} editing={editing} ready={ready} onCta={() => !editing && p.onOpenUpdates()} />
+          {p.firstStart}
+          {!p.firstStart ? <HeroCard name={p.user_name} total={total} counts={p.counts} editing={editing} ready={ready} onCta={() => !editing && p.onOpenUpdates()} /> : null}
           {order.map((id, i) => (
             <WidgetItem
               key={id}

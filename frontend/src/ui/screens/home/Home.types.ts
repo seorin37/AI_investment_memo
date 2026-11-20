@@ -115,6 +115,8 @@ export interface AppHomeProps extends HomeData, HomeCallbacks {
   header: (o: { line: boolean; onSearch: () => void }) => ReactNode;
   /** 검색: 최근 · 많이 찾는 · 전체 */
   search: { recent: SearchStock[]; popular: SearchStock[]; all: SearchStock[] };
+  /** 신규 사용자에게만 host가 끼워 넣는 첫 메모 카드 */
+  firstStart?: ReactNode;
 }
 
 export interface WebHomeProps extends HomeData, HomeCallbacks {
@@ -126,6 +128,8 @@ export interface WebHomeProps extends HomeData, HomeCallbacks {
   board: CustomItem[];
   onChangeBoard: (b: CustomItem[]) => void;
   onGoStart: () => void;
+  /** 신규 사용자에게만 host가 끼워 넣는 첫 메모 카드 */
+  firstStart?: ReactNode;
 }
 
 export type CustomWidget = 'market' | 'updates' | 'schedule' | 'news';

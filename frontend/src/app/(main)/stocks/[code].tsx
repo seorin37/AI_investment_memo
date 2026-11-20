@@ -19,18 +19,18 @@ import { feedOf, findMemo, versionsOf } from '@/ui/screens/updates/Updates.mock'
  */
 export default function StockScreen() {
   /* memo · ev: 업데이트(⑥)의 '근거 자세히 보기' → 메모 창을 그 소식 근거로 열기 */
-  const { code, tab, memo, ev } = useLocalSearchParams<{ code: string; tab?: 'board' | 'info'; memo?: string; ev?: string }>();
+  const { code, tab, memo, ev, first, stock_name } = useLocalSearchParams<{ code: string; tab?: 'board' | 'info'; memo?: string; ev?: string; first?: string; stock_name?: string }>();
   const active = tab === 'info' ? 'info' : 'board';
-  if (active === 'board') return <BoardTab key={memo ?? 'board'} code={code} memoParam={memo} ev={ev} />;
+  if (active === 'board') return <BoardTab key={memo ?? 'board'} code={code} memoParam={memo} ev={ev} firstFlow={first === '1'} stockName={stock_name} />;
   return <InfoTab code={code} />;
 }
 
 type Connect = { id: string | null; title: string; body: string; color: MemoColor; fromNew: boolean };
 
-function BoardTab({ code, memoParam, ev }: { code: string; memoParam?: string; ev?: string }) {
+function BoardTab({ code, memoParam, ev, firstFlow, stockName }: { code: string; memoParam?: string; ev?: string; firstFlow: boolean; stockName?: string }) {
   const router = useRouter();
-  const empty = code === mockEmptyStock.stock_code;
-  const stock = empty ? mockEmptyStock : mockBoardStock;
+  const empty = firstFlow || code === mockEmptyStock.stock_code;
+  const stock = firstFlow && stockName ? { ...mockEmptyStock, stock_code: code, name: stockName } : empty ? mockEmptyStock : mockBoardStock;
   const [memos, setMemos] = useState<Memo[]>(empty ? [] : mockBoardMemos);
   const [checklist, setChecklist] = useState<Checklist | null>(empty ? null : mockBoardChecklist);
   const [order, setOrder] = useState<string[]>(mockBoardOrder);
@@ -42,7 +42,7 @@ function BoardTab({ code, memoParam, ev }: { code: string; memoParam?: string; e
   const [openId, setOpenId] = useState<string | null>(memoParam ?? null);
   const [openTab, setOpenTab] = useState<'memo' | 'ai'>('memo');
   const [dlg, setDlg] = useState(!!memoParam);
-  const [newOpen, setNewOpen] = useState(false);
+  const [newOpen, setNewOpen] = useState(firstFlow);
   const [newKey, setNewKey] = useState(0);
   const [first, setFirst] = useState<string | undefined>(undefined);
   const [connect, setConnect] = useState<Connect | null>(null);
@@ -162,6 +162,7 @@ function BoardTab({ code, memoParam, ev }: { code: string; memoParam?: string; e
         setOrder((o) => [...o, id]);
         setNewOpen(false);
         if (ai) startConnect({ id, title, body, color, fromNew: true });
+        else if (firstFlow) router.replace({ pathname: '/', params: { onboarding: 'first_saved' } });
       }}
     />
     <WebConnectDialog
@@ -174,6 +175,7 @@ function BoardTab({ code, memoParam, ev }: { code: string; memoParam?: string; e
       onConfirm={() => {
         if (connect?.id) patch(connect.id, (m) => ({ ...m, ai_linked: true, ai_linked_at: mockToday }));
         setConnect(null);
+        if (firstFlow) router.replace({ pathname: '/', params: { onboarding: 'first_saved' } });
       }}
       onEditMemo={() => {
         const id = connect?.id;

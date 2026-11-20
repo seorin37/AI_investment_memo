@@ -1,6 +1,6 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Linking } from 'react-native';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { useMockNotice } from '@/components/layout/MobileScreen';
 import { useUI } from '@/store/ui';
 import type { Checklist } from '@/types/models';
@@ -8,28 +8,46 @@ import { TopBar } from '@/ui/layout/app/TopBar';
 import { AppHome } from '@/ui/screens/home/app/Home';
 import { mockHomeData, mockHomeSearch } from '@/ui/screens/home/Home.mock';
 import type { HomeWidget } from '@/ui/screens/home/Home.types';
+import { mockOnboardingStocks } from '@/ui/screens/onboarding/Onboarding.mock';
+import { AppFirstHome } from '@/ui/screens/onboarding/app/FirstHome';
 
-/**
- * 앱 홈 탭 = UI v2 (ui/screens/home/app · ②). 웹은 index.tsx.
- * mock 단계: Home.mock (11.18 종가 기준). 위젯 순서·체크리스트 변화는 이 화면 안에서만.
- * ?fail=1: 시장 위젯 불러오기 실패 상태 (5초 뒤 자동 다시 시도).
- * 홈에서 가는 길: 업데이트 탭 · 종목별 업데이트 · 검색 → 메모 보드(③) · 지수 자세히(/market/[key]) · MY.
- */
+/** 앱 홈 탭. 온보딩 query는 현재 흐름에서만 유지되는 host 임시 상태다. */
 export default function HomeTab() {
   const router = useRouter();
   const notice = useMockNotice();
   const setTabBarHidden = useUI((s) => s.setTabBarHidden);
-  const { fail } = useLocalSearchParams<{ fail?: string }>();
+  const { fail, onboarding, selected } = useLocalSearchParams<{ fail?: string; onboarding?: string; selected?: string }>();
   const [widgets, setWidgets] = useState<HomeWidget[]>(mockHomeData.widgets);
   const [checklists, setChecklists] = useState<Record<string, Checklist>>(mockHomeData.checklists);
   const [retried, setRetried] = useState(false);
+  const [firstActive, setFirstActive] = useState(!!onboarding);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const selectedCodes = useMemo(() => (selected ?? '').split(',').map((v) => v.split(':')[0]).filter(Boolean), [selected]);
+  const firstStocks = useMemo(() => {
+    const found = mockOnboardingStocks.filter((s) => selectedCodes.includes(s.stock_code));
+    return found.length ? found : mockOnboardingStocks.slice(0, 3);
+  }, [selectedCodes]);
   const marketOk = fail !== '1' || retried;
-  /* 다른 탭으로 가면 편집 때문에 숨긴 탭바를 다시 보이게 */
   useFocusEffect(useCallback(() => () => setTabBarHidden(false), [setTabBarHidden]));
   const patchCl = (code: string, f: (c: Checklist) => Checklist) => setChecklists((all) => (all[code] ? { ...all, [code]: f(all[code]) } : all));
+  const firstStart = firstActive ? (
+    <AppFirstHome
+      stocks={firstStocks}
+      guide_open={false}
+      picker_open={pickerOpen}
+      saved={onboarding === 'first_saved'}
+      onNextGuide={() => setPickerOpen(true)}
+      onCloseGuide={() => {}}
+      onSkip={() => { setPickerOpen(false); setFirstActive(false); }}
+      onOpenPicker={() => setPickerOpen(true)}
+      onClosePicker={() => setPickerOpen(false)}
+      onPickStock={(stock) => { setPickerOpen(false); router.navigate({ pathname: '/memo/new', params: { code: stock.stock_code, name: stock.name, from_onboarding: '1' } } as Href); }}
+    />
+  ) : undefined;
   return (
     <AppHome
       {...mockHomeData}
+      firstStart={firstStart}
       widgets={widgets}
       checklists={checklists}
       market={marketOk ? mockHomeData.market : null}

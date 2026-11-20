@@ -88,6 +88,7 @@ export function CustomHome(p: WebHomeProps) {
           <Text style={st.startBT}>시작 화면으로</Text>
         </Pressable>
       </View>
+      {p.firstStart ? <View style={{ width: 860, maxWidth: '100%', marginBottom: 20 }}>{p.firstStart}</View> : null}
       <View style={[st.board, { height: bottom + 48 }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={() => setSel(null)} accessibilityLabel="위젯 고르기 풀기" />
         {board.length > 0 ? <GridBg /> : null}

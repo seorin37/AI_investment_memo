@@ -156,6 +156,7 @@ function TemplateHome(p: WebHomeProps) {
                 ) : null}
               </View>
             </View>
+            {p.firstStart ? <View style={{ marginBottom: 20 }}>{p.firstStart}</View> : null}
             {editing ? (
               <EditBar onAdd={() => setAdd(true)} onReset={() => setReset(true)} onDone={() => setEditing(false)} />
             ) : (
