@@ -199,6 +199,7 @@ class ConfirmationAnswer(BaseModel):
 class ChecklistResponse(BoardBase):
     kind: Literal["checklist"]
     items: list[ChecklistItemResponse]
+    pinned: bool = False
 
 
 class ReferenceResponse(BoardBase):

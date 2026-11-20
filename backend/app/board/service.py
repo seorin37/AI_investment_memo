@@ -156,7 +156,7 @@ class BoardService:
         kind = str(row["kind"])
         allowed = {
             "note": {"title", "body", "tags", "color", "pinned"},
-            "checklist": {"title", "items"},
+            "checklist": {"title", "items", "pinned"},              # 2026-11-20 체크리스트도 테이프(고정)
             "reference": {"title", "links"},
         }[kind]
         unsupported = set(values) - allowed
@@ -348,7 +348,8 @@ class BoardService:
                 "unread_updates": self.tracking.unread_updates(memo_id),
             }
         if kind == "checklist":
-            return {**common, "kind": "checklist", "items": self.repository.checklist_items(memo_id)}
+            return {**common, "kind": "checklist", "items": self.repository.checklist_items(memo_id),
+                    "pinned": bool(row.get("is_pinned"))}
         if kind == "reference":
             return {**common, "kind": "reference", "links": self.repository.links(memo_id)}
         raise InvalidBoardPatchError(f"지원하지 않는 메모 유형입니다: {kind}")

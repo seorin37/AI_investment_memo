@@ -29,6 +29,14 @@ def _user_id(current: dict) -> int:
         raise HTTPException(401, detail="유효하지 않은 인증 사용자입니다.") from exc
 
 
+@router.get("/updates")
+def list_market_updates(stock_code: str | None = Query(None, pattern=r"^[0-9A-Z]{6}$"),
+                        limit: int | None = Query(None, ge=1, le=500), current: dict = Depends(get_current_user),
+                        service: UpdatesService = Depends(get_query_service)):
+    """최신 업데이트 피드 (계약 listUpdates → MarketUpdate[]): 지금 내 종목의 최근 30일 카드, 최신순."""
+    return service.market_updates(_user_id(current), stock_code, limit)
+
+
 @router.get("/stocks/{code}/ai-updates")
 def list_stock_ai_updates(code: str, limit: int = Query(100, ge=1, le=500), current: dict = Depends(get_current_user),
                           service: UpdatesService = Depends(get_query_service)):

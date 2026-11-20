@@ -46,14 +46,6 @@ const MOCK_ONLY = [
   'disconnectMcpApp',
   // /files
   'uploadFile',
-  // /price-conditions, /memos/{id}/price-conditions/{id}
-  'listPriceConditions',
-  'setPriceConditionTracking',
-  // /checklist-items
-  'listHomeChecklist',
-  'addChecklistItem',
-  // /updates
-  'listUpdates',
   // /ai/stats
   'getAiStats',
 ] as const satisfies readonly (keyof Api)[];
