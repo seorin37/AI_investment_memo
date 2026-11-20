@@ -24,7 +24,7 @@ export function AppPlans(p: PlansProps) {
           <Pressable disabled={free} onPress={() => p.onStart(pick)} style={({ pressed }) => [st.cta, free && st.ctaDis, pressed && { opacity: 0.9 }]} accessibilityRole="button">
             <Text style={[st.ctaT, free && { color: MC.ink3 }]}>{free ? '지금 쓰는 플랜이에요' : `${pick} 시작하기`}</Text>
           </Pressable>
-          <Text style={st.cap}>결제는 스토어 결제 창에서 진행돼요 (연동 전)</Text>
+          <Text style={st.cap}>결제는 스토어 결제 창에서 진행돼요</Text>
         </>
       }
     >

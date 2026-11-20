@@ -199,7 +199,7 @@ export function PlanBar({ pick, free, onStart }: { pick: string; free: boolean; 
       <Pressable disabled={free} onPress={onStart} accessibilityRole="button" style={({ hovered }: Hover) => [tb.pbtn, { backgroundColor: free ? '#C9CCD2' : hovered ? '#2A2C30' : '#15171A' }]}>
         <Text style={tb.pbtnT}>{free ? '현재 플랜' : `${pick} 시작하기`}</Text>
       </Pressable>
-      <Text style={ws.note}>결제는 스토어 결제 창에서 진행돼요 (연동 전)</Text>
+      <Text style={ws.note}>결제는 스토어 결제 창에서 진행돼요</Text>
     </View>
   );
 }

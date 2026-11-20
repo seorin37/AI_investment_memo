@@ -126,7 +126,9 @@ export default function MainLayout() {
       studio={{
         open: studioOpen,
         onToggle: () => setStudioOpen((o) => !o),
+        /* AI 사용량은 설정 창(My.mock)과 같은 값 */
         ...mockStudioHead,
+        usagePct: mockMyUsage.usage_pct,
         onUsage: () => {},
         onFeature: () => setStudioOpen(true),
       }}

@@ -42,7 +42,7 @@ export const mockPlanCompare: [string, (string | true)[]][] = [
   ['스튜디오 크레딧(월)', ['[미정]', '[미정]', '[미정]']],
   ['추가 크레딧 충전', [true, true, true]],
 ];
-export const mockPlanNotes = ['가격·사용량·크레딧은 팀 확정 전 자리표시예요.', '언제든 해지할 수 있고, 해지해도 쓴 기간까지는 그대로 써요.', '투자 권유·수익 보장 기능은 어떤 플랜에도 없어요.'];
+export const mockPlanNotes = ['언제든 해지할 수 있고, 해지해도 쓴 기간까지는 그대로 써요.', '투자 권유·수익 보장 기능은 어떤 플랜에도 없어요.'];
 export const mockPlanDefault = 'PLUS';
 
 /** 데이터 출처 (원본 정보 화면) */
