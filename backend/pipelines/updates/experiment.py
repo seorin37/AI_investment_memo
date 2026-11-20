@@ -582,6 +582,16 @@ def main(argv: list[str] | None = None) -> int:
                     failed_items.add(d.item.item_id)
                     failed_items.update(m["item_id"] for m in d.merged_items)
                     print(f"카드 저장 실패 {d.item.item_id}: {type(exc).__name__}: {str(exc)[:200]}", file=sys.stderr)
+        from .response import ASK_NO_ANSWER
+        by_id = {i.item_id: i for i in items}
+        for r in responses:                                     # 질문(0019)에 답할 자료가 없을 때: '확인되지 않았어요' 답을 저장하고 닫는다
+            if r.type == ASK_NO_ANSWER and r.item_id in by_id:
+                try:
+                    writer.write_no_answer(by_id[r.item_id], r)
+                except Exception as exc:
+                    writer.written["failed"] += 1
+                    failed_items.add(r.item_id)
+                    print(f"질문 답 저장 실패 {r.item_id}: {type(exc).__name__}: {str(exc)[:200]}", file=sys.stderr)
         summary["db_store"] = {"target": store_target, "run_id": run_id, "shared": shared, **writer.written,
                                "failed_items": sorted(failed_items)}
         head.append(f"- DB 저장 ({store_target}, run_id {run_id}): {json.dumps(writer.written, ensure_ascii=False)}")

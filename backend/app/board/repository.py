@@ -21,37 +21,76 @@ class BoardRepository:
             {"user_id": user_id, "symbol": symbol},
         ).first() is not None
 
+    # 보드 순서 (2026-11-20, 0019 memos.position): 보드 하나 = 사용자 × 종목. 화면 순서는 왼쪽→오른쪽, 위→아래.
+    # 응답의 position은 보드 안 자리(0부터)라 저장값에 빈 번호나 NULL이 있어도 0, 1, 2…로 보인다.
+    _BOARD_ORDER = "m.position NULLS LAST, m.created_at, m.id"
+
     def list_board(self, user_id: int, symbol: str) -> list[dict[str, Any]]:
         rows = self.db.execute(
             text(
-                """
-                SELECT m.*, (row_number() OVER (ORDER BY m.created_at, m.id) - 1)::integer AS position
+                f"""
+                SELECT m.*
                 FROM memos m
                 WHERE m.user_id = :user_id AND m.symbol = :symbol AND m.deleted_at IS NULL
-                ORDER BY m.created_at, m.id
+                ORDER BY {self._BOARD_ORDER}
                 """
             ),
             {"user_id": user_id, "symbol": symbol},
         ).mappings().all()
-        return [dict(row) for row in rows]
+        return [{**dict(row), "position": index} for index, row in enumerate(rows)]
 
     def get_owned(self, user_id: int, memo_id: int) -> dict[str, Any] | None:
         row = self.db.execute(
             text(
-                """
-                SELECT m.*,
-                       (SELECT count(*)::integer FROM memos before
-                        WHERE before.user_id = m.user_id
-                          AND before.symbol = m.symbol
-                          AND before.deleted_at IS NULL
-                          AND (before.created_at, before.id) < (m.created_at, m.id)) AS position
-                FROM memos m
-                WHERE m.id = :memo_id AND m.user_id = :user_id AND m.deleted_at IS NULL
+                f"""
+                SELECT ranked.* FROM (
+                  SELECT m.*, (row_number() OVER (ORDER BY {self._BOARD_ORDER}) - 1)::integer AS board_position
+                  FROM memos m
+                  JOIN memos target ON target.id = :memo_id AND target.user_id = :user_id
+                  WHERE m.user_id = target.user_id AND m.symbol = target.symbol AND m.deleted_at IS NULL
+                ) ranked
+                WHERE ranked.id = :memo_id
                 """
             ),
             {"user_id": user_id, "memo_id": memo_id},
         ).mappings().first()
-        return dict(row) if row else None
+        if not row:
+            return None
+        result = dict(row)
+        result["position"] = result.pop("board_position")
+        return result
+
+    def board_order(self, user_id: int, symbol: str, *, lock: bool = False) -> list[dict[str, Any]]:
+        """보드 카드 순서 [{id, pinned}]. lock=True면 순서를 다시 쓰는 동안 같은 보드의 동시 변경을 막는다."""
+        rows = self.db.execute(
+            text(
+                f"""
+                SELECT m.id, m.is_pinned
+                FROM memos m
+                WHERE m.user_id = :user_id AND m.symbol = :symbol AND m.deleted_at IS NULL
+                ORDER BY {self._BOARD_ORDER}
+                {"FOR UPDATE" if lock else ""}
+                """
+            ),
+            {"user_id": user_id, "symbol": symbol},
+        ).all()
+        return [{"id": int(memo_id), "pinned": bool(pinned)} for memo_id, pinned in rows]
+
+    def write_order(self, user_id: int, symbol: str, ids: list[int]) -> None:
+        """보드 카드 순서를 0부터 다시 매긴다. ids는 그 보드의 살아 있는 카드 전체여야 한다."""
+        if not ids:
+            return
+        self.db.execute(
+            text(
+                """
+                UPDATE memos m SET position = o.pos - 1
+                FROM unnest(CAST(:ids AS bigint[])) WITH ORDINALITY AS o(id, pos)
+                WHERE m.id = o.id AND m.user_id = :user_id AND m.symbol = :symbol
+                  AND m.deleted_at IS NULL AND m.position IS DISTINCT FROM o.pos - 1
+                """
+            ),
+            {"ids": ids, "user_id": user_id, "symbol": symbol},
+        )
 
     def create(
         self,
@@ -89,9 +128,7 @@ class BoardRepository:
                 "ai_linked": ai_linked,
             },
         ).mappings().one()
-        result = dict(row)
-        result["position"] = self._last_position(user_id, symbol)
-        return result
+        return dict(row)                                        # 자리는 service가 place_new로 정한다
 
     def update_base(self, user_id: int, memo_id: int, values: dict[str, Any]) -> bool:
         columns = {
@@ -294,17 +331,3 @@ class BoardRepository:
             text("SELECT count(*) FROM memo_revisions WHERE memo_id = :memo_id"),
             {"memo_id": memo_id},
         ).scalar_one()
-
-    def _last_position(self, user_id: int, symbol: str) -> int:
-        return max(
-            0,
-            self.db.execute(
-                text(
-                    """
-                    SELECT count(*) - 1 FROM memos
-                    WHERE user_id = :user_id AND symbol = :symbol AND deleted_at IS NULL
-                    """
-                ),
-                {"user_id": user_id, "symbol": symbol},
-            ).scalar_one(),
-        )

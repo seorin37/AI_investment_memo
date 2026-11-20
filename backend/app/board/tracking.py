@@ -112,19 +112,28 @@ class TrackingRepository:
             WHERE memo_id = :memo_id AND status = CAST(:frm AS tracking_status)"""),
                                {"memo_id": memo_id, "frm": from_status, "to": to_status}).rowcount
 
-    def sync(self, memo_id: int, new_items: list[dict], confirmations: list[dict]) -> dict[str, list]:
-        """항목 맞추기. 반환 {kept, created, done} (항목 dict 목록)."""
+    def sync(self, memo_id: int, new_items: list[dict], confirmations: list[dict],
+             questions: list[dict] | None = None) -> dict[str, list]:
+        """항목 맞추기. 반환 {kept, created, done} (항목 dict 목록).
+
+        questions(2026-11-20, 0019): 메모 분석이 찾은 '한 번 답하면 끝나는 질문'을 type='ask' 항목으로 둔다.
+        매일 실행이 한 번 답하면 done이 된다. 이미 답한(done) 같은 질문은 메모를 다시 저장해도 새로 만들지 않는다."""
         existing = self.items(memo_id)
         by_key = {item_key(e): e for e in existing}
+        answered = {item_key(e) for e in self.items(memo_id, ("done",)) if e["type"] == "ask"}
         option_keys = {item_key({**o["item"]}) for c in confirmations for o in c["options"] if o.get("item", {}).get("type")}
+        asks = [{"type": "ask", "description": " ".join(str(q.get("question") or "").split()), "keywords": []}
+                for q in (questions or [])]
         wanted, created, kept = set(), [], []
-        for it in new_items:
+        for it in [*new_items, *(a for a in asks if a["description"])]:
             key = item_key(it)
             if key in wanted:
                 continue
             wanted.add(key)
             if key in by_key:
                 kept.append(by_key[key])
+            elif it["type"] == "ask" and key in answered:
+                continue                                        # 이미 답한 질문
             else:
                 created.append(self.create_item(memo_id, it))
         done = [e for e in existing if item_key(e) not in wanted and item_key(e) not in option_keys]

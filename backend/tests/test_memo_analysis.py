@@ -102,6 +102,13 @@ class FakeRepo:
         self.rows[memo_id]["ai_linked"] = enabled
         return True
 
+    def board_order(self, user_id, symbol, *, lock=False):      # 보드 순서 (0019): 이 테스트는 순서를 보지 않는다
+        return [{"id": i, "pinned": bool(r.get("is_pinned"))} for i, r in self.rows.items() if r["symbol"] == symbol]
+
+    def write_order(self, user_id, symbol, ids):
+        for index, memo_id in enumerate(ids):
+            self.rows[memo_id]["position"] = index
+
 
 class FakeTracking:
     def __init__(self):
@@ -128,7 +135,7 @@ class FakeTracking:
     def changed_since_analysis(self, memo_id):
         return self.changed
 
-    def sync(self, memo_id, new_items, confirmations):
+    def sync(self, memo_id, new_items, confirmations, questions=None):
         created = [{**i, "id": 100 + n, "status": "active"} for n, i in enumerate(new_items)]
         self.items_list = created
         return {"kept": [], "created": created, "done": []}
