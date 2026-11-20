@@ -231,9 +231,10 @@ export function AppHome(p: AppHomeProps) {
           </Pressable>
         </Animated.View>
         <View style={st.wl}>
+          {/* 첫 홈(원본 start.html)은 위젯 없이 고른 종목만 있는 빈 홈 → firstStart 가 있으면 그것만 */}
           {p.firstStart}
           {!p.firstStart ? <HeroCard name={p.user_name} total={total} counts={p.counts} editing={editing} ready={ready} onCta={() => !editing && p.onOpenUpdates()} /> : null}
-          {order.map((id, i) => (
+          {!p.firstStart && order.map((id, i) => (
             <WidgetItem
               key={id}
               id={id}
@@ -269,16 +270,16 @@ export function AppHome(p: AppHomeProps) {
             </Pressable>
           </Reveal>
         ) : null}
-        {!editing ? (
+        {!editing && !p.firstStart ? (
           <Pressable onPress={enterEdit} accessibilityRole="button" style={({ pressed }) => [st.editbtn, pressed && { transform: [{ scale: 0.94 }] }]}>
             <SlidersGlyph />
             <Text style={st.editbtnT}>홈 편집</Text>
           </Pressable>
         ) : null}
-        <View style={{ height: !editing && nudge ? 64 : 0 }} />
+        <View style={{ height: !editing && nudge && !p.firstStart ? 64 : 0 }} />
       </ScrollView>
 
-      {nudge && !editing && ready ? (
+      {nudge && !editing && ready && !p.firstStart ? (
         <View style={[st.nudge, { bottom: snack ? 76 : 16 }]} pointerEvents="box-none">
           <NudgePill text="이번 주 내 종목, 한 장으로 볼까요?" onGo={() => p.onNudge('report')} onClose={() => setNudge(false)} />
         </View>

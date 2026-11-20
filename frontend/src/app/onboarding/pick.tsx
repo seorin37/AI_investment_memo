@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Platform } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
-import { mockOnboardingStocks } from '@/ui/screens/onboarding/Onboarding.mock';
+import { mockAppPopularStocks, mockOnboardingStocks } from '@/ui/screens/onboarding/Onboarding.mock';
 import type { HomeMode, OnboardingSelection, OnboardingStep, StockStatus } from '@/ui/screens/onboarding/Onboarding.types';
 import { AppOnboardingFlow } from '@/ui/screens/onboarding/app/OnboardingFlow';
 import { WebOnboardingFlow } from '@/ui/screens/onboarding/web/OnboardingFlow';
@@ -23,7 +23,8 @@ export default function PickScreen() {
     router.replace({ pathname: '/', params: { onboarding: 'welcome', home_mode: mode, selected: encoded } } as Href);
   };
   const props = {
-    stocks: mockOnboardingStocks,
+    /* 앱 = 원본 app/login.html '많이 찾는 종목' 12개 · 웹 = 기존 목록 (웹 원본 기준) */
+    stocks: Platform.OS === 'web' ? mockOnboardingStocks : mockAppPopularStocks,
     query,
     selected,
     step,

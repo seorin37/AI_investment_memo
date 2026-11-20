@@ -8,7 +8,9 @@ import { TopBar } from '@/ui/layout/app/TopBar';
 import { AppHome } from '@/ui/screens/home/app/Home';
 import { mockHomeData, mockHomeSearch } from '@/ui/screens/home/Home.mock';
 import type { HomeWidget } from '@/ui/screens/home/Home.types';
-import { mockOnboardingStocks } from '@/ui/screens/onboarding/Onboarding.mock';
+import { mockExtract } from '@/ui/screens/memo/MemoDetail.mock';
+import type { FirstMemoSummary } from '@/ui/screens/onboarding/FirstHome.types';
+import { mockFirstHomeStocks } from '@/ui/screens/onboarding/Onboarding.mock';
 import { AppFirstHome } from '@/ui/screens/onboarding/app/FirstHome';
 
 /** 앱 홈 탭. 온보딩 query는 현재 흐름에서만 유지되는 host 임시 상태다. */
@@ -16,32 +18,40 @@ export default function HomeTab() {
   const router = useRouter();
   const notice = useMockNotice();
   const setTabBarHidden = useUI((s) => s.setTabBarHidden);
-  const { fail, onboarding, selected } = useLocalSearchParams<{ fail?: string; onboarding?: string; selected?: string }>();
+  const { fail, onboarding, selected, first_code, first_title, first_body, first_ai } = useLocalSearchParams<{ fail?: string; onboarding?: string; selected?: string; first_code?: string; first_title?: string; first_body?: string; first_ai?: string }>();
+  const toast = useUI((s) => s.showToast);
   const [widgets, setWidgets] = useState<HomeWidget[]>(mockHomeData.widgets);
   const [checklists, setChecklists] = useState<Record<string, Checklist>>(mockHomeData.checklists);
   const [retried, setRetried] = useState(false);
   const [firstActive, setFirstActive] = useState(!!onboarding);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const selectedCodes = useMemo(() => (selected ?? '').split(',').map((v) => v.split(':')[0]).filter(Boolean), [selected]);
-  const firstStocks = useMemo(() => {
-    const found = mockOnboardingStocks.filter((s) => selectedCodes.includes(s.stock_code));
-    return found.length ? found : mockOnboardingStocks.slice(0, 3);
-  }, [selectedCodes]);
+  /* 저장한 첫 메모 (memo/new · memo/link 가 홈으로 돌아오며 넘김 — 이번 흐름의 임시 값) */
+  const firstMemo = useMemo<FirstMemoSummary | null>(() => {
+    if (onboarding !== 'first_saved' || !first_code || !first_title) return null;
+    const ai = first_ai === '1';
+    const name = mockFirstHomeStocks(`${first_code}:watching`)[0]?.name ?? '';
+    const chips = ai ? mockExtract(first_title, first_body ?? '').map((x) => (x.kind === 'price' ? `가격 조건 · 종가 ${(x.price ?? 0) / 10000}만 원 ${x.direction}` : `공시·뉴스 · ${x.label}`)) : [];
+    return { stock_code: first_code, stock_name: name, title: first_title, body: first_body ?? '', ai, chips };
+  }, [onboarding, first_code, first_title, first_body, first_ai]);
+  const firstStocks = useMemo(() => mockFirstHomeStocks(selected, firstMemo), [selected, firstMemo]);
   const marketOk = fail !== '1' || retried;
   useFocusEffect(useCallback(() => () => setTabBarHidden(false), [setTabBarHidden]));
   const patchCl = (code: string, f: (c: Checklist) => Checklist) => setChecklists((all) => (all[code] ? { ...all, [code]: f(all[code]) } : all));
+  const openNew = (code: string) => {
+    setPickerOpen(false);
+    router.navigate({ pathname: '/memo/new', params: { code, from_onboarding: '1', onboarding_selected: selected ?? '' } } as Href);
+  };
   const firstStart = firstActive ? (
     <AppFirstHome
+      user_name={mockHomeData.user_name}
       stocks={firstStocks}
-      guide_open={false}
+      memo={firstMemo}
       picker_open={pickerOpen}
-      saved={onboarding === 'first_saved'}
-      onNextGuide={() => setPickerOpen(true)}
-      onCloseGuide={() => {}}
-      onSkip={() => { setPickerOpen(false); setFirstActive(false); }}
       onOpenPicker={() => setPickerOpen(true)}
       onClosePicker={() => setPickerOpen(false)}
-      onPickStock={(stock) => { setPickerOpen(false); router.navigate({ pathname: '/memo/new', params: { code: stock.stock_code, name: stock.name, from_onboarding: '1', onboarding_selected: selected ?? '' } } as Href); }}
+      onPickStock={(stock) => openNew(stock.stock_code)}
+      onNoStocks={() => toast('먼저 내 종목에서 종목을 추가해 주세요')}
+      onContinue={() => { setPickerOpen(false); setFirstActive(false); }}
     />
   ) : undefined;
   return (
