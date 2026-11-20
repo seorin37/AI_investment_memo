@@ -33,18 +33,13 @@ const MOCK_ONLY = [
   // /calendar
   'listCalendar',
   'createCalendarEvent',
-  // /data/*
-  'getDataStats',
+  // /data/* (getDataStats는 백엔드 있음, 2026-11-20)
   'exportData',
   'deleteAllData',
-  // /feedback
-  'sendFeedback',
   // /mcp/*
   'disconnectMcpApp',
   // /files
   'uploadFile',
-  // /ai/stats
-  'getAiStats',
 ] as const satisfies readonly (keyof Api)[];
 
 type MockOnlyKey = (typeof MOCK_ONLY)[number];
