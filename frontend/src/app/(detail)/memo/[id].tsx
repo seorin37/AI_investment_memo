@@ -3,7 +3,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMockNotice } from '@/components/layout/MobileScreen';
 import type { Memo, MemoVersion } from '@/types/models';
 import { AppMemoDetail } from '@/ui/screens/memo/app/MemoDetail';
-import { mockDetailStockName, mockFeed, mockLastChecked, mockMemoById, mockToday, mockTrackItems, mockVersions } from '@/ui/screens/memo/MemoDetail.mock';
+import { mockDetailStockName, mockLastChecked, mockToday, mockTrackItems } from '@/ui/screens/memo/MemoDetail.mock';
+import { feedOf, findMemo, mockUpdateStocks, versionsOf } from '@/ui/screens/updates/Updates.mock';
 
 /**
  * 앱 메모 상세 = UI v2 (ui/screens/memo/app). mock 단계: 보드 예시 메모(m1~m5)를 id 로 찾아 보여 주고, 바꾼 내용은 이 화면 안에서만.
@@ -13,13 +14,13 @@ export default function MemoDetailScreen() {
   const { id, tab, t } = useLocalSearchParams<{ id: string; tab?: string; t?: string }>();
   const router = useRouter();
   const notice = useMockNotice();
-  const [memo, setMemo] = useState<Memo>(() => mockMemoById(id));
-  const [versions, setVersions] = useState<MemoVersion[]>(() => mockVersions[memo.id] ?? []);
-  const [feed, setFeed] = useState(() => mockFeed[memo.id] ?? []);
+  const [memo, setMemo] = useState<Memo>(() => findMemo(id));
+  const [versions, setVersions] = useState<MemoVersion[]>(() => versionsOf(memo.id));
+  const [feed, setFeed] = useState(() => feedOf(memo.id));
   return (
     <AppMemoDetail
       memo={memo}
-      stockName={mockDetailStockName}
+      stockName={mockUpdateStocks.find((s) => s.stock_code === memo.stock_code)?.name ?? mockDetailStockName}
       versions={versions}
       feed={feed}
       trackItems={mockTrackItems[memo.id] ?? []}

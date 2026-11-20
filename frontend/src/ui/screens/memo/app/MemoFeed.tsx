@@ -152,8 +152,8 @@ function SkBar({ w, h }: { w: number; h: number }) {
   return <View style={{ width: w, maxWidth: '100%', height: h, borderRadius: 6, backgroundColor: '#E2E5EA' }} />;
 }
 
-/** 소식 카드 (원본 .uc: 라운드 18 · 안쪽 14·16 · 아래 10 · 종류별 바탕) */
-function FeedCard({ f, ver, open, onToggle, onOpenSource, onOpenEvidence }: { f: MemoFeedItem; ver?: MemoVersion; open: boolean; onToggle: () => void; onOpenSource?: (f: MemoFeedItem) => void; onOpenEvidence?: (f: MemoFeedItem) => void }) {
+/** 소식 카드 — 메모 상세 AI 탭 · 업데이트 탭(⑥)이 같이 씀 (원본 .uc: 라운드 18 · 안쪽 14·16 · 아래 10 · 종류별 바탕) */
+export function FeedCard({ f, ver, open, onToggle, onOpenSource, onOpenEvidence }: { f: MemoFeedItem; ver?: MemoVersion; open: boolean; onToggle: () => void; onOpenSource?: (f: MemoFeedItem) => void; onOpenEvidence?: (f: MemoFeedItem) => void }) {
   const [bg, ic] = FK[f.kind];
   const [cite, setCite] = useState(false);
   const srcName = f.source.split(' · ')[0];

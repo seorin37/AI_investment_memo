@@ -49,11 +49,11 @@ export const APP_SPARK_N = 24;
 
 /* ───────── 웹 (원본 marketData.ts) ───────── */
 
-export type WebRange = '1일' | '1주' | '1달' | '1년';
-export const WEB_RANGES: WebRange[] = ['1일', '1주', '1달', '1년'];
+/** ② 결정 (11.19): 웹도 '1일'(전 거래일 하루 흐름) 없이 1주부터 — 전일 확정 종가 원칙 */
+export type WebRange = '1주' | '1달' | '1년';
+export const WEB_RANGES: WebRange[] = ['1주', '1달', '1년'];
 
 export function webSeries(q: MarketIndex, r: WebRange) {
-  if (r === '1일') return q.day_flow;
   const n = r === '1주' ? 5 : r === '1달' ? 22 : 250;
   return q.closes.slice(-n);
 }
@@ -61,7 +61,7 @@ export function webSeries(q: MarketIndex, r: WebRange) {
 /** 원본 mkData: 208×40 좌표 선 · 기준선 · 등락 글자 (부호는 − U+2212) */
 export function mkData(q: MarketIndex, r: WebRange) {
   const sr = webSeries(q, r);
-  const first = r === '1일' ? q.value - q.change : sr[0];
+  const first = sr[0];
   const last = sr[sr.length - 1];
   const all = [...sr, first];
   const mn = Math.min(...all);
@@ -79,14 +79,13 @@ export function mkData(q: MarketIndex, r: WebRange) {
     base: Y(first),
     up: chg >= 0,
     label: `${sign}${nf(Math.abs(chg))} (${sign}${Math.abs(pct).toFixed(2)}%)`,
-    when: r === '1일' ? `${mmdd(q.as_of)} 종가 기준` : r,
+    when: `${r} · ${mmdd(q.as_of)} 종가 기준`,
     v: nf(last),
   };
 }
 
-/** 원본 rangeLabels: x축 날짜 5개 (1일은 시각 7개) */
+/** 원본 rangeLabels: x축 날짜 5개 */
 export function rangeLabels(r: WebRange, days: string[]): string[] {
-  if (r === '1일') return ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:30'];
   const n = r === '1주' ? 5 : r === '1달' ? 22 : 250;
   const d = days.slice(-n);
   return Array.from({ length: 5 }, (_, i) => d[Math.round((i / 4) * (d.length - 1))]).map((t) => (r === '1년' ? `${t.slice(2, 4)}.${t.slice(5, 7)}` : mmdd(t)));

@@ -28,7 +28,7 @@ export function Plug12({ size = 12, c = '#16161C' }: { size?: number; c?: string
 /* ───────── 시장 카드 (원본 home.tsx MarketCardBase: 테두리 #E5E7EB · 라운드 20 · 위 62 · 선 110 · 기간 48) ───────── */
 const FLAG = { kospi: 'flagKr', kosdaq: 'flagKr2', usd: 'flagUs' } as const;
 export function MarketCardBase({ q, h = 264, usdLabel, onMore, onPress }: { q: MarketIndex; h?: number; usdLabel?: string; onMore: (k: MarketKey) => void; onPress?: () => void }) {
-  const [r, setR] = useState<WebRange>('1일');
+  const [r, setR] = useState<WebRange>('1주');
   const [w, setW] = useState(244);
   const md = mkData(q, r);
   const col = md.up ? '#E5484D' : '#2F6BDB';

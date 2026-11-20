@@ -42,7 +42,10 @@ export interface SidebarProps {
   /** 이동 · 동작 (콜백만) */
   onNavigate: (to: 'home' | 'updates' | 'journal' | 'mine') => void;
   onOpenStock: (code: string) => void;
-  onStockMenu: (code: string) => void;
+  /** 종목 메뉴 (⋯ 또는 우클릭 · 화면 좌표) */
+  onStockMenu: (code: string, at: { x: number; y: number }) => void;
+  /** 보유·관심 묶음 안 순서 (그 묶음의 새 순서) */
+  onReorderStocks: (codes: string[]) => void;
   onAddStock: () => void;
   onBell: () => void;
   onToggleDark: () => void;

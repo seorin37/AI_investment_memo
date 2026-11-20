@@ -10,6 +10,7 @@ import type { AiLinkState } from '@/ui/screens/memo/MemoDetail.types';
 import { WebConnectDialog } from '@/ui/screens/memo/web/ConnectDialog';
 import { WebMemoDialog } from '@/ui/screens/memo/web/MemoDialog';
 import { WebNewMemoDialog } from '@/ui/screens/memo/web/NewMemoDialog';
+import { feedOf, findMemo, versionsOf } from '@/ui/screens/updates/Updates.mock';
 
 /**
  * 웹 종목: 보드 = UI v2 (ui/screens/board/web) · 기업 정보 = UI v2 (ui/screens/company/web · ⑤) — /stocks/000660?tab=info
@@ -17,15 +18,16 @@ import { WebNewMemoDialog } from '@/ui/screens/memo/web/NewMemoDialog';
  * 메모 창 · 새 메모 · AI 연결 창 = UI v2 (④ ui/screens/memo/web).
  */
 export default function StockScreen() {
-  const { code, tab } = useLocalSearchParams<{ code: string; tab?: 'board' | 'info' }>();
+  /* memo · ev: 업데이트(⑥)의 '근거 자세히 보기' → 메모 창을 그 소식 근거로 열기 */
+  const { code, tab, memo, ev } = useLocalSearchParams<{ code: string; tab?: 'board' | 'info'; memo?: string; ev?: string }>();
   const active = tab === 'info' ? 'info' : 'board';
-  if (active === 'board') return <BoardTab code={code} />;
+  if (active === 'board') return <BoardTab key={memo ?? 'board'} code={code} memoParam={memo} ev={ev} />;
   return <InfoTab code={code} />;
 }
 
 type Connect = { id: string | null; title: string; body: string; color: MemoColor; fromNew: boolean };
 
-function BoardTab({ code }: { code: string }) {
+function BoardTab({ code, memoParam, ev }: { code: string; memoParam?: string; ev?: string }) {
   const router = useRouter();
   const empty = code === mockEmptyStock.stock_code;
   const stock = empty ? mockEmptyStock : mockBoardStock;
@@ -37,9 +39,9 @@ function BoardTab({ code }: { code: string }) {
   /* ④ 메모 창 · 새 메모 · AI 연결 창 (mock: 바꾼 내용은 이 화면 안에서만) */
   const [versions, setVersions] = useState<Record<string, MemoVersion[]>>(mockVersions);
   const [feed, setFeed] = useState(mockFeed);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(memoParam ?? null);
   const [openTab, setOpenTab] = useState<'memo' | 'ai'>('memo');
-  const [dlg, setDlg] = useState(false);
+  const [dlg, setDlg] = useState(!!memoParam);
   const [newOpen, setNewOpen] = useState(false);
   const [newKey, setNewKey] = useState(0);
   const [first, setFirst] = useState<string | undefined>(undefined);
@@ -48,7 +50,7 @@ function BoardTab({ code }: { code: string }) {
   /* ?fail=1: AI 연결 창 첫 분석을 실패로 (분석 실패 화면 확인용) */
   const { fail } = useLocalSearchParams<{ fail?: string }>();
   const [failOnce, setFailOnce] = useState(fail === '1');
-  const opened = memos.find((m) => m.id === openId);
+  const opened = memos.find((m) => m.id === openId) ?? (openId && openId === memoParam ? findMemo(openId) : undefined);
   const patch = (id: string, f: (m: Memo) => Memo) => setMemos((all) => all.map((m) => (m.id === id ? f(m) : m)));
   const items = connect ? (connect.id && mockTrackItems[connect.id]?.length ? mockTrackItems[connect.id] : mockExtract(connect.title, connect.body)) : [];
   /* 분석 중 0.7초 (원본 웹 ConnectDialog) → 항목 있음 / 없음 */
@@ -122,8 +124,9 @@ function BoardTab({ code }: { code: string }) {
         open={dlg}
         memo={opened}
         stockName={stock.name}
-        versions={versions[opened.id] ?? []}
-        feed={feed[opened.id] ?? []}
+        versions={versions[opened.id] ?? versionsOf(opened.id)}
+        feed={feed[opened.id] ?? feedOf(opened.id)}
+        initialEvidence={opened.id === memoParam ? ev : undefined}
         trackItems={mockTrackItems[opened.id] ?? []}
         initialTab={openTab}
         onBack={() => setDlg(false)}

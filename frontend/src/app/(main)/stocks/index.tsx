@@ -1,49 +1,32 @@
 import React, { useState } from 'react';
-import { Platform } from 'react-native';
-import { Redirect, useRouter } from 'expo-router';
-import { MobileScreen, useMockNotice, useProfileAction } from '@/components/layout/MobileScreen';
-import { TopBar } from '@/components/layout/TopBar';
-import { useLargeTitle } from '@/components/motion/Navigation';
-import { MyStocks } from '@/features/stock/MyStocks';
-import { mockMyStocksProps } from '@/features/stock/MyStocks.mock';
-import { useBackClose } from '@/hooks/useBackClose';
+import { useRouter } from 'expo-router';
+import { mockMyStocksData } from '@/ui/screens/stocks/MyStocks.mock';
+import type { MyStock } from '@/ui/screens/stocks/MyStocks.types';
+import { WebMyStocks } from '@/ui/screens/stocks/web/MyStocks';
 
-/** 앱 내 종목 탭 (웹에는 이 화면이 없어 홈으로). mock 단계 */
-export default function MyStocksTab() {
-  if (Platform.OS === 'web') return <Redirect href="/" />;
-  return <MyStocksScreen />;
-}
-
-function MyStocksScreen() {
+/**
+ * 웹 내 종목 = UI v2 (ui/screens/stocks/web · ⑥). 앱은 index.native.tsx.
+ * mock: MyStocks.mock — 추가·옮기기·빼기는 이 화면 안에서만 (사이드바 종목은 셸에서 따로).
+ */
+export default function MyStocksPage() {
   const router = useRouter();
-  const profile = useProfileAction();
-  const notice = useMockNotice();
-  const lt = useLargeTitle();
-  const [reorder, setReorder] = useState(false);
-  useBackClose(() => {
-    if (reorder) { setReorder(false); return true; }
-    return false;
-  });
+  const [stocks, setStocks] = useState<MyStock[]>(mockMyStocksData.stocks);
   return (
-    <MobileScreen
-      bar={
-        <TopBar
-          left="title"
-          title="내 종목"
-          actions={reorder ? [{ kind: 'text', label: '완료', emphasis: true, onPress: () => setReorder(false) }] : [profile]}
-          lineOpacity={lt.barLineOpacity}
-        />
-      }
-    >
-      <MyStocks
-        {...mockMyStocksProps}
-        reorder_mode={reorder}
-        onOpenStock={(code) => router.push({ pathname: '/stocks/[code]', params: { code } })}
-        onAddStock={() => notice('종목 추가')}
-        onLongPressStock={() => setReorder(true)}
-        onReorder={() => notice('순서 저장')}
-        onScroll={lt.onScroll}
+      <WebMyStocks
+        {...mockMyStocksData}
+        stocks={stocks}
+        onOpenStock={(code) => router.navigate({ pathname: '/stocks/[code]', params: { code } })}
+        onOpenCompany={(code) => router.navigate({ pathname: '/stocks/[code]', params: { code, tab: 'info' } })}
+        onAdd={(code, hold) => {
+          const u = mockMyStocksData.universe.find((s) => s.stock_code === code);
+          if (!u) return;
+          setStocks((all) => [...all, { stock_code: u.stock_code, name: u.name, logo: u.logo, logo_bg: u.logo_bg, logo_ink: u.logo_ink, market: u.market, status: hold, memo_count: 0, ai_count: 0, new_count: 0, price: u.price, change_pct: u.change_pct, ai_ready: u.ai_ready }]);
+        }}
+        onMove={(codes, hold) => setStocks((all) => all.map((s) => (codes.includes(s.stock_code) ? { ...s, status: hold } : s)))}
+        onRemove={(codes) => setStocks((all) => all.filter((s) => !codes.includes(s.stock_code)))}
+        onRestore={setStocks}
+        onReorder={(codes) => setStocks((all) => codes.map((c) => all.find((s) => s.stock_code === c)).filter((s): s is MyStock => !!s))}
+        onWriteMemo={(code) => router.navigate({ pathname: '/stocks/[code]', params: { code } })}
       />
-    </MobileScreen>
   );
 }

@@ -9,11 +9,11 @@ import { CountBadge } from '@/ui/shared/CountBadge';
 import { SkySwitch } from '@/ui/shared/SkySwitch';
 import { StockLogo } from '@/ui/shared/StockLogo';
 import { curve, fpx, shadow, size, webColor } from '@/ui/theme';
+import { SortList } from './sidebarSort.web';
 import type { SideKey, SideSearchHit, SidebarProps, SideStock } from './WebShell.types';
 
 /* 원본 shell.tsx: Figma Main Sidebar (Expanded 250 / Collapsed 72) — 위치·크기 그대로 */
 const LABEL = { ...fpx(17, 26), color: webColor.label };
-const ROW = 52;
 /* 웹 전용 스타일 (RN 타입에 없는 값) */
 const FIXED = { position: 'fixed' } as unknown as ViewStyle;
 const NO_OUTLINE = { outlineStyle: 'none' } as unknown as ViewStyle;
@@ -66,18 +66,21 @@ function Bell({ unread, rail, onPress }: { unread: number; rail?: boolean; onPre
   );
 }
 
-function StockRow({ s, on, onOpen, onMenu }: { s: SideStock; on: boolean; onOpen: () => void; onMenu: () => void }) {
+function StockRow({ s, on, lifted, onOpen, onMenu }: { s: SideStock; on: boolean; lifted?: boolean; onOpen: () => void; onMenu: (at: { x: number; y: number }) => void }) {
   const [hover, setHover] = useState(false);
   return (
     <View style={st.stockWrap} onPointerEnter={() => setHover(true)} onPointerLeave={() => setHover(false)}>
-      <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel={s.name} style={[st.stock, { backgroundColor: on ? webColor.selBg : hover ? webColor.hover : 'transparent' }]}>
+      <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel={s.name} style={[st.stock, { backgroundColor: lifted ? '#FFFFFF' : on ? webColor.selBg : hover ? webColor.hover : 'transparent' }]}>
         <StockLogo logo={s.logo} bg={s.logo_bg} ink={s.logo_ink} size={24} radius={7.2} variant="webSide" />
         <Text style={[LABEL, st.shrink, on && st.on]} numberOfLines={1}>
           {s.name}
         </Text>
       </Pressable>
-      {hover ? (
-        <Pressable onPress={onMenu} accessibilityRole="button" accessibilityLabel={`${s.name} 메뉴`} style={({ hovered }: HoverState) => [st.stockMenu, hovered && { backgroundColor: webColor.menuHover }]}>
+      {hover && !lifted ? (
+        <Pressable onPress={(e) => {
+          const ne = e.nativeEvent as unknown as { pageX: number; pageY: number };
+          onMenu({ x: ne.pageX - 12, y: ne.pageY + 14 });
+        }} accessibilityRole="button" accessibilityLabel={`${s.name} 메뉴`} style={({ hovered }: HoverState) => [st.stockMenu, hovered && { backgroundColor: webColor.menuHover }]}>
           <WebIcon name="dotsH" size={14} color={webColor.sub2} />
         </Pressable>
       ) : null}
@@ -87,7 +90,7 @@ function StockRow({ s, on, onOpen, onMenu }: { s: SideStock; on: boolean; onOpen
 
 const isStock = (cur: SideKey, code: string) => typeof cur === 'object' && cur !== null && cur.stock === code;
 
-/** 웹 사이드바 (펼침 250 · 접힘 72). 종목 순서 끌기 · 우클릭 메뉴는 ⑥ 내 종목 묶음에서 */
+/** 웹 사이드바 (펼침 250 · 접힘 72). 종목 순서 끌기 · 우클릭 메뉴 = ⑥ (sidebarSort.web) */
 export function Sidebar(p: SidebarProps) {
   const [fly, setFly] = useState(false);
   const [q, setQ] = useState('');
@@ -281,13 +284,15 @@ export function Sidebar(p: SidebarProps) {
                     {g.list.length ? (
                       <View style={st.listWrap}>
                         <View style={st.listLine} />
-                        <View style={{ width: 170, height: g.list.length * ROW - 12 }}>
-                          {g.list.map((s, i) => (
-                            <View key={s.stock_code} style={[st.abs, { top: i * ROW }]}>
-                              <StockRow s={s} on={isStock(p.current, s.stock_code)} onOpen={() => p.onOpenStock(s.stock_code)} onMenu={() => p.onStockMenu(s.stock_code)} />
-                            </View>
-                          ))}
-                        </View>
+                        <SortList
+                          codes={g.list.map((s) => s.stock_code)}
+                          onCommit={p.onReorderStocks}
+                          onMenu={p.onStockMenu}
+                          renderRow={(code, lifted) => {
+                            const s = g.list.find((x) => x.stock_code === code);
+                            return s ? <StockRow s={s} lifted={lifted} on={isStock(p.current, code)} onOpen={() => p.onOpenStock(code)} onMenu={(at) => p.onStockMenu(code, at)} /> : null;
+                          }}
+                        />
                       </View>
                     ) : (
                       <Text style={st.empty}>{g.label} 종목이 없어요</Text>

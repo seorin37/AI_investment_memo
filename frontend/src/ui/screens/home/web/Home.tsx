@@ -369,16 +369,10 @@ function MarketDetailDialog({ q, days, onClose }: { q: MarketIndex | null; days:
   const Y = (v: number) => 10 + ((mx - v) / (mx - mn || 1)) * (H - 40);
   const col = md.up ? '#E5484D' : '#2F6BDB';
   const labels = rangeLabels(r, days);
-  const ds = r === '1일' ? [] : days.slice(-sr.length);
+  const ds = days.slice(-sr.length);
   const idx = hx === null ? null : Math.max(0, Math.min(sr.length - 1, Math.round((hx / W) * (sr.length - 1))));
   const fmt = (n: number) => n.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const when = (i: number) => {
-    if (r === '1일') {
-      const m = (i * 390) / (sr.length - 1);
-      return `${String(9 + Math.floor(m / 60)).padStart(2, '0')}:${String(Math.floor(m % 60)).padStart(2, '0')}`;
-    }
-    return ds[i] ? `${mmdd(ds[i])} 종가` : '';
-  };
+  const when = (i: number) => (ds[i] ? `${mmdd(ds[i])} 종가` : '');
   const line = sr.map((v, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(v).toFixed(1)}`).join('');
   const e = curve.ease(t);
   return (
@@ -432,8 +426,7 @@ function MarketDetailDialog({ q, days, onClose }: { q: MarketIndex | null; days:
           ))}
         </View>
         <Text style={st.mdFoot}>
-          선을 마우스로 훑으면 그때의 값이 보여요 · {r === '1일' ? '전 거래일 하루 흐름 · ' : ''}
-          {`${mmdd(shown.as_of)} 종가 기준`}
+          {`선을 마우스로 훑으면 그때의 값이 보여요 · ${mmdd(shown.as_of)} 종가 기준`}
         </Text>
       </View>
     </Sheet>

@@ -89,7 +89,7 @@ function WebBarBtn({ label, onPress, disabled, danger, icon }: { label: string; 
  * 'N개 선택' 15 bold · '전체 선택 N'/'전체 해제' · | · 고정 · 복사 · 휴지통(#FF8A8F) · | · 선택 끝내기 (14 bold · 40 · 라운드 10))
  * 위치는 부모가 정함.
  */
-export function WebSelectBar({ n, total, all, onAll, onPin, onCopy, onTrash, onEnd }: { n: number; total: number; all: boolean; onAll: () => void; onPin: () => void; onCopy: () => void; onTrash: () => void; onEnd: () => void }) {
+export function WebSelectBar({ n, total, all, onAll, onPin, onCopy, onTrash, onEnd, extra }: { n: number; total: number; all: boolean; onAll: () => void; onPin?: () => void; onCopy?: () => void; onTrash: () => void; onEnd: () => void; extra?: { label: string; onPress: () => void }[] }) {
   return (
     <View style={st.web}>
       <Text style={st.webN}>{n}개 선택</Text>
@@ -97,8 +97,9 @@ export function WebSelectBar({ n, total, all, onAll, onPin, onCopy, onTrash, onE
         <Text style={[st.wbT, { color: 'rgba(255,255,255,0.8)' }]}>{all ? '전체 해제' : `전체 선택 ${total}`}</Text>
       </Pressable>
       <View style={st.webDiv} />
-      <WebBarBtn label="고정" icon="pin" disabled={!n} onPress={onPin} />
-      <WebBarBtn label="복사" icon="copy" disabled={!n} onPress={onCopy} />
+      {extra?.map((e) => <WebBarBtn key={e.label} label={e.label} disabled={!n} onPress={e.onPress} />)}
+      {onPin ? <WebBarBtn label="고정" icon="pin" disabled={!n} onPress={onPin} /> : null}
+      {onCopy ? <WebBarBtn label="복사" icon="copy" disabled={!n} onPress={onCopy} /> : null}
       <WebBarBtn label="휴지통" icon="trash" danger disabled={!n} onPress={onTrash} />
       <View style={st.webDiv} />
       <WebBarBtn label="선택 끝내기" onPress={onEnd} />

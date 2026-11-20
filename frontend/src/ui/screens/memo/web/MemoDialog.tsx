@@ -36,7 +36,10 @@ export function WebMemoDialog(p: MemoDetailProps & { open: boolean }) {
   const [text, setText] = useState(joinMemo(m.title, m.body));
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   /* 창 안 근거 상세 · 수정 이력 (이력은 근거에서 열려 뒤로 가면 근거로) */
-  const [sub, setSub] = useState<Sub | null>(null);
+  const [sub, setSub] = useState<Sub | null>(() => {
+    const it = p.initialEvidence ? p.feed.find((f) => f.id === p.initialEvidence) : undefined;
+    return it ? { k: 'ev', item: it } : null;
+  });
   /* AI 연결 창에서 켜고 돌아오면 같이 켜짐 (원본 useEffect [memo.ai]) */
   const [linked, setLinked] = useState(m.ai_linked);
   if (linked !== m.ai_linked) {

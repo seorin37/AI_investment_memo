@@ -169,7 +169,7 @@ export function PlusGlyph({ size, stroke }: { size: number; stroke: number }) {
 }
 
 /** 웹 메뉴 아이콘 (원본 x.tsx MI: 18) */
-export function MenuIcon({ k, color }: { k: 'pin' | 'trash' | 'copy' | 'find' | 'select'; color: string }) {
+export function MenuIcon({ k, color }: { k: 'pin' | 'trash' | 'copy' | 'find' | 'select' | 'move' | 'info'; color: string }) {
   const p = { stroke: color, strokeWidth: 1.6, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, fill: 'none' };
   return (
     <Svg width={18} height={18} viewBox="0 0 20 20" fill="none">
@@ -184,6 +184,13 @@ export function MenuIcon({ k, color }: { k: 'pin' | 'trash' | 'copy' | 'find' | 
         <>
           <Rect x={6.5} y={6.5} width={10} height={10} rx={2} {...p} />
           <Path d="M13.5 6.5V4.5a1 1 0 0 0-1-1h-8a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h2" {...p} />
+        </>
+      ) : k === 'move' ? (
+        <Path d="M4 7h12M12 3.5L15.5 7 12 10.5M16 13H4M8 16.5L4.5 13 8 9.5" {...p} />
+      ) : k === 'info' ? (
+        <>
+          <Rect x={3} y={3.5} width={14} height={13} rx={2.5} {...p} />
+          <Path d="M6.5 13V10M10 13V7.5M13.5 13v-4" {...p} />
         </>
       ) : k === 'find' ? (
         <>

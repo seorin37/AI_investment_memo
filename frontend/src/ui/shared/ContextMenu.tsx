@@ -5,7 +5,7 @@ import { MenuIcon } from '@/ui/icons/BoardGlyphs';
 import { curve, fpx, webColor } from '@/ui/theme';
 import { useMotionK } from '@/ui/motion/useMotion';
 
-export type MenuItem = { label: string; icon?: 'pin' | 'trash' | 'copy' | 'find' | 'select'; danger?: boolean; run: () => void } | '-';
+export type MenuItem = { label: string; icon?: 'pin' | 'trash' | 'copy' | 'find' | 'select' | 'move' | 'info'; danger?: boolean; run: () => void } | '-';
 
 /* 웹 전용 스타일: 화면 기준 위치 */
 const FIXED = { position: 'fixed' } as unknown as ViewStyle;

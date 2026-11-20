@@ -70,6 +70,8 @@ export interface MemoDetailProps {
   lastChecked?: string;
   /** 처음 여는 탭 (새 소식이 있으면 'ai') */
   initialTab?: 'memo' | 'ai';
+  /** 웹: 처음부터 이 소식의 근거 상세로 열기 (업데이트 화면 ⑥ '근거 자세히 보기') */
+  initialEvidence?: string;
   /** 바깥에서 탭 바꾸기 (근거 상세 [메모 보기] → 'memo'). 같은 탭을 다시 요청할 때는 key 를 바꿈 */
   tabRequest?: { tab: 'memo' | 'ai'; key: string };
   /** AI 사용량을 다 씀 */

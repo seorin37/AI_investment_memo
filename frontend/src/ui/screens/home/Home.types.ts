@@ -20,8 +20,6 @@ export interface MarketIndex {
   as_of: string;
   /** 일별 종가 (오래된 → 최근, days 와 같은 길이) */
   closes: number[];
-  /** 웹 '1일': 전 거래일 하루 흐름 (09:00~15:30 40점) */
-  day_flow: number[];
 }
 
 /** 홈 업데이트 위젯 한 줄 (종목별 새 소식) */
