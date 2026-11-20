@@ -5,10 +5,11 @@ import type { Memo, MemoVersion } from '@/types/models';
 import { NudgeArrow, NudgeCross, NudgeSpark, WebChev14, WebKindIcon, WebRevIcon, WebSparkle14, WebThreadArrow } from '@/ui/icons/MemoGlyphs';
 import { Collapse } from '@/ui/motion/Collapse';
 import { mmdd } from '@/ui/shared/memoFormat';
-import { fpx, paper } from '@/ui/theme';
+import { fpx } from '@/ui/theme';
 import type { AiTrackItem, MemoFeedItem } from '../MemoDetail.types';
 import { buildTimeline } from '../memoTimeline';
 import { INK } from './parts';
+import { usePaper } from '@/ui/shared/Dark';
 
 type Hover = { pressed: boolean; hovered?: boolean };
 /* 원본 KIND: 바탕 · 왼쪽 막대 */
@@ -25,6 +26,7 @@ const md = (iso: string) => {
  * 넛지 (소식 2개 이상) · 'AI가 요약했어요' · 투자 권유 아님 안내. AI 연결이 꺼져 있으면 첫 메모 줄만.
  */
 export function WebFeed({ memo, versions, feed, trackItems, onOpenSource, onOpenEvidence, onNudge }: { memo: Memo; versions: MemoVersion[]; feed: MemoFeedItem[]; trackItems: AiTrackItem[]; onOpenSource?: (f: MemoFeedItem) => void; onOpenEvidence?: (f: MemoFeedItem) => void; onNudge?: () => void }) {
+  const paper = usePaper();
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [nudge, setNudge] = useState(true);
   const rows = buildTimeline(memo, versions, feed).filter((r) => memo.ai_linked || (r.t === 'rev' && r.first));

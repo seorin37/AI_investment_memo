@@ -3,6 +3,7 @@ import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { FadeIn } from '@/ui/motion/Reveal';
 import { appColor, fpx, ft, webColor } from '@/ui/theme';
+import { DarkLayer, SCRIM_DARK, useDark } from '@/ui/shared/Dark';
 
 export interface ConfirmDialogProps {
   open: boolean;
@@ -24,11 +25,13 @@ export interface ConfirmDialogProps {
 }
 
 export function ConfirmDialog({ open, title, body, cancelLabel = '취소', confirmLabel, danger, onCancel, onConfirm, variant }: ConfirmDialogProps) {
+  const dark = useDark();
   if (!open) return null;
   const app = variant === 'app';
   return (
     <Modal transparent visible animationType="fade" onRequestClose={onCancel} statusBarTranslucent>
-      <View style={[st.scrim, { backgroundColor: app ? 'rgba(12,12,22,0.4)' : 'rgba(0,0,0,0.45)' }]}>
+      <DarkLayer>
+      <View style={[st.scrim, { backgroundColor: dark ? SCRIM_DARK : app ? 'rgba(12,12,22,0.4)' : 'rgba(0,0,0,0.45)' }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onCancel} accessibilityLabel="닫기" />
         <FadeIn>
           <View style={app ? st.app : st.web} accessibilityViewIsModal accessibilityRole="alert">
@@ -47,6 +50,7 @@ export function ConfirmDialog({ open, title, body, cancelLabel = '취소', confi
           </View>
         </FadeIn>
       </View>
+      </DarkLayer>
     </Modal>
   );
 }

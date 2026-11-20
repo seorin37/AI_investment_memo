@@ -11,6 +11,7 @@ import type { MadeItem } from '../Studio.types';
 import { reportSummary, sign, won } from '../reportParts';
 import { Check } from './AudioPopup';
 import { GBtn } from './Credit';
+import { Keep } from '@/ui/shared/Dark';
 
 type Hover = { hovered?: boolean; pressed?: boolean };
 type Rep = typeof mockReport;
@@ -79,7 +80,7 @@ export function WebReportPopup({ open, stocks, sub, onClose, onMake }: { open: b
 }
 
 function Logo({ s, size, r }: { s: ReportStock; size: number; r: number }) {
-  return <View style={{ width: size, height: size, borderRadius: r, backgroundColor: s.logo_bg, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: size > 30 ? 15 : size > 24 ? 15 : 11, lineHeight: size * 0.7, fontWeight: '700', color: s.logo_ink ?? '#FFFFFF' }}>{s.logo}</Text></View>;
+  return <Keep style={{ width: size, height: size, borderRadius: r, backgroundColor: s.logo_bg, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: size > 30 ? 15 : size > 24 ? 15 : 11, lineHeight: size * 0.7, fontWeight: '700', color: s.logo_ink ?? '#FFFFFF' }}>{s.logo}</Text></Keep>;
 }
 
 /** 작은 선 (원본 Mini 50×20 · 끝 점) */

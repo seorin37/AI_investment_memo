@@ -6,6 +6,7 @@ import { Text } from '@/components/ui/AppText';
 import { SkySwitch } from '@/ui/shared/SkySwitch';
 import type { AppMyProps } from '../My.types';
 import { Chev, Grp, Head, Item, Lb, MC, Rv, UsageBar } from './parts';
+import { DARK_SUPPORTED } from '@/ui/shared/Dark';
 
 /**
  * 앱 MY 본 화면 = 원본 app/my.html mainHTML() (11.13·11.17 반영판)
@@ -55,11 +56,13 @@ export function AppMy(p: AppMyProps) {
         <Rv i={4}><Lb>화면</Lb></Rv>
         <Rv i={4}>
           <Grp>
+            {DARK_SUPPORTED ? (
             <Pressable onPress={p.onToggleDark} style={st.dk} accessibilityRole="switch" accessibilityState={{ checked: p.dark }} accessibilityLabel="다크 모드">
               <View style={st.dki}>{p.dark ? <MoonIcon /> : <SunIcon />}</View>
               <Text style={st.dkT}>다크 모드</Text>
               <View style={st.dkSw} pointerEvents="none"><SkySwitch on={p.dark} width={64} /></View>
             </Pressable>
+            ) : null}
           </Grp>
         </Rv>
         <Rv i={4}><Lb>서비스</Lb></Rv>

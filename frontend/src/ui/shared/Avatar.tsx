@@ -2,6 +2,7 @@ import React from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { appColor, ft, webColor } from '@/ui/theme';
+import { Keep } from './Dark';
 
 export interface AvatarProps {
   /** 이름 (첫 글자를 보여 줌) */
@@ -17,7 +18,12 @@ export interface AvatarProps {
 
 export function Avatar({ name, photoUrl, size, variant, fontSize }: AvatarProps) {
   const r = size / 2;
-  if (photoUrl) return <Image source={{ uri: photoUrl }} style={{ width: size, height: size, borderRadius: r }} accessibilityIgnoresInvertColors />;
+  if (photoUrl)
+    return (
+      <Keep>
+        <Image source={{ uri: photoUrl }} style={{ width: size, height: size, borderRadius: r }} accessibilityIgnoresInvertColors />
+      </Keep>
+    );
   const fs = fontSize ?? (variant === 'app' ? Math.round((size * 13) / 32) : size * 0.45);
   const app = variant === 'app';
   return (

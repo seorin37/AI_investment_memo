@@ -192,6 +192,17 @@ export const paper: Record<MemoColor, { bg: string; accent: string; label: strin
   purple: { bg: '#D2BEFF', accent: '#7046F5', label: '보라' },
   pink: { bg: '#F7C6F0', accent: '#D62BC4', label: '분홍' },
 };
+/**
+ * 다크 메모지 (원본 웹 data.ts PAPER[].dk: 노랑 #5f5128 · 초록 #2a5240 · 파랑 #2b4268 · 보라 #433870 · 분홍 #5e2d57, 접힌 귀퉁이 accent).
+ * 화면이 통째로 반전되므로 '반전 뒤에 위 색으로 보이도록' 미리 계산한 값 (원본 웹 theme.css --pp-* 와 같은 값). 종이 위 글자는 반전되어 밝게 보임.
+ */
+export const paperDarkPre: Record<MemoColor, { bg: string; accent: string; label: string }> = {
+  yellow: { bg: '#C4B486', accent: '#8D6902', label: '노랑' },
+  green: { bg: '#9CCAB5', accent: '#2F965B', label: '초록' },
+  blue: { bg: '#B0CAF5', accent: '#4F82EA', label: '파랑' },
+  purple: { bg: '#CFC2FF', accent: '#9070F6', label: '보라' },
+  pink: { bg: '#F6BFEE', accent: '#E06ACB', label: '분홍' },
+};
 export const checklistColor = { tape: '#FF7A1A', paper: '#FFEADB', ink: '#C2410C' } as const;
 
 /** 소식 종류 태그 (웹 kit.tsx KindTag) */

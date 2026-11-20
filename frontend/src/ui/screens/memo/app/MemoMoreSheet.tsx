@@ -5,7 +5,8 @@ import type { MemoColor } from '@/types/models';
 import { SelIcon } from '@/ui/icons/BoardGlyphs';
 import { ClockIcon } from '@/ui/icons/MemoGlyphs';
 import { Sheet } from '@/ui/shared/Sheet';
-import { appColor, ft, paper } from '@/ui/theme';
+import { appColor, ft } from '@/ui/theme';
+import { usePaper } from '@/ui/shared/Dark';
 
 /* 원본 C 순서: 노랑 · 초록 · 파랑 · 보라 · 분홍 */
 const COLORS: MemoColor[] = ['yellow', 'green', 'blue', 'purple', 'pink'];
@@ -17,6 +18,7 @@ export type MoreAction = 'hist' | 'copy' | 'pin' | 'ai' | 'del';
  * 줄 52 (좌우 22 · 사이 14 · 15.5px): 수정 이력 보기 · 내용 복사 · 고정 · AI 연결 · 휴지통으로 이동(빨강))
  */
 export function MemoMoreSheet({ open, title, color, pinned, aiLinked, onColor, onAction, onClose }: { open: boolean; title: string; color: MemoColor; pinned: boolean; aiLinked: boolean; onColor: (c: MemoColor) => void; onAction: (a: MoreAction) => void; onClose: () => void }) {
+  const paper = usePaper();
   const rows: { a: MoreAction; label: string; icon: React.ReactNode; danger?: boolean }[] = [
     { a: 'hist', label: '수정 이력 보기 (AI 업데이트 탭)', icon: <ClockIcon color={appColor.ink} /> },
     { a: 'copy', label: '내용 복사', icon: <SelIcon k="copy" size={20} color={appColor.ink} /> },

@@ -140,9 +140,14 @@ export function AppNote(p: AppNoteProps) {
   /* 글 바꾸기 · 줄 바꿈 (제목·머리말·부제목 다음 줄은 본문 · 목록·체크리스트는 이어짐 · 빈 목록 줄에서 줄 바꿈은 목록 끝) */
   const onText = (i: number, t: string) => {
     const it = items[i];
-    if (!t.includes('\n')) return change(items.map((x, j) => (j === i ? { ...x, text: t } : x)), false, it.k);
-    const [a, ...r] = t.split('\n');
-    const rest = r.join('\n');
+    /* 새로 들어온 줄바꿈만 줄 나누기로 (원래 글 안에 있던 줄바꿈은 그대로 둠) */
+    const nlCount = (s: string) => s.split('\n').length - 1;
+    if (nlCount(t) <= nlCount(it.text)) return change(items.map((x, j) => (j === i ? { ...x, text: t } : x)), false, it.k);
+    let d = 0;
+    while (d < it.text.length && t[d] === it.text[d]) d++;
+    const nl = t.indexOf('\n', d);
+    const a = t.slice(0, nl);
+    const rest = t.slice(nl + 1);
     if (!a && !rest && (it.l || it.check !== undefined) && i > 0) {
       const { l: _l, check: _c, ...plain } = it;
       void _l;

@@ -8,6 +8,8 @@ import { ApiError } from '@/api';
 import { setMotionEnabled } from '@/components/motion/motion';
 import { useAuth } from '@/store/auth';
 import { colors } from '@/theme/tokens';
+import { DarkLayer, useDark } from '@/ui/shared/Dark';
+import { useDarkDom } from '@/ui/shared/darkMode';
 
 void SplashScreen.preventAutoHideAsync();
 /* 11.18 결정: 화면 전환·페이드 등 모션 켬 (기기 '동작 줄이기'가 켜져 있으면 그대로 따름) */
@@ -35,6 +37,9 @@ export default function RootLayout() {
     'Pretendard-ExtraBold': require('../../assets/fonts/Pretendard-ExtraBold.otf'),
   });
 
+  const dark = useDark();
+  /* 웹: html 전체 반전 (원본 theme.css) — 앱은 DarkLayer */
+  useDarkDom(dark);
   const bootstrap = useAuth((s) => s.bootstrap);
   const authStatus = useAuth((s) => s.status);
 
@@ -52,8 +57,10 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.page }, animation: Platform.OS === 'web' ? 'none' : 'default' }} />
+      <StatusBar style={dark ? 'light' : 'dark'} />
+      <DarkLayer>
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.page }, animation: Platform.OS === 'web' ? 'none' : 'default' }} />
+      </DarkLayer>
     </QueryClientProvider>
   );
 }

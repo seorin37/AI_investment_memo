@@ -6,9 +6,10 @@ import { splitMemo } from '@/lib/memoText';
 import type { MemoColor } from '@/types/models';
 import { MemoEditor } from '@/ui/shared/MemoEditor';
 import { Sheet } from '@/ui/shared/Sheet';
-import { fpx, paper } from '@/ui/theme';
+import { fpx } from '@/ui/theme';
 import type { NewMemoProps } from '../MemoDetail.types';
 import { AI_OFF, Actions, AiFooter, CloseBtn, INK, Swatches, Tabs2, panel } from './parts';
+import { usePaper } from '@/ui/shared/Dark';
 
 /**
  * 웹 새 메모 창 (원본 board.tsx NewDialog 6.1: 680 가운데 창)
@@ -16,6 +17,7 @@ import { AI_OFF, Actions, AiFooter, CloseBtn, INK, Swatches, Tabs2, panel } from
  * 메모 색상 · AI 연결 칸 · [취소] [메모 저장]. 비어 있으면 저장 안 함.
  */
 export function WebNewMemoDialog({ open, stockName, initialText, onCancel, onSave, onSwitchToChecklist }: NewMemoProps & { open: boolean }) {
+  const paper = usePaper();
   const { height: H } = useWindowDimensions();
   const [text, setText] = useState(initialText ?? '');
   const [color, setColor] = useState<MemoColor>('yellow');

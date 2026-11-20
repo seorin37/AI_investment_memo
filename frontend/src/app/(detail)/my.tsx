@@ -6,6 +6,7 @@ import { useMyMock } from '@/store/myMock';
 import { mockMyUsage } from '@/ui/screens/my/My.mock';
 import type { MyMenuKey } from '@/ui/screens/my/My.types';
 import { AppMy } from '@/ui/screens/my/app/My';
+import { useTheme } from '@/store/theme';
 
 /** MY 하위 화면 (⑨-3b·c) */
 const ROUTE: Record<MyMenuKey, Href> = { noti: '/my-noti', usage: '/my-usage', data: '/my-data', trash: '/my-trash', info: '/my-info', fb: '/my-feedback', help: '/my-help' };
@@ -14,8 +15,9 @@ const ROUTE: Record<MyMenuKey, Href> = { noti: '/my-noti', usage: '/my-usage', d
 export default function MyScreen() {
   const router = useRouter();
   const profile = useMyMock((s) => s.profile);
-  const dark = useMyMock((s) => s.dark);
-  const toggleDark = useMyMock((s) => s.toggleDark);
+  const dark = useTheme((s) => s.dark);
+  const setDark = useTheme((s) => s.setDark);
+  const toggleDark = () => setDark(!dark);
   if (Platform.OS === 'web') return <Redirect href="/" />;
   return (
     <AppMy

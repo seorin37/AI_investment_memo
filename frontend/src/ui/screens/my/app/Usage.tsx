@@ -6,6 +6,7 @@ import { useMotionK } from '@/ui/motion/useMotion';
 import type { UsageProps } from '../My.types';
 import type { TrackedStock } from '../My.mock';
 import { Chev, Foot, Grp, Item, Lb, MC, Odometer, Page, Rv, UsageBar } from './parts';
+import { Keep } from '@/ui/shared/Dark';
 
 /**
  * 앱 사용량 = 원본 app/my.html usageHTML()
@@ -79,7 +80,7 @@ function Acc({ stock, first, last, onOpenMemo }: { stock: TrackedStock; first: b
   return (
     <View>
       <Pressable onPress={() => setOpen((o) => !o)} style={[st.sk2, (!last || open) && st.sk2Line]} accessibilityRole="button" accessibilityState={{ expanded: open }}>
-        <View style={[st.lg0, { backgroundColor: stock.logo_bg }]}><Text style={st.lg0T}>{stock.logo}</Text></View>
+        <Keep style={[st.lg0, { backgroundColor: stock.logo_bg }]}><Text style={st.lg0T}>{stock.logo}</Text></Keep>
         <Text style={st.sk2T}>{stock.name}</Text>
         <View style={st.sk2V}>
           <Text style={st.sk2VT}>{stock.memos.length}개 추적 중</Text>

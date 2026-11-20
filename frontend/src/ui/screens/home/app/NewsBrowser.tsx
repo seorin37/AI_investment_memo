@@ -8,6 +8,7 @@ import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { appColor, curve, ft } from '@/ui/theme';
 import type { HomeNewsItem } from '../Home.types';
 import { hm } from '../homeFormat';
+import { DarkLayer } from '@/ui/shared/Dark';
 
 /**
  * 앱 안 브라우저 (원본 home.html .brow: 아래에서 올라옴 .38s · 위 56 · 아래 선 · 진행선 2px 보라 .9s)
@@ -49,6 +50,7 @@ export function NewsBrowser({ item, onClose, onOpenExternal }: { item: HomeNewsI
   const host = /^https?:\/\/([^/?#]+)/.exec(last.url)?.[1]?.replace(/^www\./, '') ?? '';
   return (
     <Modal transparent visible animationType="none" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
+      <DarkLayer>
       <Animated.View style={[st.brow, { paddingTop: insets.top, transform: [{ translateY: y }] }]}>
         <View style={st.bt}>
           <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="닫기" style={st.ib}>
@@ -88,6 +90,7 @@ export function NewsBrowser({ item, onClose, onOpenExternal }: { item: HomeNewsI
           )}
         </ScrollView>
       </Animated.View>
+      </DarkLayer>
     </Modal>
   );
 }

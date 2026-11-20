@@ -17,8 +17,9 @@ import { SpentBox } from '@/ui/shared/SpentBox';
 import { AppStockCard } from '@/ui/shared/StockHead';
 import { SwipeRow } from '@/ui/shared/SwipeRow';
 import { AppViewToggle, type BoardView } from '@/ui/shared/ViewToggle';
-import { appColor, ft, paper } from '@/ui/theme';
+import { appColor, ft } from '@/ui/theme';
 import type { BoardFilter, MemoBoardProps } from '../MemoBoard.types';
+import { usePaper } from '@/ui/shared/Dark';
 
 const CL = 'cl';
 type Item = { key: string; memo?: Memo; checklist?: Checklist; pinned: boolean; at: string };
@@ -39,6 +40,7 @@ const EXAMPLES = ['실적 나오면 다시 보기', '많이 빠지면 다시 생
  * header: 평소 상단 바 (라우트가 줌). 고르는 동안은 'N개 선택' 머리로 바꿔 끼움.
  */
 export function AppMemoBoard(p: MemoBoardProps & { header: React.ReactNode }) {
+  const paper = usePaper();
   const { width: W } = useWindowDimensions();
   const cw = (W - 44) / 2;
   const [filter, setFilter] = useState<BoardFilter>('all');

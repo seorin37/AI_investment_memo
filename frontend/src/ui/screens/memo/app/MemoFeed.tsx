@@ -9,9 +9,10 @@ import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { PaperBox } from '@/ui/shared/PaperBox';
 import { mmdd } from '@/ui/shared/memoFormat';
 import { Toggle } from '@/ui/shared/Toggle';
-import { appColor, ft, paper } from '@/ui/theme';
+import { appColor, ft } from '@/ui/theme';
 import type { AiTrackItem, MemoFeedItem } from '../MemoDetail.types';
 import { buildTimeline } from '../memoTimeline';
+import { usePaper } from '@/ui/shared/Dark';
 
 /* 원본 FK: 소식 종류별 [카드 바탕, 그림 색] */
 const FK = { 뉴스: ['#E4ECFF', '#3D73F0'], 공시: ['#EEE8FF', '#7046F5'], 주가: ['#FFF1D6', '#C98A00'] } as const;
@@ -255,6 +256,7 @@ function splitMark(q: string, mark?: string) {
 
 /** 메모 기록 줄 (원본 .mrw: 라운드 16 · 펼치면 #F7F5FD · 그림 30 #F1EEFB · 14px 600 #3F2C7A · '펼치기' 12.5px 700 #6A42AB) */
 function RevRow({ v, first, color, open, onToggle }: { v: MemoVersion; first: boolean; color: Memo['color']; open: boolean; onToggle: () => void }) {
+  const paper = usePaper();
   const p = paper[color];
   return (
     <View style={[st.mrw, open && { backgroundColor: '#F7F5FD' }]}>

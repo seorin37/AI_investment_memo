@@ -6,6 +6,7 @@ import { Text } from '@/components/ui/AppText';
 import { Head } from '../../my/app/parts';
 import type { mockReport, ReportStock } from '../Studio.mock';
 import { reportSummary, sign, Spark, SparkWide, WeekChart, won } from '../reportParts';
+import { Keep } from '@/ui/shared/Dark';
 
 /**
  * 앱 주간보고서 = 원본 studio.html #pgRp renderReport2 (16 · 회사 보고서 형식)
@@ -170,7 +171,7 @@ function SecH({ n, t }: { n: string; t: string }) {
 }
 
 function Logo({ s, size }: { s: ReportStock; size: number }) {
-  return <View style={{ width: size, height: size, borderRadius: size * 0.3, backgroundColor: s.logo_bg, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: size * 0.48, lineHeight: size * 0.62, fontWeight: '800', color: s.logo_ink ?? '#FFFFFF' }}>{s.logo}</Text></View>;
+  return <Keep style={{ width: size, height: size, borderRadius: size * 0.3, backgroundColor: s.logo_bg, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: size * 0.48, lineHeight: size * 0.62, fontWeight: '800', color: s.logo_ink ?? '#FFFFFF' }}>{s.logo}</Text></Keep>;
 }
 
 const st = StyleSheet.create({

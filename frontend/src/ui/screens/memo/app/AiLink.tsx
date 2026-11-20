@@ -7,10 +7,11 @@ import { CloseX, DoneCheck, RevIcon, SearchGlass } from '@/ui/icons/MemoGlyphs';
 import { Skeleton } from '@/ui/motion/Skeleton';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { PaperBox } from '@/ui/shared/PaperBox';
-import { appColor, curve, ft, paper } from '@/ui/theme';
+import { appColor, curve, ft } from '@/ui/theme';
 import type { AiLinkProps, AiTrackItem } from '../MemoDetail.types';
 import { won } from '../memoTimeline';
 import { CHIP } from './MemoFeed';
+import { usePaper } from '@/ui/shared/Dark';
 
 /**
  * 앱 AI 연결 (원본 memo.html 12 · 12.1 · #aif: 아래에서 올라오는 회색 #F3F4F6 전체 화면)
@@ -21,6 +22,7 @@ import { CHIP } from './MemoFeed';
  * 연결 시작을 누르면 체크가 튀어나오고 1.6초 뒤 onConfirm.
  */
 export function AppAiLink({ stockName, memo, state, items, fromNew, onConfirm, onCancel, onEditMemo, onRetry }: AiLinkProps) {
+  const paper = usePaper();
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState(fromNew ? 1 : 2);
   const [done, setDone] = useState(false);

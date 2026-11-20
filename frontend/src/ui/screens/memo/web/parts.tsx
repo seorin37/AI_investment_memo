@@ -4,7 +4,8 @@ import { Text } from '@/components/ui/AppText';
 import type { MemoColor } from '@/types/models';
 import { Toggle45Mark } from '@/ui/icons/MemoGlyphs';
 import { useMotionK } from '@/ui/motion/useMotion';
-import { curve, fpx, paper } from '@/ui/theme';
+import { curve, fpx } from '@/ui/theme';
+import { usePaper } from '@/ui/shared/Dark';
 
 /* 원본 board.tsx 팝업 공통 부품 (Toggle45 · AiFooter · Actions · Tabs2 · Close · Swatches) */
 
@@ -108,6 +109,7 @@ export function CloseBtn({ onPress }: { onPress: () => void }) {
 
 /** 원본 Swatches: 44 · '메모 색상' 76 · 동그라미 34 (사이 8 · 고르면 안쪽 1.5 #15171A + ✓) · '보기·수정 칸에 같은 색상' */
 export function Swatches({ v, set }: { v: MemoColor; set: (c: MemoColor) => void }) {
+  const paper = usePaper();
   return (
     <View style={st.sw}>
       <Text style={st.swL}>메모 색상</Text>

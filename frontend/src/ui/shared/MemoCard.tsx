@@ -5,9 +5,10 @@ import { Text } from '@/components/ui/AppText';
 import type { Memo } from '@/types/models';
 import { AppPlug, CheckMark, Dots, WebPlug } from '@/ui/icons/BoardGlyphs';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
-import { appColor, curve, fpx, ft, paper } from '@/ui/theme';
+import { appColor, curve, fpx, ft } from '@/ui/theme';
 import { AppTape, PaperFace, WebTape } from './MemoPaper';
 import { mmdd, oneLine } from './memoFormat';
+import { usePaper } from '@/ui/shared/Dark';
 
 /** 고르기 원 (원본 .gchk: 25 · 위 -8 · 왼쪽 -6 · 흰 바탕 + 안쪽 2 #C9CDD4 + 바깥 흰 2 / 고르면 #8569E3 · 등장 scale .5 → 1, .35s spring) */
 export function SelCircle({ visible, on, size = 25, style }: { visible: boolean; on: boolean; size?: number; style?: object }) {
@@ -62,6 +63,7 @@ export interface AppMemoCardProps {
  * 누르면 .12초 뒤 .965 로 줄어듦 (.45s cubic-bezier(.3,1.3,.5,1)) · .48초 꾹 누르면 고르기
  */
 export function AppMemoCard({ memo: m, width, height, selecting, selected, aiSpent, onPress, onLongPress }: AppMemoCardProps) {
+  const paper = usePaper();
   const k = useMotionK();
   const p = paper[m.color];
   const [s] = useState(() => new Animated.Value(1));
@@ -151,6 +153,7 @@ function Tip({ children, style }: { children: string; style: object }) {
  * hover: 종이가 위로 3 · -.3° 기울고 그림자
  */
 export function WebMemoCard({ memo: m, selecting, selected, onOpen, onPin, onToggleAi, onMenu, onPick }: WebMemoCardProps) {
+  const paper = usePaper();
   const p = paper[m.color];
   const [hov, setHov] = useState(false);
   const [tape, setTape] = useState(false);

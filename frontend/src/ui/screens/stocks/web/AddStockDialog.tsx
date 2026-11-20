@@ -5,6 +5,7 @@ import { Text, TextInput } from '@/components/ui/AppText';
 import { Sheet } from '@/ui/shared/Sheet';
 import { fpx } from '@/ui/theme';
 import type { AddStockProps, Hold } from '../MyStocks.types';
+import { Keep } from '@/ui/shared/Dark';
 
 type Hover = { pressed: boolean; hovered?: boolean };
 const CHO = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ';
@@ -88,9 +89,9 @@ export function WebAddStockDialog({ open, mine, universe, onClose, onAdd }: AddS
             const on = !h && s.stock_code === pick;
             return (
               <Pressable key={s.stock_code} disabled={!!h} onPress={() => setPick(on ? null : s.stock_code)} accessibilityState={{ selected: on, disabled: !!h }} style={({ hovered }: Hover) => [st.row, on ? st.rowOn : hovered && !h ? { backgroundColor: '#F9F9F9' } : null, h && { opacity: 0.5 }]}>
-                <View style={[st.logo, { backgroundColor: s.logo_bg }]}>
+                <Keep style={[st.logo, { backgroundColor: s.logo_bg }]}>
                   <Text style={[st.logoT, { fontSize: s.logo.length > 2 ? 10 : s.logo.length > 1 ? 12 : 15, color: s.logo_ink ?? '#FFFFFF' }]}>{s.logo}</Text>
-                </View>
+                </Keep>
                 <View style={st.flexMin}>
                   <View style={st.nmRow}>
                     <Text style={st.nm}>{s.name}</Text>

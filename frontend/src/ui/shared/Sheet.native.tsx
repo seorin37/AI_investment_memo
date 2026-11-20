@@ -5,6 +5,7 @@ import { Text } from '@/components/ui/AppText';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { appColor, curve, dur, ft, shadow } from '@/ui/theme';
 import type { SheetProps } from './Sheet.types';
+import { DarkLayer, SCRIM_DARK, useDark } from '@/ui/shared/Dark';
 
 /**
  * 앱 바텀 시트 (원본 home.html #sheet: 흰 바탕 · 위 라운드 26 · 손잡이 40×5 #D5D8DD 라운드 3 (위 10 · 아래 14) · 제목 17px 800 · 좌우 22
@@ -12,6 +13,7 @@ import type { SheetProps } from './Sheet.types';
  */
 export function Sheet({ open, onClose, title, children, label }: SheetProps) {
   const k = useMotionK();
+  const dark = useDark();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const [shown, setShown] = useState(open);
@@ -52,7 +54,8 @@ export function Sheet({ open, onClose, title, children, label }: SheetProps) {
   if (!shown) return null;
   return (
     <Modal transparent visible animationType="none" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
-      <Animated.View style={[StyleSheet.absoluteFill, st.scrim, { opacity: y.interpolate({ inputRange: [0, height], outputRange: [1, 0] }) }]}>
+      <DarkLayer>
+      <Animated.View style={[StyleSheet.absoluteFill, st.scrim, dark && { backgroundColor: SCRIM_DARK }, { opacity: y.interpolate({ inputRange: [0, height], outputRange: [1, 0] }) }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="닫기" />
       </Animated.View>
       <Animated.View style={[st.sheet, { paddingBottom: 14 + insets.bottom, transform: [{ translateY: Animated.add(y, drag) }] }]} accessibilityViewIsModal accessibilityLabel={label}>
@@ -62,6 +65,7 @@ export function Sheet({ open, onClose, title, children, label }: SheetProps) {
         </View>
         {children}
       </Animated.View>
+      </DarkLayer>
     </Modal>
   );
 }

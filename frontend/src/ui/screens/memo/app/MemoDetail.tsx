@@ -12,11 +12,12 @@ import { PaperBox } from '@/ui/shared/PaperBox';
 import { Seg } from '@/ui/shared/Seg';
 import { AppSnackbar } from '@/ui/shared/Snackbar';
 import { SpentBox } from '@/ui/shared/SpentBox';
-import { appColor, ft, paper } from '@/ui/theme';
+import { appColor, ft } from '@/ui/theme';
 import type { MemoDetailProps } from '../MemoDetail.types';
 import { koDate } from '../memoTimeline';
 import { AiTabSkeleton, AppAiTab } from './MemoFeed';
 import { MemoMoreSheet, type MoreAction } from './MemoMoreSheet';
+import { usePaper } from '@/ui/shared/Dark';
 
 type Snack = { id: number; msg: string };
 
@@ -28,6 +29,7 @@ type Snack = { id: number; msg: string };
  * 안드로이드 뒤로: (시트) → 편집 취소 → 화면
  */
 export function AppMemoDetail(p: MemoDetailProps) {
+  const paper = usePaper();
   const insets = useSafeAreaInsets();
   const m = p.memo;
   const pc = paper[m.color];

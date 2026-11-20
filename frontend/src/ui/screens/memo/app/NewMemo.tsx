@@ -7,8 +7,9 @@ import { splitMemo } from '@/lib/memoText';
 import { MemoEditor } from '@/ui/shared/MemoEditor';
 import { PaperBox } from '@/ui/shared/PaperBox';
 import { Toggle } from '@/ui/shared/Toggle';
-import { appColor, ft, paper } from '@/ui/theme';
+import { appColor, ft } from '@/ui/theme';
 import type { NewMemoProps } from '../MemoDetail.types';
+import { usePaper } from '@/ui/shared/Dark';
 
 /**
  * 앱 새 메모 (원본 memo.html 11 · #nm: 아래에서 올라오는 전체 화면)
@@ -17,6 +18,7 @@ import type { NewMemoProps } from '../MemoDetail.types';
  * AI 연결 칸 (#F6F6F8 라운드 16 · 안쪽 14·16 · 위 14). 저장: 첫 줄 = 제목 (splitMemo)
  */
 export function AppNewMemo({ stockName, initialText, onCancel, onEmpty, onSave }: NewMemoProps) {
+  const paper = usePaper();
   const insets = useSafeAreaInsets();
   const [text, setText] = useState(initialText ? `${initialText}\n` : '');
   const [ai, setAi] = useState(false);

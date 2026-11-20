@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Modal, Pressable, StyleSheet, View } from 'react-native';
 import { useMotionK } from '@/ui/motion/useMotion';
 import { curve, dur } from '@/ui/theme';
+import { SCRIM_DARK, useDark } from './Dark';
 import type { SheetProps } from './Sheet.types';
 
 /**
@@ -14,6 +15,7 @@ let seq = 0;
 
 export function Sheet({ open, onClose, children, width, label, scrim }: SheetProps) {
   const k = useMotionK();
+  const dark = useDark();
   const [shown, setShown] = useState(open);
   const [v] = useState(() => new Animated.Value(0));
   const [id] = useState(() => ++seq);
@@ -50,7 +52,7 @@ export function Sheet({ open, onClose, children, width, label, scrim }: SheetPro
   if (!shown) return null;
   return (
     <Modal transparent visible animationType="none" onRequestClose={onClose}>
-      <Animated.View style={[StyleSheet.absoluteFill, st.scrim, scrim ? { backgroundColor: scrim } : null, { opacity: v }]}>
+      <Animated.View style={[StyleSheet.absoluteFill, st.scrim, scrim ? { backgroundColor: scrim } : null, dark ? { backgroundColor: SCRIM_DARK } : null, { opacity: v }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="닫기" />
       </Animated.View>
       <View style={st.center} pointerEvents="box-none">

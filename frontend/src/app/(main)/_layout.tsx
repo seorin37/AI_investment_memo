@@ -30,6 +30,7 @@ import { ConfirmDialog } from '@/ui/shared/ConfirmDialog';
 import { ContextMenu } from '@/ui/shared/ContextMenu';
 import { WebSnackbar } from '@/ui/shared/Snackbar';
 import { size, webColor } from '@/ui/theme';
+import { useTheme } from '@/store/theme';
 
 const NOT_YET = '아직 연결되지 않았어요 · 데이터는 그대로예요';
 
@@ -58,7 +59,8 @@ export default function MainLayout() {
   const [sideOpen, setSideOpen] = useState(true);
   /* 원본 studio.tsx: 화면 폭 1280 이하면 처음에 접힘 */
   const [studioOpen, setStudioOpen] = useState(() => width > size.studioNarrow);
-  const [dark, setDark] = useState(false);
+  const dark = useTheme((s) => s.dark);
+  const setDark = useTheme((s) => s.setDark);
   /* ⑥ 사이드바 종목: 순서 끌기 · 우클릭/⋯ 메뉴 · + 종목 추가 (mock: 이 셸 안에서만) */
   const [sideStocks, setSideStocks] = useState<SideStock[]>(mockSideStocks);
   const [smenu, setSmenu] = useState<{ code: string; at: { x: number; y: number } } | null>(null);
@@ -160,7 +162,7 @@ export default function MainLayout() {
           }),
         onAddStock: () => setAddOpen(true),
         onBell: () => setInboxOpen((o) => !o),
-        onToggleDark: () => setDark((d) => !d),
+        onToggleDark: () => setDark(!dark),
         onTrash: () => setTrashOpen(true),
         onSettings: () => setSettings('내 프로필'),
         onFeedback: () => setFbOpen(true),

@@ -7,9 +7,10 @@ import { WebIcon } from '@/ui/icons/Icon';
 import { useMotionK } from '@/ui/motion/useMotion';
 import { useProgress } from '@/ui/motion/useProgress';
 import { StockLogo } from '@/ui/shared/StockLogo';
-import { curve, fpx, paper } from '@/ui/theme';
+import { curve, fpx } from '@/ui/theme';
 import type { HomeNewsItem, HomeStock, HomeUpdateRow, MarketIndex, MarketKey } from '../Home.types';
 import { WEB_RANGES, ago, hm, mkData, mmdd, type WebRange } from '../homeFormat';
+import { usePaper } from '@/ui/shared/Dark';
 
 type Hover = { pressed: boolean; hovered?: boolean };
 const C = { ink: '#16171A', ink15: '#15171A', ink2: '#575B63', sub: '#6B7078', mute: '#8B95A1', line: '#E5E7EB', bg3: '#F3F4F6' } as const;
@@ -138,6 +139,7 @@ export function MarketWidget({ indices, onMore, onUsd, onRetry }: { indices: Mar
 
 /* ───────── 업데이트 (원본 UpdatesWidget: 320×472 · 안쪽 20 · 줄 14 · 고른 줄 #F8F8F8 + 1.5 #111) ───────── */
 export function UpdatesWidget({ rows, w = 320, h = 472, onAll, onRow }: { rows: HomeUpdateRow[]; w?: number | `${number}%`; h?: number; onAll: () => void; onRow: (code: string) => void }) {
+  const paper = usePaper();
   const total = rows.reduce((a, u) => a + u.new_count, 0);
   const [sel, setSel] = useState(rows[0]?.stock_code ?? '');
   return (

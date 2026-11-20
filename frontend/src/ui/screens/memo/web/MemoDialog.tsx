@@ -9,7 +9,7 @@ import { ContextMenu, type MenuItem } from '@/ui/shared/ContextMenu';
 import { MemoEditor } from '@/ui/shared/MemoEditor';
 import { Sheet } from '@/ui/shared/Sheet';
 import { SpentBox } from '@/ui/shared/SpentBox';
-import { fpx, paper } from '@/ui/theme';
+import { fpx } from '@/ui/theme';
 import { BackChevron } from '@/ui/icons/MemoGlyphs';
 import { EvidenceBody, evidenceActions, evidenceTitle } from '../EvidenceContent';
 import { HistoryContent } from '../HistoryContent';
@@ -17,6 +17,7 @@ import type { MemoDetailProps, MemoFeedItem } from '../MemoDetail.types';
 import { dotDate } from '../memoTimeline';
 import { AI_OFF, Actions, AiFooter, CloseBtn, INK, Swatches, Tabs2, panel } from './parts';
 import { WebFeed } from './WebFeed';
+import { usePaper } from '@/ui/shared/Dark';
 
 type Hover = { pressed: boolean; hovered?: boolean };
 type Sub = { k: 'ev'; item: MemoFeedItem } | { k: 'hist'; v: number; from?: Sub };
@@ -28,6 +29,7 @@ type Sub = { k: 'ev'; item: MemoFeedItem } | { k: 'hist'; v: number; from?: Sub 
  * AI 연결 칸 · [취소] [메모 저장]. 색·AI 연결·글은 [메모 저장] 때 한 번에 (원본과 같음). AI 연결을 새로 켜면 AI 연결 창.
  */
 export function WebMemoDialog(p: MemoDetailProps & { open: boolean }) {
+  const paper = usePaper();
   const { height: H } = useWindowDimensions();
   const m = p.memo;
   const [tab, setTab] = useState<0 | 1>(p.initialTab === 'ai' ? 1 : 0);

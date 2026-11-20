@@ -9,6 +9,7 @@ import { Sheet } from '@/ui/shared/Sheet';
 import { Head } from '../../my/app/parts';
 import type { LabDir, mockLabStocks, mockLabVars } from '../Studio.mock';
 import { dirColor } from '../labParts';
+import { Keep } from '@/ui/shared/Dark';
 
 /**
  * 앱 투자 실험실 = 원본 studio.html #pgLab (17)
@@ -69,7 +70,7 @@ export function AppLab({ vars, stocks, code, dirs, note, onBack, onPick, onDir, 
                 const on = s.stock_code === code;
                 return (
                   <Pressable key={s.stock_code} onPress={() => { onPick(s.stock_code); setTimeout(() => setSheet(false), 260); }} accessibilityRole="radio" accessibilityState={{ selected: on }} style={st.rs}>
-                    <View style={[st.lo, { backgroundColor: s.logo_bg }]}><Text style={st.loT}>{s.logo}</Text></View>
+                    <Keep style={[st.lo, { backgroundColor: s.logo_bg }]}><Text style={st.loT}>{s.logo}</Text></Keep>
                     <Text style={st.rsT}>{s.name}</Text>
                     <View style={[st.op, h === '관심' && { backgroundColor: '#F2F2F5' }]}><Text style={[st.opT, h === '관심' && { color: C.ink2 }]}>{h}</Text></View>
                     <View style={[st.rd, on && { borderColor: C.ink }]}>{on ? <View style={st.rdI} /> : null}</View>

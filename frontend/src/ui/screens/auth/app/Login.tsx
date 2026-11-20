@@ -7,6 +7,7 @@ import { GoogleGlyph, KakaoGlyph, NaverGlyph, WifiOffGlyph } from '@/ui/screens/
 import type { LoginProps } from '@/ui/screens/auth/Auth.types';
 import { appColor, ft } from '@/ui/theme';
 import type { AuthProvider } from '@/types/models';
+import { Keep } from '@/ui/shared/Dark';
 
 const BUTTONS: { provider: AuthProvider; label: string; bg: string; fg: string; border?: boolean }[] = [
   { provider: 'kakao', label: '카카오로 로그인', bg: '#FEE500', fg: '#191919' },
@@ -37,8 +38,10 @@ export function AppLogin(p: LoginProps) {
         <View style={st.buttons}>
           {BUTTONS.map((button) => {
             const loading = p.busy === button.provider;
+            /* 원본 앱 다크: 카카오·네이버 버튼은 원래 색 (.btn.k · .btn.n) */
+            const Wrap = button.provider === 'kakao' || button.provider === 'naver' ? Keep : View;
             return (
-              <View key={button.provider}>
+              <Wrap key={button.provider}>
                 <Pressable
                   onPress={() => p.onLogin(button.provider)}
                   disabled={!!p.busy}
@@ -51,7 +54,7 @@ export function AppLogin(p: LoginProps) {
                   <View style={st.buttonSpacer} />
                 </Pressable>
                 {p.recent_provider === button.provider ? <View style={st.recent}><Text style={st.recentText}>최근 로그인</Text></View> : null}
-              </View>
+              </Wrap>
             );
           })}
         </View>

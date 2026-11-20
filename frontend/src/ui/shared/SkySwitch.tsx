@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable } from 'react-native';
 import Svg, { Circle, ClipPath, Defs, G, LinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
+import { Keep } from './Dark';
 
 /**
  * 낮·밤 하늘 스위치 (Lucian #021 · MIT (c) 2026 Seokwoooo) — 원본 224×94 를 그대로 그리고 크기만 줄임
@@ -12,6 +13,7 @@ export function SkySwitch({ on, onToggle, width = 48, label = '다크 모드' }:
   const h = (width * 94) / 224;
   return (
     <Pressable onPress={onToggle} accessibilityRole="switch" accessibilityState={{ checked: on }} accessibilityLabel={label} hitSlop={12}>
+      <Keep>
       <Svg width={width} height={h} viewBox="0 0 224 94">
         <Defs>
           <ClipPath id="u021c">
@@ -81,6 +83,7 @@ export function SkySwitch({ on, onToggle, width = 48, label = '다크 모드' }:
           </G>
         </G>
       </Svg>
+      </Keep>
     </Pressable>
   );
 }

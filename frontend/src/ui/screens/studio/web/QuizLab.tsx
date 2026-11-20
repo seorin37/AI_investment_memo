@@ -6,6 +6,7 @@ import { FeatIcon } from '@/ui/layout/web/StudioColumnFrame';
 import type { LabDir, mockLabStocks, mockLabVars, mockQuiz } from '../Studio.mock';
 import { dirColor, type LabGroup } from '../labParts';
 import { GBtn } from './Credit';
+import { Keep } from '@/ui/shared/Dark';
 
 type Hover = { hovered?: boolean; pressed?: boolean };
 const TR = { letterSpacing: -0.2 };
@@ -170,7 +171,7 @@ export function WebLabResult({ stock, vars, groups, disclaimer, onBack, onMemo, 
         <View style={{ gap: 16, paddingHorizontal: 16, paddingTop: 8 }}>
           <View style={{ gap: 8 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View style={[st.lo, { backgroundColor: stock.logo_bg }]}><Text style={st.loT}>{stock.logo}</Text></View>
+              <Keep style={[st.lo, { backgroundColor: stock.logo_bg }]}><Text style={st.loT}>{stock.logo}</Text></Keep>
               <Text style={st.name}>{stock.name}</Text>
             </View>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>

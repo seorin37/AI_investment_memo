@@ -5,10 +5,11 @@ import { TickSmall } from '@/ui/icons/MemoGlyphs';
 import { FadeIn } from '@/ui/motion/Reveal';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { Sheet } from '@/ui/shared/Sheet';
-import { fpx, paper } from '@/ui/theme';
+import { fpx } from '@/ui/theme';
 import type { AiLinkProps, AiTrackItem } from '../MemoDetail.types';
 import { won } from '../memoTimeline';
 import { INK } from './parts';
+import { usePaper } from '@/ui/shared/Dark';
 
 type Hover = { pressed: boolean; hovered?: boolean };
 
@@ -19,6 +20,7 @@ type Hover = { pressed: boolean; hovered?: boolean };
  * [일반 메모로 두기] [N개 항목으로 AI 연결]
  */
 export function WebConnectDialog({ open, memo, state, items, onConfirm, onCancel, onEditMemo, onRetry }: AiLinkProps & { open: boolean }) {
+  const paper = usePaper();
   const pick = state === 'items';
   const steps = ['메모 확인', '항목 확인', '연결 시작'];
   const primary =

@@ -7,6 +7,7 @@ import { PressScale } from '@/ui/motion/PressScale';
 import { Head } from '../../my/app/parts';
 import type { mockLabStocks, mockLabVars } from '../Studio.mock';
 import type { LabGroup } from '../labParts';
+import { Keep } from '@/ui/shared/Dark';
 
 /**
  * 앱 실험 결과 = 원본 studio.html #pgLr renderLabRes (20)
@@ -28,7 +29,7 @@ export function AppLabResult({ stock, vars, groups, disclaimer, onBack, onOpenMe
     <View style={[st.root, { paddingTop: insets.top }]}>
       <Head title="실험 결과" onBack={onBack} />
       <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 110 + insets.bottom }} showsVerticalScrollIndicator={false}>
-        <View style={st.sh}><View style={[st.lo, { backgroundColor: stock.logo_bg }]}><Text style={st.loT}>{stock.logo}</Text></View><Text style={st.shT}>{stock.name}</Text></View>
+        <View style={st.sh}><Keep style={[st.lo, { backgroundColor: stock.logo_bg }]}><Text style={st.loT}>{stock.logo}</Text></Keep><Text style={st.shT}>{stock.name}</Text></View>
         <View style={st.cds}>{groups.map((g) => <View key={g.i} style={st.cd}><Text style={st.cdT}>{vars[g.i].name} · {g.d} 가정</Text></View>)}</View>
         <Text style={st.lead}>바꾼 가정이 회사의 어떤 항목에 닿는지 경로로 보여 드려요.</Text>
         <View style={st.card}>

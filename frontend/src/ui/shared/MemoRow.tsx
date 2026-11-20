@@ -5,9 +5,10 @@ import { Text } from '@/components/ui/AppText';
 import type { Memo } from '@/types/models';
 import { AppPin, AppPlug, CheckMark, Dots } from '@/ui/icons/BoardGlyphs';
 import { useMotionK } from '@/ui/motion/useMotion';
-import { appColor, curve, fpx, ft, paper, webColor } from '@/ui/theme';
+import { appColor, curve, fpx, ft, webColor } from '@/ui/theme';
 import { Pick } from './MemoCard';
 import { mmdd, oneLine } from './memoFormat';
+import { usePaper } from '@/ui/shared/Dark';
 
 /** 목록 고르기 원 (원본 .lchk: 폭 0 → 24 · 오른쪽 여백 -12 → 0, .3s ease) */
 export function ListCheck({ visible, on }: { visible: boolean; on: boolean }) {
@@ -27,6 +28,7 @@ export function ListCheck({ visible, on }: { visible: boolean; on: boolean }) {
 
 /** 목록 작은 메모지 (원본 .mini: 30×32 · 라운드 5 · 오른쪽 아래 10 삼각형 (접힌 부분 색 | 흰 .75)) */
 function Mini({ color }: { color: Memo['color'] }) {
+  const paper = usePaper();
   const p = paper[color];
   return (
     <View style={[st.mini, { backgroundColor: p.bg }]}>
@@ -116,6 +118,7 @@ type HoverState = { pressed: boolean; hovered?: boolean };
  * 'AI 연결' 칩 (28 · #F2F3F4 · 13 bold) · 배지 24 · ⋯ 32)
  */
 export function WebMemoRow({ memo: m, first, selecting, selected, onOpen, onPick, onMenu }: WebMemoRowProps) {
+  const paper = usePaper();
   return (
     <Pressable onPress={selecting ? onPick : onOpen} accessibilityLabel={m.title} style={({ hovered }: HoverState) => [st.wrow, !first && st.wline, hovered && { backgroundColor: webColor.hover }]}>
       {selecting ? <Pick on={selected} /> : null}

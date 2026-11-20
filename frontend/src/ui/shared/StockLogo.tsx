@@ -1,7 +1,7 @@
 import React from 'react';
-import { View } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { ft } from '@/ui/theme';
+import { Keep } from './Dark';
 
 export interface StockLogoProps {
   /** 로고 글자 (예: 'S', '삼', 'KB') */
@@ -29,10 +29,10 @@ export function StockLogo({ logo, bg, ink = '#FFFFFF', size, variant, radius, fo
     (variant === 'app' ? Math.round((size * 16) / 40) : variant === 'webSide' ? size * (len > 2 ? 0.28 : len > 1 ? 0.34 : 0.425) : size * (len > 1 ? 0.34 : 0.44));
   const fw = variant === 'webSide' ? '700' : '800';
   return (
-    <View style={{ width: size, height: size, borderRadius: r, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+    <Keep style={{ width: size, height: size, borderRadius: r, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       <Text style={[ft(fs, 1), { fontWeight: fw, color: ink }]} numberOfLines={1}>
         {logo}
       </Text>
-    </View>
+    </Keep>
   );
 }

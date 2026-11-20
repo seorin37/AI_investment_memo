@@ -7,9 +7,10 @@ import { EvIcon } from '@/ui/icons/MemoGlyphs';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { PaperBox } from '@/ui/shared/PaperBox';
 import { mmdd } from '@/ui/shared/memoFormat';
-import { appColor, curve, ft, paper } from '@/ui/theme';
+import { appColor, curve, ft } from '@/ui/theme';
 import type { MemoFeedItem } from './MemoDetail.types';
 import { won } from './memoTimeline';
+import { usePaper } from '@/ui/shared/Dark';
 
 /* 근거 상세 내용 (원본 memo.html 13.1 · 13.2 · 13.3 openEv) — 앱 화면과 웹 메모 창이 같이 씀 */
 
@@ -176,6 +177,7 @@ function GradientBg() {
 
 /** 연결된 내 메모 (원본 memoCard: '연결된 내 메모' + '버전 N' · 메모지 (라운드 14 · 접힌 18) · 누르면 그 버전 이력) */
 function MemoCard({ memo, version, onPress }: { memo: Memo; version?: MemoVersion; onPress: () => void }) {
+  const paper = usePaper();
   const pc = paper[memo.color];
   const title = version?.title ?? memo.title;
   const body = version?.body ?? memo.body;
