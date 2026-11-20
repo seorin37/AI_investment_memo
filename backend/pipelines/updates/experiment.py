@@ -94,14 +94,29 @@ def _fmt(out) -> list[str]:
     return rows
 
 
+def _cited(checks: list[dict]) -> set[str]:
+    """검사 기록의 카드들이 쓴 근거 번호 (facts의 evidence_id와 sources)."""
+    out = set()
+    for row in checks:
+        card = row.get("card") or {}
+        out |= {f.get("evidence_id") for f in card.get("facts") or []} | set(card.get("sources") or [])
+    return out - {"", None}
+
+
 def _outcome(item, out) -> dict:
+    """outcomes.jsonl 한 줄. checks(검사 기록: 카드 JSON·걸린 코드)가 있으면 함께 쓰고, 그 카드들이 쓴 근거에는
+    검사에 쓴 원문 shown_text를 붙인다 (검사 대상 글 = title + shown_text + date, checks._ev_text). 2026-11-17."""
+    checks = getattr(out, "checks", None) or []
+    cited = _cited(checks)
     ev = [{"eid": e.eid, "ref": e.candidate.ref, "kind": e.candidate.kind, "doc": e.candidate.doc, "date": e.candidate.date,
-           "similarity": round(e.candidate.similarity, 4), "title": e.candidate.title} for e in out.evidence]
+           "similarity": round(e.candidate.similarity, 4), "title": e.candidate.title,
+           **({"shown_text": e.shown_text} if e.eid in cited else {})} for e in out.evidence]
     d = out.draft
     return {"item_id": item.item_id, "symbol": item.symbol, "description": item.description, "kind": out.kind,
-            "fail_codes": out.fail_codes, "evidence": ev,
+            "fail_codes": out.fail_codes, "evidence": ev, **({"checks": checks} if checks else {}),
             "grouped": [{"ref": c.ref, "rcept_no": r, "title": c.title} for c, r in out.grouped],
             "card": None if d is None else {"type": d.type, "origin": d.origin, "title": d.title, "summary": d.summary,
+                                            "explanation": d.explanation, "memo_link": d.reason, "when": d.when,
                                             "sources": [r for r, _ in d.sources], "supporting_news": d.supporting_news,
                                             "related_news": [r for r, _ in d.related_news]}}
 
@@ -144,7 +159,10 @@ def main(argv: list[str] | None = None) -> int:
                                         "이번 카드가 쓴 근거를 더해 적는다. 기본: 쓰지 않음")
     ap.add_argument("--used-refs-match", choices=["ref", "doc"], default="ref",
                     help="ref: 같은 ref만 뺀다 (기본) · doc: 같은 공시의 다른 청크도 뺀다")
-    ap.add_argument("--item-state", help="항목 상태 파일 (item_state.FileItemStateStore). 주면 항목별 마지막 확인 시각·응답 유형을 적는다")
+    ap.add_argument("--item-ids", help="이 tracking_items id(쉼표 구분)만 처리한다. --store db: 다른 항목의 확인 시각·카드를 건드리지 않는다. "
+                                       "--store file: 공용 DB에서 그 활성 항목을 읽기만 하고(첫 확인으로) 결과는 파일로")
+    ap.add_argument("--save-llm-io", action="store_true", help="LLM 프롬프트·응답 원문을 실행 폴더 llm_io.jsonl에 남긴다")
+    ap.add_argument("--item-state",help="항목 상태 파일 (item_state.FileItemStateStore). 주면 항목별 마지막 확인 시각·응답 유형을 적는다")
     args = ap.parse_args(argv)
 
     import psycopg
@@ -190,8 +208,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"DB 저장 대상: {store_target}" + (" (공용 DB 쓰기 허용)" if shared else ""))
         wconn = _pg.connect(dsn)
         items = db_items(wconn, None if args.symbols.upper() == "ALL" else tuple(args.symbols.split(",")))
+        if args.item_ids:                                       # 이 항목만 (다른 사용자 항목의 확인 시각·카드를 건드리지 않게)
+            keep = {s.strip() for s in args.item_ids.split(",") if s.strip()}
+            items = [i for i in items if i.item_id in keep]
         from .db_store import item_memos
         memo_by_item = item_memos(wconn, [i.item_id for i in items])
+    elif args.item_ids:                                         # 파일 저장 + DB 항목 (읽기 전용, 확인 시각 없이 = 첫 확인으로)
+        from .db_store import load_items as db_items
+        keep = {s.strip() for s in args.item_ids.split(",") if s.strip()}
+        with psycopg.connect(get_read_dsn()) as rconn:
+            rconn.read_only = True
+            items = [i for i in db_items(rconn, tuple(args.symbols.split(","))) if i.item_id in keep]
+            rconn.rollback()
     else:
         items = load_items(resolve_path(args.gold), tuple(args.symbols.split(",")))
     if args.limit:
@@ -248,7 +276,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             client = OpenAIClient.from_env()
     from .usage import UsageTracker
-    tracker = UsageTracker()                                    # LLM 호출을 항목·단계별로 센다 (usage_by_item.csv, usage_log.jsonl)
+    tracker = UsageTracker(keep_io=args.save_llm_io)            # LLM 호출을 항목·단계별로 센다 (usage_by_item.csv, usage_log.jsonl)
     rel_cfg = None
     rel_client = None
     if client is not None:
@@ -261,12 +289,15 @@ def main(argv: list[str] | None = None) -> int:
         else:
             from .autolabel import load_prompt
             rel_prompt = load_prompt(rel_cfg["prompt"])
+            # 실험(2026-11-17): 한 번 답하기(ask) 질문은 "질문에 답이 되는 자료인가"로 판정 (configs/ask_relevance_prompt.md)
+            rel_prompt_ask = load_prompt(rel_cfg["prompt_ask"]) if rel_cfg.get("prompt_ask") else None
             rel_client = client
             if args.response_schema or (rel_cfg.get("model") and rel_cfg["model"] != client.model):
                 rel_client = OpenAIClient.from_env()            # 카드 응답 형식을 강제하지 않는 판정용 클라이언트
                 if rel_cfg.get("model"):
                     rel_client.model = rel_cfg["model"]
     relevance_rows: dict[tuple[str, str], tuple[str, str, str]] = {}   # (항목, ref) → (O/X, 이유 코드, 범위): candidates.csv
+    verify_client = None                                        # topic.verify_model이 있을 때 처음 쓸 때 만든다 (실험 2026-11-17)
     relevance_items: list[dict] = []
 
     names: dict[str, str] = {}
@@ -307,6 +338,10 @@ def main(argv: list[str] | None = None) -> int:
         if chunk_encoder is not None:
             from .news_search import NewsChunkSearch
             searcher = NewsChunkSearch(conn, chunk_encoder, cfg["news"].get("chunks"))
+        dsearch = None                                          # 공시 하이브리드 검색 (실험, disclosure.search: hybrid, 기본 dense)
+        if chunk_encoder is not None and (cfg.get("disclosure") or {}).get("search") == "hybrid":
+            from .disclosure_search import DisclosureHybridSearch
+            dsearch = DisclosureHybridSearch(conn, chunk_encoder, (cfg.get("disclosure") or {}).get("hybrid"))
         from datetime import datetime
 
         from .candidates import drop_not_ready, fresh_window
@@ -339,9 +374,16 @@ def main(argv: list[str] | None = None) -> int:
                         news, company_terms(src_name, src, rcfg, symbol_aliases),
                         news_lead)
                     no_company_news += [(item, c) for c in dropped]
-                cands = (news + recent_disclosure_candidates(conn, src, vec, d_from or d_since, fetch_k, floor["disclosure"],
-                                                        floor["event"], rcfg.get("include_subsidiary", False), filters,
-                                                        fresh_since=fresh, pub_since=d_from))
+                if dsearch is not None and fresh is None:       # 하이브리드는 첫 확인(조회 기간 전체)에만. 새 자료만 받기는 기존 함수
+                    from .disclosure_search import section_hints
+                    discs = dsearch.recent(src, item.query_text, d_from or d_since, filters=filters,
+                                           include_subsidiary=rcfg.get("include_subsidiary", False),
+                                           hints=section_hints(item.memo_text) if item.category == "ask" else None)
+                else:
+                    discs = recent_disclosure_candidates(conn, src, vec, d_from or d_since, fetch_k, floor["disclosure"],
+                                                         floor["event"], rcfg.get("include_subsidiary", False), filters,
+                                                         fresh_since=fresh, pub_since=d_from)
+                cands = news + discs
                 if fresh is not None:
                     cands, late, late_chunk = drop_not_ready(
                         conn, cands, fresh, cfg["news"]["variant"], late_chunk_since=n_since,
@@ -367,7 +409,7 @@ def main(argv: list[str] | None = None) -> int:
                     from .relevance import filter_candidates
                     sim_before = {c.ref: c.similarity for c in cands}
                     cands, rel, stop = filter_candidates(item, cands, floor, tracker.caller(rel_client, item, "relevance"),
-                                                         rel_cfg, rel_prompt)
+                                                         rel_cfg, rel_prompt_ask if (item.category == "ask" and rel_prompt_ask) else rel_prompt)
                     if writer is not None:                      # 판정한 후보 전체 → tracking_matches
                         writer.write_matches(item, rel.labels, sim_before)
                     for ref, (ok, code) in rel.labels.items():
@@ -382,11 +424,30 @@ def main(argv: list[str] | None = None) -> int:
                 if card_schema == "v2" and tcfg.get("compare_prior", True):
                     from .compare_prior import prior_evidence
                     extra = lambda ev: prior_evidence(conn, ev)          # 실적·배당 공시의 직전 같은 기간 값 (DB 읽기 전용)
+                if item.category == "ask" and tcfg.get("ask_fin_table"):   # 실험(2026-11-16): ask 질문에 재무 표 근거 (fin_table.py)
+                    from .fin_table import fin_evidence
+
+                    def extra(ev, _item=item, _base=extra):
+                        out = _base(ev) if _base else []
+                        return out + fin_evidence(conn, _item.symbol, _item.company_name or _item.symbol,
+                                                  f"{_item.memo_text} {_item.description}", len(ev) + len(out),
+                                                  rcfg.get("company_aliases"))
+                    if stop == "no_relevant_candidates":       # 관련 후보가 없어도 재무 표로 답해 본다
+                        stop, cands = None, []
                 if stop is not None:                            # 관련 후보가 없거나 판정 실패: 카드 생성 호출 없이
                     from .models import TopicOutcome
                     out = TopicOutcome(stop)                    # 실패 이유는 responses의 relevance.failed에 남는다
                 else:
-                    out = check_topic(item, cands, None if args.no_cards else tracker.caller(client, item), banned, tcfg, links,
+                    card_call = None if args.no_cards else tracker.caller(client, item)
+                    if card_call is not None and tcfg.get("verify_model") and tcfg["verify_model"] != client.model:
+                        # 실험(2026-11-17 비용): 검수 프롬프트만 더 싼 모델로 보낸다 (카드 생성은 그대로)
+                        from .usage import stage_of
+                        if verify_client is None:
+                            verify_client = OpenAIClient.from_env()
+                            verify_client.model = tcfg["verify_model"]
+                        ver_call = tracker.caller(verify_client, item, "verify")
+                        card_call = (lambda p, _c=card_call, _v=ver_call: _v(p) if stage_of(p) == "verify" else _c(p))
+                    out = check_topic(item, cands, card_call, banned, tcfg, links,
                                       extra_evidence=extra)          # --no-cards: 근거 준비까지만 (not_called)
                 if used_store is not None:
                     from .used_refs import card_refs
@@ -586,6 +647,10 @@ def main(argv: list[str] | None = None) -> int:
     with (run_dir / "responses.jsonl").open("w", encoding="utf-8") as f:
         for r in responses:
             f.write(json.dumps(to_dict(r), ensure_ascii=False, default=str) + "\n")
+    if tracker.io is not None:                                  # --save-llm-io: 프롬프트·응답 원문
+        with (run_dir / "llm_io.jsonl").open("w", encoding="utf-8") as f:
+            for row in tracker.io:
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
     preview_path = write_preview(run_dir, drafts, cand_rows, empties, f"{run_dir.name} · LLM {args.llm}")
     if client is not None:                                      # 사용량 기록 (결정 (다): DB가 아니라 파일)
         from .usage import LOG_PATH, write_usage
@@ -599,7 +664,8 @@ def main(argv: list[str] | None = None) -> int:
               f"{json.dumps({k: v['calls'] for k, v in uline['stages'].items()}, ensure_ascii=False)} → {run_dir / 'usage_by_item.csv'}")
     print("\n".join(head))
     print(f"결과 폴더: {run_dir}  (cards.jsonl, report.md, summary.json, candidates.csv, outcomes.jsonl) — "
-          + (f"카드·판정·확인 시각은 {store_target}에 썼습니다 (공용 DB에는 쓰지 않음)." if wconn is not None
+          + (f"카드·판정·확인 시각은 {store_target}에 썼습니다 ({'공용 DB, --allow-shared-write' if shared else '테스트 DB, 공용 DB에는 쓰지 않음'})."
+             if wconn is not None
              else "DB에는 아무것도 쓰지 않았습니다."))
     print(f"미리보기(사용자 화면처럼): {preview_path}")
     print(f"임계값 정하기: {csv_path} 의 마지막 열 '관련(O/X)'을 채운 뒤 python -m pipelines.updates.calibrate --labels {csv_path}")

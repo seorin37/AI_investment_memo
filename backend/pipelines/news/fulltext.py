@@ -119,24 +119,58 @@ def load_done(out_dir: Path, days: Iterable[date] | None = None) -> dict[str, Se
     return done
 
 
+def _new_record(row: ArticleRow, version: str) -> BodyRecord:
+    return BodyRecord(row.news_id, row.url, row.source_code, FETCH_METHOD, row.title, row.published_at, "skipped",
+                      extractor_version=version)
+
+
+def _finisher(rec: BodyRecord, now: Callable[[], datetime]):
+    def done(status: str, reason: str | None = None, **fields) -> BodyRecord:
+        rec.status, rec.reason, rec.fetched_at = status, reason, now().isoformat(timespec="seconds")
+        for key, value in fields.items():
+            setattr(rec, key, value)
+        return rec
+    return done
+
+
+def precheck_reason(row: ArticleRow, src: lf.SourceConfig) -> str | None:
+    """요청하지 않고 끝낼 수 있는 제외 이유 (URL 패턴·도메인, 제목 규칙). 없으면 None."""
+    if not lf._url_accepted(row.url, src):
+        return "URL 패턴·도메인 제외 (사진 기사·다른 서브도메인)"
+    return lf.title_skip_reason(row.title, src)
+
+
+def record_from_page(row: ArticleRow, src: lf.SourceConfig, config: lf.LeadConfig, version: str, status_code: int,
+                     html: str, attempts: int, now: Callable[[], datetime] = lambda: datetime.now(KST)) -> BodyRecord:
+    """받은 응답(5xx 아님) 하나를 판정해 기록을 만든다: 403·429, 200 아님, 본문 비어 있음, 유료·모음·짧은 본문, 본문 추출.
+    fetch_one과 백필 목록 단계(backfill_list, 이미 받은 페이지 재사용)가 같이 쓴다."""
+    done = _finisher(_new_record(row, version), now)
+    code = status_code
+    if code in lf.STOP_STATUSES:
+        return done("failed", f"HTTP {code} (이 매체 이번 실행 중단)", http_status=code, attempts=attempts)
+    if code != 200:
+        return done("skipped", f"HTTP {code}", http_status=code, attempts=attempts)
+    if not (lf.source_body_text(html, src) or ""):
+        # 속보는 본문이 나중에 채워진다 (2026-11-06 매경 [속보] 0자). skipped로 끝내지 않고 다음 실행에서 다시 받는다
+        return done("failed", "본문 비어 있음 (속보 등, 다음 실행에서 다시)", http_status=code, attempts=attempts)
+    reason = lf.page_skip_reason(html, src) or lf.short_body_reason(html, src, config.min_body_chars)
+    if reason:
+        return done("skipped", reason, http_status=code, attempts=attempts)
+    body = lf.source_body_text(html, src)
+    if not body or len(body) < max(config.min_chars, config.min_body_chars):
+        return done("failed", "본문 추출 실패 (선택자 확인 필요)", http_status=code, attempts=attempts)
+    return done("ok", None, subtitle=lf.extract_subtitle(html, src.subtitle_selector), body=body, body_chars=len(body),
+                body_hash=sha256_text(body), http_status=code, attempts=attempts)
+
+
 def fetch_one(row: ArticleRow, src: lf.SourceConfig, config: lf.LeadConfig, http_get: lf.HttpGet,
               robots: lf.RobotsCache, throttle: lf.Throttle, version: str,
               sleep: Callable[[float], None] = time.sleep, now: Callable[[], datetime] = lambda: datetime.now(KST)
               ) -> BodyRecord:
     """기사 1건. 요청하지 않고 끝낼 수 있는 것(URL·제목 규칙, robots)은 먼저 거른다.
     일시 오류는 이번 실행 안에서 max_attempts번까지 (실행을 넘긴 포기는 collect가 fulltext_max_runs로 정한다)."""
-    rec = BodyRecord(row.news_id, row.url, row.source_code, FETCH_METHOD, row.title, row.published_at, "skipped",
-                     extractor_version=version)
-
-    def done(status: str, reason: str | None = None, **fields) -> BodyRecord:
-        rec.status, rec.reason, rec.fetched_at = status, reason, now().isoformat(timespec="seconds")
-        for key, value in fields.items():
-            setattr(rec, key, value)
-        return rec
-
-    if not lf._url_accepted(row.url, src):
-        return done("skipped", "URL 패턴·도메인 제외 (사진 기사·다른 서브도메인)")
-    reason = lf.title_skip_reason(row.title, src)
+    done = _finisher(_new_record(row, version), now)
+    reason = precheck_reason(row, src)
     if reason:
         return done("skipped", reason)
     allowed = robots.allowed(row.url)
@@ -163,23 +197,9 @@ def fetch_one(row: ArticleRow, src: lf.SourceConfig, config: lf.LeadConfig, http
             sleep(config.interval * attempt)
     if resp is None or resp.status_code >= 500:
         return done("failed", error, http_status=getattr(resp, "status_code", None), attempts=attempts)
-    code = resp.status_code
-    if code in lf.STOP_STATUSES:
-        return done("failed", f"HTTP {code} (이 매체 이번 실행 중단)", http_status=code, attempts=attempts)
-    if code != 200:
-        return done("skipped", f"HTTP {code}", http_status=code, attempts=attempts)
-    html = resp.text
-    if not (lf.source_body_text(html, src) or ""):
-        # 속보는 본문이 나중에 채워진다 (2026-11-06 매경 [속보] 0자). skipped로 끝내지 않고 다음 실행에서 다시 받는다
-        return done("failed", "본문 비어 있음 (속보 등, 다음 실행에서 다시)", http_status=code, attempts=attempts)
-    reason = lf.page_skip_reason(html, src) or lf.short_body_reason(html, src, config.min_body_chars)
-    if reason:
-        return done("skipped", reason, http_status=code, attempts=attempts)
-    body = lf.source_body_text(html, src)
-    if not body or len(body) < max(config.min_chars, config.min_body_chars):
-        return done("failed", "본문 추출 실패 (선택자 확인 필요)", http_status=code, attempts=attempts)
-    return done("ok", None, subtitle=lf.extract_subtitle(html, src.subtitle_selector), body=body, body_chars=len(body),
-                body_hash=sha256_text(body), http_status=code, attempts=attempts)
+    # 403·429는 resp.text를 읽지 않는다 (예전과 같음)
+    html = resp.text if resp.status_code == 200 else ""
+    return record_from_page(row, src, config, version, resp.status_code, html, attempts, now)
 
 
 def collect(rows: Iterable[ArticleRow], config: lf.LeadConfig, http_get: lf.HttpGet, out_dir: Path,

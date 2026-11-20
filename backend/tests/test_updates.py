@@ -789,13 +789,14 @@ class GuideRulesTest(unittest.TestCase):
             self.assertNotIn("BANNED", real_codes(summary=[s]), s)
 
     def test_forecast_with_source_as_subject_allowed(self):
-        # 시제 패턴(BANNED)은 주체를 쓴 전망을 통과시키지만, 2026-11-09 결정으로 남의 전망은 사실 근거가 아니다 (PREDICTION)
+        # 2026-11-18 N08 결정: 주체를 밝힌 전망 전달은 BANNED·PREDICTION 모두 통과 (2026-11-09에는 PREDICTION이었다)
         d = disc(text="KB증권은 HBM 매출이 8.0% 상승할 것으로 전망했다.")
         good = {**GOOD, "summary": ["KB증권은 HBM 매출이 8.0% 상승할 것으로 전망했어요. [E1]"],
                 "evidence": [{"source_id": "E1", "fact": "KB증권은 HBM 매출이 8.0% 상승할 것으로 전망했다"}]}
-        self.assertEqual(check_card(parse_card(json.dumps(good)), build_evidence([d]), REAL_BANNED, REAL_TOPIC), ["PREDICTION"])
-        self.assertEqual(check_card(parse_card(json.dumps(good)), build_evidence([d]), REAL_BANNED,
-                                    {**REAL_TOPIC, "prediction_terms": []}), [])
+        self.assertEqual(check_card(parse_card(json.dumps(good)), build_evidence([d]), REAL_BANNED, REAL_TOPIC), [])
+        subjectless = {**good, "summary": ["HBM 매출이 8.0% 상승할 것으로 전망했어요. [E1]"]}     # 주체를 빼면 실패
+        self.assertIn("PREDICTION", check_card(parse_card(json.dumps(subjectless)), build_evidence([d]), REAL_BANNED,
+                                               REAL_TOPIC))
 
     def test_past_facts_allowed(self):
         self.assertEqual(real_codes(summary=["HBM 매출이 8.0% 상승했어요. [E1]"],
@@ -1292,7 +1293,10 @@ class NewsChunkSearchTest(unittest.TestCase):
         cfg = load_config("configs/updates.yaml")
         self.assertEqual(cfg["news"]["search"], "chunks")                         # 2026-11-10 기본값 전환
         self.assertEqual(cfg["topic"]["card_schema"], "v2")                        # 2026-11-10 미리보기 확인 후 v2
-        self.assertNotIn("min_similarity_news_chunks", cfg["topic"])              # 임계값은 아직 보정 전 (그대로)
+        # 2026-11-19 원문 청크 기준값 보정 (calibrate 0.59·바닥선 p95 0.48~0.55 → 뉴스 값과 같은 0.58 유지)
+        self.assertEqual(cfg["topic"]["min_similarity_news_chunks"], 0.58)
+        from pipelines.updates.news_search import check_mode
+        self.assertFalse(check_mode("chunks", cfg["topic"]))                       # 보정 전 경고가 더 나오지 않는다
         self.assertTrue(cfg["news"]["chunks"]["fallback_headline"])               # 청크 없는 기사는 제목+요약 벡터로 보충
 
     def test_used_refs_skip_news_by_article(self):
@@ -1514,7 +1518,7 @@ class ExtraRulesAndPredictionTest(unittest.TestCase):
         check_topic(ITEM, [disc()], lambda p: prompts.append(p) or NO_UPDATE_JSON, BANNED,
                     {"extra_rules": self.TOPIC["extra_rules"]})
         self.assertIn("# 추가 규칙\n- 같은 내용이 공시와 뉴스에 있으면 공시 숫자를 쓴다.", prompts[0])
-        self.assertIn("- 전망·예상·추정을 다룬 기사는 사실 근거로 쓰지 않는다.", prompts[0])
+        self.assertIn("- 전망·예상·추정 기사도 근거로 쓸 수 있다.", prompts[0])           # 2026-11-18 N08
 
     def test_naver_forecast_card_is_blocked(self):                    # 2026-11-09 비교 실행에서 나온 카드
         from pipelines.updates.models import Card
@@ -1532,7 +1536,8 @@ class ExtraRulesAndPredictionTest(unittest.TestCase):
     def test_prediction_rule_details(self):
         from pipelines.updates.checks import prediction_text
         cfg = {**self.TOPIC}
-        self.assertIsNotNone(prediction_text(["KB증권은 매출이 늘 것으로 전망했어요"], cfg))   # 주체를 써도 예측은 예측
+        self.assertIsNone(prediction_text(["KB증권은 매출이 늘 것으로 전망했어요"], cfg))      # 주체를 밝힌 전달 (2026-11-18)
+        self.assertIsNotNone(prediction_text(["매출이 늘 것으로 전망했어요"], cfg))            # 주체 없음
         self.assertIsNotNone(prediction_text(["흑자 전환 가능성이 거론돼요"], cfg))
         self.assertIsNone(prediction_text(["영업이익이 시장 예상치를 웃돌았어요"], cfg))     # 실제 실적 vs 예상치
         self.assertIsNone(prediction_text(["매출이 예상보다 8% 많았어요"], cfg))
@@ -2014,6 +2019,23 @@ class ResponseTest(unittest.TestCase):
     def resp(self, kind, codes=(), card=None, has_data=True, item=ITEM):
         from pipelines.updates.response import item_response
         return item_response(item, kind, list(codes), card, has_data, "M07", "2026-11-10T09:00:00+09:00")
+
+    def test_ask_no_answer(self):
+        """실험(2026-11-17): 한 번 답하기 질문은 답을 못 만들면 '자료 없음' 답을 보인다. 시스템 실패는 숨긴 채 다시 본다."""
+        ask = replace(ITEM, category="ask", description="HBM이 무엇인지")
+        for kind, codes, reason in (("no_update", (), "llm_no_update"), ("no_relevant_candidates", (), "no_relevant_candidates"),
+                                    ("no_candidates", (), "no_candidates"), ("no_update", ("VERIFY_UNSUPPORTED",), "verify_failed")):
+            r = self.resp(kind, codes, item=ask)
+            self.assertEqual((r.type, r.reason, r.user_visible, r.question), ("ask_no_answer", reason, True, "HBM이 무엇인지"))
+            self.assertIn("확인되지 않았어요", r.message)
+        r = self.resp("no_update", item=ask, has_data=False)
+        self.assertEqual((r.type, r.reason), ("ask_no_answer", "no_source_data"))
+        for kind, codes in (("no_update", ("CALL_FAILED:Timeout",)), ("relevance_failed", ()), ("not_called", ())):
+            r = self.resp(kind, codes, item=ask)
+            self.assertEqual((r.type, r.user_visible), ("no_new_info", False))
+        r = self.resp("update", card={"title": "HBM 설명", "origin": "llm"}, item=ask)
+        self.assertEqual(r.type, "update_card")
+        self.assertEqual(self.resp("no_update").type, "no_new_info")                  # 추적 항목은 그대로
 
     def test_item_types_and_reasons(self):
         r = self.resp("update", card={"title": "HBM 매출 8.0% 증가", "origin": "llm"})

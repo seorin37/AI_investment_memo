@@ -539,3 +539,24 @@ class DomainVocabTest(unittest.TestCase):
         for name in ("memo_eval_v0/memo_eval_v0.jsonl", "memo_eval_team_v1/memo_eval_team_v1.jsonl"):
             s = evaluate(load_gold(REPO_ROOT / "eval" / name), LEX)["summary"]
             self.assertEqual((s["missed_tracking"], s["over_tracking"], s["flat_missed_tracking"]), (0, 0, 0), name)
+
+class KospiMemoRuleTest(unittest.TestCase):
+    """2026-11-19 코스피 메모 dry-run (별칭 사전 26종목 밖 종목). 팀원 수정(내려오면·증자·해군) 위에서."""
+
+    def test_price_with_ieon(self):
+        # '밑이면'·'아래이면': 방향어 뒤 '이면' (K05 "엘전 12만 밑이면 산다"가 항목도 응답도 없이 빠졌다)
+        for text, value in (('12만 밑이면 산다', 120000), ('12만원 밑이면 산다', 120000), ('5만 아래이면 산다', 50000)):
+            p = parse_price(text, LEX)
+            self.assertEqual((p.direction, p.price), ('below', value), text)
+        self.assertEqual(parse_price('10만 이상이면 팔자', LEX).direction, 'above')
+        j = judge_one('엘전 12만 밑이면 산다', symbol='066570')
+        self.assertEqual([(i['type'], i['price_threshold']) for i in j.items], [('price_below', 120000)])
+        self.assertEqual(parse_price('5만 아래로 내려오면 알림', LEX).price, 50000)          # 팀원 수정 그대로
+
+    def test_latin_company_name_not_sentence_end(self):
+        # "LG전자 인도 법인 …"이 "LG전자"에서 잘려 "LG전자 관련 소식" 항목이 생겼다 (K04)
+        for text in ('LG전자 인도 법인 상장 이후 지분가치 반영되는지, 4분기 실적 가이던스 나오면 확인',
+                     'LG전자 실적 확인', '대덕전자 실적 확인', 'SK텔레콤 배당 확인'):
+            self.assertEqual(len(split_sentences(text)), 1, text)
+        self.assertEqual([s.text for s in split_sentences('결국 TSMC다 삼성은 멀었음')], ['결국 TSMC다', '삼성은 멀었음'])
+        self.assertEqual(len(split_sentences('유상증자 한다던데 괜찮나')), 1)                 # 팀원 수정 그대로

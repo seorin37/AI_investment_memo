@@ -31,6 +31,12 @@ def draft_to_dict(d: UpdateDraft) -> dict:
     if d.card_schema == "v2":                       # v1 카드는 예전 모양 그대로
         out.update(card_schema="v2", headline=d.title, when=d.when, facts=d.facts, memo_link=d.reason,
                    merged_items=d.merged_items, coverage=d.coverage)
+        if d.explanation:
+            out["explanation"] = d.explanation
+        if d.calculations:                          # 실험(2026-11-17) ask 즉석 계산 (calc.py). ok인 것만 화면에 보인다
+            out["calculations"] = d.calculations
+        if d.source_list:                           # 실험(2026-11-18) ask: 답 아래 출처 목록
+            out["source_list"] = d.source_list
     return out
 
 

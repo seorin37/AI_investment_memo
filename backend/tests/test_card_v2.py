@@ -10,7 +10,7 @@ from pipelines.updates.checks import check_card_v2, text_dates
 from pipelines.updates.compare_prior import korean_won, period_type, prior_evidence
 from pipelines.updates.judge import asks_why, build_prompt, parse_card_v2, wants_comparison
 from pipelines.updates.models import Candidate, CardV2, Evidence, TrackingItem, UpdateDraft
-from pipelines.updates.topic import check_topic, merge_same_source
+from pipelines.updates.topic import _sentences, check_topic, merge_same_source
 
 ITEM = TrackingItem("M01:0:0", "000660", "topic", "SK하이닉스 배당", memo_text="작년보다 배당 늘었나?",
                     company_name="SK하이닉스")
@@ -76,6 +76,27 @@ class CheckTest(unittest.TestCase):
         ok = card(facts=[("보통주 1주당 20,000원 배당을 결정했어요.", "E1"), ("주가는 2.62% 올랐어요.", "E2")],
                   sources=["E1", "E2"])
         self.assertEqual(check_card_v2(ok, e, [], CFG), [])
+
+    def test_preliminary_earnings_require_consolidated_or_separate_basis(self):
+        connected = disc(text="매출액 34,724억원 영업이익 4,513억원")
+        connected = Candidate(**{**connected.__dict__, "title": "[수시공시] 연결재무제표기준영업(잠정)실적(공정공시)"})
+        separate = disc("disc:R2#0", text="매출액 19,720억원 영업이익 3,226억원")
+        separate = Candidate(**{**separate.__dict__, "title": "[수시공시] 영업(잠정)실적(공정공시)"})
+        cfg = {**CFG, "require_financial_basis": True}
+        unlabeled = card(facts=[("3분기 매출액은 34,724억원이에요.", "E1")])
+        self.assertIn("FINANCIAL_BASIS", check_card_v2(unlabeled, ev(connected), [], cfg))
+        labeled = card(facts=[("3분기 연결 기준 매출액은 34,724억원이에요.", "E1")])
+        self.assertEqual(check_card_v2(labeled, ev(connected), [], cfg), [])
+        mixed = card(facts=[("연결 기준 매출액은 34,724억원이에요.", "E1"),
+                            ("별도 기준 영업이익은 3,226억원이에요.", "E2")], sources=["E1", "E2"])
+        self.assertIn("FINANCIAL_BASIS", check_card_v2(mixed, ev(connected, separate), [], cfg))
+        explained = card(facts=[("별도 기준 매출액은 19,720억원이에요.", "E1")],
+                         explanation="매출액은 19,720억원이에요.")
+        self.assertIn("FINANCIAL_BASIS", check_card_v2(explained, ev(separate), [],
+                                                        {**cfg, "explanation": {"enabled": True}}))
+        connected_news = news(text="연결 기준 매출액은 34,724억원이다.")
+        unlabeled_news = card(when="2026-10-29", facts=[("매출액은 34,724억원이에요.", "E1")])
+        self.assertIn("FINANCIAL_BASIS", check_card_v2(unlabeled_news, ev(connected_news), [], cfg))
 
     def test_when_and_sources(self):
         e = ev(disc())
@@ -145,6 +166,10 @@ class CheckTest(unittest.TestCase):
     def test_text_dates(self):
         self.assertEqual(text_dates("2026.10.28 및 2026년 11월 3일"), {"2026-10-28", "2026-11-03"})
 
+    def test_verify_sentence_split_does_not_break_numeric_date(self):
+        text = "회사는 2026.05. HBM 샘플을 출하했어요. 속도도 공개했어요."
+        self.assertEqual(_sentences(text), ["회사는 2026.05. HBM 샘플을 출하했어요.", "속도도 공개했어요."])
+
 
 class FlowTest(unittest.TestCase):
     def _call(self, payload):
@@ -179,6 +204,122 @@ class FlowTest(unittest.TestCase):
     def test_v1_unchanged(self):
         out = check_topic(ITEM, [disc()], None, [], {**CFG, "card_schema": "v1"})
         self.assertEqual(out.kind, "not_called")
+
+    def test_check_log_keeps_failed_card_and_evidence_text(self):
+        """검사 기록 (2026-11-17): 떨어진 카드 JSON·코드, 형식 재요청 전 첫 카드, 카드가 쓴 근거의 원문이 outcomes에 남는다."""
+        from pipelines.updates.experiment import _outcome
+        bad = {"status": "update", "headline": "SK하이닉스 분기배당 결정", "when": "2026-10-28",
+               "facts": [{"text": "보통주 1주당 30,000원 분기배당을 결정했어요.", "evidence_id": "E1"}],
+               "memo_link": "메모의 '배당' 관심사와 연결돼요.", "sources": ["E1"], "confidence": 0.9}
+        older = news(day="2026-10-20")                                     # 근거는 최신순이라 공시가 E1
+        out = check_topic(ITEM, [disc(), older], self._call(bad), [], CFG)
+        self.assertEqual([e.candidate.kind for e in out.evidence], ["disclosure", "news"])
+        self.assertEqual((out.kind, out.fail_codes), ("no_update", ["NUMBER"]))
+        self.assertEqual(len(out.checks), 1)
+        self.assertEqual(out.checks[0]["stage"], "card")
+        self.assertEqual(out.checks[0]["codes"], ["NUMBER"])
+        self.assertEqual(parse_card_v2(json.dumps(out.checks[0]["card"], ensure_ascii=False)).facts,
+                         [("보통주 1주당 30,000원 분기배당을 결정했어요.", "E1")])   # 응답과 같은 모양이라 다시 읽힌다
+        row = _outcome(ITEM, out)
+        self.assertEqual(row["checks"], out.checks)
+        by_eid = {e["eid"]: e for e in row["evidence"]}
+        self.assertEqual(by_eid["E1"]["shown_text"], disc().text)        # 카드가 쓴 근거만 원문을 남긴다
+        self.assertNotIn("shown_text", by_eid["E2"])
+        json.dumps(row, ensure_ascii=False)                              # 그대로 jsonl에 쓸 수 있다
+
+        long = {**bad, "headline": "가" * 40, "facts": [{"text": "보통주 1주당 20,000원 분기배당을 결정했어요.", "evidence_id": "E1"}]}
+        answers = iter([long, {**long, "headline": "SK하이닉스 분기배당 결정"}])
+        out = check_topic(ITEM, [disc()], lambda p: json.dumps(next(answers), ensure_ascii=False), [],
+                          {**CFG, "format_retry": 1})
+        self.assertEqual(out.kind, "update")
+        self.assertEqual([(c["stage"], c["codes"]) for c in out.checks], [("card", ["FORMAT_TITLE"]), ("format_retry", [])])
+        self.assertEqual(out.checks[0]["card"]["headline"], "가" * 40)   # 재요청 전 첫 카드도 남는다
+
+        out = check_topic(ITEM, [disc()], lambda p: "JSON 아님", [], CFG)
+        self.assertEqual(out.checks, [{"stage": "card", "card": None, "codes": ["FORMAT_PARSE"], "raw": "JSON 아님"}])
+
+    def test_format_retry_memo_link(self):
+        """memo_link가 두 문장이면(FORMAT_REASON) 한 번 고쳐 달라고 한다 (2026-11-18, 오늘 실행 항목 7 카드 모양)."""
+        good = {"status": "update", "headline": "SK하이닉스 분기배당 결정", "when": "2026-10-28",
+                "facts": [{"text": "보통주 1주당 20,000원 분기배당을 결정했어요.", "evidence_id": "E1"}],
+                "memo_link": "메모의 '배당' 관심사와 연결돼요.", "sources": ["E1"], "confidence": 0.9}
+        two = {**good, "memo_link": "분기배당 발표 금액을 확인하는 공시예요. 작년 같은 시기 배당금은 제공 자료에 없어요."}
+        prompts, replies = [], iter([two, good])
+        out = check_topic(ITEM, [disc()], lambda p: prompts.append(p) or json.dumps(next(replies), ensure_ascii=False), [],
+                          {**CFG, "format_retry": 1})
+        self.assertEqual(out.kind, "update")
+        self.assertEqual([(c["stage"], c["codes"]) for c in out.checks], [("card", ["FORMAT_REASON"]), ("format_retry", [])])
+        self.assertIn("memo_link가 비었거나, 80자(공백 포함)를 넘었거나, 한 문장이 아니에요", prompts[1])
+
+    def test_repair_reasons_cover_format_codes(self):
+        """재요청 대상 코드마다 안내 문구가 있다 (v1 reason 길이 FORMAT_REASON도 KeyError 없이)."""
+        from pipelines.updates.topic import _FORMAT_CODES, _REPAIR_REASON, _REPAIR_REASON_V2
+        self.assertTrue(_FORMAT_CODES - {"FORMAT_EXPLANATION"} <= set(_REPAIR_REASON))   # v1에는 설명 문단이 없다
+        self.assertTrue(_FORMAT_CODES <= set(_REPAIR_REASON_V2))
+
+    def test_number_compare_reads_outcomes_checks(self):
+        """number_check_compare가 새 형식(outcomes.jsonl 검사 기록)을 읽어 같은 검사를 다시 돌린다."""
+        from pipelines.updates import checks
+        from pipelines.updates.experiment import _outcome
+        from pipelines.updates.number_check_compare import _runs, compare
+        unit = disc(text="(단위 : 백만원) 매출 706,565")
+        good = {"status": "update", "headline": "SK하이닉스 실적", "when": "2026-10-28",
+                "facts": [{"text": "매출은 7,065억 6,500만원이에요.", "evidence_id": "E1"}],
+                "memo_link": "메모의 '배당' 관심사와 연결돼요.", "sources": ["E1"], "confidence": 0.9}
+        wrong = {**good, "facts": [{"text": "매출은 706,565원이에요.", "evidence_id": "E1"}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp) / "run_x"
+            run.mkdir()
+            with (run / "outcomes.jsonl").open("w", encoding="utf-8") as f:
+                for payload in (good, wrong):
+                    out = check_topic(ITEM, [unit], self._call(payload), [], CFG)
+                    f.write(json.dumps(_outcome(ITEM, out), ensure_ascii=False) + "\n")
+            self.assertEqual(_runs([tmp]), [run])
+            res = compare([run], checks)                                  # 전·후 모두 지금 코드: 바뀐 카드 없음
+        s = res["stats"]
+        self.assertEqual((s["unique_cards"], s["from_outcomes"], s["same_pass"], s["same_fail"], s["no_evidence"]),
+                         (2, 2, 1, 1, 0))
+
+
+class ExplanationTest(unittest.TestCase):
+    """설명 문단 시험 (topic.explanation, 2026-11-12). 기본은 꺼져 있어 기존 카드와 같다."""
+    ON = {**CFG, "explanation": {"enabled": True, "max_sentences": 3, "max_chars": 200}}
+    EXP = "SK하이닉스는 보통주 1주당 20,000원을 분기배당으로 주기로 했어요. 배당기준일은 2026-11-30이에요."
+
+    def _payload(self, **kw):
+        base = {"status": "update", "headline": "SK하이닉스 분기배당 결정", "when": "2026-10-28",
+                "facts": [{"text": "보통주 1주당 20,000원 분기배당을 결정했어요.", "evidence_id": "E1"}],
+                "explanation": self.EXP, "memo_link": "메모의 '배당' 관심사와 연결돼요.", "sources": ["E1"], "confidence": 0.9}
+        base.update(kw)
+        return json.dumps(base, ensure_ascii=False)
+
+    def test_off_by_default(self):
+        self.assertEqual(check_card_v2(card(), ev(disc()), [], CFG), [])
+        self.assertNotIn("explanation", build_prompt(ITEM, ev(disc()), schema="v2"))
+        out = check_topic(ITEM, [disc()], lambda p: self._payload(), [], CFG)
+        self.assertEqual(out.draft.explanation, "")                 # 꺼져 있으면 응답에 있어도 쓰지 않는다
+
+    def test_checked_when_on(self):
+        self.assertEqual(check_card_v2(card(explanation=self.EXP), ev(disc()), [], self.ON), [])
+        self.assertIn("FORMAT_EXPLANATION", check_card_v2(card(), ev(disc()), [], self.ON))       # 비었다
+        self.assertIn("FORMAT_EXPLANATION", check_card_v2(card(explanation=self.EXP + " [E1]"), ev(disc()), [], self.ON))
+        self.assertIn("NUMBER", check_card_v2(card(explanation="1주당 30,000원으로 정했어요. 기준일은 2026-11-30이에요."),
+                                              ev(disc()), [], self.ON))                           # 근거에 없는 숫자
+        self.assertIn("BANNED", check_card_v2(card(explanation="배당을 정한 호재예요. 기준일은 2026-11-30이에요."),
+                                              ev(disc()), ["호재"], self.ON))
+
+    def test_prompt_parse_and_draft(self):
+        self.assertIn("JSON 키: status, headline, when, facts, explanation, memo_link",
+                      build_prompt(ITEM, ev(disc()), schema="v2", explain=True))
+        seen = []
+
+        def call(prompt):
+            seen.append(prompt)
+            return self._payload()
+        out = check_topic(ITEM, [disc()], call, [], {**self.ON, "prompt_path_v2": "configs/update_judge_prompt_v2_explain.md"})
+        self.assertEqual(out.kind, "update")
+        self.assertEqual(out.draft.explanation, self.EXP)
+        self.assertIn("explanation: 2~3문장, 200자 이내", seen[0])  # 시험용 프롬프트 파일에 설정값이 채워진다
 
 
 class MergeTest(unittest.TestCase):
@@ -260,6 +401,451 @@ class CompareTest(unittest.TestCase):
         self.assertEqual(conn.sqls, [])
 
 
+class NumberUnitTest(unittest.TestCase):
+    """숫자 단위 (2026-11-17): 십억·백억·천억·백만·천만을 읽고, 표 머리 "(단위 : 백만원)"의 맨숫자에 카드가 "원"이나 다른 단위를
+    붙이면 NUMBER. v1 카드(_check_body)·v2 카드·즉시 답변이 같은 규칙인지 셋 다 본다."""
+
+    PASS = [("706,565백만원", "706,565백만원"), ("706,565백만원", "7,065억 6,500만원"),
+            ("(단위 : 백만원) 706,565", "7,065억 6,500만원"), ("12십억원", "120억원"),
+            ("(단위 : 백만원) 706,565", "706,565"),                                   # 맨숫자는 지금처럼 원래 값으로 인정
+            ("배당금총액 14조 1034억 6648만 8000원", "14조 1034억 6648만 8000원"),       # 한국식 나눠 쓴 금액
+            ("순이익 5조7천921억원", "5조7천921억원"), ("순이익 1조9075억원", "9075억원"),
+            ("2026.11.03 매출 12.5% 늘었다", "2026년 11월 3일 매출이 12.5% 늘었어요"),     # 날짜·%
+            ("3분기 매출 706,565백만원", "3분기 매출이 706,565백만원이에요"),             # 한 자리 숫자는 비교에서 뺀다
+            ("(단위 : 백만원) 배당금총액(원): 1,500 매출 706,565", "1주당 1,500원이에요")]  # "(원)" 이름표 숫자는 원 금액
+    FAIL = [("706,565백만원", "706,565원"), ("706,565백만원", "706,565천원"),
+            ("(단위 : 백만원) 706,565", "706,565원"), ("1,234억원", "1,234원"),
+            ("(단위 : 백만원) 706,565", "706,565억원")]
+
+    @staticmethod
+    def _v2(src, said):
+        c = card(headline="SK하이닉스 실적", when="2026-10-28", facts=[(f"매출은 {said}이에요.", "E1")])
+        return "NUMBER" in check_card_v2(c, ev(disc(text=src)), [], CFG)
+
+    @staticmethod
+    def _v1(src, said):
+        from pipelines.updates.checks import check_card
+        from pipelines.updates.models import Card
+        c = Card("update", "SK하이닉스 실적", [f"매출은 {said}이에요. [E1]"], "메모의 실적 관심사와 연결돼요.",
+                 [("E1", "실적 공시")], 0.9)
+        return "NUMBER" in check_card(c, ev(disc(text=src)), [], {"min_fact_overlap": 0})
+
+    @staticmethod
+    def _answer(src, said):
+        from pipelines.updates.checks import check_answer
+        from pipelines.updates.models import Answer
+        a = Answer("answer", "none", [f"매출은 {said}이에요. [E1]"], [("E1", "실적 공시")], 0.9)
+        return "NUMBER" in check_answer(a, ev(disc(text=src)), [], {"min_fact_overlap": 0})
+
+    def test_same_rule_in_v1_v2_answer(self):
+        for name, fn in (("v2", self._v2), ("v1", self._v1), ("answer", self._answer)):
+            for src, said in self.PASS:
+                self.assertFalse(fn(src, said), f"{name} 통과해야 함: {src} ↔ {said}")
+            for src, said in self.FAIL:
+                self.assertTrue(fn(src, said), f"{name} 실패해야 함: {src} ↔ {said}")
+
+    def test_units_and_kinds(self):
+        from pipelines.updates.checks import evidence_number_sets, evidence_numbers, numbers
+        self.assertEqual(numbers("706,565백만원"), {706565000000.0})
+        self.assertEqual(numbers("5천억원 3천만원 2백억원 12십억원"), {5e11, 3e7, 2e10, 1.2e10})
+        self.assertEqual(numbers("14조 1034억 6648만 8000원"), {14103466488000.0})
+        self.assertEqual(numbers("3분기"), set())
+        ev_sets = evidence_number_sets("(단위 : 백만원) 706,565")
+        self.assertEqual(ev_sets.plain, {706565.0, 706565000000.0})
+        self.assertEqual(ev_sets.unit, {706565000000.0})
+        self.assertEqual(evidence_numbers("(단위 : 백만원) 706,565"), ev_sets.plain)   # 값만 쓰는 곳은 이전과 같다
+
+
+# 2026-11-17 dry-run 항목 7 KB금융 분기배당 금액의 E2 원문 (outcomes.jsonl shown_text 그대로)
+KB_DIVIDEND = (
+    "[KB금융 2026 3분기 | III. 재무에 관한 사항 > 3. 연결재무제표 주석 > 26. 배당금 (연결)]\n"
+    "[표] 배당금에 대한 공시 / 당분기말\n(단위 : 백만원)\n열: 연차배당 | 분기배당\n"
+    "소유주에 대한 배분으로 인식된 배당금 | 연차배당: 573,768 | 분기배당: 810,246\n"
+    "소유주에 대한 배분으로 인식된 주당배당금(단위: 원) | 연차배당: 1,605\n\n"
+    "[표] 전기말\n(단위 : 백만원)\n열: 연차배당 | 분기배당\n"
+    "소유주에 대한 배분으로 인식된 배당금 | 연차배당: 298,285 | 분기배당: 1,004,006\n"
+    "소유주에 대한 배분으로 인식된 주당배당금(단위: 원) | 연차배당: 804\n\n"
+    "[표] 배당금에 대한 공시, 중간배당\n(단위 : 백만원)\n"
+    "열: 배당의 구분 / 분기배당 / 분기배당 1 | 배당의 구분 / 분기배당 / 분기배당 2\n"
+    "소유주에 대한 배분으로 인식된 배당금 | 배당의 구분 / 분기배당 / 분기배당 1: 405,088 | 배당의 구분 / 분기배당 / 분기배당 2: 405,158\n"
+    "소유주에 대한 배분으로 인식된 주당배당금(단위: 원) | 배당의 구분 / 분기배당 / 분기배당 1: 1,143 | 배당의 구분 / 분기배당 / 분기배당 2: 1,155")
+TWO_TABLES = ("[삼성전자 2026 3분기 | 연결재무제표 주석]\n[표] 매출\n(단위 : 백만원)\n매출액 | 당분기: 706,565\n\n"
+              "[표] 임원 보수\n(단위 : 천원)\n보수총액 | 당분기: 12,345")
+
+
+class RowUnitTest(unittest.TestCase):
+    """표 행 이름표 단위·표 머리 여러 개 (2026-11-18, 결정 2 변경). 줄 앞쪽 이름표 "(단위: 원)"이 있으면 그 줄 값은 원,
+    표 머리는 숫자마다 가장 가까운 앞 머리를 쓴다. v1·v2·즉시 답변 셋 다 본다."""
+
+    PASS = [(KB_DIVIDEND, "1,143원"), (KB_DIVIDEND, "1,155원"), (KB_DIVIDEND, "1,605원"),
+            (KB_DIVIDEND, "4,050억 8,800만원"), (KB_DIVIDEND, "405,088백만원"),        # 표 머리 백만원 줄은 그대로
+            (KB_DIVIDEND, "1,143"),                                                     # 맨숫자는 그대로 인정
+            (TWO_TABLES, "7,065억 6,500만원"), (TWO_TABLES, "12,345천원"), (TWO_TABLES, "1,234만 5천원"),
+            ("(단위 : 백만원)\n배당성향(%) | 당기: 30.5", "30.5%"),
+            ("(단위 : 백만원)\n발행주식수(단위: 주) | 당기: 1,000,000", "1,000,000주"),
+            ("(단위 : 백만원)\n(주)한화 | 장부금액: 1,000", "10억원"),                       # "(주)"는 단위가 아니다
+            ("(단위 : 백만원)\n기본주당이익(손실) (단위 : 원) | 당기: 2,345", "2,345원"),        # 띄어 쓴 이름표
+            ("(단위: 백만원) [KB금융 2026 3분기 | III. 재무]\n순이익 | 당기: 706,565", "7,065억 6,500만원")]
+    FAIL = [(KB_DIVIDEND, "405,088원"), (KB_DIVIDEND, "573,768원"),                    # 다른 줄의 백만원 값을 원으로
+            (KB_DIVIDEND, "1,143백만원"),                                               # 원 줄 값을 백만원으로
+            (TWO_TABLES, "12,345백만원"), (TWO_TABLES, "706,565천원"),                   # 다른 표의 머리를 쓰면 실패
+            ("(단위 : 백만원)\n발행주식수(단위: 주) | 당기: 1,000,000", "1,000,000원"),       # 주 줄 값은 금액이 아니다
+            ("(단위 : 백만원)\n발행주식수(단위: 주) | 당기: 1,000,000", "1조원"),
+            ("(단위: 백만원) [KB금융 2026 3분기 | III. 재무]\n순이익 | 당기: 706,565", "706,565원")]
+
+    def test_same_rule_in_v1_v2_answer(self):
+        for name, fn in (("v2", NumberUnitTest._v2), ("v1", NumberUnitTest._v1), ("answer", NumberUnitTest._answer)):
+            for src, said in self.PASS:
+                self.assertFalse(fn(src, said), f"{name} 통과해야 함: {said} ← {src[-60:]!r}")
+            for src, said in self.FAIL:
+                self.assertTrue(fn(src, said), f"{name} 실패해야 함: {said} ← {src[-60:]!r}")
+
+    def test_kb_card_from_dryrun(self):
+        """dry-run에서 NUMBER로 떨어졌던 KB금융 카드 문장 그대로."""
+        c = card(headline="KB금융 3분기 분기배당 금액 확인", when="2026-11-16",
+                 facts=[("분기배당 1의 주당배당금은 1,143원이에요.", "E1"), ("분기배당 2의 주당배당금은 1,155원이에요.", "E1")])
+        self.assertNotIn("NUMBER", check_card_v2(c, ev(disc(text=KB_DIVIDEND)), [], CFG))
+
+
+class CountUnitTest(unittest.TestCase):
+    """배수가 붙은 개수 단위 (2026-11-18 N30). 표 머리·이름표 "(단위: 천명)"·"(백만주)"의 맨숫자는 개수로 환산하고,
+    환산값은 명·주·건·개를 붙인 카드 숫자하고만 맞춘다 ("30,853천명"으로 "30,853,000원"은 안 된다). v1·v2·즉시 답변 셋 다."""
+
+    HEAD = "(단위: 천명) 30,853"
+    ROW = "(단위 : 백만원)\n임직원수(단위: 천명) | 당기: 30,853"
+    PASS = [(HEAD, "30,853천 명"), (HEAD, "3,085만 3천 명"), (HEAD, "30,853,000명"), (HEAD, "30,853"),
+            ("[표] 고객\n(단위 : 천명)\n고객수 | 당기: 30,853", "30,853천 명"),
+            (ROW, "3,085만 3천 명"), ("(단위 : 원)\n가입자(천명) | 당기: 30,853", "30,853천명"),   # 행 이름표
+            ("(단위 : 백만주)\n유통주식수 | 당기: 12.5", "1,250만 주"), ("(단위: 천건) 4,321", "432만 1천 건"),
+            ("(단위 : 주)\n자기주식 | 취득: 1,000,000", "100만주를"),
+            ("임직원 30,853천명", "30,853천 명"), ("임직원 30,853명", "30,853명"),               # 표 머리 없는 글
+            ("임직원 3만명", "30,000명"), ("가입자 30,853", "30,853명"),
+            # 금액 표 안의 개수 열: 2026-11-12 A_all 항목 8 KB금융 자기주식 소각 카드 (표 머리 백만원, 소각수량은 주)
+            ("[표] 자기주식 소각현황\n(단위 : 백만원)\n소각일: 2026.05.15 | 주식종류: 보통주 | 소각수량: 18,162,721 | "
+             "소각금액: 2,002,230", "18,162,721주")]
+    FAIL = [(HEAD, "30,853명"), (HEAD, "30,853,000원"), (HEAD, "30,853천원"),
+            (ROW, "30,853명"), (ROW, "30,853,000원"), (ROW, "30,853백만원"),
+            ("(단위 : 백만주)\n유통주식수 | 당기: 12.5", "12,500,000원"), ("(단위 : 백만주)\n유통주식수 | 당기: 12.5", "12.5주"),
+            ("(단위 : 백만원)\n매출 | 당기: 30,853", "30,853,000,000명"),                      # 금액 환산값을 개수로
+            ("임직원 30,853천명", "30,853,000원")]                                           # 표 머리 없는 글도
+
+    def test_same_rule_in_v1_v2_answer(self):
+        for name, fn in (("v2", NumberUnitTest._v2), ("v1", NumberUnitTest._v1), ("answer", NumberUnitTest._answer)):
+            for src, said in self.PASS:
+                self.assertFalse(fn(src, said), f"{name} 통과해야 함: {said} ← {src!r}")
+            for src, said in self.FAIL:
+                self.assertTrue(fn(src, said), f"{name} 실패해야 함: {said} ← {src!r}")
+
+    def test_count_words(self):
+        from pipelines.updates.checks import COUNT, _card_scan, table_unit
+        self.assertEqual(_card_scan("자기주식 1,000주를 취득"), [(1000.0, COUNT)])
+        self.assertEqual(_card_scan("3,085만 3천 명이에요"), [(30853000.0, COUNT)])
+        for text in ("1주당 1,143원", "3개월", "주식 1,000 주식", "1,000 건설"):        # 주당·개월·주식·건설은 개수가 아니다
+            self.assertNotIn(COUNT, {k for _, k in _card_scan(text)}, text)
+        self.assertEqual(table_unit("백만주"), (COUNT, 1e6))
+        self.assertEqual(table_unit("천원")[1], 1e3)
+        self.assertIsNone(table_unit("톤"))
+
+
+class ParenNegativeTest(unittest.TestCase):
+    """괄호 음수 (2026-11-19 M019 'LG화학 석유화학 부문 실적이 얼마나 나빠졌는지'). 공시 표의 "(104,182)"는 -104,182이고
+    표 머리 "(단위 : 백만원, %)" 환산값도 음수다. 카드가 음수·손실로 쓰면 통과, 이익으로 쓰면 NUMBER, 부호를 안 밝히면 크기만 본다.
+    v1·v2·즉시 답변 셋 다. 근거는 LG화학 2025 사업보고서(20260313001195) 경영진단 청크 그대로."""
+
+    M019 = ("[LG화학 2025 사업보고서 | IV. 이사의 경영진단 및 분석의견 > 3. 재무상태 및 영업실적]\n[표]\n(단위 : 백만원, %)\n"
+            "구 분 | 영업이익 | 증감율(%)\n구 분 | 제25기 | 제24기 | 증감율(%)\n"
+            "석유화학 사업부문 | (356,378) | (104,182) | (242.1%)\n첨단소재 사업부문 | 146,388 | 436,722 | (66.5%)\n"
+            "생명과학 사업부문 | 127,587 | 110,263 | 15.7%")
+    PASS = ["석유화학 부문 영업손익은 -104,182백만원이에요.", "석유화학 부문은 104,182백만원 적자였어요.",
+            "석유화학 부문 영업손실은 1,041억 8,200만원이에요.", "석유화학 부문 순손실 1,041억 8,200만원이에요.",
+            "석유화학 부문은 △104,182백만원이에요.", "석유화학 부문은 △104,182였어요.",
+            "석유화학 부문은 1,041억 8,200만원의 영업손실을 냈어요.",
+            "석유화학 부문 영업손실이 1,041억 8,200만원에서 3,563억 7,800만원으로 커졌어요.",
+            "석유화학 부문 실적은 1,041억 8,200만원이었어요.",                          # 부호를 안 밝히면 크기만
+            "석유화학 부문 영업손실 증감률은 242.1%예요.",                               # %는 크기만
+            "첨단소재 부문 영업이익은 1,463억 8,800만원이에요.",
+            # 한계: 표의 표시 없는 양수는 부호를 모른다고 본다 ("당기순손실 | 5,000"처럼 손실을 양수로 적는 표가 있어서)
+            "첨단소재 부문 영업손익은 -1,463억 8,800만원이에요."]
+    FAIL = ["석유화학 부문 영업이익은 104,182백만원이에요.", "석유화학 부문은 이익 104,182백만원을 냈어요.",
+            "석유화학 부문은 1,041억 8,200만원 흑자였어요.",
+            "석유화학 부문 영업손실은 1,041억원이에요."]                                 # 크기가 다른 숫자는 그대로 실패
+
+    @staticmethod
+    def _cases(fact):
+        from pipelines.updates.checks import check_answer, check_card
+        from pipelines.updates.models import Answer, Card
+        e = ev(disc(text=ParenNegativeTest.M019))
+        v2 = card(headline="LG화학 석유화학 실적", when="2026-03-13", facts=[(fact, "E1")])
+        v1 = Card("update", "LG화학 석유화학 실적", [f"{fact} [E1]"], "메모의 실적 관심사와 연결돼요.", [("E1", "사업보고서")], 0.9)
+        a = Answer("answer", "none", [f"{fact} [E1]"], [("E1", "사업보고서")], 0.9)
+        return {"v2": "NUMBER" in check_card_v2(v2, e, [], CFG),
+                "v1": "NUMBER" in check_card(v1, e, [], {"min_fact_overlap": 0}),
+                "answer": "NUMBER" in check_answer(a, e, [], {"min_fact_overlap": 0})}
+
+    def test_m019_sign(self):
+        for fact in self.PASS:
+            for name, failed in self._cases(fact).items():
+                self.assertFalse(failed, f"{name} 통과해야 함: {fact}")
+        for fact in self.FAIL:
+            for name, failed in self._cases(fact).items():
+                self.assertTrue(failed, f"{name} 실패해야 함: {fact}")
+
+    def test_paren_reading(self):
+        from pipelines.updates.checks import NEG, NONE, _scan_signed, evidence_number_sets, evidence_numbers, numbers
+        s = evidence_number_sets(self.M019)
+        self.assertEqual(s.signs[104182e6], {NEG})                    # 표 머리 백만원 환산값도 음수
+        self.assertIn(104182.0, s.plain)                              # 맨숫자·% 묶음은 크기 그대로
+        self.assertIn(242.1, s.plain)
+        self.assertIn(104182e6, evidence_numbers(self.M019))          # 값만 쓰는 곳(calc·compare_prior·same_event)은 그대로 크기
+        self.assertEqual(numbers("-104,182백만원"), {104182e6})
+        # 괄호가 음수가 아닌 경우
+        for text in ("(단위: 백만원) 1,000", "(2026년)", "(2026)", "삼성전자(005930)", "(373220)", "(주)한화 1,000",
+                     "주석 (1)", "부문(104,182)", "매출 3-4%", "2026-11-19"):
+            self.assertTrue(all(sign == NONE for *_, sign in _scan_signed(text, False)), text)
+        self.assertEqual([x[2] for x in _scan_signed("| (1,234) | ( 56 ) | (3.5%) | -78 | △ 90 |", False)], [NEG] * 5)
+
+
+# 녹십자 2025 1분기 (20250515002021 청크 27) 외화 자산·부채 표: 외화와 원화 단위가 한 머리에 섞여 있다
+GREENCROSS_FX = ("[녹십자 2025 1분기 | II. 사업의 내용 > 5. 위험관리 및 파생거래]\n"
+                 "[표] 당분기말과 전기말 현재 당사의 환율변동 위험에 노출된 원화로 환산한 화폐성 외화 자산 및 부채는 다음과 같습니다. / ① 당분기말\n"
+                 "(외화단위: 천USD, 천EUR, 천JPY, 천GBP, 천AUD, 천SGD, 천VND, 천SEK, 원화단위: 백만원)\n"
+                 "열: 구분 | USD | EUR | JPY | GBP | AUD | SGD | VND | SEK | 환산금액\n"
+                 "구분: 외화 자산 | USD: 84,878 | EUR: 5,857 | JPY: - | GBP: - | AUD: 39 | SGD: - | VND: 121,215 | SEK: - | 환산금액: 133,816")
+
+
+class UnknownUnitTest(unittest.TestCase):
+    """모르는 단위 머리 (2026-11-18): "(단위 : USD)"·"(단위 : 천)"처럼 쌍점 뒤 단위를 모르면 앞 표 단위 범위를 끊고,
+    그 표 숫자는 맨숫자로만 인정한다 (DB 표 청크 중 아는 머리 뒤에 모르는 머리가 오는 청크 11,461개). 십억원은 금액 단위."""
+
+    USD_AFTER = ("[표] 매출\n(단위 : 백만원)\n국내 매출 | 당기: 706,565\n\n"
+                 "[표] 해외 법인\n(단위 : USD)\n해외 매출 | 당기: 5,000")
+    PASS = [(USD_AFTER, "7,065억 6,500만원"),                    # 앞 표는 그대로 백만원
+            (USD_AFTER, "5,000"),                                 # 모르는 단위 표 숫자는 맨숫자로
+            ("(단위 : 십억원)\n매출 | 당기: 12", "120억원"), ("(단위: 십억원) 1,234", "1조 2,340억원"),
+            ("(단위 : 천)\n매출 | 당기: 5,000", "5,000"),
+            ("(단위 : 백만원)\n매출 | 당기: 1,000\n\n(단위 : USD)\n매출 | 당기: 5,000\n\n(단위 : 백만원)\n이익 | 당기: 300",
+             "3억원")]                                             # 다시 아는 머리가 오면 그 단위
+    FAIL = [(USD_AFTER, "50억원"), (USD_AFTER, "5,000백만원"), (USD_AFTER, "5,000원"), (USD_AFTER, "5,000명"),
+            ("(단위 : 천)\n매출 | 당기: 5,000", "500만원"), ("(단위 : 천)\n매출 | 당기: 5,000", "5,000원"),
+            ("(단위 : 백만원)\n매출 | 당기: 1,000\n(단위 : 백만)\n이익 | 당기: 300", "3억원"),
+            ("(단위 : 백만원)\n매출 | 당기: 1,000\n(단위 : 천단위)\n이익 | 당기: 300", "3억원"),
+            ("(단위 : 백만원)\n해외매출(단위: USD) | 당기: 5,000", "50억원"),   # 행 이름표의 모르는 단위
+            # 행 안 칸의 모르는 단위 (실제 공시 20240814003229 청크 802 모양)
+            ("(단위 : 백만원)\n항목: 수입신용장 관련 약정 | 한도단위: USD | 한도액: 350,000", "350,000백만원"),
+            ("(단위 : 백만원)\n항목: 수입신용장 관련 약정 | 한도단위: USD | 한도액: 350,000", "3,500억원"),
+            # 녹십자 20250515002021 청크 27: 외화·원화 단위가 섞인 머리 → USD 칸을 백만원으로 보지 않는다
+            (GREENCROSS_FX, "84,878백만원"), (GREENCROSS_FX, "848억 7,800만원"),
+            # 녹십자 청크 380: 이름표의 통화 표시 "[USD, 천]"
+            ("[표] 외화금융자산의 통화별 내역\n(단위 : 백만원)\n외화금융자산, 기초통화금액, USD [USD, 천] | 통화 / USD: 84,878",
+             "84,878백만원"),
+            ("(단위 : 백만원)\n이익 | 당기: 300\n주당배당금(원) | 당기: - | 전기: -\n매출 | 당기: 1,000", "1,000원"),  # 빈 데이터 행은 머리 아님
+            ("(단위 : 십억원)\n매출 | 당기: 12", "12억원")]
+    PASS_REAL = [
+            # LG유플러스 20260814001092 청크 134: 열 머리 행의 이름표 단위가 그 표 머리
+            ("[표] [케이블TV 가입자 현황] / (2026년 3월 31일 기준)\n구분(단위 : 천명) | SO수 | 가입자 | 점유율\n"
+             "㈜LG헬로비전 | 23개 | 3,340 | 28.7%", "3,340천 명"),
+            ("[표] [케이블TV 가입자 현황]\n구분(단위 : 천명) | SO수 | 가입자 | 점유율\n㈜LG헬로비전 | 23개 | 3,340 | 28.7%", "334만 명"),
+            # 제일기획 20260310002959 청크 21: 줄 끝 칸 "(단위 : 천주)"
+            ("[표]\n(대상기간 : | 2026년 02월 13일 | ~ | 2026년 08월 12일 | ) | (단위 : 천주)\n\n[표]\n"
+             "열: 구분 | 구분 | 취득형태 | 주식종류 | 거래방법 | 수량 | 결정사유\n"
+             "구분: 보유수량 | 취득형태: 직접 | 주식종류: 보통주 | 거래방법: - | 수량: 13,762", "1,376만 2천 주"),
+            (GREENCROSS_FX, "84,878"),
+            ("(단위 : 백만원)\n이익 | 당기: 300\n주당배당금(원) | 당기: - | 전기: -\n매출 | 당기: 1,000", "10억원")]
+    FAIL_REAL = [
+            ("[표] [케이블TV 가입자 현황]\n구분(단위 : 천명) | SO수 | 가입자 | 점유율\n㈜LG헬로비전 | 23개 | 3,340 | 28.7%", "3,340명"),
+            ("[표]\n(대상기간 : | 2026년 02월 13일 | ~ | 2026년 08월 12일 | ) | (단위 : 천주)\n\n[표]\n"
+             "구분: 보유수량 | 취득형태: 직접 | 주식종류: 보통주 | 거래방법: - | 수량: 13,762", "13,762주")]
+
+    def test_real_disclosure_shapes(self):
+        """2026-11-18 운영 DB 표 모양 (unit_card_probe로 찾은 실제 청크)."""
+        for name, fn in (("v2", NumberUnitTest._v2), ("v1", NumberUnitTest._v1), ("answer", NumberUnitTest._answer)):
+            for src, said in self.PASS_REAL:
+                self.assertFalse(fn(src, said), f"{name} 통과해야 함: {said} ← {src[-80:]!r}")
+            for src, said in self.FAIL_REAL:
+                self.assertTrue(fn(src, said), f"{name} 실패해야 함: {said} ← {src[-80:]!r}")
+
+    def test_same_rule_in_v1_v2_answer(self):
+        for name, fn in (("v2", NumberUnitTest._v2), ("v1", NumberUnitTest._v1), ("answer", NumberUnitTest._answer)):
+            for src, said in self.PASS:
+                self.assertFalse(fn(src, said), f"{name} 통과해야 함: {said} ← {src!r}")
+            for src, said in self.FAIL:
+                self.assertTrue(fn(src, said), f"{name} 실패해야 함: {said} ← {src!r}")
+
+
+class ForecastAttributionTest(unittest.TestCase):
+    """전망 근거 (2026-11-18 N08 결정): 증권사·회사·기관·언론의 전망은 "누가 무엇을 전망했다"로 전하면 통과,
+    주체 없는 미래 단정·판단은 실패 (PREDICTION·BANNED). 운영 설정(configs/updates.yaml)의 금지어·패턴으로 본다."""
+
+    EV = ("KB증권은 4분기 영업이익을 1조 2,000억원으로 전망했다. 김동원 KB증권 애널리스트는 4분기 영업이익을 104조원으로 예측했다. "
+          "모건스탠리는 데이터센터 투자가 3조달러에 이를 것으로 내다봤다. 회사는 4분기 출하량이 늘 것이라고 밝혔다.")
+    PASS = ["KB증권은 4분기 영업이익을 1조 2,000억원으로 전망했어요.",
+            "김동원 KB증권 애널리스트는 4분기 영업이익을 104조원으로 예측했어요.",
+            "모건스탠리는 데이터센터 투자가 3조달러에 이를 것으로 내다봤어요.",
+            "회사는 4분기 출하량이 늘 것이라고 밝혔어요.",
+            "SK하이닉스는 4분기 출하량이 늘 것으로 예상한다고 밝혔어요."]
+    FAIL = ["4분기 영업이익은 1조 2,000억원으로 전망돼요.",                 # 주체 없는 전망
+            "4분기 영업이익이 늘어날 전망이에요.", "주가가 오를 거예요.", "4분기 영업이익이 늘 것으로 보여요.",
+            "영업이익은 1조 2,000억원으로 전망했어요.",                     # 주어가 지표 (전망한 주체가 아님)
+            "KB증권은 1조 2,000억원으로 전망했고 주가도 오를 거예요.",       # 전달 문장 안의 주체 없는 단정
+            "KB증권은 영업이익 개선을 전망했어요. 호재예요.",              # 판단
+            # 막연한 주어 (2026-11-18): 시장·증권가·전문가들·업계 관계자·일각·이름 없는 직함
+            "시장은 4분기 영업이익을 1조 2,000억원으로 전망했어요.",
+            "증권가는 4분기 영업이익을 1조 2,000억원으로 내다봤어요.",
+            "전문가들은 4분기 영업이익을 1조 2,000억원으로 예상했어요.",
+            "업계 관계자는 4분기 영업이익을 1조 2,000억원으로 전망했어요.",
+            "일각에서는 4분기 영업이익을 1조 2,000억원으로 전망했어요.",
+            "투자자들은 4분기 영업이익을 1조 2,000억원으로 예상했어요.",
+            "애널리스트는 4분기 영업이익을 104조원으로 예측했어요.",
+            "한 연구원은 4분기 영업이익을 104조원으로 예측했어요."]
+
+    @classmethod
+    def setUpClass(cls):
+        from pipelines.common.config import load_config
+        real = load_config("configs/updates.yaml")
+        cls.cfg, cls.banned = {**CFG, **real["topic"], "verify_call": False}, list(real["banned"])
+
+    def _codes(self, fact="KB증권은 4분기 영업이익을 1조 2,000억원으로 전망했어요.", headline="KB증권 4분기 실적 보고서"):
+        c = card(headline=headline, when="2026-10-28", facts=[(fact, "E1")], memo_link="메모의 '4분기 실적' 관심사와 연결돼요.")
+        return set(check_card_v2(c, ev(news(text=self.EV, day="2026-10-28")), self.banned, self.cfg))
+
+    def test_attributed_pass_unattributed_fail(self):
+        for s in self.PASS:
+            self.assertFalse(self._codes(fact=s) & {"PREDICTION", "BANNED", "ATTRIBUTION"}, s)
+        for s in self.FAIL:   # 2026-11-19부터 주체만 빠진 전망 전달("영업이익은 ~로 전망했어요")은 ATTRIBUTION으로 걸린다
+            self.assertTrue(self._codes(fact=s) & {"PREDICTION", "BANNED", "ATTRIBUTION"}, s)
+
+    def test_headline(self):
+        self.assertFalse(self._codes(headline="KB증권, 4분기 영업이익 1조 2,000억원 전망") & {"PREDICTION", "BANNED"})
+        self.assertFalse(self._codes(headline="김동원 애널리스트, 4분기 영업이익 104조원 전망") & {"PREDICTION", "BANNED"})
+        for h in ("SK하이닉스 4분기 영업이익 1조 2,000억원 전망", "SK하이닉스, 4분기 영업이익 1조 2,000억원 전망",
+                  "4분기 영업이익 개선 전망", "증권가, 4분기 영업이익 1조 2,000억원 전망", "시장, 4분기 영업이익 개선 전망",
+                  "애널리스트, 4분기 영업이익 104조원 전망"):                                   # 맨 앞이 출처가 아니면 주체 없는 전망
+            self.assertIn("PREDICTION", self._codes(headline=h), h)
+
+    def test_attributed_forecast_unit(self):
+        from pipelines.updates.checks import attributed_forecast
+        self.assertTrue(attributed_forecast("HBM 매출이 8% 늘 것으로 KB증권은 전망했어요."))   # 앞 주어가 지표여도 출처 주어가 있으면
+        self.assertFalse(attributed_forecast("HBM 매출이 8% 늘 것으로 전망했어요."))
+        self.assertFalse(attributed_forecast("KB증권, 4분기 영업이익 1조 2,000억원 전망"))    # 제목 형식은 headline일 때만
+        self.assertTrue(attributed_forecast("KB증권, 4분기 영업이익 1조 2,000억원 전망", headline=True))
+        # 출처 주어의 전달 동사 (지난 C_all·C2_all 항목 3 카드 문장 그대로)
+        self.assertTrue(attributed_forecast("김 애널리스트는 이 과거 주가 통계를 반등 전망의 근거로 제시했어요."))
+        self.assertTrue(attributed_forecast("메모에서 궁금해한 친구의 '상승 전망' 근거와 관련해, 이번 자료는 KB증권이 반등 전망의 "
+                                            "근거로 제시한 과거 주가 통계예요."))
+        self.assertFalse(attributed_forecast("이 통계는 반등 전망의 근거로 제시됐어요."))            # 출처 주어 없음
+        self.assertFalse(attributed_forecast("KB증권은 보고서를 제시했고 주가는 오를 전망이에요."))  # 주체 없는 단정이 섞임
+        self.assertFalse(attributed_forecast("두 수치는 향후 1년간 예상 이익을 기준으로 제시된 것이에요."))
+        self.assertFalse(attributed_forecast("매출이 줄어들었어요."))                               # "들었"은 띄어 쓴 때만
+
+    # 2026-11-18 안 A 재실행에서 예측 표현으로 걸린 카드 6장 (forecast_rule_rerun, 문장 그대로).
+    # 전달 동사(들었·전했)·소유격 주체·제목 맨 앞 이름은 통과, 자료를 주체 없이 "~ 전망이에요"로 가리킨 문장은 그대로 실패
+    # (검사를 풀지 않고 지시문 [전망 근거]에 "주체를 넣는다"를 넣었다)
+    RERUN_CARDS = [
+        ("A 항목 3", "KB증권, 4분기 영업이익 104조원 전망",
+         ["김동원 KB증권 애널리스트는 SK하이닉스의 4분기 영업이익을 104조원으로 전망했어요.",
+          "김동원 KB증권 애널리스트는 판가 상승과 출하량 증가를 실적 전망의 근거로 들었어요."],
+         "SK하이닉스 주가 상승 전망의 근거를 확인하려는 관심사와 연결되는 실적 전망이에요.", "",
+         ["SK하이닉스 주가 상승 전망의 근거를 확인하려는 관심사와 연결되는 실적 전망이에요."]),
+        ("A_all 항목 3", "KB증권, SK하이닉스 4분기 영업이익 전망",
+         ["김동원 KB증권 애널리스트는 4분기 영업이익을 104조원으로 예상했어요.",
+          "매일경제는 판가 상승과 출하량 증가를 실적 전망의 배경으로 전했어요."],
+         "메모의 '상승 전망의 근거 확인'과 연결되는 증권사의 실적 전망과 그 배경이에요.", "",
+         ["메모의 '상승 전망의 근거 확인'과 연결되는 증권사의 실적 전망과 그 배경이에요."]),   # "증권사"는 막연한 주어
+        ("B 항목 3", "KB증권, SK하이닉스 실적 전망 제시",
+         ["김동원 KB증권 애널리스트는 HBM4 판매 비중이 HBM3E를 넘어설 것으로 예측했어요."],
+         "메모의 '상승 전망의 근거 확인'과 연결되는 증권사 실적 전망과 그 전제인 판매가격·출하량 예상에 관한 내용이에요.", "",
+         ["메모의 '상승 전망의 근거 확인'과 연결되는 증권사 실적 전망과 그 전제인 판매가격·출하량 예상에 관한 내용이에요."]),
+        ("C2_all 항목 10", "머스크, 중국 메모리 대규모 생산 전망",
+         ["머스크는 중국이 2028년 엄청난 양의 메모리 반도체를 생산할 것이라고 전망했어요.",
+          "머스크는 중국이 관련 제조 기술을 확보하면 대규모 증산에 나설 수 있다고 전망했어요."],
+         "메모에서 '중국 메모리 업체 증설'을 주목하셨는데, 이번 자료는 중국의 메모리 공급 확대 가능성에 대한 머스크의 전망이에요.",
+         "머스크는 중국 업체들이 기술을 확보하면 생산 규모를 급격히 확대할 수 있다고 주장했어요. "
+         "이는 중국 업체의 실제 증설 발표가 아니라 기술 확보를 조건으로 한 생산 확대 전망이에요.",
+         ["이는 중국 업체의 실제 증설 발표가 아니라 기술 확보를 조건으로 한 생산 확대 전망이에요."]),
+        ("C_all 항목 3", "KB증권, 하이닉스 4분기 이익 전망 제시",
+         ["김동원 KB증권 애널리스트는 4분기 영업이익을 104조원으로 예상했어요.",
+          "KB증권은 4분기 D램·낸드 출하량이 3분기보다 각각 24%, 5% 늘 것으로 봤어요."],
+         "메모에서는 주가 상승 전망의 근거를 궁금해하셨는데, 이번 자료는 KB증권이 제시한 실적 전망과 그 배경을 담고 있어요.",
+         "김동원 애널리스트는 평균판매가격 상승과 출하량 증가를 실적 전망의 배경으로 제시했어요. "
+         "이 수치들은 발표된 4분기 실적이 아니라 해당 애널리스트의 예상치예요.",
+         ["이 수치들은 발표된 4분기 실적이 아니라 해당 애널리스트의 예상치예요."]),          # "해당 애널리스트"는 이름 없음
+        ("오늘 실행 항목 3", "KB증권, SK하이닉스 4분기 이익 전망",
+         ["SK하이닉스의 3분기 영업이익은 83조원이었어요.", "김동원 KB증권 애널리스트는 4분기 영업이익을 104조원으로 전망했어요.",
+          "김동원 KB증권 애널리스트는 4분기 D램 출하량이 3분기보다 24% 늘 것으로 예상했어요."],
+         "SK하이닉스 주가 상승 전망의 근거를 확인하려는 관심사와 연결되는 실적·출하량 전망이에요.", "",
+         ["SK하이닉스 주가 상승 전망의 근거를 확인하려는 관심사와 연결되는 실적·출하량 전망이에요."]),
+    ]
+
+    def test_rerun_cards(self):
+        import re
+        from pipelines.updates.checks import _banned_hit, forecast_subjects, prediction_text
+        for name, head, facts, link, exp, still in self.RERUN_CARDS:
+            names = forecast_subjects(facts)
+            texts = [head, *facts, link] + [s for s in re.split(r"(?<=[.!?])\s+", exp) if s.strip()]
+            flagged = [t for t in texts if prediction_text([t], self.cfg, names) or _banned_hit([t], self.banned, self.cfg, names)]
+            self.assertEqual(flagged, still, name)
+
+    def test_possessive_and_headline_name(self):
+        from pipelines.updates.checks import attributed_forecast
+        self.assertTrue(attributed_forecast("이번 자료는 KB증권의 실적 전망을 다룬 기사예요."))     # 지시문 예시
+        self.assertTrue(attributed_forecast("이 수치는 김동원 애널리스트의 예상치예요."))
+        self.assertFalse(attributed_forecast("이번 자료는 증권가의 실적 전망이에요."))               # 막연한 주어
+        self.assertFalse(attributed_forecast("이번 자료는 SK하이닉스의 실적 전망이에요."))           # 대상일 수 있다 (names에 없으면)
+        self.assertFalse(attributed_forecast("KB증권의 전망이에요. 주가는 오를 거예요."))           # 나머지에 주체 없는 단정
+        self.assertTrue(attributed_forecast("머스크, 중국 메모리 대규모 생산 전망", headline=True, names={"머스크"}))
+        self.assertFalse(attributed_forecast("머스크, 중국 메모리 대규모 생산 전망", headline=True))
+        # 전달 동사 문장의 주체도 사실 문장의 전망 주체(names)면 인정 (2026-11-18 항목 10 재실행 memo_link)
+        link = "메모에서 우려한 중국 메모리 업체의 증설과 관련해, 머스크가 중국의 기술 확보 이후 공급 확대 가능성을 언급한 기사예요."
+        self.assertTrue(attributed_forecast(link, names={"머스크"}))
+        self.assertFalse(attributed_forecast(link))
+        self.assertFalse(attributed_forecast("업계가 중국의 공급 확대 가능성을 언급한 기사예요.", names={"업계"}))   # 막연한 주어는 names여도 X
+        # 최종 재실행(2026-11-18) 문장: 소유격과 전망 사이 낱말 4개, 관형절 주체 "X가 제시한 … 전망이에요"
+        self.assertTrue(attributed_forecast("메모에서 우려한 중국 업체 증설과 관련해, 머스크의 중국 메모리 공급 확대 전망을 다룬 기사예요.",
+                                            names={"머스크"}))
+        self.assertTrue(attributed_forecast("이는 발표된 4분기 실적이 아니라 김동원 애널리스트가 제시한 전망이에요."))
+        self.assertTrue(attributed_forecast("이번 기사가 전한 내용은 중국 업체의 증설 확정 발표가 아니라 머스크가 제시한 공급 확대 전망이에요.",
+                                            names={"머스크"}))
+        self.assertFalse(attributed_forecast("이는 시장이 제시한 전망이에요."))                      # 막연한 주어
+        self.assertFalse(attributed_forecast("이는 애널리스트가 제시한 전망이에요."))                # 이름 없는 직함
+
+
+class MemoLinkNumberTest(unittest.TestCase):
+    """memo_link 숫자는 쓴 근거나 메모 문장 중 하나에 있으면 인정 (2026-11-18). headline·facts는 근거만.
+    C2_gold run_20261113_124759 항목 M15:1:0 카드: memo_link가 메모의 "13% 아래"를 인용했는데 13%가 근거 E1에 없어 NUMBER였다."""
+
+    MEMO = "CET1 비율 13% 아래로 내려가면 주주환원 축소 가능성"
+    E1 = ("[KB금융 2025 사업보고서 | III. 재무에 관한 사항 > 6. 배당에 관한 사항]\n[표] - 2차 주주환원 결정 : 연중 축적되는 이익을 통해 "
+          "하반기 CET1비율 13.5%를 초과하는 자본에 상응하는 금액을 추가 주주환원 재원으로 활용(자사주 매입/소각)")
+    LINK = "메모의 '13% 아래' 하락이나 주주환원 축소를 확인하는 내용은 아니며, CET1과 추가 주주환원 재원을 연결하는 기준에 관한 공시예요."
+    HEAD = "하반기 CET1 13.5% 초과분, 추가 환원 재원"
+    FACT = "회사는 하반기 CET1비율 13.5% 초과 자본을 추가 환원 재원으로 활용한다고 밝혔어요."
+
+    def _card(self, **kw):
+        return card(**{"headline": self.HEAD, "when": "2026-03-10", "facts": [(self.FACT, "E1")], "memo_link": self.LINK, **kw})
+
+    def _number(self, c, memo=MEMO):
+        return "NUMBER" in check_card_v2(c, ev(disc(text=self.E1, day="2026-03-10")), [], CFG, memo)
+
+    def test_memo_number_in_memo_link(self):
+        self.assertFalse(self._number(self._card()))                                     # 실제 카드: 통과
+        self.assertTrue(self._number(self._card(), memo=""))                              # 메모 없이는 이전처럼 실패
+        self.assertTrue(self._number(self._card(memo_link="메모의 '14% 아래'와는 다른 기준이에요.")))   # 어디에도 없는 숫자
+        self.assertTrue(self._number(self._card(headline="CET1 13% 기준 공시")))           # 제목은 근거만
+        self.assertTrue(self._number(self._card(facts=[("CET1 13% 아래면 환원을 줄여요.", "E1")])))   # 사실 문장도 근거만
+
+    def test_topic_passes_memo_text(self):
+        from dataclasses import replace
+        payload = {"status": "update", "headline": self.HEAD, "when": "2026-03-10",
+                   "facts": [{"text": self.FACT, "evidence_id": "E1"}],
+                   "memo_link": self.LINK, "sources": ["E1"], "confidence": 0.9}
+        call = lambda p: json.dumps(payload, ensure_ascii=False)                        # noqa: E731
+        src = [disc(text=self.E1, day="2026-03-10")]
+        out = check_topic(replace(ITEM, memo_text=self.MEMO), src, call, [], CFG)
+        self.assertNotIn("NUMBER", out.checks[0]["codes"])
+        out = check_topic(ITEM, src, call, [], CFG)                                       # 메모에 13이 없는 항목
+        self.assertIn("NUMBER", out.checks[0]["codes"])
+
+
 class PreviewTest(unittest.TestCase):
     def test_v2_card_and_compare_page(self):
         from pipelines.updates.preview import build_preview
@@ -292,6 +878,159 @@ class PreviewTest(unittest.TestCase):
             page = build(runs[0], runs[1], ("v1", "v2"))
             self.assertIn("카드 비교", page)
             self.assertIn("M01:0:0 카드로 합쳤어요", page)
+
+
+class CoverageMemoQuoteTest(unittest.TestCase):
+    """memo_link가 메모 표현을 따옴표로 옮긴 부분은 자료 범위(COVERAGE) 검사에서 뺀다 (2026-11-19).
+    코스피 메모 dry-run K02:1:0 현대차 배당 카드: "메모의 '배당은 계속 늘려주나'…"의 '계속'으로 COVERAGE가 걸려 버려졌다."""
+
+    MEMO = "로봇(아틀라스) 사업이 실제로 매출이 되는지 궁금함. 배당은 계속 늘려주나?"
+    E1 = ("[현대자동차 2026-10-29 수시공시 | 현금ㆍ현물배당결정]\n1. 배당구분: 분기배당\n2. 배당종류: 현금배당\n"
+          "3. 1주당 배당금(원) > 보통주식: 2,500\n6. 배당기준일: 2026-11-30\n7. 배당금지급 예정일자: 2026-12-30")
+    E2 = ("기준 공시: 현금ㆍ현물배당결정 (2026-10-29 접수), 이번 배당: 분기배당 보통주 1주당 2,500원 (배당기준일 2026-11-30).\n"
+          "- 작년 같은 시기(배당기준일 2025-11-30 전후) 배당 공시는 DB에서 찾지 못했어요 (DB의 배당 공시는 2026-10-21 접수분부터 있어요).")
+    CFG = {**CFG, "coverage_terms": ["처음", "최초", "줄곧", "계속", "꾸준히", "연속", "여전히"]}
+
+    def _codes(self, memo_link, memo=MEMO):
+        e = [Evidence("E1", disc(ref="disc:20261029800269#0", text=self.E1, day="2026-10-29"), self.E1),
+             Evidence("E2", Candidate("cmp:20261029800269", "disclosure", "005380", "2026-10-29",
+                                      "직전 같은 기간 비교 · 현금ㆍ현물배당결정", self.E2, None, "DART", 1.0, "compare"), self.E2)]
+        c = card(headline="현대차, 보통주 분기배당 2,500원 결정", when="2026-10-29",
+                 facts=[("현대차는 보통주 1주당 분기 현금배당금을 2,500원으로 결정했어요.", "E1"),
+                        ("배당기준일은 2026-11-30이에요.", "E1"),
+                        ("작년 같은 시기 배당 공시는 DB에서 찾지 못했어요.", "E2")],
+                 memo_link=memo_link, sources=["E1", "E2"], confidence=0.99)
+        return check_card_v2(c, e, [], self.CFG, memo)
+
+    def test_hyundai_dividend_card_passes(self):
+        self.assertEqual(self._codes("메모의 ‘배당은 계속 늘려주나’와 관련된 분기배당 결정 공시예요."), [])
+        self.assertEqual(self._codes("메모의 '배당은 계속 늘려주나'와 관련된 분기배당 결정 공시예요."), [])
+        self.assertEqual(self._codes("메모의 “배당은 계속 늘려 주나”와 관련된 공시예요."), [])      # 띄어쓰기만 다른 인용
+
+    def test_quote_not_in_memo_or_outside_quote_still_checked(self):
+        self.assertIn("COVERAGE", self._codes("메모의 ‘배당은 계속 늘려주나’와 관련된 분기배당 결정 공시예요.", memo=""))
+        self.assertIn("COVERAGE", self._codes("메모의 ‘배당은 줄곧 늘었나’와 관련된 공시예요."))      # 메모에 없는 인용
+        self.assertIn("COVERAGE", self._codes("메모의 ‘배당’과 관련해 계속 늘려 온 배당 공시예요."))   # 따옴표 밖 '계속'
+
+    def test_strip_memo_quotes(self):
+        from pipelines.updates.checks import strip_memo_quotes
+        self.assertEqual(strip_memo_quotes("‘a b’와 ‘c’", "ab"), " 와 ‘c’")
+        self.assertEqual(strip_memo_quotes("‘계속’", ""), "‘계속’")
+
+
+class FactSubjectTest(unittest.TestCase):
+    """사실·설명 문장마다 주체 (2026-11-19). 전망·분석·설명·발언을 전하는 문장은 그 문장 안에 누가 말했는지 있어야 한다.
+    안 A 재실행 항목 3 "구체적으로 4분기 D램 출하량은 3분기보다 24% … 증가할 것으로 예상했어요." 같은 문장이 통과했다."""
+
+    MISSING = ["2027년 출하량을 11만5000t으로 전망했어요.",
+               "출하량은 11만5000t으로 예상했어요.",                                   # 지표는 주체가 아니다
+               "아틀라스가 아직 대규모 매출 이전 단계라는 분석을 전했어요.",            # 안긴 문장의 주어
+               "SK하이닉스 M15X 가동 확대 등을 출하 증가 요인으로 꼽았어요.",
+               "4분기 출하량이 늘 것이라고 밝혔어요.",
+               "구체적으로 4분기 D램 출하량은 3분기보다 24%, 낸드플래시 출하량은 5% 증가할 것으로 예상했어요.",
+               "증권가는 1조원으로 전망했어요.", "올해는 1조원으로 전망했어요.", "외신은 주관사를 선정했다고 전했어요.",
+               "기사에 따르면 영업이익은 1조원으로 예상했어요.", "수요가 늘었다는 분석을 내놨어요."]
+    OK = ["DS투자증권은 2027년 과산화수소 출하량을 11만5000t으로 전망했어요.",
+          "DS투자증권은 SK하이닉스 M15X 가동 확대 등을 출하 증가 요인으로 꼽았어요.",
+          "한국경제는 아틀라스가 아직 대규모 매출 이전 단계라는 분석을 전했어요.",
+          "회사는 4분기 출하량이 늘 것이라고 밝혔어요.", "카카오는 이용자 의견 수렴 과정을 공유할 계획이라고 밝혔어요.",
+          "김동원 KB증권 애널리스트는 1조원으로 전망했어요.", "KB증권에 따르면 영업이익은 1조원으로 추정했어요.",
+          "KB증권 분석을 전한 기사에 따르면 삼성전자 주가는 6월 고점보다 약 50% 낮아졌어요.",
+          "카운터포인트리서치는 현재 D램 시장이 성장하는 국면이라고 분석했어요.", "매일경제가 하락 원인을 분석했어요.",
+          # 전달 문장이 아닌 사실 문장은 보지 않는다
+          "대한항공은 합병기일을 2026년 12월 16일로 공시했어요.", "3분기 총 미수금은 14조6천451억원으로 집계됐어요.",
+          "현대차그룹은 2030년까지 아틀라스 2만5000대를 투입할 계획이에요.", "배당기준일은 2026-11-30이에요."]
+
+    def test_missing_subject(self):
+        from pipelines.updates.checks import missing_subject
+        for s in self.MISSING:
+            self.assertTrue(missing_subject(s), s)
+        for s in self.OK:
+            self.assertFalse(missing_subject(s), s)
+
+    def _card(self, facts, explanation="", **cfg):
+        e = ev(news(text="DS투자증권은 2027년 과산화수소 출하량을 11만5000t으로 전망했다. SK하이닉스 M15X 가동 확대 등을 요인으로 꼽았다."))
+        c = card(headline="DS투자증권, 2027년 과산화수소 출하 증가 전망", when="2026-10-29",
+                 facts=[(t, "E1") for t in facts], explanation=explanation, sources=["E1"])
+        conf = {**CFG, "prediction_terms": ["전망", "예상"], "prediction_exempt": [],
+                "explanation": {"enabled": bool(explanation), "max_chars": 400, "max_sentences": 4}, **cfg}
+        return check_card_v2(c, e, [], conf)
+
+    def test_card_sentence_level(self):
+        good = ["DS투자증권은 2027년 과산화수소 출하량을 11만5000t으로 전망했어요.",
+                "DS투자증권은 SK하이닉스 M15X 가동 확대 등을 출하 증가 요인으로 꼽았어요."]
+        self.assertNotIn("ATTRIBUTION", self._card(good))
+        # 둘째 문장이 앞 문장의 주체에 기대면 실패 (제목 "DS투자증권, …전망"은 그대로 둔다)
+        self.assertIn("ATTRIBUTION", self._card([good[0], "SK하이닉스 M15X 가동 확대 등을 출하 증가 요인으로 꼽았어요."]))
+        self.assertIn("ATTRIBUTION", self._card(good, explanation="DS투자증권은 출하가 늘 것으로 전망했어요. 가동 확대를 요인으로 꼽았어요."))
+        self.assertNotIn("ATTRIBUTION", self._card([good[0], "SK하이닉스 M15X 가동 확대 등을 출하 증가 요인으로 꼽았어요."],
+                                                   fact_subject=False))
+
+    def test_attribution_gets_one_repair(self):
+        from pipelines.updates.topic import _FORMAT_CODES, _FORMAT_CODES_V2, _repair_prompt_v2
+        self.assertIn("ATTRIBUTION", _FORMAT_CODES_V2)
+        self.assertNotIn("ATTRIBUTION", _FORMAT_CODES)                       # v1 카드에는 없는 코드
+        p = _repair_prompt_v2("P", "{}", ["ATTRIBUTION"], {**CFG, "explanation": {}})
+        self.assertIn("문장마다 주체를 다시 쓰세요", p)
+        bad = {"status": "update", "headline": "DS투자증권, 2027년 과산화수소 출하 증가 전망", "when": "2026-10-29",
+               "facts": [{"text": "2027년 출하량을 11만5000t으로 전망했어요.", "evidence_id": "E1"}],
+               "memo_link": "메모의 과산화수소 수요 관심과 연결돼요.", "sources": ["E1"], "confidence": 0.9}
+        fixed = {**bad, "facts": [{"text": "DS투자증권은 2027년 출하량을 11만5000t으로 전망했어요.", "evidence_id": "E1"}]}
+        replies = iter([json.dumps(bad, ensure_ascii=False), json.dumps(fixed, ensure_ascii=False)])
+        src = [news(text="DS투자증권은 2027년 과산화수소 출하량을 11만5000t으로 전망했다.")]
+        out = check_topic(ITEM, src, lambda p: next(replies), [],
+                          {**CFG, "format_retry": 1, "prediction_terms": ["전망"], "prediction_exempt": []})
+        self.assertEqual([c["codes"] for c in out.checks], [["ATTRIBUTION"], []])
+        self.assertEqual(out.kind, "update")
+
+
+class AskAnswerFalsePositiveTest(unittest.TestCase):
+    """2026-11-19 두 방식 비교에서 팀원 방식 '자료 없음' 답이 된 카드 (K02·M021): 답은 맞는데 코드 검사가 막았다."""
+
+    def test_coverage_restated_question_unconfirmed(self):
+        # K02 "배당은 계속 늘려주나?" → "다만 배당을 계속 늘리겠다는 계획은 이번 자료로는 확인되지 않아요."
+        cfg = {**CFG, "coverage_terms": ["처음", "줄곧", "계속", "연속"]}
+        e = ev(disc())
+        memo = "배당은 계속 늘려주나?"
+        ok = card(facts=[("보통주 1주당 20,000원 분기배당을 결정했어요.", "E1")],
+                  memo_link="배당을 계속 늘리겠다는 계획은 이번 자료로는 확인되지 않아요.")
+        self.assertNotIn("COVERAGE", check_card_v2(ok, e, [], cfg, memo))
+        self.assertIn("COVERAGE", check_card_v2(ok, e, [], cfg, ""))                     # 메모에 없는 말이면 그대로
+        bad = card(facts=[("보통주 1주당 20,000원 분기배당을 결정했어요.", "E1")],
+                   memo_link="회사는 배당을 계속 늘려 왔어요.")                           # 확인 안 됨 답이 아닌 단정
+        self.assertIn("COVERAGE", check_card_v2(bad, e, [], cfg, memo))
+        mixed = card(facts=[("보통주 1주당 20,000원 분기배당을 결정했어요.", "E1")],
+                     memo_link="배당을 계속 늘렸어요. 다만 이후 계획은 확인되지 않아요.")  # 문장마다 본다
+        self.assertIn("COVERAGE", check_card_v2(mixed, e, [], cfg, memo))
+
+    TABLE = ("[삼성바이오로직스 2026 3분기 | II. 사업의 내용 > 4. 매출 및 수주상황]\n[표] 마. 수주상황\n(단위: 백만달러)\n"
+             "열: 사업부문 | 품목 | 구분 | 수주총액 | 기납품액 | 수주잔고\n"
+             "사업부문: CDMO | 품목: 항체의약품 | 구분: 현 최소구매물량 기준 | 수주총액: 21,982 | 기납품액: 12,547 | 수주잔고: 9,435\n"
+             "사업부문: CDMO | 품목: 항체의약품 | 구분: 고객사 수요 증가 시 예상물량 기준 (제품개발 성공 등) | 수주총액: 24,591 | "
+             "기납품액: 12,547 | 수주잔고: 12,044")
+
+    def test_fx_multiplier_unit(self):
+        from pipelines.updates.checks import evidence_number_sets
+        nums = evidence_number_sets(self.TABLE)
+        self.assertTrue(nums.supports("수주잔고는 현 최소구매물량 기준 9,435백만달러예요."))
+        self.assertTrue(nums.supports("수주잔고는 94억3500만달러예요."))
+        self.assertFalse(nums.supports("수주잔고는 9,435억달러예요."))                       # 배수가 다르면 실패
+        self.assertTrue(evidence_number_sets("(단위: 천USD)\n구분: 매출 | 금액: 1,200").supports("매출은 1,200천USD예요."))
+        # 외화와 원화가 한 머리에 섞이면 모르는 단위 (USD 칸을 백만원으로 보지 않게)
+        mixed = evidence_number_sets("(외화단위: 천USD, 원화단위: 백만원)\n구분: 차입금 | 금액: 3,000")
+        self.assertFalse(mixed.supports("차입금은 30억원이에요."))
+
+    def test_expected_volume_label_is_not_prediction(self):
+        from pipelines.common.config import load_config
+        for path in ("configs/updates.yaml", "configs/updates_exp.yaml"):
+            cfg = {**CFG, **load_config(path)["topic"]}
+            c = card(headline="수주잔고 9,435백만달러", when="2026-10-28",
+                     facts=[("공시는 고객사 수요 증가 시 예상물량 기준 수주잔고를 12,044백만달러로 제시했어요.", "E1")])
+            codes = check_card_v2(c, ev(disc(text=self.TABLE)), [], cfg)
+            self.assertNotIn("PREDICTION", codes, path)
+            self.assertNotIn("NUMBER", codes, path)
+            fc = card(headline="수주잔고 전망", facts=[("내년 수주잔고는 늘어날 것으로 예상돼요.", "E1")])
+            self.assertIn("PREDICTION", check_card_v2(fc, ev(disc(text=self.TABLE)), [], cfg), path)
 
 
 if __name__ == "__main__":

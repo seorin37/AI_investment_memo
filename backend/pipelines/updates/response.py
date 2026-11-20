@@ -28,7 +28,8 @@ from typing import Callable
 from .fixed import NO_DATA
 from .models import Response, TrackingItem
 
-TYPES = ("update_card", "price_card", "no_new_info", "no_data", "needs_confirmation", "out_of_scope")
+TYPES = ("update_card", "price_card", "no_new_info", "no_data", "needs_confirmation", "out_of_scope",
+         "ask_no_answer")                                     # 실험(2026-11-17): 한 번 답하기 질문의 '자료 없음' 답
 TRACKED = {"normal", "partial"}
 OUT_OF_SCOPE_MEMO = "이 메모에서는 추적할 내용을 찾지 못했어요"
 
@@ -99,6 +100,8 @@ def item_response(item: TrackingItem, kind: str, fail_codes: list[str], card: di
     if kind == "price_stale":                             # 마지막 종가가 3거래일 넘게 오래됨 (price.price_outcome)
         return Response("no_data", reason="stale_price", message=NO_DATA, **base)
     if item.type == "topic" and has_data is False:
+        if item.category == "ask":                            # 실험(2026-11-17): 질문이면 '자료 없음' 답
+            return ask_no_answer(item, "no_source_data", base)
         return Response("no_data", reason="no_source_data", message=NO_DATA, **base)
     if kind == "update" and card and card.get("origin", "llm") == "llm":
         return Response("update_card", reason="card", message=card.get("title", ""), card=card, **base)
@@ -106,7 +109,24 @@ def item_response(item: TrackingItem, kind: str, fail_codes: list[str], card: di
         reason = failure_reason(fail_codes) if fail_codes else "check_failed"
     else:
         reason = _NO_NEW.get(kind, kind)
+    if item.category == "ask" and reason in ASK_NO_ANSWER_REASONS:
+        return ask_no_answer(item, reason, base)
     return Response("no_new_info", reason=reason, user_visible=False, **base)
+
+
+# 실험(2026-11-17): 한 번 답하기(ask) 질문에 답을 만들지 못했을 때 아무것도 안 보이면 사용자는 질문이 처리됐는지 모른다.
+# 자료에서 찾지 못했다는 고정 답을 보인다 (user_visible). 시스템 실패(call_failed·parse_failed·relevance_failed·not_called)는
+# "자료 없음"이 아니므로 그대로 no_new_info(안 보임)로 두고 다음 실행에서 다시 본다.
+ASK_NO_ANSWER = "ask_no_answer"
+ASK_NO_ANSWER_REASONS = {"no_candidates", "llm_no_update", "no_relevant_candidates", "no_source_data",
+                         "check_failed", "verify_failed"}
+ASK_NO_ANSWER_TEXT = "물으신 내용은 지금 가진 공시·뉴스·재무 자료에서 확인되지 않았어요."
+
+
+def ask_no_answer(item: TrackingItem, reason: str, base: dict) -> Response:
+    question = (item.description or "").strip()
+    return Response(ASK_NO_ANSWER, reason=reason, message=ASK_NO_ANSWER_TEXT, question=question, text=item.memo_text,
+                    **base)
 
 
 def sentence_responses(memo_id: str, judgments: list, confirm: Callable[[object], tuple[str, list, dict | None]],
@@ -162,7 +182,7 @@ def marks_checked(r: Response, failed_items: set[str] | frozenset = frozenset())
     """이 응답으로 그 항목의 last_checked_at을 갱신해도 되는가. failed_items: 카드 저장이 실패한 항목."""
     if r.scope != "item" or not r.item_id or r.item_id in failed_items:
         return False
-    if r.type in ("update_card", "price_card", "no_data"):
+    if r.type in ("update_card", "price_card", "no_data", "ask_no_answer"):
         return True
     return r.type == "no_new_info" and (r.reason in NORMAL_NO_NEW or r.reason.startswith("merged_into:"))
 
