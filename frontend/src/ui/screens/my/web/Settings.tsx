@@ -7,7 +7,9 @@ import { GoogleGlyph, KakaoGlyph, NaverGlyph } from '@/ui/screens/auth/AuthGlyph
 import { Avatar } from '@/ui/shared/Avatar';
 import { ConfirmDialog } from '@/ui/shared/ConfirmDialog';
 import { Sheet } from '@/ui/shared/Sheet';
-import { WITHDRAW_REASONS, type MyProfile, type WithdrawProps } from '../My.types';
+import { WITHDRAW_REASONS, type InfoDoc, type MyProfile, type WithdrawProps } from '../My.types';
+import { SBtn } from './parts';
+import { DataTab, DocModal, InfoTab, NotiTab, PlanBar, PlanView, UsageTab, type WebSettingsExtra } from './SettingsTabs';
 
 /**
  * 웹 설정 창 = 원본 web/src/screens/overlays.tsx Settings (1040×780 가운데 · 막 rgba(0,0,0,.32) · 라운드 20)
@@ -19,7 +21,7 @@ const NAV: [string, SettingsTab[]][] = [['계정', ['내 프로필', '알림']],
 const HEAD: Partial<Record<SettingsTab, string>> = { 알림: '내 메모와 연결된 새 소식을 어떻게 받을지 정해요.', 사용량: 'AI 업데이트에 쓰인 사용량을 확인해요.' };
 type Hover = { hovered?: boolean; pressed?: boolean };
 
-export interface WebSettingsProps {
+export interface WebSettingsProps extends WebSettingsExtra {
   open: boolean;
   tab: SettingsTab;
   profile: MyProfile;
@@ -37,9 +39,20 @@ export interface WebSettingsProps {
 
 export function WebSettings(p: WebSettingsProps) {
   const { height } = useWindowDimensions();
-  const [danger, setDanger] = useState<'logout' | 'withdraw' | null>(null);
+  const [danger, setDanger] = useState<'logout' | 'withdraw' | 'wipe' | null>(null);
   const [wd, setWd] = useState(false);
   const [why, setWhy] = useState<string[]>([]);
+  /* 사용량 › 플랜 살펴보기 (탭을 바꾸면 닫힘) · 정보 › 문서 창 */
+  const [planFor, setPlanFor] = useState<SettingsTab | null>(null);
+  const plan = planFor === '사용량' && p.tab === '사용량';
+  const [pick, setPick] = useState(p.plan_default);
+  const [doc, setDoc] = useState<InfoDoc | null>(null);
+  const DANGER = {
+    logout: ['로그아웃할까요?', '이 기기에서 로그아웃해요.', '로그아웃'],
+    withdraw: ['정말 탈퇴할까요?', '계정과 모든 데이터가 바로 삭제되고 되돌릴 수 없어요.', '탈퇴'],
+    wipe: ['모든 데이터를 삭제할까요?', '모든 메모, 기록, 종목이 영구 삭제돼요. 되돌릴 수 없어요.', '전체 삭제'],
+  } as const;
+  const dt = DANGER[danger ?? 'logout'];
   return (
     <Sheet open={p.open} onClose={p.onClose} width={1040} scrim="rgba(0,0,0,0.32)" label="설정">
       <View style={[st.frame, { height: Math.min(780, height - 32) }]}>
@@ -69,20 +82,29 @@ export function WebSettings(p: WebSettingsProps) {
         <View style={st.sec}>
           <View style={st.head}>
             <View style={st.headL}>
-              <Text style={st.title}>{p.tab}</Text>
-              {HEAD[p.tab] ? <Text style={st.sub}>{HEAD[p.tab]}</Text> : null}
+              <View style={st.titleRow}>
+                {plan ? (
+                  <Pressable onPress={() => setPlanFor(null)} accessibilityRole="button" accessibilityLabel="사용량으로 돌아가기" style={({ hovered }: Hover) => [st.planBack, hovered && { backgroundColor: '#F8F7F5' }]}>
+                    <Svg width={20} height={20} viewBox="0 0 20 20" fill="none"><Path d="M12.5 4.5L7 10L12.5 15.5" stroke="#15171A" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" /></Svg>
+                  </Pressable>
+                ) : null}
+                <Text style={st.title}>{plan ? '플랜 살펴보기' : p.tab}</Text>
+              </View>
+              {plan ? <Text style={st.sub}>필요한 만큼 AI 업데이트와 스튜디오를 쓸 수 있게 골라요. 가격·한도는 아직 정해지지 않았어요.</Text> : HEAD[p.tab] ? <Text style={st.sub}>{HEAD[p.tab]}</Text> : null}
             </View>
             <Pressable onPress={p.onClose} accessibilityRole="button" accessibilityLabel="닫기" style={({ hovered }: Hover) => [st.x, hovered && { backgroundColor: '#F8F7F5' }]}>
               <Svg width={36} height={36} viewBox="0 0 36 36" fill="none"><Path d="M13 13L23 23" stroke="#333333" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" /><Path d="M23 13L13 23" stroke="#333333" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" /></Svg>
             </Pressable>
           </View>
-          <ScrollView style={st.flex} contentContainerStyle={st.body}>
-            {p.tab === '내 프로필' ? (
-              <ProfileTab {...p} onAskLogout={() => setDanger('logout')} onAskWithdraw={() => { setWhy([]); setWd(true); }} />
-            ) : (
-              <Text style={st.later}>이 탭은 다음 묶음에서 채워요.</Text>
-            )}
+          <ScrollView key={p.tab + (plan ? '-plan' : '')} style={st.flex} contentContainerStyle={st.body}>
+            {p.tab === '내 프로필' ? <ProfileTab {...p} onAskLogout={() => setDanger('logout')} onAskWithdraw={() => { setWhy([]); setWd(true); }} /> : null}
+            {p.tab === '알림' ? <NotiTab noti={p.noti} onNoti={p.onNoti} /> : null}
+            {p.tab === '사용량' && !plan ? <UsageTab usage={p.usage} tracked={p.tracked} onOpenMemo={p.onOpenMemo} onPlan={() => { setPick(p.plan_default); setPlanFor('사용량'); }} /> : null}
+            {plan ? <PlanView plans={p.plans} compare={p.compare} notes={p.notes} pick={pick} setPick={setPick} /> : null}
+            {p.tab === '데이터' ? <DataTab counts={p.counts} onExport={p.onExport} onAskWipe={() => setDanger('wipe')} /> : null}
+            {p.tab === '정보' ? <InfoTab version={p.version} sources={p.sources} onDoc={setDoc} onFeedback={p.onFeedback} onReplayGuide={p.onReplayGuide} /> : null}
           </ScrollView>
+          {plan ? <PlanBar pick={pick} free={pick === p.plans[0]?.key} onStart={() => p.onStartPlan(pick)} /> : null}
         </View>
       </View>
       <Withdraw open={wd} counts={p.counts} why={why} setWhy={setWhy} onClose={() => setWd(false)} onGo={() => { setWd(false); setDanger('withdraw'); }} />
@@ -90,17 +112,19 @@ export function WebSettings(p: WebSettingsProps) {
         variant="web"
         danger
         open={!!danger}
-        title={danger === 'withdraw' ? '정말 탈퇴할까요?' : '로그아웃할까요?'}
-        body={danger === 'withdraw' ? '계정과 모든 데이터가 바로 삭제되고 되돌릴 수 없어요.' : '이 기기에서 로그아웃해요.'}
-        confirmLabel={danger === 'withdraw' ? '탈퇴' : '로그아웃'}
+        title={dt[0]}
+        body={dt[1]}
+        confirmLabel={dt[2]}
         onCancel={() => setDanger(null)}
         onConfirm={() => {
           const d = danger;
           setDanger(null);
           if (d === 'withdraw') p.onWithdraw(why);
+          else if (d === 'wipe') p.onWipe();
           else p.onLogout();
         }}
       />
+      <DocModal doc={doc} docs={p.docs} oss={p.oss} onClose={() => setDoc(null)} />
     </Sheet>
   );
 }
@@ -229,15 +253,6 @@ function Withdraw({ open, counts, why, setWhy, onClose, onGo }: { open: boolean;
   );
 }
 
-/* SBtn: 높이 36 · 라운드 8 · 선 #E5E3E8 · 15/23 · hover #F8F7F5 */
-function SBtn({ w, label, red, onPress }: { w: number; label: string; red?: boolean; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} accessibilityRole="button" style={({ hovered }: Hover) => [st.sbtn, { width: w }, hovered && { backgroundColor: '#F8F7F5' }]}>
-      <Text style={[st.sbtnT, red && { color: '#E45D6A' }]}>{label}</Text>
-    </Pressable>
-  );
-}
-
 function NavIcon({ n, c }: { n: SettingsTab; c: string }) {
   const s = { stroke: c, strokeWidth: 1.42222, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   return (
@@ -289,11 +304,12 @@ const st = StyleSheet.create({
   sec: { flex: 1, minWidth: 0 },
   head: { height: 112, flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingHorizontal: 36, paddingVertical: 28 },
   headL: { width: 620, gap: 8 },
+  titleRow: { height: 34, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  planBack: { marginLeft: -8, width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 26, lineHeight: 35, fontWeight: '700', color: '#15171A' },
   sub: { fontSize: 15, lineHeight: 23, color: '#8E8A97' },
   x: { width: 36, height: 36, borderRadius: 8 },
   body: { paddingHorizontal: 36, paddingVertical: 24, gap: 24 },
-  later: { fontSize: 15, lineHeight: 23, color: '#8E8A97' },
   photoRow: { height: 72, flexDirection: 'row', alignItems: 'center', gap: 20 },
   photoCol: { width: 300, gap: 12 },
   photoBtns: { flexDirection: 'row', gap: 8 },
@@ -316,8 +332,6 @@ const st = StyleSheet.create({
   row: { width: 718, flexDirection: 'row', alignItems: 'center', gap: 24 },
   row2: { flexDirection: 'row', alignItems: 'center', gap: 24 },
   rowText: { gap: 4 },
-  sbtn: { height: 36, borderRadius: 8, borderWidth: 1, borderColor: '#E5E3E8', backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
-  sbtnT: { fontSize: 15, lineHeight: 23, color: '#15171A' },
   wd: { width: 680, maxWidth: '100%', gap: 20, borderRadius: 28, backgroundColor: '#FFFFFF', paddingHorizontal: 32, paddingVertical: 28 },
   wdT: { fontSize: 22, lineHeight: 31, fontWeight: '700', color: '#15171A' },
   wdS: { fontSize: 17, lineHeight: 26, color: '#747D8D' },

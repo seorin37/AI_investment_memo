@@ -8,7 +8,9 @@ import type { SideKey, SideSearchHit, SideStock } from '@/ui/layout/web/WebShell
 import { mockMyStocksData } from '@/ui/screens/stocks/MyStocks.mock';
 import { WebAddStockDialog } from '@/ui/screens/stocks/web/AddStockDialog';
 import { useMyMock } from '@/store/myMock';
-import { mockWithdrawCounts } from '@/ui/screens/my/My.mock';
+import Constants from 'expo-constants';
+import { legalDocument } from '@/ui/screens/auth/Auth.mock';
+import { mockDataSources, mockMyUsage, mockOss, mockPlanCompare, mockPlanDefault, mockPlanNotes, mockPlans, mockTracked, mockWithdrawCounts } from '@/ui/screens/my/My.mock';
 import { WebSettings, type SettingsTab } from '@/ui/screens/my/web/Settings';
 import { ConfirmDialog } from '@/ui/shared/ConfirmDialog';
 import { ContextMenu } from '@/ui/shared/ContextMenu';
@@ -53,6 +55,8 @@ export default function MainLayout() {
   const signOut = useAuth((s) => s.signOut);
   const myProfile = useMyMock((s) => s.profile);
   const setMyProfile = useMyMock((s) => s.setProfile);
+  const myNoti = useMyMock((s) => s.noti);
+  const setMyNoti = useMyMock((s) => s.setNoti);
   const say = (x: { msg: string; undo?: () => void; check?: boolean }) => {
     setSnack(x);
     setTimeout(() => setSnack((c) => (c === x ? null : c)), 4000);
@@ -195,6 +199,28 @@ export default function MainLayout() {
       onPhotoDelete={() => say({ msg: '지울 사진이 없어요' })}
       onLogout={() => { setSettings(null); logout(); }}
       onWithdraw={() => say({ msg: '아직 탈퇴 기능은 연결되지 않았어요 · 데이터는 그대로예요' })}
+      noti={myNoti}
+      onNoti={(n) => {
+        const on = n.ai !== myNoti.ai ? n.ai : n.studio;
+        setMyNoti(n);
+        say({ msg: on ? '알림을 켰어요 · 알림함에 다시 보여요' : '알림을 껐어요 · 알림함에서도 안 보여요', check: true });
+      }}
+      usage={mockMyUsage}
+      tracked={mockTracked}
+      onOpenMemo={(code) => { setSettings(null); openStock(code); }}
+      plans={mockPlans}
+      compare={mockPlanCompare}
+      notes={mockPlanNotes}
+      plan_default={mockPlanDefault}
+      onStartPlan={() => say({ msg: '결제는 아직 연결되지 않았어요' })}
+      onExport={() => say({ msg: '내보내기는 아직 연결되지 않았어요' })}
+      onWipe={() => say({ msg: '아직 연결되지 않았어요 · 데이터는 그대로예요' })}
+      version={Constants.expoConfig?.version ?? ''}
+      sources={mockDataSources}
+      oss={mockOss}
+      docs={{ terms: legalDocument('terms'), privacy: legalDocument('privacy'), invest: legalDocument('invest') }}
+      onFeedback={() => say({ msg: '피드백 창은 다음 묶음에서 열려요' })}
+      onReplayGuide={() => say({ msg: '사용법 안내는 아직 준비 중이에요' })}
     />
     <ConfirmDialog
       variant="web"
