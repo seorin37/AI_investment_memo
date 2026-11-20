@@ -1,6 +1,6 @@
 import type { AuthProvider } from '@/types/models';
 import type { LegalKey } from '@/ui/screens/auth/Auth.types';
-import type { PlanInfo, TrackedStock } from './My.mock';
+import type { InboxItem, PlanInfo, TrackedStock, TrashItem } from './My.mock';
 
 /** MY · 설정 (원본 app/my.html · web overlays.tsx Settings) — ⑨-3a: 본 화면 · 내 프로필 · 로그아웃 · 회원 탈퇴 */
 export interface MyProfile {
@@ -98,6 +98,43 @@ export interface InfoProps {
   onFeedback: () => void;
   /** 웹만: 사용법 다시 보기 */
   onReplayGuide?: () => void;
+}
+
+/* ---------- ⑨-3c ---------- */
+export interface TrashProps {
+  items: TrashItem[];
+  onBack: () => void;
+  /** 복원 (mock: 휴지통에서 빠짐 · 되돌리기 가능) */
+  onRestore: (item: TrashItem) => void;
+  /** 복원 되돌리기 */
+  onUndo: (item: TrashItem) => void;
+  /** 영구 삭제 · 비우기 확인 뒤 (mock: 실제로 지우지 않음) */
+  onPurge: (item: TrashItem | null) => void;
+}
+
+export interface FeedbackDraft { mode: 'general' | 'bug'; star: number; text: string; where: string; kinds: string[]; detail: string }
+export interface FeedbackProps {
+  kinds: string[];
+  star_labels: string[];
+  onBack: () => void;
+  /** 보내기 (연결 안 됨 → 안내만) */
+  onSend: (d: FeedbackDraft) => void;
+}
+
+export interface HelpProps {
+  faq: [string, string][];
+  onBack: () => void;
+  onReplayGuide: () => void;
+}
+
+export interface InboxProps {
+  items: InboxItem[];
+  unread: string[];
+  noti: NotiSettings;
+  onBack: () => void;
+  onOpen: (item: InboxItem) => void;
+  onReadAll: () => void;
+  onSettings: () => void;
 }
 
 export const WITHDRAW_REASONS = ['자주 쓰지 않아요', '원하는 기능이 없어요', '사용이 어려워요', '개인정보가 걱정돼요', '기타'] as const;

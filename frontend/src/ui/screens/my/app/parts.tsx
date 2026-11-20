@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Animated, BackHandler, Easing, Pressable, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Animated, BackHandler, Easing, Keyboard, Pressable, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
@@ -99,6 +99,14 @@ export function Page({ title, onBack, lead, children, bottom, onHardwareBack }: 
     });
     return () => sub.remove();
   }, [onBack, onHardwareBack]);
+  /* 키보드가 올라오면 아래 버튼이 키보드 바로 위에 붙게 (안전 영역 여백 빼기) */
+  const [kb, setKb] = useState(false);
+  useEffect(() => {
+    const a = Keyboard.addListener('keyboardDidShow', () => setKb(true));
+    const b = Keyboard.addListener('keyboardDidHide', () => setKb(false));
+    return () => { a.remove(); b.remove(); };
+  }, []);
+  const padB = kb ? 0 : insets.bottom;
   return (
     <View style={[pt.page, { paddingTop: insets.top }]}>
       <Head title={title} onBack={onBack} />
@@ -107,7 +115,7 @@ export function Page({ title, onBack, lead, children, bottom, onHardwareBack }: 
         <View style={pt.w}>{children}</View>
       </ScrollView>
       {bottom ? (
-        <View style={[pt.bot, { paddingBottom: 12 + insets.bottom }]}>
+        <View style={[pt.bot, { paddingBottom: 12 + padB }]}>
           {/* 원본 .bot: linear-gradient(transparent → .85 40% → bg 70%) */}
           <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" preserveAspectRatio="none">
             <Defs>

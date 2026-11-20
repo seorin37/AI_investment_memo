@@ -68,7 +68,7 @@ export default function HomeTab() {
           showLine={line}
           actions={[
             { icon: 'search', label: '검색', onPress: onSearch },
-            { icon: 'bell', label: '알림', onPress: () => notice('알림') },
+            { icon: 'bell', label: '알림', onPress: () => router.push('/my-inbox') },
           ]}
           avatar={{ name: mockHomeData.user_name, onPress: () => router.push('/my') }}
         />
