@@ -41,7 +41,7 @@ export default function HomeTab() {
       onSkip={() => { setPickerOpen(false); setFirstActive(false); }}
       onOpenPicker={() => setPickerOpen(true)}
       onClosePicker={() => setPickerOpen(false)}
-      onPickStock={(stock) => { setPickerOpen(false); router.navigate({ pathname: '/memo/new', params: { code: stock.stock_code, name: stock.name, from_onboarding: '1' } } as Href); }}
+      onPickStock={(stock) => { setPickerOpen(false); router.navigate({ pathname: '/memo/new', params: { code: stock.stock_code, name: stock.name, from_onboarding: '1', onboarding_selected: selected ?? '' } } as Href); }}
     />
   ) : undefined;
   return (

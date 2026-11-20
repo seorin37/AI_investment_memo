@@ -41,7 +41,7 @@ export default function HomeScreen() {
       onSkip={() => { setGuideOpen(false); setPickerOpen(false); setFirstActive(false); }}
       onOpenPicker={() => setPickerOpen(true)}
       onClosePicker={() => setPickerOpen(false)}
-      onPickStock={(stock) => { setPickerOpen(false); router.navigate({ pathname: '/stocks/[code]', params: { code: stock.stock_code, stock_name: stock.name, first: '1' } } as Href); }}
+      onPickStock={(stock) => { setPickerOpen(false); router.navigate({ pathname: '/stocks/[code]', params: { code: stock.stock_code, stock_name: stock.name, first: '1', onboarding_selected: selected ?? '', onboarding_home_mode: home_mode ?? mode ?? 'template' } } as Href); }}
     />
   ) : undefined;
   return (
