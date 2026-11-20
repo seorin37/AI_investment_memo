@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, useWindowDimensions } from 'react-native';
 import { Redirect, Stack, usePathname, useRouter } from 'expo-router';
 import { useAuth } from '@/store/auth';
-import { mockPopular, mockRecentSearches, mockSideProfile, mockSideStocks, mockStudioHead, mockUnreadNotifs } from '@/ui/layout/web/WebShell.mock';
+import { mockPopular, mockRecentSearches, mockSideProfile, mockSideStocks, mockStudioHead } from '@/ui/layout/web/WebShell.mock';
 import { WebShell } from '@/ui/layout/web/WebShell';
 import type { SideKey, SideSearchHit, SideStock } from '@/ui/layout/web/WebShell.types';
 import { mockMyStocksData } from '@/ui/screens/stocks/MyStocks.mock';
@@ -10,8 +10,12 @@ import { WebAddStockDialog } from '@/ui/screens/stocks/web/AddStockDialog';
 import { useMyMock } from '@/store/myMock';
 import Constants from 'expo-constants';
 import { legalDocument } from '@/ui/screens/auth/Auth.mock';
-import { mockDataSources, mockMyUsage, mockOss, mockPlanCompare, mockPlanDefault, mockPlanNotes, mockPlans, mockTracked, mockWithdrawCounts } from '@/ui/screens/my/My.mock';
+import { mockDataSources, mockInbox, mockMyUsage, mockOss, mockPlanCompare, mockPlanDefault, mockPlanNotes, mockPlans, mockReportKinds, mockTracked, mockWithdrawCounts } from '@/ui/screens/my/My.mock';
+import { WebFeedback } from '@/ui/screens/my/web/Feedback';
+import { WebInbox } from '@/ui/screens/my/web/Inbox';
 import { WebSettings, type SettingsTab } from '@/ui/screens/my/web/Settings';
+import { WebTrash } from '@/ui/screens/my/web/Trash';
+import { useUI } from '@/store/ui';
 import { ConfirmDialog } from '@/ui/shared/ConfirmDialog';
 import { ContextMenu } from '@/ui/shared/ContextMenu';
 import { WebSnackbar } from '@/ui/shared/Snackbar';
@@ -32,7 +36,7 @@ function sideKeyOf(path: string): SideKey {
  * 웹 로그인 후 영역: UI v2 WebShell (사이드바 250/72 · 가운데 · 스튜디오 열 436/96).
  * 옛 AppShell(components/layout)은 지우지 않고 여기서만 뺌. 탭 안 화면은 아직 옛 화면.
  * 앱(안드로이드·iOS)은 같은 폴더의 _layout.native.tsx.
- * mock 단계: 사이드바·스튜디오 머리 숫자는 WebShell.mock. 알림·휴지통·설정 등 창은 다음 묶음에서 연결.
+ * mock 단계: 사이드바·스튜디오 머리 숫자는 WebShell.mock. 설정·휴지통·피드백·알림함 창은 이 셸에서 연다 (⑨-3).
  */
 export default function MainLayout() {
   const status = useAuth((s) => s.status);
@@ -57,6 +61,18 @@ export default function MainLayout() {
   const setMyProfile = useMyMock((s) => s.setProfile);
   const myNoti = useMyMock((s) => s.noti);
   const setMyNoti = useMyMock((s) => s.setNoti);
+  /* ⑨-3c 휴지통 · 피드백 · 알림함 (mock: 복원·읽음은 화면 상태만, 영구 삭제·보내기는 연결 안 됨) */
+  const [trashOpen, setTrashOpen] = useState(false);
+  const [fbOpen, setFbOpen] = useState(false);
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const trash = useMyMock((s) => s.trash);
+  const restore = useMyMock((s) => s.restore);
+  const undoRestore = useMyMock((s) => s.undoRestore);
+  const unread = useMyMock((s) => s.unread);
+  const readNotif = useMyMock((s) => s.read);
+  const readAll = useMyMock((s) => s.readAll);
+  const uiToast = useUI((s) => s.toast);
+  const unreadShown = mockInbox.filter((n) => unread.includes(n.id) && (n.kind === 'ai' ? myNoti.ai : myNoti.studio)).length;
   const say = (x: { msg: string; undo?: () => void; check?: boolean }) => {
     setSnack(x);
     setTimeout(() => setSnack((c) => (c === x ? null : c)), 4000);
@@ -87,7 +103,7 @@ export default function MainLayout() {
         stocks: sideStocks,
         /* 설정에서 바꾼 이름·소개를 사이드바 프로필에도 (mock 상태) */
         profile: { ...mockSideProfile, name: myProfile.name, job: myProfile.intro },
-        unreadNotifs: mockUnreadNotifs,
+        unreadNotifs: unreadShown,
         dark,
         recentSearches: mockRecentSearches,
         popular: mockPopular,
@@ -114,11 +130,11 @@ export default function MainLayout() {
             });
           }),
         onAddStock: () => setAddOpen(true),
-        onBell: () => {},
+        onBell: () => setInboxOpen((o) => !o),
         onToggleDark: () => setDark((d) => !d),
-        onTrash: () => {},
+        onTrash: () => setTrashOpen(true),
         onSettings: () => setSettings('내 프로필'),
-        onFeedback: () => {},
+        onFeedback: () => setFbOpen(true),
         onHelp: () => router.navigate('/help'),
         onProfile: () => setSettings('내 프로필'),
         onLogout: () => setLogoutAsk(true),
@@ -221,8 +237,37 @@ export default function MainLayout() {
       sources={mockDataSources}
       oss={mockOss}
       docs={{ terms: legalDocument('terms'), privacy: legalDocument('privacy'), invest: legalDocument('invest') }}
-      onFeedback={() => say({ msg: '피드백 창은 다음 묶음에서 열려요' })}
+      onFeedback={() => { setSettings(null); setFbOpen(true); }}
       onReplayGuide={() => say({ msg: '사용법 안내는 아직 준비 중이에요' })}
+    />
+    <WebTrash
+      open={trashOpen}
+      items={trash}
+      onClose={() => setTrashOpen(false)}
+      onBack={() => setTrashOpen(false)}
+      onRestore={(t) => {
+        const it = restore(t.id);
+        if (it) say({ msg: it.kind === '메모' ? '메모를 복원했어요 · 원래 종목 보드에 돌아갔어요' : it.kind === '종목' ? '종목을 복원했어요 · 메모도 함께 돌아왔어요' : '복원했어요', check: true });
+      }}
+      onUndo={undoRestore}
+      onPurge={() => say({ msg: '아직 연결되지 않았어요 · 데이터는 그대로예요' })}
+    />
+    <WebFeedback open={fbOpen} kinds={mockReportKinds} onClose={() => setFbOpen(false)} onSend={() => say({ msg: '아직 연결되지 않았어요' })} />
+    <WebInbox
+      open={inboxOpen}
+      left={(sideOpen ? 250 : 72) + 8}
+      items={mockInbox}
+      unread={unread}
+      noti={myNoti}
+      onClose={() => setInboxOpen(false)}
+      onOpen={(n) => {
+        setInboxOpen(false);
+        readNotif(n.id);
+        if (n.kind === 'ai' && n.stock_code) openStock(n.stock_code);
+        else setStudioOpen(true);
+      }}
+      onReadAll={readAll}
+      onSettings={() => { setInboxOpen(false); setSettings('알림'); }}
     />
     <ConfirmDialog
       variant="web"
@@ -234,7 +279,7 @@ export default function MainLayout() {
       onCancel={() => setLogoutAsk(false)}
       onConfirm={() => { setLogoutAsk(false); logout(); }}
     />
-    <WebSnackbar visible={!!snack} message={snack?.msg ?? ''} onUndo={snack?.undo} check={snack?.check} style={{ position: 'absolute', bottom: 30, alignSelf: 'center' }} />
+    <WebSnackbar visible={!!snack || !!uiToast} message={snack?.msg ?? uiToast?.message ?? ''} onUndo={snack?.undo} check={snack?.check} style={{ position: 'absolute', bottom: 30, alignSelf: 'center' }} />
     </View>
   );
 }
