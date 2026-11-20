@@ -1,15 +1,21 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Platform } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
-import { IntroSlides } from '@/features/onboarding/IntroSlides';
-import { mockIntroSlidesProps } from '@/features/onboarding/IntroSlides.mock';
 import { useAuth } from '@/store/auth';
+import { mockIntroPages } from '@/ui/screens/auth/Auth.mock';
+import { AppIntro } from '@/ui/screens/auth/app/Intro';
+import { WebIntro } from '@/ui/screens/auth/web/Intro';
 
-/** 앱: 로그인 전 서비스 소개 3장 → 로그인. 웹(frontend)은 바로 로그인 */
 export default function IntroScreen() {
   const router = useRouter();
   const status = useAuth((s) => s.status);
-  if (Platform.OS === 'web') return <Redirect href="/login" />;
+  const [page, setPage] = useState(0);
   if (status === 'signedIn') return <Redirect href="/" />;
-  return <IntroSlides {...mockIntroSlidesProps} onDone={() => router.replace('/login')} />;
+  const props = {
+    pages: mockIntroPages,
+    page,
+    onPageChange: setPage,
+    onDone: () => router.replace('/login'),
+  };
+  return Platform.OS === 'web' ? <WebIntro {...props} /> : <AppIntro {...props} />;
 }
