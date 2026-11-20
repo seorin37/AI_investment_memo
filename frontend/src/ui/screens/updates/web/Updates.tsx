@@ -11,6 +11,7 @@ import { curve, fpx } from '@/ui/theme';
 import type { KindFilter, UpdateItem, WebUpdatesProps } from '../Updates.types';
 import { KINDS, WEB_TAG, ago, byStock, josa, unreadOf } from '../updatesFormat';
 import { versionsOf } from '../Updates.mock';
+import { useNudge } from '@/store/nudge';
 
 type Hover = { pressed: boolean; hovered?: boolean };
 const mmdd = (iso: string) => `${iso.slice(5, 7)}.${iso.slice(8, 10)}`;
@@ -38,7 +39,12 @@ export function WebUpdates(p: WebUpdatesProps) {
   }
   const [q, setQ] = useState('');
   const [qOpen, setQOpen] = useState(false);
-  const [nudge, setNudge] = useState(true);
+  /* 넛지 닫은 상태는 한 곳(store/nudge)에 — 다시 들어와도 안 뜸 · 사용법 안내 중엔 숨김 */
+  const nudgeS = useNudge('updates');
+  const nudge = nudgeS.show;
+  const setNudge = (v: boolean) => {
+    if (!v) nudgeS.hide();
+  };
   const CARD = (c: string) => byStock(p.items, c).slice(0, 3);
   const pool = cur ? byStock(p.items, cur.stock_code) : p.stocks.flatMap((s) => CARD(s.stock_code));
   const unread = pool.filter((u) => u.unread).map((u) => u.id);

@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
 import type { Checklist, Memo, MemoColor } from '@/types/models';
+import { Confetti } from '@/components/motion/Celebrate';
 import { FadeIn } from '@/ui/motion/Reveal';
 import { AppChecklistCard, AppChecklistRow } from '@/ui/shared/ChecklistCard';
 import { AppChips } from '@/ui/shared/Chips';
@@ -77,6 +78,14 @@ export function AppMemoBoard(p: MemoBoardProps & { header: React.ReactNode }) {
     return () => clearTimeout(t);
   }, [snack]);
   const toast = (msg: string, undo?: string[]) => setSnack((s) => ({ id: (s?.id ?? 0) + 1, msg, undo }));
+  /* 축하: 화면 안 자리로 바꿔 색종이 · 스낵바 */
+  const rootRef = useRef<React.ComponentRef<typeof View>>(null);
+  const [cf, setCf] = useState<{ x: number; y: number; id: number } | null>(null);
+  const celebrate = (c: { x: number; y: number }) =>
+    rootRef.current?.measureInWindow((rx, ry) => {
+      setCf((o) => ({ x: c.x - rx, y: c.y - ry, id: (o?.id ?? 0) + 1 }));
+      toast('체크리스트를 모두 끝냈어요');
+    });
   /* 돌아올 때 받은 알림 (새 메모 저장 · 빈 메모) */
   const [noticeKey, setNoticeKey] = useState(p.notice?.key);
   if (p.notice && p.notice.key !== noticeKey) {
@@ -163,7 +172,7 @@ export function AppMemoBoard(p: MemoBoardProps & { header: React.ReactNode }) {
   const colorNow = colorFor && colorFor.every((id) => byId(id)?.color === byId(colorFor[0])?.color) ? byId(colorFor[0])?.color : null;
 
   return (
-    <View style={st.root}>
+    <View ref={rootRef} collapsable={false} style={st.root}>
       {sel ? <AppSelectHeader count={sel.length} allSelected={sel.length === items.length} onClose={() => setSel(null)} onToggleAll={() => setSel(sel.length === items.length ? null : items.map((i) => i.key))} /> : p.header}
       <ScrollView style={st.flex} contentContainerStyle={st.content} showsVerticalScrollIndicator={false} onScrollBeginDrag={() => openRow && setOpenRow(null)}>
         <View style={st.cardWrap}>
@@ -206,7 +215,7 @@ export function AppMemoBoard(p: MemoBoardProps & { header: React.ReactNode }) {
               <View style={st.grid}>
                 {items.map((it) =>
                   it.checklist ? (
-                    <AppChecklistCard key={it.key} checklist={it.checklist} width={cw} height={150} selecting={selecting} selected={!!sel?.includes(it.key)} onPress={() => tap(it)} onLongPress={() => enterSel(it.key)} onToggleItem={p.onToggleChecklistItem} />
+                    <AppChecklistCard key={it.key} checklist={it.checklist} onAllDone={celebrate} width={cw} height={150} selecting={selecting} selected={!!sel?.includes(it.key)} onPress={() => tap(it)} onLongPress={() => enterSel(it.key)} onToggleItem={p.onToggleChecklistItem} />
                   ) : (
                     <AppMemoCard key={it.key} memo={it.memo!} width={cw} height={150} selecting={selecting} selected={!!sel?.includes(it.key)} aiSpent={p.aiSpent} onPress={() => tap(it)} onLongPress={() => enterSel(it.key)} />
                   ),
@@ -257,6 +266,8 @@ export function AppMemoBoard(p: MemoBoardProps & { header: React.ReactNode }) {
           onPick={(k) => (k === 'check' ? p.onNewChecklist() : p.onNewMemo())}
         />
       ) : null}
+      {/* 체크리스트를 모두 끝내면 카드 가운데서 색종이 (원본 memo.html confetti · Lucian #093) */}
+      <Confetti fire={cf} />
       <AppSnackbar
         visible={!!snack}
         message={snack?.msg ?? ''}

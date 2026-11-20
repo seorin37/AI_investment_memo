@@ -10,6 +10,7 @@ import type { AiTrackItem, MemoFeedItem } from '../MemoDetail.types';
 import { buildTimeline } from '../memoTimeline';
 import { INK } from './parts';
 import { usePaper } from '@/ui/shared/Dark';
+import { useNudge } from '@/store/nudge';
 
 type Hover = { pressed: boolean; hovered?: boolean };
 /* 원본 KIND: 바탕 · 왼쪽 막대 */
@@ -28,7 +29,12 @@ const md = (iso: string) => {
 export function WebFeed({ memo, versions, feed, trackItems, onOpenSource, onOpenEvidence, onNudge }: { memo: Memo; versions: MemoVersion[]; feed: MemoFeedItem[]; trackItems: AiTrackItem[]; onOpenSource?: (f: MemoFeedItem) => void; onOpenEvidence?: (f: MemoFeedItem) => void; onNudge?: () => void }) {
   const paper = usePaper();
   const [open, setOpen] = useState<Set<string>>(new Set());
-  const [nudge, setNudge] = useState(true);
+  /* 넛지 닫은 상태는 한 곳(store/nudge)에 — 다시 들어와도 안 뜸 · 사용법 안내 중엔 숨김 */
+  const nudgeS = useNudge('memo');
+  const nudge = nudgeS.show;
+  const setNudge = (v: boolean) => {
+    if (!v) nudgeS.hide();
+  };
   const rows = buildTimeline(memo, versions, feed).filter((r) => memo.ai_linked || (r.t === 'rev' && r.first));
   const n = memo.ai_linked ? feed.length : 0;
   const first = versions[versions.length - 1];

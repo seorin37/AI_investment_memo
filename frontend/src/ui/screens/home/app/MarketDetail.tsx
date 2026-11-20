@@ -10,6 +10,7 @@ import { PillSeg } from '@/ui/shared/PillSeg';
 import { appColor, curve, ft } from '@/ui/theme';
 import type { MarketDetailProps } from '../Home.types';
 import { APP_PERIODS, mmdd, nf, spark, type AppPeriod } from '../homeFormat';
+import { useNudge } from '@/store/nudge';
 
 const CH = 230;
 let seq = 0;
@@ -32,7 +33,12 @@ export function AppMarketDetail({ index: q, header, onNudge }: MarketDetailProps
   const last = data[data.length - 1];
   const col = last < first ? appColor.down : appColor.up;
   const [idx, setIdx] = useState<number | null>(null);
-  const [nudge, setNudge] = useState(true);
+  /* 넛지 닫은 상태는 한 곳(store/nudge)에 — 다시 들어와도 안 뜸 · 사용법 안내 중엔 숨김 */
+  const nudgeS = useNudge('lab');
+  const nudge = nudgeS.show;
+  const setNudge = (v: boolean) => {
+    if (!v) nudgeS.hide();
+  };
   /* 큰 숫자 세기 (원본 countTo 500ms · 1-(1-t)^3) */
   const [num] = useState(() => new Animated.Value(q.value));
   const [shown, setShown] = useState(q.value);

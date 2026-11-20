@@ -19,6 +19,7 @@ import { WebViewToggle, type BoardView } from '@/ui/shared/ViewToggle';
 import { fpx, webColor } from '@/ui/theme';
 import type { BoardFilter, MemoBoardProps } from '../MemoBoard.types';
 import { useBoardDragWeb, useContextMenuWeb, useEscapeWeb } from './boardDom.web';
+import { useCoachRef } from '@/ui/shared/Coach';
 
 const CL = 'cl';
 const HOLE = '__hole';
@@ -35,6 +36,8 @@ const data = (o: Record<string, string>) => ({ dataSet: o }) as object;
  * 카드를 끌어 순서 바꾸기 · hover · ⋯ 메뉴 · 우클릭 메뉴 · Esc. + 버튼 (56 #111 · 가운데 칸 오른쪽 아래 32) · 고르기 막대 (아래 28)
  */
 export function WebMemoBoard(p: MemoBoardProps) {
+  /* 사용법 안내 ① 대상 (원본 board.tsx data-coach="fab") */
+  const fabRef = useCoachRef('fab');
   const [k, setK] = useState(1);
   const [filter, setFilter] = useState<BoardFilter>('all');
   const [view, setView] = useState<BoardView>('grid');
@@ -210,7 +213,7 @@ export function WebMemoBoard(p: MemoBoardProps) {
       </ScrollView>
       {/* + 버튼 (원본 NewMemoFab: 56 · #111 · 오른쪽 아래 32 · 그림자) */}
       {!sel ? (
-        <Pressable onPress={() => p.onNewMemo()} accessibilityRole="button" accessibilityLabel="새 메모" style={({ hovered, pressed }: HoverState) => [st.fab, { transform: [{ scale: pressed ? 0.95 : hovered ? 1.05 : 1 }] }]}>
+        <Pressable ref={fabRef} onPress={() => p.onNewMemo()} accessibilityRole="button" accessibilityLabel="새 메모" style={({ hovered, pressed }: HoverState) => [st.fab, { transform: [{ scale: pressed ? 0.95 : hovered ? 1.05 : 1 }] }]}>
           <PlusGlyph size={24} stroke={2.2} />
         </Pressable>
       ) : null}

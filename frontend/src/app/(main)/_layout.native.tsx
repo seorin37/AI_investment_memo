@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View } from 'react-native';
-import { Redirect, Tabs, useRouter } from 'expo-router';
+import { Redirect, Tabs, usePathname, useRouter } from 'expo-router';
+import { useCoach } from '@/store/coach';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/store/auth';
 import { chapterAt, fmt, useStudioPlayer } from '@/store/studioPlayer';
@@ -51,8 +52,44 @@ export default function MainTabsLayout() {
         <Tabs.Screen name="report" options={{ href: null }} />
       </Tabs>
       <Mini hidden={hidden} />
+      <CoachDriver />
     </View>
   );
+}
+
+/**
+ * 사용법 안내 화면 이동 (원본 앱: 첫 카드 홈 → ①②③ 메모 화면(memo.html: 보드 + 버튼 · 메모 상세 AI 탭) → ④ 스튜디오 탭 → 끝나면 홈)
+ * 대상 종목·메모는 원본처럼 SK하이닉스 · 첫 AI 연결 메모.
+ */
+function CoachDriver() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const step = useCoach((s) => s.step);
+  const was = useRef<number | null>(null);
+  useEffect(() => {
+    const prev = was.current;
+    was.current = step;
+    if (step === prev) return;
+    const inMemo = pathname.startsWith('/memo/');
+    if (step == null || step === -1) {
+      /* 첫 카드는 홈에서 (원본 owner(-1) = home) · 끝나도 홈 */
+      if (prev == null && step == null) return;
+      if (inMemo) router.back();
+      if (pathname !== '/') router.navigate('/');
+      return;
+    }
+    if (step === 0) {
+      if (inMemo) router.back();
+      router.navigate({ pathname: '/stocks/[code]', params: { code: '000660' } });
+    } else if (step === 1 || step === 2) {
+      if (!inMemo) router.push({ pathname: '/memo/[id]', params: { id: 'm1', tab: 'ai' } });
+    } else {
+      if (inMemo) router.back();
+      router.navigate('/studio');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+  return null;
 }
 
 /* ⑧-8b 미니 플레이어: 탭 바 위 10 (원본 .mini bottom 88). 탭을 바꿔도 남고, 위로 쌓이는 화면이 덮으면 가려짐 */

@@ -17,6 +17,7 @@ import { WEB_RANGES, mkData, mmdd, rangeLabels, type WebRange } from '../homeFor
 import { CustomHome } from './CustomHome';
 import { HomeGrip } from './homeDom.web';
 import { CheckWidget, MarketWidget, NewsWidget, Plug12, UpdatesWidget } from './HomeWidgets';
+import { useNudge } from '@/store/nudge';
 
 type Hover = { pressed: boolean; hovered?: boolean };
 const data = (o: Record<string, string>) => ({ dataSet: o }) as object;
@@ -72,7 +73,16 @@ function TemplateHome(p: WebHomeProps) {
   const [add, setAdd] = useState(false);
   const [reset, setReset] = useState(false);
   const [market, setMarket] = useState<MarketKey | null>(null);
-  const [nudge, setNudge] = useState<'report' | 'lab' | null>('report');
+  /* 넛지 (원본 nudge.tsx NudgeHost: 원/달러를 누르면 실험실 제안, 아니면 주간보고서 제안) — 닫은 상태는 store/nudge 한 곳 */
+  const [ask, setAsk] = useState<'lab' | null>(null);
+  const labN = useNudge('lab');
+  const homeN = useNudge('home');
+  const nudge: 'report' | 'lab' | null = ask === 'lab' && labN.show ? 'lab' : homeN.show ? 'report' : null;
+  const setNudge = (v: 'lab' | null) => {
+    if (v === 'lab') return setAsk('lab');
+    if (nudge === 'lab') labN.hide();
+    else homeN.hide();
+  };
   const [snack, setSnack] = useState<Snack | null>(null);
   const [drag, setDrag] = useState<HomeWidget | null>(null);
   const [gone, setGone] = useState<HomeWidget | null>(null);

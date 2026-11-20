@@ -16,6 +16,7 @@ import type { CompanyInfoProps } from '../CompanyInfo.types';
 import { HEALTH_KEYS, TERM_TIP, TERMS, appQuoteRows, healthScore, healthVal, mdOf, mmddOf, won, yoyAt, type FinKey, type TermKey } from '../companyFormat';
 import { useProgress } from '@/ui/motion/useProgress';
 import { CANDLE_H, CandleChart, GrowthChart, ProfitChart, Radar } from './CompanyCharts';
+import { useNudge } from '@/store/nudge';
 
 const RANGES: { key: ChartRange; label: string }[] = [
   { key: '1W', label: '1주' },
@@ -59,7 +60,12 @@ export function AppCompanyInfo(p: CompanyInfoProps) {
   const [gpick, setGpick] = useState(false);
   const [hidden, setHidden] = useState<Record<string, boolean>>({});
   const [term, setTerm] = useState<TermKey | null>(null);
-  const [nudge, setNudge] = useState(true);
+  /* 넛지 닫은 상태는 한 곳(store/nudge)에 — 다시 들어와도 안 뜸 · 사용법 안내 중엔 숨김 */
+  const nudgeS = useNudge('info');
+  const nudge = nudgeS.show;
+  const setNudge = (v: boolean) => {
+    if (!v) nudgeS.hide();
+  };
   /* 원본 body(skel): 기업정보를 처음 열면 0.65초 뼈대 */
   useEffect(() => {
     const t = setTimeout(() => setReady(true), 650 * k);

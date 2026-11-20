@@ -8,17 +8,20 @@
  * fire 값(숫자)이 바뀔 때마다 한 번 터짐.
  */
 import { useEffect, useMemo, useRef } from 'react';
-import { Animated, StyleSheet, View } from 'react-native';
+import { Animated, Easing, StyleSheet, View } from 'react-native';
 import { BURST, LINEAR, ND, ms, tween, useValue } from '@/components/motion/motion';
 
 const DOTC = ['#22C3A6', '#10B981', '#FFB547', '#FF6B8B', '#7B61FF', '#3D8BFF'] as const;
 const N = 90;
 const SAMPLES = 30;
+/* 26조각 터짐 곡선 (원본 cubic-bezier(.2,.7,.4,1)) */
+const POP = Easing.bezier(0.2, 0.7, 0.4, 1);
 
 /** 체크 상자를 감싸는 View 안에 넣음 (가운데 기준) */
 export function DotBurst({ fire, size = 24 }: { fire: number; size?: number }) {
   const t = useValue(0);
-  const dirs = useMemo(() => Array.from({ length: 8 }, (_, i) => { const a = (i / 8) * Math.PI * 2 + 0.3, r = 20 + Math.random() * 8; return [Math.cos(a) * r, Math.sin(a) * r]; }), [fire]);
+  /* fire 가 바뀔 때마다 새 방향 */
+  const dirs = useMemo(() => Array.from({ length: fire ? 8 : 0 }, (_, i) => { const a = (i / 8) * Math.PI * 2 + 0.3, r = 20 + Math.random() * 8; return [Math.cos(a) * r, Math.sin(a) * r]; }), [fire]);
   useEffect(() => {
     if (!fire) return;
     t.setValue(0);
@@ -94,4 +97,50 @@ const st = StyleSheet.create({
   dotBox: { position: 'absolute', left: 0, top: 0 },
   dot: { position: 'absolute', width: 6, height: 6, borderRadius: 3 },
   piece: { position: 'absolute', left: 0, top: 0 },
+  popBox: { position: 'absolute', left: '50%', top: '50%', width: 0, height: 0, zIndex: 20 },
+  pop: { position: 'absolute', left: 0, top: 0, borderRadius: 2 },
 });
+
+/**
+ * 그 자리에서 사방으로 26조각 (원본 home.html .conf 7×10 · 1.1s / studio.html .cf 7×11 · 1s · cubic-bezier(.2,.7,.4,1))
+ * 각도 아무렇게나 · 거리 60~150 · 위로 40 더 · 회전 ±(360|270)도 · 끝으로 갈수록 투명. 체크 상자처럼 기준이 되는 View 안에 넣음 (가운데 기준).
+ */
+export function PopBurst({ fire, colors, w = 7, h = 10, dur = 1100, spin = 720 }: { fire: number; colors: readonly string[]; w?: number; h?: number; dur?: number; spin?: number }) {
+  const t = useValue(0);
+  const parts = useMemo(
+    () =>
+      Array.from({ length: fire ? 26 : 0 }, (_, i) => {
+        const a = Math.random() * Math.PI * 2;
+        const d = 60 + Math.random() * 90;
+        return { x: Math.cos(a) * d, y: Math.sin(a) * d - 40, r: `${Math.random() * spin - spin / 2}deg`, c: colors[i % colors.length] };
+      }),
+    [fire, colors, spin],
+  );
+  useEffect(() => {
+    if (!fire) return;
+    t.setValue(0);
+    tween(t, 1, dur, POP, ND).start();
+  }, [fire, t, dur]);
+  if (!fire) return null;
+  return (
+    <View pointerEvents="none" style={st.popBox}>
+      {parts.map((p, i) => (
+        <Animated.View
+          key={i}
+          style={[
+            st.pop,
+            {
+              width: w,
+              height: h,
+              marginLeft: -w / 2,
+              marginTop: -h / 2,
+              backgroundColor: p.c,
+              opacity: t.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+              transform: [{ translateX: t.interpolate({ inputRange: [0, 1], outputRange: [0, p.x] }) }, { translateY: t.interpolate({ inputRange: [0, 1], outputRange: [0, p.y] }) }, { rotate: t.interpolate({ inputRange: [0, 1], outputRange: ['0deg', p.r] }) }],
+            },
+          ]}
+        />
+      ))}
+    </View>
+  );
+}

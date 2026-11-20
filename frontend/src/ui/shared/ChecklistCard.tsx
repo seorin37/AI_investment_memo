@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
 import type { Checklist, ChecklistItem } from '@/types/models';
 import { AppPin, CheckMark, CkiMark } from '@/ui/icons/BoardGlyphs';
 import { appColor, checklistColor, fpx, ft } from '@/ui/theme';
+import { DotBurst } from '@/components/motion/Celebrate';
 import { SelCircle } from './MemoCard';
 import { AppTape } from './MemoPaper';
 import { ListCheck } from './MemoRow';
@@ -43,12 +44,23 @@ export interface AppChecklistCardProps {
  * 항목 (위 8 · 사이 6): 동그라미 17 (안쪽 1.6 #E9B48F · 흰 .7 / 한 것 #FF7A1A) · 12.5px · 한 것 #B49A8A 줄 긋기
  * 3개까지 + '+N개 더' 11.5px 600 #B07A55. 항목 줄을 누르면 체크, 그 밖을 누르면 체크리스트 화면)
  */
-export function AppChecklistCard({ checklist, width, height, selecting, selected, onPress, onLongPress, onToggleItem }: AppChecklistCardProps) {
+export function AppChecklistCard({ checklist, width, height, selecting, selected, onPress, onLongPress, onToggleItem, onAllDone }: AppChecklistCardProps & { onAllDone?: (center: { x: number; y: number }) => void }) {
   const L = checklist.items.length;
+  /* 축하 (원본 memo.html toggleCk: 체크할 때 점이 튀고 · 마지막 항목이면 .32초 뒤 카드 가운데서 색종이) */
+  const outer = useRef<React.ComponentRef<typeof View>>(null);
+  const [pop, setPop] = useState<{ id: string; n: number } | null>(null);
+  const toggle = (id: string) => {
+    const it = checklist.items.find((x) => x.id === id);
+    const was = checklist.items.every((x) => x.done);
+    const will = checklist.items.every((x) => (x.id === id ? !x.done : x.done));
+    if (it && !it.done) setPop((p) => ({ id, n: (p?.n ?? 0) + 1 }));
+    onToggleItem(id);
+    if (!was && will && onAllDone) setTimeout(() => outer.current?.measureInWindow((x, y, w, h) => onAllDone({ x: x + w / 2, y: y + h / 2 })), 320);
+  };
   const d = checklist.items.filter((x) => x.done).length;
   const ord = useDelayedOrder(checklist.items);
   return (
-    <View style={{ width, height }}>
+    <View ref={outer} collapsable={false} style={{ width, height }}>
       <Pressable onPress={onPress} onLongPress={onLongPress} delayLongPress={480} accessibilityRole="button" accessibilityLabel={checklist.title || '체크리스트'} style={[st.face, { width, height }, selected && st.faceSel]}>
         <View style={st.ckh}>
           <View style={st.cki}>
@@ -64,8 +76,11 @@ export function AppChecklistCard({ checklist, width, height, selecting, selected
         <View style={st.ckl}>
           {L ? (
             ord.slice(0, 3).map((x) => (
-              <Pressable key={x.id} onPress={() => (selecting ? onPress() : onToggleItem(x.id))} onLongPress={onLongPress} delayLongPress={480} accessibilityRole="checkbox" accessibilityState={{ checked: x.done }} accessibilityLabel={x.text} style={({ pressed }) => [st.cr, pressed && { backgroundColor: 'rgba(255,122,26,0.12)' }]}>
-                <View style={[st.cc, x.done ? st.ccOn : st.ccOff]}>{x.done ? <CheckMark kind="cki" size={11} stroke={1.9} /> : null}</View>
+              <Pressable key={x.id} onPress={() => (selecting ? onPress() : toggle(x.id))} onLongPress={onLongPress} delayLongPress={480} accessibilityRole="checkbox" accessibilityState={{ checked: x.done }} accessibilityLabel={x.text} style={({ pressed }) => [st.cr, pressed && { backgroundColor: 'rgba(255,122,26,0.12)' }]}>
+                <View style={[st.cc, x.done ? st.ccOn : st.ccOff]}>
+                  {x.done ? <CheckMark kind="cki" size={11} stroke={1.9} /> : null}
+                  <DotBurst fire={pop?.id === x.id ? pop.n : 0} size={17} />
+                </View>
                 <Text style={[st.ct, x.done && st.ctDone]} numberOfLines={1}>
                   {x.text}
                 </Text>

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useCoach } from '@/store/coach';
 import { View, useWindowDimensions } from 'react-native';
 import { Redirect, Stack, useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
 import { useAuth } from '@/store/auth';
@@ -61,6 +62,28 @@ export default function MainLayout() {
   const [studioOpen, setStudioOpen] = useState(() => width > size.studioNarrow);
   const dark = useTheme((s) => s.dark);
   const setDark = useTheme((s) => s.setDark);
+  /* 사용법 안내 화면 이동 (원본 웹 coach.tsx: 첫 카드 홈 → ①②③ 종목 보드(메모 창은 보드가 엶) → ④ 홈 + 스튜디오 열 펼침 → 끝나면 홈) */
+  const coachStep = useCoach((s) => s.step);
+  const replayCoach = useCoach((s) => s.replay);
+  const coachWas = useRef<number | null>(null);
+  useEffect(() => {
+    const prev = coachWas.current;
+    coachWas.current = coachStep;
+    if (coachStep === prev) return;
+    if (coachStep == null || coachStep === -1) {
+      /* 첫 카드는 홈에서 (원본 go home) · 끝나도 홈 */
+      if ((prev != null || coachStep === -1) && pathname !== '/') router.navigate('/');
+      return;
+    }
+    if (coachStep <= 2) {
+      if (!pathname.startsWith('/stocks/000660')) router.navigate({ pathname: '/stocks/[code]', params: { code: '000660' } });
+    } else {
+      router.navigate('/');
+      useStudioPlayer.getState().setWebView('home');
+      setTimeout(() => setStudioOpen(true), 0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coachStep]);
   /* ⑥ 사이드바 종목: 순서 끌기 · 우클릭/⋯ 메뉴 · + 종목 추가 (mock: 이 셸 안에서만) */
   const [sideStocks, setSideStocks] = useState<SideStock[]>(mockSideStocks);
   const [smenu, setSmenu] = useState<{ code: string; at: { x: number; y: number } } | null>(null);
@@ -361,7 +384,11 @@ export default function MainLayout() {
       oss={mockOss}
       docs={{ terms: legalDocument('terms'), privacy: legalDocument('privacy'), invest: legalDocument('invest') }}
       onFeedback={() => { setSettings(null); setFbOpen(true); }}
-      onReplayGuide={() => say({ msg: '사용법 안내는 아직 준비 중이에요' })}
+      onReplayGuide={() => {
+        /* 원본 overlays.tsx replay: 창을 닫고 첫 카드부터 */
+        setSettings(null);
+        replayCoach();
+      }}
     />
     <WebTrash
       open={trashOpen}

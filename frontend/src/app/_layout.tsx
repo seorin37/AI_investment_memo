@@ -8,6 +8,7 @@ import { ApiError } from '@/api';
 import { setMotionEnabled } from '@/components/motion/motion';
 import { useAuth } from '@/store/auth';
 import { colors } from '@/theme/tokens';
+import { CoachOverlay } from '@/ui/shared/Coach';
 import { DarkLayer, useDark } from '@/ui/shared/Dark';
 import { useDarkDom } from '@/ui/shared/darkMode';
 
@@ -60,6 +61,8 @@ export default function RootLayout() {
       <StatusBar style={dark ? 'light' : 'dark'} />
       <DarkLayer>
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.page }, animation: Platform.OS === 'web' ? 'none' : 'default' }} />
+        {/* 사용법 안내 (화면 위 모든 곳을 덮음) */}
+        <CoachOverlay />
       </DarkLayer>
     </QueryClientProvider>
   );

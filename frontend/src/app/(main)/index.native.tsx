@@ -1,4 +1,5 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCoach } from '@/store/coach';
 import { Linking } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { useMockNotice } from '@/components/layout/MobileScreen';
@@ -36,6 +37,14 @@ export default function HomeTab() {
   const firstStocks = useMemo(() => mockFirstHomeStocks(selected, firstMemo), [selected, firstMemo]);
   const marketOk = fail !== '1' || retried;
   useFocusEffect(useCallback(() => () => setTabBarHidden(false), [setTabBarHidden]));
+  /* 가입 직후 첫 홈에서 0.7초 뒤 사용법 안내 (원본 start.html MX.coach(-1)) — 처음 한 번만 */
+  const startCoach = useCoach((s) => s.startFirst);
+  useEffect(() => {
+    /* 종목 고르기 시트가 떠 있는 동안은 기다림 (시트가 안내보다 위에 그려져서) */
+    if (!onboarding || pickerOpen) return;
+    const t = setTimeout(startCoach, 700);
+    return () => clearTimeout(t);
+  }, [onboarding, pickerOpen, startCoach]);
   const patchCl = (code: string, f: (c: Checklist) => Checklist) => setChecklists((all) => (all[code] ? { ...all, [code]: f(all[code]) } : all));
   const openNew = (code: string) => {
     setPickerOpen(false);

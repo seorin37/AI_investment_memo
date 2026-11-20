@@ -14,6 +14,7 @@ import type { AppHomeProps, HomeNewsItem, HomeWidget } from '../Home.types';
 import { HomeSearch } from './HomeSearch';
 import { CheckWidget, HeroCard, MarketFail, MarketWidget, NewsWidget, UpdatesWidget, WidgetShell } from './HomeWidgets';
 import { NewsBrowser } from './NewsBrowser';
+import { useNudge } from '@/store/nudge';
 
 const ALL: HomeWidget[] = ['market', 'updates', 'news', 'check'];
 const DEFAULT_W: HomeWidget[] = ['market', 'updates', 'news'];
@@ -43,7 +44,12 @@ export function AppHome(p: AppHomeProps) {
   const [gone, setGone] = useState<HomeWidget | null>(null);
   const [fresh, setFresh] = useState<{ ids: HomeWidget[]; key: number; flash: boolean } | null>(null);
   const [lifted, setLifted] = useState<HomeWidget | null>(null);
-  const [nudge, setNudge] = useState(true);
+  /* 넛지 닫은 상태는 한 곳(store/nudge)에 — 다시 들어와도 안 뜸 · 사용법 안내 중엔 숨김 */
+  const nudgeS = useNudge('home');
+  const nudge = nudgeS.show;
+  const setNudge = (v: boolean) => {
+    if (!v) nudgeS.hide();
+  };
   const [browser, setBrowser] = useState<HomeNewsItem | null>(null);
   const [editV] = useState(() => new Animated.Value(0));
   const [tys] = useState<Shift>(() => ({ market: new Animated.Value(0), updates: new Animated.Value(0), news: new Animated.Value(0), check: new Animated.Value(0) }));

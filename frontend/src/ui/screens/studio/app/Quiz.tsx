@@ -7,6 +7,10 @@ import { FadeIn } from '@/ui/motion/Reveal';
 import { PressScale } from '@/ui/motion/PressScale';
 import { Head } from '../../my/app/parts';
 import type { mockQuiz } from '../Studio.mock';
+import { PopBurst } from '@/components/motion/Celebrate';
+
+/* 원본 studio.html confetti 색 */
+const QCONF = ['#8569E3', '#1F8A4C', '#FFC53D', '#E5484D', '#3D73F0'] as const;
 
 /**
  * 앱 오늘의 퀴즈 = 원본 studio.html #pgQz (12 고름 · 13 정답)
@@ -45,6 +49,8 @@ export function AppQuiz({ q, done, onBack, onSubmit }: { q: Q; done: number | nu
                 <Text style={[st.optT, on && { color: '#4B2E9E' }, isAns && { color: '#14653A' }, wrong && { color: '#B42318' }]}>{o}</Text>
                 {isAns ? <Svg width={20} height={20} viewBox="0 0 20 20" style={{ marginLeft: 'auto' }}><Circle cx={10} cy={10} r={10} fill="#1F8A4C" /><Path d="M5.5 10.3l3 3L14.5 7" fill="none" stroke="#fff" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" /></Svg> : null}
                 {wrong ? <Svg width={20} height={20} viewBox="0 0 20 20" style={{ marginLeft: 'auto' }}><Circle cx={10} cy={10} r={10} fill="#E5484D" /><Path d="M6.5 6.5l7 7M13.5 6.5l-7 7" stroke="#fff" strokeWidth={2.2} strokeLinecap="round" /></Svg> : null}
+                {/* 정답이면 그 보기 가운데서 26조각 (원본 studio.html confetti(os[ANS]) · .cf 7×11 · 1s) */}
+                {isAns && ok ? <PopBurst fire={1} colors={QCONF} w={7} h={11} dur={1000} spin={540} /> : null}
               </PressScale>
             );
           })}

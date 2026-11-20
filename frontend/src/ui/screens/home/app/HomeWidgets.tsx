@@ -12,6 +12,10 @@ import { StockLogo } from '@/ui/shared/StockLogo';
 import { appColor, curve, ft } from '@/ui/theme';
 import type { HomeNewsItem, HomeUpdateRow, HomeWidget, MarketIndex } from '../Home.types';
 import { APP_SPARK_N, ago, hm, mmdd, nf, spark } from '../homeFormat';
+import { PopBurst } from '@/components/motion/Celebrate';
+
+/* 원본 home.html confetti 색 */
+const CONF = ['#8569E3', '#FFC800', '#E5484D', '#2FAE68', '#3D73F0'] as const;
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -300,7 +304,7 @@ export function NewsWidget({ items, day, total, now, ready, editing, onOpen }: {
 }
 
 /* ───────── 체크리스트 (원본 #014 #093: 진행 막대 · 동그라미가 차고 글자에 줄) ───────── */
-function CheckRow({ text, done, isNew, onPress }: { text: string; done: boolean; isNew: boolean; onPress: () => void }) {
+function CheckRow({ text, done, isNew, onPress, burst = 0 }: { text: string; done: boolean; isNew: boolean; onPress: () => void; burst?: number }) {
   const k = useMotionK();
   const [v] = useState(() => new Animated.Value(done ? 1 : 0));
   const [inV] = useState(() => new Animated.Value(isNew ? 0 : 1));
@@ -323,6 +327,8 @@ function CheckRow({ text, done, isNew, onPress }: { text: string; done: boolean;
           <Animated.View style={{ opacity: v.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0, 1, 1] }) }}>
             <CheckGlyph />
           </Animated.View>
+          {/* 마지막 항목을 끝내면 그 자리에서 26조각 (원본 home.html toggleCk → confetti) */}
+          <PopBurst fire={burst} colors={CONF} />
         </Animated.View>
         <View style={st.txWrap}>
           <AnimatedText style={[st.tx, { color: v.interpolate({ inputRange: [0, 1], outputRange: [appColor.ink, appColor.ink3] }) }]} onLayout={(e) => setTw(e.nativeEvent.layout.width)}>
@@ -345,6 +351,12 @@ export function CheckWidget({ cl, editing, onToggle, onAdd }: { cl: Checklist | 
   const [adding, setAdding] = useState(false);
   const [val, setVal] = useState('');
   const [seen] = useState(() => items.map((c) => c.id));
+  const [burst, setBurst] = useState<{ id: string; n: number } | null>(null);
+  const toggle = (id: string) => {
+    const willAll = items.length > 0 && items.every((c) => (c.id === id ? !c.done : c.done));
+    if (willAll) setBurst((b) => ({ id, n: (b?.n ?? 0) + 1 }));
+    onToggle(id);
+  };
   useEffect(() => {
     const a = Animated.parallel([
       Animated.timing(bar, { toValue: items.length ? d / items.length : 0, duration: 450 * k, easing: curve.ease, useNativeDriver: false }),
@@ -360,7 +372,7 @@ export function CheckWidget({ cl, editing, onToggle, onAdd }: { cl: Checklist | 
         <Animated.View style={[st.pbarI, { width: bar.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }]} />
       </View>
       {items.map((c) => (
-        <CheckRow key={c.id} text={c.text} done={c.done} isNew={!seen.includes(c.id)} onPress={() => !editing && onToggle(c.id)} />
+        <CheckRow key={c.id} text={c.text} done={c.done} isNew={!seen.includes(c.id)} onPress={() => !editing && toggle(c.id)} burst={burst?.id === c.id ? burst.n : 0} />
       ))}
       <Animated.View style={{ height: yay.interpolate({ inputRange: [0, 1], outputRange: [0, 24] }), overflow: 'hidden' }}>
         <Text style={st.yay}>오늘 할 일을 다 했어요</Text>

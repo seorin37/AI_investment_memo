@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { AppIcon, WebIcon } from '@/ui/icons/Icon';
 import { fpx, size, studioFeature, webColor } from '@/ui/theme';
+import { useCoachRef } from '@/ui/shared/Coach';
 import type { StudioColumnFrameProps, StudioFeature } from './WebShell.types';
 
 type HoverState = { pressed: boolean; hovered?: boolean };
@@ -30,6 +31,8 @@ export function FeatIcon({ f, size = 20 }: { f: StudioFeature; size?: number }) 
  * 카드 안 내용은 ⑧ 스튜디오 묶음에서 children 으로.
  */
 export function StudioColumnFrame({ open, onToggle, stockCount, aiMemoCount, usagePct, onUsage, onFeature, badges, children }: StudioColumnFrameProps) {
+  /* 사용법 안내 ④ 대상 (원본 studio.tsx data-coach="studio") */
+  const coachRef = useCoachRef('studio');
   if (!open)
     return (
       <View style={st.colClosed} accessibilityLabel="스튜디오 (접힘)">
@@ -55,7 +58,7 @@ export function StudioColumnFrame({ open, onToggle, stockCount, aiMemoCount, usa
   const out = usagePct >= 100;
   return (
     <View style={st.col} accessibilityLabel="스튜디오">
-      <View style={st.card}>
+      <View ref={coachRef} collapsable={false} style={st.card}>
         <View style={st.head}>
           <View style={st.star}>
             <WebIcon name="sparkleNudge" size={19} color="#FFFFFF" />

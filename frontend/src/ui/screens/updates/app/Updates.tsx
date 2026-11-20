@@ -15,6 +15,7 @@ import { appColor, curve, ft } from '@/ui/theme';
 import type { AppUpdatesProps, KindFilter, UpdateItem, UpdateStock } from '../Updates.types';
 import { versionsOf } from '../Updates.mock';
 import { APP_TAG, KINDS, ago, byStock, dayGroup, unreadOf } from '../updatesFormat';
+import { useNudge } from '@/store/nudge';
 
 let seq = 0;
 const nextKey = () => ++seq;
@@ -36,7 +37,12 @@ export function AppUpdates(p: AppUpdatesProps) {
   const [q, setQ] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
   const [snack, setSnack] = useState<{ msg: string; undo?: () => void; key: number } | null>(null);
-  const [nudge, setNudge] = useState(true);
+  /* 넛지 닫은 상태는 한 곳(store/nudge)에 — 다시 들어와도 안 뜸 · 사용법 안내 중엔 숨김 */
+  const nudgeS = useNudge('updates');
+  const nudge = nudgeS.show;
+  const setNudge = (v: boolean) => {
+    if (!v) nudgeS.hide();
+  };
   const [fading, setFading] = useState<string[]>([]);
   const cur = code ? p.stocks.find((s) => s.stock_code === code) : undefined;
   const total = unreadOf(p.items);

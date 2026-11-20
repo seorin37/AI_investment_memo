@@ -13,6 +13,8 @@ import { appColor, ft } from '@/ui/theme';
 import type { AiTrackItem, MemoFeedItem } from '../MemoDetail.types';
 import { buildTimeline } from '../memoTimeline';
 import { usePaper } from '@/ui/shared/Dark';
+import { useCoachRef } from '@/ui/shared/Coach';
+import { useNudge } from '@/store/nudge';
 
 /* 원본 FK: 소식 종류별 [카드 바탕, 그림 색] */
 const FK = { 뉴스: ['#E4ECFF', '#3D73F0'], 공시: ['#EEE8FF', '#7046F5'], 주가: ['#FFF1D6', '#C98A00'] } as const;
@@ -43,7 +45,16 @@ export function AppAiTab({ memo, versions, feed, trackItems, lastChecked, openLa
   const feeds = rows.filter((r) => r.t === 'feed');
   const firstUnread = feeds.find((r) => r.t === 'feed' && r.item.unread);
   const [open, setOpen] = useState<Set<string>>(() => new Set(firstUnread && firstUnread.t === 'feed' ? [firstUnread.item.id] : []));
-  const [nudge, setNudge] = useState(true);
+  /* 넛지 닫은 상태는 한 곳(store/nudge)에 — 다시 들어와도 안 뜸 · 사용법 안내 중엔 숨김 */
+  const memoNudge = useNudge('memo');
+  const nudge = memoNudge.show;
+  const setNudge = (v: boolean) => {
+    if (!v) memoNudge.hide();
+  };
+  /* 사용법 안내 ② AI 연결 칸 (원본 .aic) · ③ 첫 소식 카드 (원본 .uc) */
+  const aiRef = useCoachRef('ai');
+  const feedRef = useCoachRef('feed');
+  const firstFeedId = feeds[0]?.t === 'feed' ? feeds[0].item.id : null;
   /* ⋯ → 수정 이력 보기: 가장 최근 메모 기록 줄 펼침 (원본 showHistInTab) */
   const latestRev = rows.find((r) => r.t === 'rev');
   const latestKey = latestRev && latestRev.t === 'rev' ? `v${latestRev.v.version}` : '';
@@ -62,7 +73,7 @@ export function AppAiTab({ memo, versions, feed, trackItems, lastChecked, openLa
     });
   const verOf = (n: number) => versions.find((v) => v.version === n);
   const sw = (
-    <View style={[st.aic, { marginTop: 6 }]}>
+    <View ref={aiRef} collapsable={false} style={[st.aic, { marginTop: 6 }]}>
       <View style={st.flex}>
         <Text style={st.aicB}>AI 연결</Text>
         <Text style={st.aicS}>{memo.ai_linked ? '이 메모를 AI가 지켜보고 있어요' : '켜면 관련 소식을 모아 드려요'}</Text>
@@ -98,6 +109,12 @@ export function AppAiTab({ memo, versions, feed, trackItems, lastChecked, openLa
                 <AppPlug size={14} />
               </View>
               <Text style={st.hrwT}>{mmdd(r.at)} · AI 연결을 시작했어요</Text>
+            </View>
+          );
+        if (r.item.id === firstFeedId)
+          return (
+            <View key={r.item.id} ref={feedRef} collapsable={false}>
+              <FeedCard f={r.item} ver={verOf(r.item.memo_version)} open={open.has(r.item.id)} onToggle={() => tog(r.item.id)} onOpenSource={onOpenSource} onOpenEvidence={onOpenEvidence} />
             </View>
           );
         return <FeedCard key={r.item.id} f={r.item} ver={verOf(r.item.memo_version)} open={open.has(r.item.id)} onToggle={() => tog(r.item.id)} onOpenSource={onOpenSource} onOpenEvidence={onOpenEvidence} />;

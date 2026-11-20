@@ -5,6 +5,7 @@ import { Text } from '@/components/ui/AppText';
 import { Odometer } from '@/ui/motion/Numbers';
 import { PressScale } from '@/ui/motion/PressScale';
 import { Reveal } from '@/ui/motion/Reveal';
+import { useCoachRef } from '@/ui/shared/Coach';
 import { Sheet } from '@/ui/shared/Sheet';
 import type { MadeItem, StudioHomeProps, StudioKind } from '../Studio.types';
 
@@ -51,6 +52,7 @@ export function AppStudioHome({ header, job, onJob, bottomPad = 0, ...p }: Studi
   bottomPad?: number;
 }) {
   const [sheet, setSheet] = useState(false);
+  const featRef = useCoachRef('studio');
   const full = p.usage_pct >= 100;
   const top = p.made.find((m) => m.kind === 'audio');
   const rest = p.made.filter((m) => m !== top);
@@ -67,6 +69,8 @@ export function AppStudioHome({ header, job, onJob, bottomPad = 0, ...p }: Studi
             <Text style={[st.credT, full && { color: '#8A5A00' }]}>%</Text>
           </PressScale>
         </View>
+        {/* 사용법 안내 ④ 대상 (원본 #feat) */}
+        <View ref={featRef} collapsable={false}>
         {p.features.map((f, i) => (
           <Reveal key={f.key} i={i}>
             <PressScale scaleTo={0.975} onPress={() => p.onFeature(f.key)} accessibilityRole="button" accessibilityLabel={f.title} style={st.fc}>
@@ -79,6 +83,7 @@ export function AppStudioHome({ header, job, onJob, bottomPad = 0, ...p }: Studi
             </PressScale>
           </Reveal>
         ))}
+        </View>
         <View style={st.secr}><Text style={st.secrT}>만든 항목</Text><Text style={st.secrS}>30일 보관 · 다시 보기 무료</Text></View>
         {top ? <RadioCard m={top} onPress={() => p.onOpenMade(top)} /> : null}
         {rest.length || job ? (

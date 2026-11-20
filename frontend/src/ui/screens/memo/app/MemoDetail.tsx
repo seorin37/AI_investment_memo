@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { BackHandler, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { BackHandler, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View, type ScrollViewInstance } from 'react-native';
+import { useCoach } from '@/store/coach';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/AppText';
 import { joinMemo, splitMemo } from '@/lib/memoText';
@@ -52,6 +53,20 @@ export function AppMemoDetail(p: MemoDetailProps) {
     setReqKey(p.tabRequest.key);
     setTab(p.tabRequest.tab);
   }
+
+  /* 사용법 안내 ②③ (원본 memo.html coachHooks prep): AI 업데이트 탭으로 · ② 는 AI 연결 칸이 보이게 아래로, ③ 은 맨 위로 */
+  const scroll = useRef<ScrollViewInstance>(null);
+  const coachStep = useCoach((s) => s.step);
+  const [coachSeen, setCoachSeen] = useState(coachStep);
+  if (coachStep !== coachSeen) {
+    setCoachSeen(coachStep);
+    if ((coachStep === 1 || coachStep === 2) && tab !== 'ai') setTab('ai');
+  }
+  useEffect(() => {
+    if (coachStep !== 1 && coachStep !== 2) return;
+    const t = setTimeout(() => (coachStep === 1 ? scroll.current?.scrollToEnd({ animated: false }) : scroll.current?.scrollTo({ y: 0, animated: false })), 1400);
+    return () => clearTimeout(t);
+  }, [coachStep]);
 
   const toast = (msg: string) => setSnack((s) => ({ id: (s?.id ?? 0) + 1, msg }));
   useEffect(() => {
@@ -183,7 +198,7 @@ export function AppMemoDetail(p: MemoDetailProps) {
         </View>
       ) : null}
       <KeyboardAvoidingView style={st.flex} behavior="padding">
-        <ScrollView style={st.flex} contentContainerStyle={[st.dbody, editing && { paddingBottom: 300 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <ScrollView ref={scroll} style={st.flex} contentContainerStyle={[st.dbody, editing && { paddingBottom: 300 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {tab === 'memo' ? (
             <FadeIn key="memo">
               <View style={st.paperwrap}>

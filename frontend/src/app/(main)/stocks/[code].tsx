@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useCoach } from '@/store/coach';
 import type { Checklist, Memo, MemoColor, MemoVersion } from '@/types/models';
 import { mockCompanyByCode } from '@/ui/screens/company/CompanyInfo.mock';
 import { WebCompanyInfo } from '@/ui/screens/company/web/CompanyInfo';
@@ -50,6 +51,25 @@ function BoardTab({ code, memoParam, ev, firstFlow, stockName, onboardingSelecte
   /* ?fail=1: AI 연결 창 첫 분석을 실패로 (분석 실패 화면 확인용) */
   const { fail } = useLocalSearchParams<{ fail?: string }>();
   const [failOnce, setFailOnce] = useState(fail === '1');
+  /* 사용법 안내 (원본 board.tsx): ② 새 메모 창의 AI 연결 칸 · ③ 소식이 붙은 메모 창 · 그 밖에는 닫음 */
+  const coachStep = useCoach((s) => s.step);
+  const [coachSeen, setCoachSeen] = useState<number | null>(coachStep);
+  if (coachStep !== coachSeen) {
+    setCoachSeen(coachStep);
+    if (coachStep === 1) {
+      setDlg(false);
+      setNewKey((n) => n + 1);
+      setNewOpen(true);
+    } else if (coachStep === 2) {
+      setNewOpen(false);
+      setOpenId('m1');
+      setOpenTab('ai');
+      setDlg(true);
+    } else if (coachSeen === 1 || coachSeen === 2) {
+      setNewOpen(false);
+      setDlg(false);
+    }
+  }
   const opened = memos.find((m) => m.id === openId) ?? (openId && openId === memoParam ? findMemo(openId) : undefined);
   const patch = (id: string, f: (m: Memo) => Memo) => setMemos((all) => all.map((m) => (m.id === id ? f(m) : m)));
   const items = connect ? (connect.id && mockTrackItems[connect.id]?.length ? mockTrackItems[connect.id] : mockExtract(connect.title, connect.body)) : [];

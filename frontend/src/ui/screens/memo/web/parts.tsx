@@ -6,6 +6,7 @@ import { Toggle45Mark } from '@/ui/icons/MemoGlyphs';
 import { useMotionK } from '@/ui/motion/useMotion';
 import { curve, fpx } from '@/ui/theme';
 import { usePaper } from '@/ui/shared/Dark';
+import { useCoachRef } from '@/ui/shared/Coach';
 
 /* 원본 board.tsx 팝업 공통 부품 (Toggle45 · AiFooter · Actions · Tabs2 · Close · Swatches) */
 
@@ -41,9 +42,11 @@ export function Toggle45({ on, set }: { on: boolean; set: (v: boolean) => void }
 
 /** 원본 AiFooter: 108 (좌우 24 · 위아래 12) · 회색 상자 84 라운드 12 · 'AI 연결' 17/26 500 · 설명 14/21 500 */
 export function AiFooter({ on, set, sub }: { on: boolean; set: (v: boolean) => void; sub: string }) {
+  /* 사용법 안내 ② 대상 (원본 board.tsx data-coach="ai" 회색 상자) */
+  const coachRef = useCoachRef('ai');
   return (
     <View style={st.foot}>
-      <View style={st.footBox}>
+      <View ref={coachRef} collapsable={false} style={st.footBox}>
         <View style={st.footRow}>
           <View style={st.flex}>
             <Text style={st.footT}>AI 연결</Text>

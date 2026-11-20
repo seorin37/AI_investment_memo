@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet } from 'react-native';
+import { useCoachRef } from './Coach';
 import Svg, { Circle, Defs, LinearGradient, RadialGradient, Stop } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
 import { FanIcon, PlusGlyph } from '@/ui/icons/BoardGlyphs';
@@ -23,6 +24,8 @@ const ITEMS: { k: FanPick; label: string; x: number; y: number; from: string; to
  */
 export function FabFan({ open, onToggle, onPick, up = false }: { open: boolean; onToggle: (open: boolean) => void; onPick: (k: FanPick) => void; up?: boolean }) {
   const k = useMotionK();
+  /* 사용법 안내 ① 대상 (원본 .fab) */
+  const fabRef = useCoachRef('fab');
   const [v] = useState(() => new Animated.Value(open ? 1 : 0));
   const [lift] = useState(() => new Animated.Value(up ? 1 : 0));
   const [breath] = useState(() => new Animated.Value(0));
@@ -111,7 +114,7 @@ export function FabFan({ open, onToggle, onPick, up = false }: { open: boolean; 
           );
         })}
         <Animated.View pointerEvents="none" style={[st.breath, { opacity: breath.interpolate({ inputRange: [0, 1], outputRange: [0.45, 0] }), transform: [{ scale: breath.interpolate({ inputRange: [0, 1], outputRange: [1, 90 / 58] }) }] }]} />
-        <Pressable onPress={() => onToggle(!open)} accessibilityRole="button" accessibilityLabel="새로 만들기" accessibilityState={{ expanded: open }} style={({ pressed }) => [st.fab, pressed && { transform: [{ scale: 0.9 }] }]}>
+        <Pressable ref={fabRef} onPress={() => onToggle(!open)} accessibilityRole="button" accessibilityLabel="새로 만들기" accessibilityState={{ expanded: open }} style={({ pressed }) => [st.fab, pressed && { transform: [{ scale: 0.9 }] }]}>
           <Animated.View style={{ transform: [{ rotate: v.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '135deg'] }) }] }}>
             <PlusGlyph size={26} stroke={2.4} />
           </Animated.View>
