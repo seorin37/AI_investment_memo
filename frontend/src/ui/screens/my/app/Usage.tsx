@@ -9,7 +9,7 @@ import { Chev, Foot, Grp, Item, Lb, MC, Odometer, Page, Rv, UsageBar } from './p
 
 /**
  * 앱 사용량 = 원본 app/my.html usageHTML()
- * (90% 이상 주의 · 100% 중단 안내) · 무료 플랜 카드(가정 · 예시 데이터 배지 · 큰 % · 막대 · 남은 사용량 · 다음 갱신)
+ * (90% 이상 주의 · 100% 중단 안내) · 무료 플랜 카드(큰 % · 원본의 가정·예시 데이터 배지는 개발 상태 표현이라 뺌 · 막대 · 남은 사용량 · 다음 갱신)
  * 종목별 추적 현황(펼치기 · 첫 종목 열림 · 메모 + 칩) · 안내 · [플랜 살펴보기] · 안내
  */
 export function AppUsage(p: UsageProps) {
@@ -35,8 +35,6 @@ export function AppUsage(p: UsageProps) {
         <Grp style={st.plan}>
           <View style={st.planH}>
             <Text style={st.planHT}>{p.plan_name}</Text>
-            <View style={st.ex}><Text style={st.exT}>가정</Text></View>
-            <View style={[st.ex, { marginLeft: 'auto' }]}><Text style={st.exT}>예시 데이터</Text></View>
           </View>
           <View style={st.big}>
             <Odometer value={pct} size={30} lineHeight={38} />
@@ -119,8 +117,6 @@ const st = StyleSheet.create({
   plan: { padding: 16 },
   planH: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   planHT: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: MC.ink },
-  ex: { backgroundColor: '#F1F2F4', borderRadius: 5, paddingVertical: 1, paddingHorizontal: 5 },
-  exT: { fontSize: 11, lineHeight: 16, fontWeight: '700', color: MC.ink2 },
   big: { flexDirection: 'row', alignItems: 'flex-end', marginTop: 10, marginBottom: 2 },
   bigT: { fontSize: 30, lineHeight: 38, fontWeight: '800', color: MC.ink },
   m: { flexDirection: 'row', justifyContent: 'space-between' },

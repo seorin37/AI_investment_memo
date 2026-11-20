@@ -6,6 +6,7 @@ import { TopBar } from '@/components/layout/TopBar';
 import { useLargeTitle } from '@/components/motion/Navigation';
 import { StudioHome } from '@/features/studio/StudioHome';
 import { mockStudioHomeProps } from '@/features/studio/StudioHome.mock';
+import { mockMyUsage } from '@/ui/screens/my/My.mock';
 
 /** 앱 스튜디오 탭 (웹 frontend 에는 없음 → 홈으로). mock 단계 — 스튜디오는 백엔드 API가 없어 다음 단계에도 mock */
 export default function StudioTab() {
@@ -23,6 +24,8 @@ function StudioScreen() {
     <MobileScreen bar={<TopBar left="title" title="스튜디오" actions={[profile]} lineOpacity={lt.barLineOpacity} />}>
       <StudioHome
         {...mockStudioHomeProps}
+        /* AI 사용량은 MY·웹 스튜디오와 같은 값 (My.mock) */
+        usage_percent={mockMyUsage.usage_pct}
         playing_id={playing}
         onPlayAudio={(id) => setPlaying((p) => (p === id ? null : id))}
         onOpenUsage={() => notice('사용량')}

@@ -9,7 +9,7 @@ import { Chev, Grp, Head, Item, Lb, MC, Rv, UsageBar } from './parts';
 
 /**
  * 앱 MY 본 화면 = 원본 app/my.html mainHTML() (11.13·11.17 반영판)
- * 프로필 묶음(50 아바타 · 18 이름 · 12.5 소개) · AI 사용량(예시 배지 · 자세히 › · 막대 6 · '이번 기간 N% 사용' · 'MM.DD 갱신')
+ * 프로필 묶음(50 아바타 · 18 이름 · 12.5 소개) · AI 사용량(원본 예시 배지는 뺌 · 자세히 › · 막대 6 · '이번 기간 N% 사용' · 'MM.DD 갱신')
  * 계정(알림) · 화면(다크 모드 · 낮밤 스위치) · 서비스(사용량 N%) · 기타(데이터 · 휴지통 · 정보) · 지원(피드백 보내기 · 도움말) · 버전
  */
 const PROVIDER: Record<string, string> = { kakao: '카카오', naver: '네이버', google: '구글' };
@@ -41,7 +41,6 @@ export function AppMy(p: AppMyProps) {
           <Pressable onPress={p.onUsage} style={({ pressed }) => [st.use, pressed && { backgroundColor: '#F7F7F9' }]} accessibilityRole="button" accessibilityLabel={`AI 사용량 ${p.usage_pct}%`}>
             <View style={st.useT}>
               <Text style={st.useTT}>AI 사용량</Text>
-              <View style={st.ex}><Text style={st.exT}>예시</Text></View>
               <View style={st.more}><Text style={st.moreT}>자세히</Text><Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={MC.a2} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><Path d="M9 5l7 7-7 7" /></Svg></View>
             </View>
             <UsageBar pct={p.usage_pct} />
@@ -110,8 +109,6 @@ const st = StyleSheet.create({
   use: { marginTop: 10, paddingTop: 14, paddingHorizontal: 16, paddingBottom: 12, backgroundColor: '#FFFFFF', borderRadius: 18 },
   useT: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   useTT: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: MC.ink },
-  ex: { backgroundColor: '#F1F2F4', borderRadius: 5, paddingVertical: 1, paddingHorizontal: 5 },
-  exT: { fontSize: 11, lineHeight: 16, fontWeight: '700', color: MC.ink2 },
   more: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center' },
   moreT: { fontSize: 13, lineHeight: 19, fontWeight: '700', color: MC.a2 },
   useM: { flexDirection: 'row', justifyContent: 'space-between' },

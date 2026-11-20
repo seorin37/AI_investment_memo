@@ -74,14 +74,15 @@ export function AppTrash({ items, onBack, onRestore, onUndo, onPurge }: TrashPro
             </View>
           )}
         </Rv>
-        <Rv i={3}><Foot>영구 삭제하기 전까지 복원할 수 있어요. 보관 기간과 자동 삭제 여부는 추후 안내할게요.</Foot></Rv>
+        <Rv i={3}><Foot>영구 삭제하기 전까지 복원할 수 있어요.</Foot></Rv>
       </Page>
       <AppSnackbar visible={!!snack} message="원래 자리로 복원했어요" onUndo={() => { if (snack) onUndo(snack); setSnack(null); }} style={st.snack} />
       <ConfirmSheet
         open={!!ask}
         red
         title="영구 삭제할까요?"
-        body="삭제하면 되돌릴 수 없어요. 이 메모의 수정 이력과 받은 소식도 함께 지워져요."
+        /* 종목: 원본 웹에 종목용 문구가 없어 새로 씀 */
+        body={ask?.kind === '종목' ? '이 종목과 메모를 영구 삭제할까요? 되돌릴 수 없어요.' : '삭제하면 되돌릴 수 없어요. 이 메모의 수정 이력과 받은 소식도 함께 지워져요.'}
         ok="영구 삭제"
         onCancel={() => setAsk(null)}
         onOk={() => { const t = ask; setAsk(null); onPurge(t); }}
