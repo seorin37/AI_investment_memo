@@ -89,7 +89,7 @@ export default function MainLayout() {
     if (k === 'audio') return setStudioPop('audio');
     say({ msg: NOT_YET });
   };
-  /* ⑧-8b 오디오: 만들기 · 재생 mock 상태 (store/studioPlayer). ?studio_fail=1 이면 다음 만들기가 실패 (확인용) */
+  /* ⑧-8b 오디오: 만들기 · 재생 mock 상태 (store/studioPlayer). 개발 빌드(__DEV__)에서만 ?studio_fail=1 이면 다음 만들기가 실패 (확인용 · 배포 빌드는 무시) */
   const sp = useStudioPlayer();
   const spItem = sp.made.find((m) => m.id === sp.cur);
   const { studio_fail } = useGlobalSearchParams<{ studio_fail?: string }>();
@@ -333,7 +333,7 @@ export default function MainLayout() {
         setStudioPop(null);
         setStudioOpen(true);
         sp.setWebView('gen');
-        sp.startAudio({ sub: `${codes.length}종목 · ${period} · ${market ? '증시 요약 포함' : '증시 요약 없음'}`, n: codes.length }, studio_fail === '1');
+        sp.startAudio({ sub: `${codes.length}종목 · ${period} · ${market ? '증시 요약 포함' : '증시 요약 없음'}`, n: codes.length }, __DEV__ && studio_fail === '1');
       }}
     />
     <WebUsageSheet open={studioPop === 'usage'} pct={mockMyUsage.usage_pct} refill={mockMyUsage.usage_refill} onClose={() => setStudioPop(null)} onBuyCredit={() => setStudioPop('charge')} onChangePlan={() => setSettings('사용량')} />

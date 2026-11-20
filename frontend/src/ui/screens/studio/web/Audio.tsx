@@ -57,7 +57,7 @@ export function WebFail({ onHome, onRetry }: { onHome: () => void; onRetry: () =
         <GBtn flex onPress={onHome}>스튜디오로</GBtn>
         <GBtn flex dark onPress={onRetry}>다시 시도</GBtn>
       </View>
-      <Text style={[st.note, { textAlign: 'center' }]}>크레딧 사용 내역은 설정 › 크레딧에서 볼 수 있어요.</Text>
+      <Text style={[st.note, { textAlign: 'center' }]}>크레딧 사용 내역은 설정 › 사용량에서 볼 수 있어요.</Text>
     </ScrollView>
   );
 }
