@@ -10,6 +10,7 @@ import type {
   ChecklistItem,
   CompareMemoCard,
   ConcludeCandidate,
+  CreditUsage,
   DataStats,
   FeedbackPayload,
   Financials,
@@ -154,6 +155,8 @@ export interface Api {
   updateSettings(patch: DeepPartial<Settings>): Promise<Settings>;
   disconnectMcpApp(appId: string): Promise<Settings>;
   getAiStats(): Promise<AiStats>;
+  /** 이번 기간 AI 크레딧 사용량. 이번 달 기본량을 아직 안 받았으면 서버가 이 호출에서 지급한다 */
+  getUsage(): Promise<CreditUsage>;
   getDataStats(): Promise<DataStats>;
   exportData(format: 'csv' | 'json'): Promise<{ url: string }>;
   deleteAllData(): Promise<void>;

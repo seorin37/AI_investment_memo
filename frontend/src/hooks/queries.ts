@@ -35,6 +35,7 @@ export const qk = {
   trash: ['trash'] as const,
   settings: ['settings'] as const,
   aiStats: ['aiStats'] as const,
+  usage: ['usage'] as const,
   dataStats: ['dataStats'] as const,
 };
 
@@ -307,6 +308,7 @@ export function useDisconnectMcpApp() {
 }
 
 export const useAiStats = () => useQuery({ queryKey: qk.aiStats, queryFn: api.getAiStats });
+export const useUsage = () => useQuery({ queryKey: qk.usage, queryFn: api.getUsage });
 export const useDataStats = () => useQuery({ queryKey: qk.dataStats, queryFn: api.getDataStats });
 
 export function useUpdateMe() {

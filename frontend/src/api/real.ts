@@ -77,6 +77,7 @@ export const realApi: Api = {
   updateSettings: (patch) => http.patch('/settings', patch),
   disconnectMcpApp: (appId) => http.del(`/mcp/apps/${appId}`),
   getAiStats: () => http.get('/ai/stats'),
+  getUsage: () => http.get('/me/usage'),
   getDataStats: () => http.get('/data/stats'),
   exportData: (format) => http.post('/data/export', { format }),
   deleteAllData: () => http.del('/data'),

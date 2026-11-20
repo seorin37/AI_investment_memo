@@ -6,7 +6,7 @@ import { GoogleLogo, Icon, KakaoLogo, type IconName } from '@/components/icons/I
 import { Sheet } from '@/components/ui/Modal';
 import { Avatar, Button, Hoverable, IconButton, LabeledCheck, Loading, MiniSegmented, Select, Switch, TextField } from '@/components/ui/primitives';
 import { T } from '@/components/ui/Text';
-import { useAiStats, useDataStats, useDisconnectMcpApp, useSettings, useUpdateMe, useUpdateSettings } from '@/hooks/queries';
+import { useAiStats, useDataStats, useDisconnectMcpApp, useSettings, useUpdateMe, useUpdateSettings, useUsage } from '@/hooks/queries';
 import { useBreakpoint } from '@/hooks/useLayout';
 import { relative } from '@/lib/format';
 import { useAuth } from '@/store/auth';
@@ -476,9 +476,43 @@ function StatRow({ items }: { items: [string, string][] }) {
 // ─── 사용량 (시안 없음 — 최소 구성)
 function UsagePanel() {
   const { data: stats } = useAiStats();
+  const { data: usage, isLoading: usageLoading, isError: usageError } = useUsage(); // GET /me/usage (크레딧)
+  const pct = Math.max(0, Math.min(100, usage?.usage_percent ?? 0));
   return (
     <View>
       <PanelTitle title="사용량" desc="이번 달 AI 연결과 업데이트 사용 현황이에요." />
+      {/* 화면에는 %만 보여 준다 (크레딧 숫자는 결제 화면에서만) */}
+      <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 20, gap: 10, marginBottom: 16 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
+          <T size={14} weight="medium">
+            AI 사용량
+          </T>
+          <T size={12} color={colors.textSub}>
+            {usage?.renew_label ?? ''}
+          </T>
+        </View>
+        {usageLoading ? (
+          <Loading height={40} />
+        ) : usageError || !usage ? (
+          <T size={13} color={colors.textSub}>
+            사용량을 불러오지 못했어요.
+          </T>
+        ) : (
+          <>
+            <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.borderSoft, overflow: 'hidden' }}>
+              <View style={{ width: `${pct}%`, height: 8, borderRadius: 4, backgroundColor: usage.paused ? colors.danger : colors.blue }} />
+            </View>
+            <T size={13} color={colors.textBody}>
+              이번 기간 <T size={13} weight="bold">{pct}%</T> 사용
+            </T>
+            {usage.paused && (
+              <T size={12} color={colors.danger} lh={1.5}>
+                이번 기간 AI 사용량을 다 썼어요. 갱신일까지 AI 업데이트가 멈춰요. 가격 조건 알림은 계속 받아요.
+              </T>
+            )}
+          </>
+        )}
+      </View>
       <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 20 }}>
         <StatRow items={[['AI 연결 메모', `${stats?.linked_memos ?? '–'}개`], ['이번 달 업데이트', `${stats?.updates_this_month ?? '–'}건`], ['연결된 종목', `${stats?.linked_stocks ?? '–'}개`]]} />
       </View>
