@@ -35,7 +35,7 @@ export default function HomeTab() {
     return { stock_code: first_code, stock_name: name, title: first_title, body: first_body ?? '', ai, chips };
   }, [onboarding, first_code, first_title, first_body, first_ai]);
   const firstStocks = useMemo(() => mockFirstHomeStocks(selected, firstMemo), [selected, firstMemo]);
-  const marketOk = fail !== '1' || retried;
+  const marketOk = !(__DEV__ && fail === '1') || retried;
   useFocusEffect(useCallback(() => () => setTabBarHidden(false), [setTabBarHidden]));
   /* 가입 직후 첫 홈에서 0.7초 뒤 사용법 안내 (원본 start.html MX.coach(-1)) — 처음 한 번만 */
   const startCoach = useCoach((s) => s.startFirst);

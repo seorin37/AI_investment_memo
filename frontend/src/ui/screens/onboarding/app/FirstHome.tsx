@@ -75,9 +75,7 @@ export function AppFirstHome(p: AppFirstHomeProps) {
         <Rv i={4}>
           <View style={st.next}>
             <Pressable onPress={p.onContinue} style={({ pressed }) => [st.nextB, pressed && { transform: [{ scale: 0.97 }] }]} accessibilityRole="button"><Text style={st.nextT}>홈으로 이어서 보기 →</Text></Pressable>
-          </View>
-          <Text style={st.disc}>여기부터는 예시 데이터가 채워진 홈이에요</Text>
-        </Rv>
+          </View>        </Rv>
       ) : (
         <Rv i={3}>
           <View style={st.w}>
@@ -298,7 +296,6 @@ const st = StyleSheet.create({
   next: { alignItems: 'center' },
   nextB: { minHeight: 44, paddingHorizontal: 18, borderRadius: 14, backgroundColor: C.a, alignItems: 'center', justifyContent: 'center' },
   nextT: { fontSize: 14.5, lineHeight: 21, fontWeight: '800', color: '#FFFFFF' },
-  disc: { fontSize: 12, lineHeight: 19.2, color: C.ink3, textAlign: 'center', marginTop: 12 },
   h4: { fontSize: 18, lineHeight: 26, fontWeight: '700', color: C.ink, marginHorizontal: 20, marginBottom: 2 },
   sd: { fontSize: 13, lineHeight: 19, color: C.ink3, marginHorizontal: 20, marginBottom: 10 },
   pk: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 20 },

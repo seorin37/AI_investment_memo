@@ -32,7 +32,7 @@ export default function MyProfileScreen() {
           toast('프로필을 저장했어요');
         }
       }}
-      onPhoto={() => toast('사진 올리기는 아직 준비 중이에요')}
+      onPhoto={() => toast('아직 연결되지 않았어요 · 데이터는 그대로예요')}
       onPhotoDelete={() => toast('지울 사진이 없어요')}
       onLink={() => toast('계정을 연결했어요')}
       onLogout={() => {

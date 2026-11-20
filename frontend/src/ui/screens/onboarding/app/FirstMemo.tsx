@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, BackHandler, Easing, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View, type ScrollViewInstance } from 'react-native';
+import { Animated, BackHandler, Easing, Keyboard, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View, type ScrollViewInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Line, Path } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
@@ -32,6 +32,13 @@ export function AppFirstMemo({ stocks, stock_code, onCancel, onEmpty, onSave }: 
   const [ai, setAi] = useState(false);
   const [picker, setPicker] = useState(false);
   const [tip, setTip] = useState<'none' | 'open' | 'done'>('none');
+  /* 키보드가 떠 있으면 말풍선을 AI 칸 위로 ('알겠어요'가 키보드에 가려지지 않게) */
+  const [kb, setKb] = useState(false);
+  useEffect(() => {
+    const a = Keyboard.addListener('keyboardDidShow', () => setKb(true));
+    const b = Keyboard.addListener('keyboardDidHide', () => setKb(false));
+    return () => { a.remove(); b.remove(); };
+  }, []);
   const [typing, setTyping] = useState(false);
   const ed = useRef<{ focus: () => void; blur: () => void }>(null);
   const scroll = useRef<ScrollViewInstance>(null);
@@ -124,7 +131,7 @@ export function AppFirstMemo({ stocks, stock_code, onCancel, onEmpty, onSave }: 
               </View>
               <Toggle variant="app" on={ai} onChange={(v) => { setAi(v); setTip('done'); }} label="AI 연결" />
             </View>
-            {tip === 'open' ? <Tip onClose={() => setTip('done')} /> : null}
+            {tip === 'open' ? <Tip up={kb} onClose={() => setTip('done')} /> : null}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -141,7 +148,8 @@ export function AppFirstMemo({ stocks, stock_code, onCancel, onEmpty, onSave }: 
 }
 
 /* .tip: AI 칸 아래 10 · 오른쪽 6 · 폭 258 · #1F2024 라운드 14 · 13px 줄 1.55 · 위쪽 꼬리(오른쪽 28) · [알겠어요] #CDBBFF 800 · 튀어나옴 .45s */
-function Tip({ onClose }: { onClose: () => void }) {
+/* up: 키보드가 떠 있으면 아래 공간이 모자라 AI 칸 위로 띄움 (꼬리 아래쪽) — 메모지는 그대로 */
+function Tip({ onClose, up }: { onClose: () => void; up: boolean }) {
   const k = useMotionK();
   const [v] = useState(() => new Animated.Value(0));
   useEffect(() => {
@@ -150,8 +158,8 @@ function Tip({ onClose }: { onClose: () => void }) {
     return () => a.stop();
   }, [k, v]);
   return (
-    <Animated.View style={[st.tip, { opacity: v, transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }, { scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] }) }] }]}>
-      <View style={st.tipTail} />
+    <Animated.View style={[st.tip, up && st.tipUp, { opacity: v, transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [up ? 6 : -6, 0] }) }, { scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] }) }] }]}>
+      <View style={up ? st.tipTailUp : st.tipTail} />
       <Text keepAll style={st.tipT}>AI 연결을 켜면 이 메모와 관련된 <Text keepAll style={st.tipB}>공시·뉴스·종가 변화</Text>를 찾아 원문 링크와 함께 보여 드려요.</Text>
       <Pressable onPress={onClose} style={st.tipBtn} accessibilityRole="button" hitSlop={8}><Text style={st.tipBtnT}>알겠어요</Text></Pressable>
     </Animated.View>
@@ -185,6 +193,8 @@ const st = StyleSheet.create({
   aiWrap: { zIndex: 3 },
   tip: { position: 'absolute', top: '100%', right: 6, marginTop: 10, width: 258, zIndex: 3, backgroundColor: '#1F2024', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, shadowColor: '#000000', shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 12 }, elevation: 8 },
   tipTail: { position: 'absolute', right: 28, top: -16, width: 0, height: 0, borderWidth: 8, borderColor: 'transparent', borderBottomColor: '#1F2024' },
+  tipUp: { top: undefined, bottom: '100%', marginTop: 0, marginBottom: 10 },
+  tipTailUp: { position: 'absolute', right: 28, bottom: -16, width: 0, height: 0, borderWidth: 8, borderColor: 'transparent', borderTopColor: '#1F2024' },
   tipT: { fontSize: 13, lineHeight: 20.15, color: '#FFFFFF' },
   tipB: { fontWeight: '700', color: '#FFFFFF' },
   tipBtn: { alignSelf: 'flex-end', marginTop: 8 },

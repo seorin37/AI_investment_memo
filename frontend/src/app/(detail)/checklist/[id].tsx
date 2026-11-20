@@ -18,7 +18,7 @@ export default function ChecklistScreen() {
   const bar =
     base.mode === 'new' ? (
       <TopBar left="cancel" title="새 체크리스트" onCancel={() => router.back()}
-        actions={[{ kind: 'text', label: '완료', emphasis: true, disabled: !items.length, onPress: () => { toast('저장했어요 (예시)'); router.back(); } }]} />
+        actions={[{ kind: 'text', label: '완료', emphasis: true, disabled: !items.length, onPress: () => { toast('아직 연결되지 않았어요 · 데이터는 그대로예요'); router.back(); } }]} />
     ) : (
       <TopBar left="back" title="메모 보드" onBack={() => router.back()} actions={[{ kind: 'pill', label: '고정', on: pinned, onPress: () => setPinned((p) => !p) }]} />
     );

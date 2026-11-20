@@ -21,8 +21,10 @@ export default function LoginScreen() {
   const status = useAuth((s) => s.status);
   const acceptSession = useAuth((s) => s.acceptSession);
   const mockSignIn = useAuth((s) => s.mockSignIn);
-  const [busy, setBusy] = useState<AuthProvider | null>(() => params.demo === 'loading' ? 'kakao' : null);
-  const [error, setError] = useState<LoginErrorKind>(() => params.demo === 'offline' ? 'network' : params.demo === 'error' ? 'login' : null);
+  /* ?demo= 는 화면 상태 확인용 — 개발 빌드에서만 */
+  const demo = __DEV__ ? params.demo : undefined;
+  const [busy, setBusy] = useState<AuthProvider | null>(() => demo === 'loading' ? 'kakao' : null);
+  const [error, setError] = useState<LoginErrorKind>(() => demo === 'offline' ? 'network' : demo === 'error' ? 'login' : null);
   const [recent, setRecent] = useState<AuthProvider | null>(params.recent ?? null);
   const [continueToTerms, setContinueToTerms] = useState(false);
 

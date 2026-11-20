@@ -50,7 +50,7 @@ function BoardTab({ code, memoParam, ev, firstFlow, stockName, onboardingSelecte
   const [cState, setCState] = useState<AiLinkState>('loading');
   /* ?fail=1: AI 연결 창 첫 분석을 실패로 (분석 실패 화면 확인용) */
   const { fail } = useLocalSearchParams<{ fail?: string }>();
-  const [failOnce, setFailOnce] = useState(fail === '1');
+  const [failOnce, setFailOnce] = useState(__DEV__ && fail === '1');
   /* 사용법 안내 (원본 board.tsx): ② 새 메모 창의 AI 연결 칸 · ③ 소식이 붙은 메모 창 · 그 밖에는 닫음 */
   const coachStep = useCoach((s) => s.step);
   const [coachSeen, setCoachSeen] = useState<number | null>(coachStep);

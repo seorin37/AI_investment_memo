@@ -361,7 +361,7 @@ export default function MainLayout() {
           say({ msg: '프로필을 저장했어요', check: true });
         }
       }}
-      onPhoto={() => say({ msg: '사진 올리기는 아직 준비 중이에요' })}
+      onPhoto={() => say({ msg: '아직 연결되지 않았어요 · 데이터는 그대로예요' })}
       onPhotoDelete={() => say({ msg: '지울 사진이 없어요' })}
       onLogout={() => { setSettings(null); logout(); }}
       onWithdraw={() => say({ msg: '아직 탈퇴 기능은 연결되지 않았어요 · 데이터는 그대로예요' })}

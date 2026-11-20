@@ -37,7 +37,7 @@ export default function HomeScreen() {
     const t = setTimeout(startCoach, 600);
     return () => clearTimeout(t);
   }, [onboarding, guideOpen, pickerOpen, startCoach]);
-  const marketOk = fail !== '1' || retried;
+  const marketOk = !(__DEV__ && fail === '1') || retried;
   const patchCl = (code: string, f: (c: Checklist) => Checklist) => setChecklists((all) => (all[code] ? { ...all, [code]: f(all[code]) } : all));
   const firstStart = firstActive ? (
     <WebFirstHome

@@ -24,7 +24,7 @@ export default function AiLinkScreen() {
   const memo = { title: base?.title ?? title ?? '', body: base?.body ?? body ?? '', color: (base?.color ?? 'yellow') as MemoColor };
   const items = isNew ? mockExtract(memo.title, memo.body) : (mockTrackItems[id] ?? []);
   const [state, setState] = useState<AiLinkState>('loading');
-  const [failed, setFailed] = useState(fail === '1');
+  const [failed, setFailed] = useState(__DEV__ && fail === '1');
   useEffect(() => {
     if (state !== 'loading') return;
     const t = setTimeout(() => setState(failed ? 'error' : items.length ? 'items' : 'empty'), from === 'new' ? 1700 : 1200);

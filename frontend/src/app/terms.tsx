@@ -12,9 +12,11 @@ export default function TermsScreen() {
   const params = useLocalSearchParams<{ demo?: string; doc?: LegalKey }>();
   const status = useAuth((s) => s.status);
   const signOut = useAuth((s) => s.signOut);
-  const [checked, setChecked] = useState<Record<TermKey, boolean>>(() => params.demo === 'all' ? checkedTerms : emptyTermChecks);
+  /* ?demo= 는 화면 상태 확인용 — 개발 빌드에서만 */
+  const demo = __DEV__ ? params.demo : undefined;
+  const [checked, setChecked] = useState<Record<TermKey, boolean>>(() => demo === 'all' ? checkedTerms : emptyTermChecks);
   const [documentKey, setDocumentKey] = useState<LegalKey | null>(params.doc ?? null);
-  const [leaveOpen, setLeaveOpen] = useState(params.demo === 'leave');
+  const [leaveOpen, setLeaveOpen] = useState(demo === 'leave');
 
   if (status === 'signedOut') return <Redirect href="/login" />;
 

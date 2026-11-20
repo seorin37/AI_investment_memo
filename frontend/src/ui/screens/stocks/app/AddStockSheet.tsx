@@ -61,7 +61,7 @@ export function AddStockSheet({ open, mine, universe, popular, onClose, onAdd }:
         />
       </View>
       <ScrollView style={st.slist} keyboardShouldPersistTaps="handled">
-        {!t ? <Text style={[st.slab, { paddingLeft: 2 }]}>많이 찾는 종목 · 예시</Text> : list.length ? <Text style={st.slab}>검색 결과 {list.length}건</Text> : null}
+        {!t ? <Text style={[st.slab, { paddingLeft: 2 }]}>많이 찾는 종목</Text> : list.length ? <Text style={st.slab}>검색 결과 {list.length}건</Text> : null}
         {t && !list.length ? (
           <View style={st.snores}>
             <Text style={st.snoresB}>‘{t}’ 종목을 찾지 못했어요</Text>
