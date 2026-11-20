@@ -43,6 +43,7 @@ class FakeRepo:
                 "url": "https://example.com/11",
                 "published_at": datetime(2026, 11, 20, 4, 0, tzinfo=timezone.utc),
                 "source": "연합뉴스",
+                "stock_codes": ["000660", "005930"],
             },
             {
                 "id": 10,
@@ -150,8 +151,10 @@ class MarketDataApiTest(unittest.TestCase):
                 "source": "연합뉴스",
                 "url": "https://example.com/11",
                 "published_at": "2026-11-20T04:00:00+00:00",
+                "stock_codes": ["000660", "005930"],
             },
         )
+        self.assertEqual(res.json()[1]["stock_codes"], [])
         self.assertEqual(self.repo.news_limits, [20])
 
     def test_headlines_limit_bounds(self):
@@ -200,6 +203,15 @@ class MarketDataRepositorySqlTest(unittest.TestCase):
         self.assertNotIn("news_article_bodies", session.sql[0])
         self.assertNotIn("news_chunks", session.sql[0])
         self.assertIn("ORDER BY a.published_at DESC", session.sql[0])
+
+    def test_news_query_only_stock_linked_once_per_article(self):
+        session = RecordingSession([])
+        MarketDataRepository(session).latest_news(5)
+        sql = " ".join(session.sql[0].split())
+        # JOIN 이 아니라 EXISTS 로 걸러야 여러 종목에 연결된 기사가 한 번만 나온다
+        self.assertIn("WHERE EXISTS (SELECT 1 FROM news_stocks ns WHERE ns.news_id = a.id)", sql)
+        self.assertNotIn("JOIN news_stocks", sql)
+        self.assertNotIn("section", sql)
 
 
 if __name__ == "__main__":

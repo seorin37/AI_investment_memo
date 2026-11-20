@@ -57,12 +57,19 @@ class MarketDataRepository:
         return list(reversed(rows))
 
     def latest_news(self, limit: int) -> list[dict[str, Any]]:
-        # 원문(news_article_bodies)·청크(news_chunks)는 쓰지 않는다.
+        """홈 뉴스: 종목과 연결된(news_stocks) 기사만, 최신순. 여러 종목에 연결된 기사도 한 번만 나온다(EXISTS).
+
+        2026-11-12 이후 수집 피드가 모두 '전체뉴스'라 섹션으로는 경제·증권 기사를 거를 수 없다.
+        원문(news_article_bodies)·청크(news_chunks)는 쓰지 않는다.
+        """
         return self._rows(
             """
-            SELECT a.id, a.title, a.summary, a.url, a.published_at, s.name AS source
+            SELECT a.id, a.title, a.summary, a.url, a.published_at, s.name AS source,
+                   ARRAY(SELECT btrim(ns.symbol) FROM news_stocks ns
+                         WHERE ns.news_id = a.id ORDER BY ns.score DESC NULLS LAST, ns.symbol) AS stock_codes
             FROM news_articles a
             JOIN news_sources s ON s.id = a.source_id
+            WHERE EXISTS (SELECT 1 FROM news_stocks ns WHERE ns.news_id = a.id)
             ORDER BY a.published_at DESC, a.id DESC
             LIMIT :limit
             """,
