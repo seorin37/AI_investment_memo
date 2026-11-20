@@ -10,8 +10,11 @@ export interface SwipeRowProps {
   /** 오른쪽으로 70 넘게 밀고 놓으면 */
   onPin: () => void;
   pinLabel: string;
-  onAi: () => void;
-  aiLabel: string;
+  /** 없으면 왼쪽은 휴지통 하나 (투자 기록 · 원본 journal.html .ar 88) */
+  onAi?: () => void;
+  aiLabel?: string;
   onDelete: () => void;
   children: ReactNode;
+  /** memo: 메모 보드 (기본) · journal: 투자 기록 (원본 journal.html: 오른쪽 60 넘겨 놓으면 고정 · 70 넘으면 ×.35 · 주황 #F2A33A · 핀 20 · 12px · 왼쪽 휴지통 88 하나 · -44 넘으면 열림) */
+  kind?: 'memo' | 'journal';
 }
