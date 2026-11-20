@@ -16,6 +16,7 @@ from app.updates.routes import router as updates_router
 from app.credits.routes import router as credits_router
 from app.stocks.routes import router as stocks_router
 from app.trash.routes import router as trash_router
+from app.web import mount_web
 from pipelines.common.db import DatabaseConfigError, get_read_dsn
 
 load_dotenv()
@@ -90,3 +91,7 @@ def health_db():
             status_code=503,
             content={"status": "error", "detail": "database health check failed"},
         )
+
+
+# 웹 정적 빌드 서빙 (모든 API 라우트 뒤에 등록해야 한다). 빌드가 없으면 아무것도 하지 않는다.
+mount_web(app)
