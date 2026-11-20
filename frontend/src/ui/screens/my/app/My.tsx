@@ -1,12 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { Animated, BackHandler, Easing, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { BackHandler, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, G, Path } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
-import { useMotionK } from '@/ui/motion/useMotion';
 import { SkySwitch } from '@/ui/shared/SkySwitch';
 import type { AppMyProps } from '../My.types';
-import { Chev, Grp, Head, Item, Lb, MC, Rv } from './parts';
+import { Chev, Grp, Head, Item, Lb, MC, Rv, UsageBar } from './parts';
 
 /**
  * 앱 MY 본 화면 = 원본 app/my.html mainHTML() (11.13·11.17 반영판)
@@ -87,25 +86,6 @@ export function AppMy(p: AppMyProps) {
   );
 }
 
-/* .bar 6 · #ECEDF1 · 0 → N% .9s (90% 이상 #E89A0C · 100% 빨강) */
-function UsageBar({ pct }: { pct: number }) {
-  const k = useMotionK();
-  const [w, setW] = useState(0);
-  const [v] = useState(() => new Animated.Value(0));
-  useEffect(() => {
-    if (!w) return;
-    const a = Animated.timing(v, { toValue: (w * Math.min(pct, 100)) / 100, duration: 900 * k, delay: 200 * k, easing: Easing.bezier(0.2, 0.8, 0.2, 1), useNativeDriver: false });
-    a.start();
-    return () => a.stop();
-  }, [w, pct, k, v]);
-  const color = pct >= 100 ? MC.red : pct >= 90 ? '#E89A0C' : MC.a;
-  return (
-    <View style={st.bar} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
-      <Animated.View style={[st.barI, { width: v, backgroundColor: color }]} />
-    </View>
-  );
-}
-
 function SunIcon() {
   return (
     <Svg width={20} height={20} viewBox="0 0 16 16">
@@ -134,8 +114,6 @@ const st = StyleSheet.create({
   exT: { fontSize: 11, lineHeight: 16, fontWeight: '700', color: MC.ink2 },
   more: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center' },
   moreT: { fontSize: 13, lineHeight: 19, fontWeight: '700', color: MC.a2 },
-  bar: { height: 6, borderRadius: 3, backgroundColor: '#ECEDF1', marginTop: 12, marginBottom: 8, overflow: 'hidden' },
-  barI: { height: 6, borderRadius: 3 },
   useM: { flexDirection: 'row', justifyContent: 'space-between' },
   useMT: { fontSize: 12, lineHeight: 17, color: MC.ink2 },
   dk: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 52, paddingHorizontal: 16 },

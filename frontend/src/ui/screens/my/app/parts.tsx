@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import { Animated, BackHandler, Easing, Pressable, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { Sheet } from '@/ui/shared/Sheet';
@@ -84,7 +85,112 @@ export function ConfirmSheet({ open, title, body, ok, red, onCancel, onOk }: { o
   );
 }
 
+/**
+ * MY 하위 화면 틀 (원본 .pg: 바탕 #F3F4F6 · .bh 머리 · .sc 스크롤 아래 28 · .wb 아래 고정 버튼이면 150)
+ * 안드로이드 뒤로: onHardwareBack 이 true 를 돌려주면 그 안에서 처리, 아니면 onBack
+ */
+export function Page({ title, onBack, lead, children, bottom, onHardwareBack }: { title: string; onBack: () => void; lead?: string; children: React.ReactNode; bottom?: React.ReactNode; onHardwareBack?: () => boolean }) {
+  const insets = useSafeAreaInsets();
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (onHardwareBack?.()) return true;
+      onBack();
+      return true;
+    });
+    return () => sub.remove();
+  }, [onBack, onHardwareBack]);
+  return (
+    <View style={[pt.page, { paddingTop: insets.top }]}>
+      <Head title={title} onBack={onBack} />
+      <ScrollView contentContainerStyle={{ paddingBottom: (bottom ? 150 : 28) + insets.bottom }} showsVerticalScrollIndicator={false}>
+        {lead ? <Lead>{lead}</Lead> : null}
+        <View style={pt.w}>{children}</View>
+      </ScrollView>
+      {bottom ? (
+        <View style={[pt.bot, { paddingBottom: 12 + insets.bottom }]}>
+          {/* 원본 .bot: linear-gradient(transparent → .85 40% → bg 70%) */}
+          <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" preserveAspectRatio="none">
+            <Defs>
+              <LinearGradient id="myBot" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0" stopColor={MC.bg} stopOpacity={0} />
+                <Stop offset="0.4" stopColor={MC.bg} stopOpacity={0.85} />
+                <Stop offset="0.7" stopColor={MC.bg} stopOpacity={1} />
+              </LinearGradient>
+            </Defs>
+            <Rect x="0" y="0" width="100%" height="100%" fill="url(#myBot)" />
+          </Svg>
+          {bottom}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/* .bar 6 · #ECEDF1 · 0 → N% .9s (90% 이상 #E89A0C · 100% 빨강) */
+export function UsageBar({ pct, delay = 200 }: { pct: number; delay?: number }) {
+  const k = useMotionK();
+  const [w, setW] = useState(0);
+  const [v] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    if (!w) return;
+    const a = Animated.timing(v, { toValue: (w * Math.min(pct, 100)) / 100, duration: 900 * k, delay: delay * k, easing: Easing.bezier(0.2, 0.8, 0.2, 1), useNativeDriver: false });
+    a.start();
+    return () => a.stop();
+  }, [w, pct, k, v, delay]);
+  return (
+    <View style={pt.bar} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
+      <Animated.View style={[pt.barI, { width: v, backgroundColor: usageColor(pct) }]} />
+    </View>
+  );
+}
+export const usageColor = (pct: number) => (pct >= 100 ? MC.red : pct >= 90 ? '#E89A0C' : MC.a);
+
+/* .odo: 숫자 자리마다 0~9 가 굴러 멈춤 .7s (#098) */
+export function Odometer({ value, size, lineHeight, weight = '800', color = MC.ink }: { value: number; size: number; lineHeight: number; weight?: '700' | '800'; color?: string }) {
+  return (
+    <View style={{ flexDirection: 'row' }} accessible accessibilityLabel={String(value)}>
+      {String(value).split('').map((d, i) => <Digit key={i} n={Number(d)} size={size} lh={lineHeight} weight={weight} color={color} />)}
+    </View>
+  );
+}
+function Digit({ n, size, lh, weight, color }: { n: number; size: number; lh: number; weight: '700' | '800'; color: string }) {
+  const k = useMotionK();
+  const [y] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    const a = Animated.timing(y, { toValue: -n * lh, duration: 700 * k, delay: 250 * k, easing: Easing.bezier(0.3, 1.25, 0.5, 1), useNativeDriver: NATIVE });
+    a.start();
+    return () => a.stop();
+  }, [n, lh, k, y]);
+  return (
+    <View style={{ height: lh, overflow: 'hidden' }} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+      <Animated.View style={{ transform: [{ translateY: y }] }}>
+        {Array.from({ length: 10 }, (_, d) => <Text key={d} style={{ fontSize: size, lineHeight: lh, height: lh, fontWeight: weight, color, textAlign: 'center' }}>{d}</Text>)}
+      </Animated.View>
+    </View>
+  );
+}
+
+/* .lead (하위 화면): 12.5 ink3 · 좌우 18 · 아래 12 · 줄 1.55 */
+export function Lead({ children }: { children: string }) {
+  return <Text keepAll style={pt.lead}>{children}</Text>;
+}
+/* .foot2: 11.5 ink3 · 위 12 · 좌우 4 · 줄 1.6 */
+export function Foot({ children }: { children: string }) {
+  return <Text keepAll style={pt.foot}>{children}</Text>;
+}
+/* IC.ok: ✓ 16 · #6A42AB · 선 2.6 */
+export function OkIcon({ size = 16, color = MC.a2 }: { size?: number; color?: string }) {
+  return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><Path d="M5 12.5l4.5 4.5L19 7" /></Svg>;
+}
+
 export const pt = StyleSheet.create({
+  page: { flex: 1, backgroundColor: MC.bg },
+  w: { paddingHorizontal: 16 },
+  bot: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: 30, paddingHorizontal: 16 },
+  bar: { height: 6, borderRadius: 3, backgroundColor: '#ECEDF1', marginTop: 12, marginBottom: 8, overflow: 'hidden' },
+  barI: { height: 6, borderRadius: 3 },
+  lead: { fontSize: 12.5, lineHeight: 19.4, color: MC.ink3, marginHorizontal: 18, marginBottom: 12 },
+  foot: { fontSize: 11.5, lineHeight: 18.4, color: MC.ink3, marginTop: 12, marginHorizontal: 4 },
   bh: { height: 58, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10 },
   ib: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
   bhT: { fontSize: 19, lineHeight: 27, fontWeight: '700', color: MC.ink },
