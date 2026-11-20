@@ -13,15 +13,16 @@ import { SwipeRow } from '@/ui/shared/SwipeRow';
 import { Toggle } from '@/ui/shared/Toggle';
 import { appColor, curve, ft } from '@/ui/theme';
 import { mockJournalLoadMs, mockJournalRecentCount } from '../Journal.mock';
+import type { JournalFlash } from '@/store/journal';
 import type { JournalEntry, JournalProps } from '../Journal.types';
-import { groupJournal, preview, searchJournal, splitHit } from '../journalParts';
+import { appTitle, groupJournal, preview, searchJournal, splitHit } from '../journalParts';
 import { JBarIcon, JCheck, JChevron, JClose, JCompose, JEmptyDoc, JMic, JNoHit, JPlus, JSearch } from './journalGlyphs';
 
 const A2 = appColor.tabPurple;
 const SEP = '#ECEDF1';
 const NOT_YET = '아직 연결되지 않았어요 · 데이터는 그대로예요';
 type Snack = { id: number; msg: string; undo?: JournalEntry[] };
-type Toast = { id: number; msg: string };
+export type Toast = { id: number; msg: string };
 
 export interface AppJournalProps extends JournalProps {
   /** 평소 상단 바 (라우트가 줌 · TopBar journal) — 검색 중엔 위로 접히고, 고르는 동안은 'N개 선택' 머리로 바뀜 */
@@ -32,6 +33,9 @@ export interface AppJournalProps extends JournalProps {
   onSelectionChange: (n: number) => void;
   /** 라우트가 띄우는 알림 (머리 알림 버튼 등) — key 가 바뀌면 알약으로 */
   notice?: { key: number; message: string };
+  /** 기록 화면에서 돌아올 때 (저장 알림 · 반짝임 · 휴지통) — 처리하면 onFlashDone */
+  flash?: JournalFlash | null;
+  onFlashDone?: () => void;
 }
 
 /**
@@ -157,6 +161,22 @@ export function AppJournal(p: AppJournalProps) {
       setSnack((s) => ({ id: (s?.id ?? 0) + 1, msg: `기록 ${ids.length}개를 휴지통으로 옮겼어요`, undo: before }));
     }, 260 * k);
   };
+  /* 기록 화면에서 돌아옴 (원본 back: .3초 뒤 목록이 반짝 + '새 기록을 저장했어요' / 빈 새 기록 / 휴지통 + 되돌리기) */
+  const fk = p.flash?.key;
+  useEffect(() => {
+    const f = p.flash;
+    if (!f) return;
+    const t = setTimeout(() => {
+      if (f.kind === 'saved') {
+        setHl((h) => ({ id: f.id, n: (h?.n ?? 0) + 1 }));
+        if (f.isNew) toast('새 기록을 저장했어요');
+      } else if (f.kind === 'empty') toast('빈 기록은 저장하지 않았어요');
+      else trash([f.id]);
+      p.onFlashDone?.();
+    }, 320 * k);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fk]);
   const undo = () => {
     if (!snack?.undo) return;
     const ids = new Set(L.map((j) => j.id));
@@ -454,7 +474,7 @@ function JRow({ j, q, first, selV, selecting, selected, hl, onPress, onLongPress
         </Animated.View>
         <Animated.View style={[st.tx, { transform: [{ translateX: selV.interpolate({ inputRange: [0, 1], outputRange: [0, 36] }) }] }]}>
           <Text style={st.rT} numberOfLines={1}>
-            {hit(j.title, st.rT)}
+            {hit(appTitle(j), st.rT)}
           </Text>
           <Text style={st.rS} numberOfLines={1}>
             {j.date}
@@ -530,7 +550,7 @@ function PopIn({ children }: { children: React.ReactNode }) {
 }
 
 /** 알림 알약 (원본 .toast: 가운데 · #1F2024 · 13.5px 600 · 위아래 10 좌우 16 · 라운드 20 · .45s spring) */
-function Pill({ toast, bottom }: { toast: Toast | null; bottom: number }) {
+export function Pill({ toast, bottom }: { toast: Toast | null; bottom: number }) {
   const k = useMotionK();
   const [msg, setMsg] = useState('');
   const [v] = useState(() => new Animated.Value(0));

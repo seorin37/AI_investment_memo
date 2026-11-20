@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, View, type TextStyle } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { Dots } from '@/ui/icons/BoardGlyphs';
 import { FixedFrame } from '@/ui/layout/web/FixedFrame';
@@ -12,8 +12,9 @@ import { ContextMenu, type MenuItem } from '@/ui/shared/ContextMenu';
 import { WebSelectBar } from '@/ui/shared/SelectBar';
 import { WebSnackbar } from '@/ui/shared/Snackbar';
 import { curve, fpx } from '@/ui/theme';
-import type { JournalEntry, JournalProps } from '../Journal.types';
-import { firstSentence, groupJournal, searchJournal, splitHit } from '../journalParts';
+import type { JBlock, JournalEntry, JournalProps } from '../Journal.types';
+import { blocksToHtml, firstSentence, groupJournal, searchJournal, splitHit, splitWeb } from '../journalParts';
+import { BodyEditor, FindBar, FormatPanel, useEdRef, useFindHits } from './journalEditor.web';
 
 type Hover = { pressed: boolean; hovered?: boolean };
 type Snack = { key: number; msg: string; undo?: () => void; check?: boolean };
@@ -22,7 +23,13 @@ const data = (o: Record<string, string>) => ({ dataSet: o }) as object;
 let seq = 0;
 const NOT_YET = '아직 연결되지 않았어요 · 데이터는 그대로예요';
 
-export interface WebJournalProps extends JournalProps {
+export interface WebJournalProps extends Omit<JournalProps, 'onNew'> {
+  /** 새 기록을 맨 위에 만들고 id 를 돌려줌 (원본 addJournal) */
+  onNew: () => string;
+  /** 쓰는 대로 바로 저장 (원본 updateJournal) */
+  onUpdate: (id: string, p: Partial<JournalEntry>) => void;
+  /** 비어 있는 새 기록을 다른 기록으로 옮기면 지움 (원본 dropEmptyJournal) */
+  onDropEmpty: (id: string) => void;
   /** 처음 고른 기록 (검색 등에서 ?id= 로 들어올 때) */
   initialId?: string;
 }
@@ -58,11 +65,23 @@ export function WebJournal(p: WebJournalProps) {
   const sections: { key: string; items: JournalEntry[] }[] = [...(pins.length && grouped ? [{ key: '고정됨', items: pins }] : []), ...(grouped ? groups : [{ key: '', items: [...pins, ...groups.flatMap((g) => g.items)] }])].filter((s) => s.items.length);
 
   const say = (msg: string, extra?: Partial<Snack>) => setSnack({ key: ++seq, msg, ...extra });
-  /* 새 기록 쓰기는 7b 에서 연결 */
+  /* 새 기록: 맨 위에 만들고 고른 뒤 제목부터 (원본 add · m-new) */
+  const [fresh, setFresh] = useState<string | null>(null);
   const newJ = () => {
-    p.onNew();
-    say(NOT_YET);
+    const id = p.onNew();
+    setQ('');
+    setCur(id);
+    setFresh(id);
+    setTimeout(() => setFresh(null), 1400);
   };
+  /* 비어 있는 새 기록은 다른 기록으로 옮기면 지움 */
+  const prevCur = useRef(curJ?.id ?? null);
+  const dropEmpty = p.onDropEmpty;
+  useEffect(() => {
+    const was = prevCur.current;
+    if (was && was !== curJ?.id) dropEmpty(was);
+    prevCur.current = curJ?.id ?? null;
+  }, [curJ?.id, dropEmpty]);
   const trashJ = (ls: JournalEntry[]) => {
     const before = L;
     p.onTrash(ls.map((j) => j.id));
@@ -211,54 +230,27 @@ export function WebJournal(p: WebJournalProps) {
                 </Pressable>
               </FadeIn>
             ) : (
-              <View style={st.ed}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="이 기록 메뉴"
-                  onPress={(e) => {
-                    const { r } = at(e);
-                    setMenu({
-                      at: { x: r.right - 220, y: r.bottom + 6 },
-                      items: [
-                        { label: '공유', icon: 'share', run: () => copyJ(curJ, '공유할 내용을 복사했어요') },
-                        { label: '내용 복사', icon: 'copy', run: () => copyJ(curJ) },
-                        { label: curJ.pinned ? '고정 풀기' : '맨 위에 고정', icon: 'pin', run: () => pinJ([curJ], !curJ.pinned) },
-                        '-',
-                        { label: '휴지통으로 이동', icon: 'trash', danger: true, run: () => trashJ([curJ]) },
-                      ],
-                    });
-                  }}
-                  style={({ hovered }: Hover) => [st.curMenu, hovered && { backgroundColor: '#F3F4F6' }]}
-                >
-                  <Dots color="#575B63" />
-                </Pressable>
-                <FadeIn key={curJ.id} style={st.flex}>
-                  <ScrollView style={st.flex} contentContainerStyle={st.edC}>
-                    <Text style={st.full}>{curJ.full}</Text>
-                    <View style={{ height: 18 }} />
-                    <Text style={st.edTitle}>{curJ.title || '제목 없음'}</Text>
-                    <View style={{ height: 12 }} />
-                    {curJ.blocks.slice(1).map((b, i) =>
-                      b.check !== undefined ? (
-                        <View key={i} style={st.todo}>
-                          <View style={[st.tdBox, b.check && st.tdOn]}>
-                            {b.check ? (
-                              <Svg width={10} height={10} viewBox="0 0 10 10" fill="none">
-                                <Path d="M2 5.2 4.1 7.2 8 3" stroke="#FFFFFF" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
-                              </Svg>
-                            ) : null}
-                          </View>
-                          <Text style={[st.body, b.check ? st.tdDone : { color: '#1C1C1C' }]}>{b.text}</Text>
-                        </View>
-                      ) : (
-                        <Text key={i} style={[b.s === 'head' ? st.edHead : b.s === 'sub' ? st.edSub : st.body, st.para]}>
-                          {b.text.replace(/\n/g, ' ')}
-                        </Text>
-                      ),
-                    )}
-                  </ScrollView>
-                </FadeIn>
-              </View>
+              <WebNote
+                key={curJ.id}
+                j={curJ}
+                fresh={fresh === curJ.id}
+                say={say}
+                onUpdate={p.onUpdate}
+                onMenu={(e, openFind) => {
+                  const { r } = at(e);
+                  setMenu({
+                    at: { x: r.right - 220, y: r.bottom + 6 },
+                    items: [
+                      { label: '공유', icon: 'share', run: () => copyJ(curJ, '공유할 내용을 복사했어요') },
+                      { label: '기록 안에서 찾기', icon: 'find', run: openFind },
+                      { label: '내용 복사', icon: 'copy', run: () => copyJ(curJ) },
+                      { label: curJ.pinned ? '고정 풀기' : '맨 위에 고정', icon: 'pin', run: () => pinJ([curJ], !curJ.pinned) },
+                      '-',
+                      { label: '휴지통으로 이동', icon: 'trash', danger: true, run: () => trashJ([curJ]) },
+                    ],
+                  });
+                }}
+              />
             )}
           </View>
         </View>
@@ -284,6 +276,123 @@ export function WebJournal(p: WebJournalProps) {
       ) : null}
       <ContextMenu at={menu?.at ?? null} items={menu?.items ?? []} onClose={() => setMenu(null)} />
       <WebSnackbar visible={!!snack} message={snack?.msg ?? ''} onUndo={snack?.undo} check={snack?.check} style={st.snack} />
+    </View>
+  );
+}
+
+/**
+ * 오른쪽 기록 편집기 (원본 journal.tsx 오른쪽 칸: 날짜 14/21 · 제목 칸 30/40 · 본문 contentEditable 17/26 · '다음 액션' 할 일
+ * · 떠 있는 도구 막대 [체크리스트] [사진] [Aa] (아래 20 가운데) · 서식 창 (아래 76) · ⋯ 메뉴 · 기록 안에서 찾기)
+ * 쓰는 대로 바로 저장 (원본 updateJournal). 사진은 연결 전이라 안내만.
+ */
+function WebNote({ j, fresh, say, onUpdate, onMenu }: { j: JournalEntry; fresh: boolean; say: (m: string) => void; onUpdate: (id: string, p: Partial<JournalEntry>) => void; onMenu: (e: { nativeEvent: unknown }, openFind: () => void) => void }) {
+  const ed = useEdRef();
+  const [fmt, setFmt] = useState(false);
+  const [find, setFind] = useState<string | null>(null);
+  const [focusEnd, setFocusEnd] = useState(0);
+  const [focusTodo, setFocusTodo] = useState<number | null>(null);
+  const [titleH, setTitleH] = useState(40);
+  const { title, body, todo } = splitWeb(j.blocks);
+  const hits = useFindHits(ed, find, j.html ?? j.blocks);
+  const put = (b: JBlock[], t: JBlock[], ti = title, html?: string) => onUpdate(j.id, { blocks: [{ ...(j.blocks[0] ?? { s: 'title' }), text: ti }, ...b, ...t], ...(html !== undefined ? { html } : null) });
+  const setTodo = (t: JBlock[]) => put(body, t);
+  const headBefore = body[body.length - 1]?.s === 'head';
+  return (
+    <View style={st.ed}>
+      <Pressable accessibilityRole="button" accessibilityLabel="이 기록 메뉴" onPress={(e) => onMenu(e, () => setFind(''))} style={({ hovered }: Hover) => [st.curMenu, hovered && { backgroundColor: '#F3F4F6' }]}>
+        <Dots color="#575B63" />
+      </Pressable>
+      {find !== null ? <FindBar value={find} hits={hits} onChange={setFind} onClose={() => setFind(null)} /> : null}
+      <FadeIn style={st.flex}>
+        <ScrollView style={st.flex} contentContainerStyle={st.edC}>
+          <Text style={st.full}>{j.full}</Text>
+          <View style={{ height: 18 }} />
+          <TextInput
+            value={title}
+            autoFocus={fresh}
+            multiline
+            submitBehavior="submit"
+            onSubmitEditing={() => setFocusEnd((n) => n + 1)}
+            onChangeText={(v) => put(body, todo, v.replace(/\n/g, ''))}
+            onContentSizeChange={(e) => setTitleH(Math.max(40, e.nativeEvent.contentSize.height))}
+            placeholder="제목"
+            placeholderTextColor="#9A9EA7"
+            accessibilityLabel="제목"
+            style={[st.edTitle, st.noOutline, { height: titleH }]}
+          />
+          <View style={{ height: 12 }} />
+          <BodyEditor edRef={ed} docKey={j.id} html={j.html ?? (body.length ? blocksToHtml(body) : '')} onInput={(html, b) => put(b, todo, title, html)} onFocusEnd={focusEnd} />
+          {todo.length ? (
+            <>
+              {!headBefore ? (
+                <>
+                  <View style={{ height: 18 }} />
+                  <Text style={st.edHead}>다음 액션</Text>
+                  <View style={{ height: 6 }} />
+                </>
+              ) : null}
+              {todo.map((td, i) => (
+                <View key={i} style={st.todo}>
+                  <Pressable onPress={() => setTodo(todo.map((x, n) => (n === i ? { ...x, check: !x.check } : x)))} accessibilityRole="checkbox" accessibilityState={{ checked: !!td.check }} accessibilityLabel={td.text || '할 일'} style={({ hovered }: Hover) => [st.tdBox, td.check ? st.tdOn : hovered && { borderColor: '#9A9EA7' }]}>
+                    {td.check ? (
+                      <Svg width={10} height={10} viewBox="0 0 10 10" fill="none">
+                        <Path d="M2 5.2 4.1 7.2 8 3" stroke="#FFFFFF" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+                      </Svg>
+                    ) : null}
+                  </Pressable>
+                  <TextInput
+                    value={td.text}
+                    autoFocus={focusTodo === i}
+                    onFocus={() => setFocusTodo(null)}
+                    onChangeText={(v) => setTodo(todo.map((x, n) => (n === i ? { ...x, text: v } : x)))}
+                    onKeyPress={(e) => {
+                      if (e.nativeEvent.key === 'Backspace' && !td.text) {
+                        e.preventDefault();
+                        setTodo(todo.filter((_, n) => n !== i));
+                      }
+                    }}
+                    accessibilityLabel="할 일"
+                    style={[st.body, st.tdIn, st.noOutline, td.check ? st.tdDone : { color: '#1C1C1C' }]}
+                  />
+                </View>
+              ))}
+            </>
+          ) : null}
+        </ScrollView>
+      </FadeIn>
+      {fmt ? <FormatPanel edRef={ed} onClose={() => setFmt(false)} onChanged={() => {}} /> : null}
+      {/* 떠 있는 도구 막대 (원본: 체크리스트 · 사진 · Aa — 52×40 · 라운드 24 · 그림자) */}
+      <View style={st.tbWrap} pointerEvents="box-none">
+        <View style={st.tb}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="체크리스트"
+            onPress={() => {
+              setTodo([...todo, { s: 'body', text: '', check: false }]);
+              setFocusTodo(todo.length);
+            }}
+            style={({ hovered }: Hover) => [st.tbB, hovered && { backgroundColor: '#F3F4F6' }]}
+          >
+            <Svg width={44} height={38} viewBox="2.5 -0.5 33 33" fill="none" stroke="#1C1C1C" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+              <Path d="M11.9167 10.9993L13.25 12.3327L15.6667 9.91602" />
+              <Path d="M13.5833 22.0007C14.5959 22.0007 15.4167 21.1798 15.4167 20.1673C15.4167 19.1548 14.5959 18.334 13.5833 18.334C12.5708 18.334 11.75 19.1548 11.75 20.1673C11.75 21.1798 12.5708 22.0007 13.5833 22.0007Z" />
+              <Path d="M18.1667 11H25.6667M18.1667 20.1667H25.6667" />
+            </Svg>
+          </Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="사진" onPress={() => say(NOT_YET)} style={({ hovered }: Hover) => [st.tbB, hovered && { backgroundColor: '#F3F4F6' }]}>
+            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#1C1C1C" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+              <Rect x={3.5} y={5} width={17} height={14} rx={3} />
+              <Circle cx={9} cy={10} r={1.8} />
+              <Path d="M20.5 15.5l-4.5-4.5-8.5 8" />
+            </Svg>
+          </Pressable>
+          <View {...data({ fmtBtn: '' })}>
+            <Pressable accessibilityRole="button" accessibilityLabel="서식" accessibilityState={{ expanded: fmt }} onPress={() => setFmt((v) => !v)} style={({ hovered }: Hover) => [st.tbB, fmt ? { backgroundColor: '#111111' } : hovered && { backgroundColor: '#F3F4F6' }]}>
+              <Text style={[st.aa, { color: fmt ? '#FFFFFF' : '#1C1C1C' }]}>Aa</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
     </View>
   );
 }
@@ -392,6 +501,12 @@ const st = StyleSheet.create({
   edHead: { ...fpx(20, 29), fontWeight: '700', color: '#16171A', marginTop: 8 },
   edSub: { ...fpx(17.5, 26), fontWeight: '700', color: '#16171A' },
   todo: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 3 },
+  tdIn: { flex: 1, minWidth: 0, padding: 0 },
+  noOutline: { outlineStyle: 'none' } as object,
+  tbWrap: { position: 'absolute', left: 0, right: 0, bottom: 20, alignItems: 'center' },
+  tb: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 24, borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: '#FFFFFF', padding: 4, shadowColor: '#120F1F', shadowOpacity: 0.1, shadowRadius: 20, shadowOffset: { width: 0, height: 6 } },
+  tbB: { width: 52, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  aa: { ...fpx(20, 29), fontWeight: '600', letterSpacing: -0.4 },
   tdBox: { width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: '#C7C7CC', backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
   tdOn: { borderColor: '#5E5668', backgroundColor: '#5E5668' },
   tdDone: { color: '#9A9EA7', textDecorationLine: 'line-through' },

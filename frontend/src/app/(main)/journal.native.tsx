@@ -1,31 +1,42 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useJournal } from '@/store/journal';
 import { useUI } from '@/store/ui';
 import { TopBar } from '@/ui/layout/app/TopBar';
 import { AppJournal } from '@/ui/screens/journal/app/Journal';
-import { mockJournal } from '@/ui/screens/journal/Journal.mock';
-import type { JournalEntry } from '@/ui/screens/journal/Journal.types';
 
 const NOT_YET = '아직 연결되지 않았어요 · 데이터는 그대로예요';
 
 /**
  * 앱 투자 기록 탭 = UI v2 (ui/screens/journal/app · ⑦). 웹은 journal.tsx.
- * mock: Journal.mock — 고정·휴지통·되돌리기는 앱을 켜 둔 동안 이 화면 안에서만.
+ * 기록은 store/journal (mock · 앱을 켜 둔 동안) — 기록 화면(/journal/[id])과 같이 씀.
  * 옛 목록(features/journal/JournalList)은 지우지 않고 라우트에서만 뺌.
  */
 export default function JournalTab() {
   const router = useRouter();
   const sp = useLocalSearchParams<{ empty?: string }>();
   const setTabBarHidden = useUI((s) => s.setTabBarHidden);
-  const [entries, setEntries] = useState<JournalEntry[]>(() => (__DEV__ && sp.empty === '1' ? [] : mockJournal));
+  const j = useJournal();
   const [viewSig, setViewSig] = useState(0);
   const [notice, setNotice] = useState<{ key: number; message: string }>();
   const toast = (message: string) => setNotice((n) => ({ key: (n?.key ?? 0) + 1, message }));
+  /* 기록 화면 열기 — 빠르게 두 번 눌러도 한 번만 */
+  const busy = useRef(false);
+  const go = (id: string) => {
+    if (busy.current) return;
+    busy.current = true;
+    setTimeout(() => (busy.current = false), 800);
+    router.push({ pathname: '/journal/[id]', params: { id } });
+  };
+  const reset = j.reset;
+  useEffect(() => {
+    if (__DEV__ && sp.empty === '1') reset(true);
+  }, [sp.empty, reset]);
   useFocusEffect(useCallback(() => () => setTabBarHidden(false), [setTabBarHidden]));
   const onSelectionChange = useCallback((n: number) => setTabBarHidden(n > 0), [setTabBarHidden]);
   return (
     <AppJournal
-      entries={entries}
+      entries={j.entries}
       header={
         <TopBar
           preset="journal"
@@ -40,11 +51,13 @@ export default function JournalTab() {
       viewSheetSignal={viewSig}
       onSelectionChange={onSelectionChange}
       notice={notice}
-      onOpen={() => toast(NOT_YET)}
-      onNew={() => toast(NOT_YET)}
-      onPin={(ids, on) => setEntries((all) => all.map((j) => (ids.includes(j.id) ? { ...j, pinned: on } : j)))}
-      onTrash={(ids) => setEntries((all) => all.filter((j) => !ids.includes(j.id)))}
-      onRestore={setEntries}
+      flash={j.flash}
+      onFlashDone={() => j.setFlash(null)}
+      onOpen={(id) => go(id)}
+      onNew={() => go('new')}
+      onPin={j.pin}
+      onTrash={j.trash}
+      onRestore={j.restore}
     />
   );
 }

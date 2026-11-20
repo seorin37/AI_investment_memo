@@ -1,11 +1,20 @@
 /** 기록 한 줄의 글 모양 (원본 앱 #ned .b[data-s] · 웹 h1/h2/h3/p) */
 export type JBlockStyle = 'title' | 'head' | 'sub' | 'body';
 
+/** 목록 모양 (원본 앱 data-l · 웹 ul/ul.dash/ol/blockquote) */
+export type JList = 'dot' | 'dash' | 'num' | 'quote';
+
 /** 기록 안의 한 줄. check 가 있으면 체크리스트 줄 (true = 끝냄) */
 export interface JBlock {
   s: JBlockStyle;
   text: string;
   check?: boolean;
+  l?: JList;
+  /** 굵게 · 기울임 · 밑줄 · 취소선 — 앱은 줄 전체에만 (RN TextInput 은 글자 일부 서식이 안 됨) */
+  b?: boolean;
+  i?: boolean;
+  u?: boolean;
+  x?: boolean;
 }
 
 /**
@@ -26,6 +35,8 @@ export interface JournalEntry {
   group: string;
   pinned: boolean;
   blocks: JBlock[];
+  /** 웹 편집기에서 쓴 본문 (글자 일부 서식 포함 HTML). 앱에서 고치면 지우고 blocks 로 다시 그림 */
+  html?: string;
 }
 
 export interface JournalProps {

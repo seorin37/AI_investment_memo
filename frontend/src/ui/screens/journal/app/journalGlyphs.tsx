@@ -92,3 +92,57 @@ export function JPlus() {
     </Svg>
   );
 }
+
+/** 기록 화면 머리 · 도구 (원본 journal.html #nh · .ntb · .acc) */
+export function JBack({ color }: { color: string }) {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24" {...line(color, 2.4)}>
+      <Path d="M15 5l-7 7 7 7" />
+    </Svg>
+  );
+}
+
+export function JShare({ color }: { color: string }) {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 24 24" {...line(color, 2)}>
+      <Path d="M12 3v12M7.5 7.5 12 3l4.5 4.5M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" />
+    </Svg>
+  );
+}
+
+export function JMore({ color }: { color: string }) {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 24 24" fill={color}>
+      <Circle cx={5.5} cy={12} r={2} />
+      <Circle cx={12} cy={12} r={2} />
+      <Circle cx={18.5} cy={12} r={2} />
+    </Svg>
+  );
+}
+
+export function JUndo({ color }: { color: string }) {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24" {...line(color, 2.1)}>
+      <Path d="M9 14 4 9l5-5" />
+      <Path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+    </Svg>
+  );
+}
+
+export function JChecklist({ color, size = 24 }: { color: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" {...line(color, 2)}>
+      <Circle cx={5} cy={7} r={1.8} />
+      <Circle cx={5} cy={17} r={1.8} />
+      <Path d="M10 7h10M10 17h10" />
+    </Svg>
+  );
+}
+
+export function JX({ size = 14, color = '#16171A' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" {...line(color, 2.6)}>
+      <Path d="M6 6l12 12M18 6 6 18" />
+    </Svg>
+  );
+}

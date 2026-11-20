@@ -1,25 +1,30 @@
-import React, { useState } from 'react';
+import React, { useEffect } from 'react';
 import { useLocalSearchParams } from 'expo-router';
-import { mockJournal } from '@/ui/screens/journal/Journal.mock';
-import type { JournalEntry } from '@/ui/screens/journal/Journal.types';
+import { useJournal } from '@/store/journal';
 import { WebJournal } from '@/ui/screens/journal/web/Journal';
 
 /**
  * 웹 투자 기록 = UI v2 (ui/screens/journal/web · ⑦). 앱은 journal.native.tsx.
- * mock: Journal.mock — 고정·휴지통·되돌리기는 이 화면 안에서만. 옛 화면은 features/journal/LegacyJournalRoute.tsx 로 옮겨 보관.
+ * 기록은 store/journal (mock · 켜 둔 동안) — 쓰는 대로 바로 반영. 옛 화면은 features/journal/LegacyJournalRoute.tsx 로 옮겨 보관.
  */
 export default function JournalPage() {
   const sp = useLocalSearchParams<{ id?: string; empty?: string }>();
-  const [entries, setEntries] = useState<JournalEntry[]>(() => (__DEV__ && sp.empty === '1' ? [] : mockJournal));
+  const j = useJournal();
+  const reset = j.reset;
+  useEffect(() => {
+    if (__DEV__ && sp.empty === '1') reset(true);
+  }, [sp.empty, reset]);
   return (
     <WebJournal
-      entries={entries}
+      entries={j.entries}
       initialId={sp.id}
       onOpen={() => {}}
-      onNew={() => {}}
-      onPin={(ids, on) => setEntries((all) => all.map((j) => (ids.includes(j.id) ? { ...j, pinned: on } : j)))}
-      onTrash={(ids) => setEntries((all) => all.filter((j) => !ids.includes(j.id)))}
-      onRestore={setEntries}
+      onNew={j.addWeb}
+      onUpdate={j.updateWeb}
+      onDropEmpty={j.dropEmpty}
+      onPin={j.pin}
+      onTrash={j.trash}
+      onRestore={j.restore}
     />
   );
 }

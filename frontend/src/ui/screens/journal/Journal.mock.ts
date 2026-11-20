@@ -70,3 +70,6 @@ export const mockJournalRecentCount = 3;
 
 /** 처음 들어올 때 뼈대를 보여 주는 시간 (원본 loadList 900ms) — 연결 단계에서는 불러오기 끝날 때까지 */
 export const mockJournalLoadMs = 900;
+
+/** 새로 쓰거나 고친 기록에 붙는 '지금' (원본 openNew · saveCur: 2026.11.5 오후 4:20 · 묶음 '오늘'). 연결 단계에서 서버 시각으로 */
+export const mockJournalNow = { date: '오후 4:20', web_date: '11월 5일', full: '2026년 11월 5일 오후 4:20', group: '오늘' };
