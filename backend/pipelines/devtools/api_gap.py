@@ -6,6 +6,8 @@ frontend/src/api/index.ts 의 MOCK_ONLY(C그룹) 함수는 따로 표시한다.
 실행 (backend 폴더에서):
     python -m pipelines.devtools.api_gap --openapi-url http://127.0.0.1:8020/openapi.json
     python -m pipelines.devtools.api_gap --openapi-file openapi.json
+    # API 명세서(docs/api-spec.md)도 다시 만들기 — 담당·비고 칸은 보존된다 (pipelines/devtools/api_spec.py)
+    python -m pipelines.devtools.api_gap --openapi-url http://127.0.0.1:8020/openapi.json --write-spec
 """
 
 from __future__ import annotations
@@ -32,8 +34,11 @@ _FUNC = re.compile(r"^\s*(?:async\s+)?([A-Za-z_]\w*)\s*(?::\s*(?:async\s*)?\(|\(
 class Call:
     func: str
     method: str
-    path: str
+    path: str                 # 비교용: 경로 변수는 {}
     source: str
+    display_path: str = ""    # 사람용: ${code} → {code}
+    line: str = ""            # 호출한 코드 한 줄
+    lineno: int = 0
 
 
 def _normalize(path: str) -> str:
@@ -41,16 +46,22 @@ def _normalize(path: str) -> str:
     return "/" + path.strip("/")
 
 
+def _display(path: str) -> str:
+    path = re.sub(r"\$\{\s*([A-Za-z_]\w*)[^}]*\}", r"{\1}", path.split("?")[0])
+    return "/" + path.strip("/")
+
+
 def frontend_calls() -> list[Call]:
     calls: list[Call] = []
     for name in SOURCES:
         current = "?"
-        for line in (API_DIR / name).read_text(encoding="utf-8").splitlines():
+        for lineno, line in enumerate((API_DIR / name).read_text(encoding="utf-8").splitlines(), 1):
             func = _FUNC.match(line)
             if func and func.group(1) not in {"if", "for", "while", "return", "switch"}:
                 current = func.group(1)
             for method, _quote, path in _CALL.findall(line):
-                calls.append(Call(current, _METHODS[method], _normalize(path), name))
+                calls.append(Call(current, _METHODS[method], _normalize(path), name,
+                                  _display(path), line.strip(), lineno))
     return calls
 
 
@@ -76,6 +87,8 @@ def main(argv: list[str] | None = None) -> int:
     src = parser.add_mutually_exclusive_group(required=True)
     src.add_argument("--openapi-url")
     src.add_argument("--openapi-file", type=Path)
+    parser.add_argument("--write-spec", nargs="?", const=REPO / "docs" / "api-spec.md", type=Path,
+                        help="API 명세서 생성 (기본 docs/api-spec.md). 담당·비고 칸은 기존 문서에서 보존")
     args = parser.parse_args(argv)
 
     if args.openapi_url:
@@ -104,6 +117,12 @@ def main(argv: list[str] | None = None) -> int:
                 mark = "  (백엔드에도 있음)"
             print(f"  {call.method:6} {call.path:45} {call.func}{mark}")
     print(f"\n총 {len(unique)}개 경로: 있음 {len(rows['ok'])}, 없음 {len(rows['missing'])}, C그룹 {len(rows['mock'])}")
+    if args.write_spec:
+        from .api_spec import write_spec
+
+        source = args.openapi_url or str(args.openapi_file)
+        path = write_spec(spec, frontend_calls(), mock_only, args.write_spec, openapi_source=source)
+        print(f"\nAPI 명세서: {path}")
     return 1 if rows["missing"] else 0
 
 
