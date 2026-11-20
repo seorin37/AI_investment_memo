@@ -80,12 +80,43 @@ class StockRepository:
                 JOIN stocks s ON s.symbol = us.symbol
                 WHERE us.user_id = :user_id
                   AND us.deleted_at IS NULL
-                ORDER BY us.created_at, s.symbol
+                ORDER BY us.position NULLS LAST, us.created_at, s.symbol
                 """
             ),
             {"user_id": user_id},
         ).mappings().all()
-        return [dict(row) for row in rows]
+        return [{**dict(row), "position": index} for index, row in enumerate(rows)]   # 사이드바 자리 (0021, 0부터)
+
+    def stock_order(self, user_id: int, *, lock: bool = False) -> list[str]:
+        """내 종목 순서 (지우지 않은 것). lock=True면 순서를 다시 쓰는 동안 동시 변경을 막는다."""
+        rows = self.db.execute(
+            text(
+                f"""
+                SELECT btrim(symbol) FROM user_stocks
+                WHERE user_id = :user_id AND deleted_at IS NULL
+                ORDER BY position NULLS LAST, created_at, symbol
+                {"FOR UPDATE" if lock else ""}
+                """
+            ),
+            {"user_id": user_id},
+        ).scalars().all()
+        return list(rows)
+
+    def write_stock_order(self, user_id: int, codes: list[str]) -> None:
+        """내 종목 순서를 0부터 다시 매긴다. codes는 지우지 않은 내 종목 전체."""
+        if not codes:
+            return
+        self.db.execute(
+            text(
+                """
+                UPDATE user_stocks us SET position = o.pos - 1
+                FROM unnest(CAST(:codes AS text[])) WITH ORDINALITY AS o(code, pos)
+                WHERE us.user_id = :user_id AND btrim(us.symbol) = o.code AND us.deleted_at IS NULL
+                  AND us.position IS DISTINCT FROM o.pos - 1
+                """
+            ),
+            {"user_id": user_id, "codes": codes},
+        )
 
     def get_user_stock(self, user_id: int, code: str) -> dict[str, Any] | None:
         row = self.db.execute(
@@ -126,10 +157,14 @@ class StockRepository:
         self.db.execute(
             text(
                 """
-                INSERT INTO user_stocks (user_id, symbol, status)
-                VALUES (:user_id, :code, CAST(:status AS stock_status))
+                INSERT INTO user_stocks (user_id, symbol, status, position)
+                VALUES (:user_id, :code, CAST(:status AS stock_status),
+                        (SELECT COALESCE(max(position) + 1, 0) FROM user_stocks
+                         WHERE user_id = :user_id AND deleted_at IS NULL))
                 ON CONFLICT (user_id, symbol) DO UPDATE
                 SET status = EXCLUDED.status,
+                    position = CASE WHEN user_stocks.deleted_at IS NULL THEN user_stocks.position
+                                    ELSE EXCLUDED.position END,     -- 새로·다시 추가하면 맨 뒤 (0021)
                     deleted_at = NULL
                 """
             ),

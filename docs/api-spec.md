@@ -57,7 +57,7 @@
 
 ## 2. 현황표
 
-상태: **구현됨** 48개 (프론트가 부르고 백엔드에 있음) · **mock** 13개 (백엔드 미구현 — frontend/src/api/index.ts MOCK_ONLY 로 USE_MOCK=false 에서도 mock 응답)
+상태: **구현됨** 51개 (프론트가 부르고 백엔드에 있음) · **mock** 10개 (백엔드 미구현 — frontend/src/api/index.ts MOCK_ONLY 로 USE_MOCK=false 에서도 mock 응답)
 
 <!-- api-table:start (담당·비고 칸만 손으로 고치세요. 나머지 칸은 다시 생성하면 덮어씁니다) -->
 | 영역 | 메서드 | 경로 | 프론트 함수 | 상태 | 담당 | 비고 |
@@ -76,6 +76,7 @@
 | 계정·설정 | PATCH | `/settings` | updateSettings (real.ts) | 구현됨 |  |  |
 | 종목 | GET | `/stocks` | listMyStocks (stocks.ts) | 구현됨 |  |  |
 | 종목 | POST | `/stocks` | addStock (stocks.ts) | 구현됨 |  |  |
+| 종목 | PUT | `/stocks/order` |  | 백엔드만 있음 | 이민성 | 사이드바 내 종목 전체 순서 저장 (0021 user_stocks.position). 프론트 미연결: 웹 stocks[].order 대신 호출 필요 |
 | 종목 | GET | `/stocks/search` | searchStocks (stocks.ts) | 구현됨 |  |  |
 | 종목 | DELETE | `/stocks/{code}` | removeStock (stocks.ts) | 구현됨 |  |  |
 | 종목 | GET | `/stocks/{code}` | getStock (stocks.ts) | 구현됨 |  |  |
@@ -93,9 +94,10 @@
 | 메모 보드 | GET | `/memos/pinned` | listPinnedMemos (real.ts) | 구현됨 |  |  |
 | 메모 보드 | POST | `/memos/{memoId}/conclude` | concludeMemo (real.ts) | mock |  |  |
 | 메모 보드 | PUT | `/memos/{memo_id}/ai-link` | setAiLink (board.ts) | 구현됨 |  |  |
+| 메모 보드 | GET | `/memos/{memo_id}/answers` |  | 백엔드만 있음 | 이민성 | 메모 질문 답 목록: pending·answered·no_answer + 답 본문·출처. 프론트 미연결 |
 | 메모 보드 | POST | `/memos/{memo_id}/confirmations` |  | 백엔드만 있음 |  |  |
 | 메모 보드 | GET | `/stocks/{code}/board` | listBoard (board.ts) | 구현됨 |  |  |
-| 메모 보드 | PUT | `/stocks/{code}/board-order` |  | 백엔드만 있음 |  |  |
+| 메모 보드 | PUT | `/stocks/{code}/board-order` |  | 백엔드만 있음 | 이민성 | 보드 카드 전체 순서 저장 (#48). 프론트 미연결: 웹 boards[code]·앱 끌기 화면에서 호출 필요 |
 | 메모 보드 | POST | `/stocks/{code}/checklists` | createChecklist (board.ts) | 구현됨 |  |  |
 | 메모 보드 | POST | `/stocks/{code}/memos` | createMemo (board.ts) | 구현됨 |  |  |
 | 메모 보드 | POST | `/stocks/{code}/references` | createReference (board.ts) | 구현됨 |  |  |
@@ -111,7 +113,7 @@
 | 휴지통 | GET | `/trash` | listTrash (real.ts) | 구현됨 |  |  |
 | 휴지통 | DELETE | `/trash/{trash_id}` | purgeTrash (real.ts) | 구현됨 |  |  |
 | 휴지통 | POST | `/trash/{trash_id}/restore` | restoreTrash (real.ts) | 구현됨 |  |  |
-| 크레딧 | GET | `/me/usage` | getUsage (real.ts) | 구현됨 |  |  |
+| 크레딧 | GET | `/me/usage` | getUsage (real.ts) | 구현됨 | 이민성 | 크레딧 사용량 (#49). 이번 달 기본량을 안 받았으면 이 호출에서 지급 |
 | 투자 기록 | GET | `/journal` | listJournal (real.ts) | 구현됨 |  |  |
 | 투자 기록 | POST | `/journal` | createJournal (real.ts) | 구현됨 |  |  |
 | 투자 기록 | DELETE | `/journal/{entry_id}` | deleteJournal (real.ts) | 구현됨 |  |  |
@@ -121,11 +123,11 @@
 | 인사이트 | GET | `/insights/compare-memos` | listCompareMemos (real.ts) | mock |  |  |
 | 인사이트 | GET | `/insights/conclude-candidates` | listConcludeCandidates (real.ts) | mock |  |  |
 | 인사이트 | GET | `/insights/memo-backtest` | listMemoBacktests (real.ts) | mock |  |  |
-| AI 통계 | GET | `/ai/stats` | getAiStats (real.ts) | mock |  |  |
+| AI 통계 | GET | `/ai/stats` | getAiStats (real.ts) | 구현됨 | 이민성 | AI 연결 메모·이번 달 AI 소식·연결 종목 수 |
 | 데이터 | DELETE | `/data` | deleteAllData (real.ts) | mock |  |  |
 | 데이터 | POST | `/data/export` | exportData (real.ts) | mock |  |  |
-| 데이터 | GET | `/data/stats` | getDataStats (real.ts) | mock |  |  |
-| 피드백 | POST | `/feedback` | sendFeedback (real.ts) | mock |  |  |
+| 데이터 | GET | `/data/stats` | getDataStats (real.ts) | 구현됨 | 이민성 | 메모(note)·투자 기록·종목 수, 지운 것 제외 |
+| 피드백 | POST | `/feedback` | sendFeedback (real.ts) | 구현됨 | 이민성 | feedbacks 테이블. 평점 1~5, 빈 내용 422 |
 | MCP | DELETE | `/mcp/apps/{appId}` | disconnectMcpApp (real.ts) | mock |  |  |
 | 파일 | POST | `/files` | uploadFile (real.ts) | mock |  |  |
 <!-- api-table:end -->
@@ -734,6 +736,7 @@ OpenAPI 응답 스키마 `MyStockResponse[]`
 | `tags` | `string[]` |  |  |
 | `unread_updates` | `integer` |  | 기본 `0` |
 | `added_at` | `string(date-time)` | 예 |  |
+| `position` | `integer` |  | 기본 `0` |
 
 프론트 타입 (mock 기준) `MyStock[]`
 
@@ -797,6 +800,7 @@ OpenAPI 응답 스키마 `MyStockResponse`
 | `tags` | `string[]` |  |  |
 | `unread_updates` | `integer` |  | 기본 `0` |
 | `added_at` | `string(date-time)` | 예 |  |
+| `position` | `integer` |  | 기본 `0` |
 
 프론트 타입 (mock 기준) `MyStock`
 
@@ -829,6 +833,37 @@ OpenAPI 응답 스키마 `MyStockResponse`
 </details>
 
 **에러**: `401` 인증 필요 · 토큰 만료/폐기 (프론트는 /auth/refresh 를 한 번 시도) · `403` 권한 없음 · 쿠키 세션의 쓰기 요청에서 CSRF 불일치 · `404` 대상 없음 (다른 사용자 것 포함) · `422` 요청 검증 실패 (FastAPI 형식 detail 배열)
+
+<a id="put--stocks-order"></a>
+#### `PUT /stocks/order`
+
+사이드바에서 끌어 옮긴 뒤 내 종목 전체 순서를 저장하고, 새 순서의 목록을 돌려준다 (0021).
+
+- 상태: **백엔드만 있음**
+- 인증: 필요 · 구현: `backend/app/stocks/routes.py` `put_stock_order`
+
+**요청 본문** `StockOrderRequest` (필수)
+
+| 필드 | 타입 | 필수 | 설명·제약 |
+|---|---|---|---|
+| `codes` | `string[]` | 예 | 최대 개수 500 |
+
+**응답** `200`
+
+OpenAPI 응답 스키마 `MyStockResponse[]`
+
+| 필드 | 타입 | 필수 | 설명·제약 |
+|---|---|---|---|
+| `code` | `string` | 예 |  |
+| `name` | `string` | 예 |  |
+| `market` | `"KOSPI" \| "KOSDAQ" \| "KONEX"` | 예 |  |
+| `status` | `"holding" \| "watching"` | 예 |  |
+| `tags` | `string[]` |  |  |
+| `unread_updates` | `integer` |  | 기본 `0` |
+| `added_at` | `string(date-time)` | 예 |  |
+| `position` | `integer` |  | 기본 `0` |
+
+**에러**: `401` 인증 필요 · 토큰 만료/폐기 (프론트는 /auth/refresh 를 한 번 시도) · `403` 권한 없음 · 쿠키 세션의 쓰기 요청에서 CSRF 불일치 · `422` 요청 검증 실패 (FastAPI 형식 detail 배열)
 
 <a id="get--stocks-search"></a>
 #### `GET /stocks/search`
@@ -976,6 +1011,7 @@ OpenAPI 응답 스키마 `MyStockResponse`
 | `tags` | `string[]` |  |  |
 | `unread_updates` | `integer` |  | 기본 `0` |
 | `added_at` | `string(date-time)` | 예 |  |
+| `position` | `integer` |  | 기본 `0` |
 
 프론트 타입 (mock 기준) `MyStock`
 
@@ -1900,6 +1936,22 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 
 **에러**: `401` 인증 필요 · 토큰 만료/폐기 (프론트는 /auth/refresh 를 한 번 시도) · `403` 권한 없음 · 쿠키 세션의 쓰기 요청에서 CSRF 불일치 · `404` 대상 없음 (다른 사용자 것 포함) · `409` 지금 상태와 충돌 · `422` 요청 검증 실패 (FastAPI 형식 detail 배열)
 
+<a id="get--memos-memoid-answers"></a>
+#### `GET /memos/{memo_id}/answers`
+
+- 상태: **백엔드만 있음** · 담당: 이민성
+- 인증: 필요 · 구현: `backend/app/answers/routes.py` `get_memo_answers`
+
+**요청 파라미터**
+
+| 이름 | 위치 | 타입 | 필수 | 설명·제약 |
+|---|---|---|---|---|
+| `memo_id` | 경로 | `integer` | 예 |  |
+
+**응답** `200`
+
+**에러**: `401` 인증 필요 · 토큰 만료/폐기 (프론트는 /auth/refresh 를 한 번 시도) · `404` 대상 없음 (다른 사용자 것 포함) · `422` 요청 검증 실패 (FastAPI 형식 detail 배열)
+
 <a id="post--memos-memoid-confirmations"></a>
 #### `POST /memos/{memo_id}/confirmations`
 
@@ -2102,7 +2154,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse[]
 
 끌어서 옮긴 뒤 보드 카드 전체 순서를 저장하고, 새 순서의 보드를 돌려준다.
 
-- 상태: **백엔드만 있음**
+- 상태: **백엔드만 있음** · 담당: 이민성
 - 인증: 필요 · 구현: `backend/app/board/routes.py` `put_board_order`
 
 **요청 파라미터**
@@ -3062,7 +3114,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 
 이번 기간 사용량. 이번 달 기본량을 아직 안 받았으면 여기서 지급한다(쓰기 세션).
 
-- 상태: **구현됨**
+- 상태: **구현됨** · 담당: 이민성
 - 인증: 필요 · 구현: `backend/app/credits/routes.py` `get_my_usage`
 - 프론트: `getUsage(): Promise<CreditUsage>`
   - 호출: real.ts:80 `getUsage: () => http.get('/me/usage'),`
@@ -3502,10 +3554,12 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 <a id="get--ai-stats"></a>
 #### `GET /ai/stats`
 
-- 상태: **mock**
-- 인증: (백엔드 미구현) · 응답은 `frontend/src/api/mock/index.ts`의 같은 함수가 기준
+- 상태: **구현됨** · 담당: 이민성
+- 인증: 필요 · 구현: `backend/app/stats/routes.py` `get_ai_stats`
 - 프론트: `getAiStats(): Promise<AiStats>`
   - 호출: real.ts:79 `getAiStats: () => http.get('/ai/stats'),`
+
+**응답** `200`
 
 프론트 타입 (mock 기준) `AiStats`
 
@@ -3526,6 +3580,8 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 ```
 
 </details>
+
+**에러**: `401` 인증 필요 · 토큰 만료/폐기 (프론트는 /auth/refresh 를 한 번 시도)
 
 ### 데이터
 
@@ -3564,10 +3620,12 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 <a id="get--data-stats"></a>
 #### `GET /data/stats`
 
-- 상태: **mock**
-- 인증: (백엔드 미구현) · 응답은 `frontend/src/api/mock/index.ts`의 같은 함수가 기준
+- 상태: **구현됨** · 담당: 이민성
+- 인증: 필요 · 구현: `backend/app/stats/routes.py` `get_data_stats`
 - 프론트: `getDataStats(): Promise<DataStats>`
   - 호출: real.ts:81 `getDataStats: () => http.get('/data/stats'),`
+
+**응답** `200`
 
 프론트 타입 (mock 기준) `DataStats`
 
@@ -3589,15 +3647,31 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 
 </details>
 
+**에러**: `401` 인증 필요 · 토큰 만료/폐기 (프론트는 /auth/refresh 를 한 번 시도)
+
 ### 피드백
 
 <a id="post--feedback"></a>
 #### `POST /feedback`
 
-- 상태: **mock**
-- 인증: (백엔드 미구현) · 응답은 `frontend/src/api/mock/index.ts`의 같은 함수가 기준
+- 상태: **구현됨** · 담당: 이민성
+- 인증: 필요 · 구현: `backend/app/stats/routes.py` `post_feedback`
 - 프론트: `sendFeedback(payload: FeedbackPayload): Promise<void>`
   - 호출: real.ts:84 `sendFeedback: (payload) => http.post('/feedback', payload),`
+
+**요청 본문** `FeedbackPayload` (필수)
+
+| 필드 | 타입 | 필수 | 설명·제약 |
+|---|---|---|---|
+| `kind` | `"general" \| "bug"` | 예 |  |
+| `rating` | `integer \| null` |  | ≥ 1.0, ≤ 5.0 |
+| `screen` | `string \| null` |  | 최대 길이 200 |
+| `categories` | `string[]` |  | 최대 개수 20 |
+| `message` | `string` | 예 | 최대 길이 5000 |
+
+**응답** `204` 본문 없음
+
+**에러**: `401` 인증 필요 · 토큰 만료/폐기 (프론트는 /auth/refresh 를 한 번 시도) · `403` 권한 없음 · 쿠키 세션의 쓰기 요청에서 CSRF 불일치 · `422` 요청 검증 실패 (FastAPI 형식 detail 배열)
 
 ### MCP
 
