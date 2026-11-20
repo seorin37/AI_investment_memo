@@ -71,7 +71,6 @@ export function AppWithdraw(p: WithdrawProps) {
         <Pressable disabled={!ok} onPress={() => setAsk(true)} style={({ pressed }) => [st.cta, !ok && st.ctaDis, ok && { backgroundColor: MC.red }, pressed && { opacity: 0.9 }]} accessibilityRole="button">
           <Text style={[st.ctaT, !ok && { color: MC.ink3 }]}>탈퇴하기</Text>
         </Pressable>
-        <Text keepAll style={st.cap}>동의에 체크하면 빨간 버튼으로 바뀌고, 누르면 확인 창을 한 번 더 띄워요</Text>
       </View>
       <ConfirmSheet
         open={ask}
@@ -104,5 +103,4 @@ const st = StyleSheet.create({
   cta: { borderRadius: 16, paddingVertical: 16, minHeight: 56, alignItems: 'center', justifyContent: 'center', backgroundColor: MC.ink },
   ctaDis: { backgroundColor: '#E3E5E9' },
   ctaT: { fontSize: 16, lineHeight: 23, fontWeight: '800', color: '#FFFFFF' },
-  cap: { textAlign: 'center', fontSize: 11, lineHeight: 15.4, color: MC.ink3, marginTop: 6 },
 });
