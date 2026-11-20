@@ -57,7 +57,7 @@
 
 ## 2. 현황표
 
-상태: **구현됨** 43개 (프론트가 부르고 백엔드에 있음) · **mock** 17개 (백엔드 미구현 — frontend/src/api/index.ts MOCK_ONLY 로 USE_MOCK=false 에서도 mock 응답)
+상태: **구현됨** 48개 (프론트가 부르고 백엔드에 있음) · **mock** 13개 (백엔드 미구현 — frontend/src/api/index.ts MOCK_ONLY 로 USE_MOCK=false 에서도 mock 응답)
 
 <!-- api-table:start (담당·비고 칸만 손으로 고치세요. 나머지 칸은 다시 생성하면 덮어씁니다) -->
 | 영역 | 메서드 | 경로 | 프론트 함수 | 상태 | 담당 | 비고 |
@@ -111,11 +111,11 @@
 | 휴지통 | GET | `/trash` | listTrash (real.ts) | 구현됨 |  |  |
 | 휴지통 | DELETE | `/trash/{trash_id}` | purgeTrash (real.ts) | 구현됨 |  |  |
 | 휴지통 | POST | `/trash/{trash_id}/restore` | restoreTrash (real.ts) | 구현됨 |  |  |
-| 크레딧 | GET | `/me/usage` |  | 백엔드만 있음 |  |  |
-| 투자 기록 | GET | `/journal` | listJournal (real.ts) | mock |  |  |
-| 투자 기록 | POST | `/journal` | createJournal (real.ts) | mock |  |  |
-| 투자 기록 | DELETE | `/journal/{id}` | deleteJournal (real.ts) | mock |  |  |
-| 투자 기록 | PATCH | `/journal/{id}` | updateJournal (real.ts) | mock |  |  |
+| 크레딧 | GET | `/me/usage` | getUsage (real.ts) | 구현됨 |  |  |
+| 투자 기록 | GET | `/journal` | listJournal (real.ts) | 구현됨 |  |  |
+| 투자 기록 | POST | `/journal` | createJournal (real.ts) | 구현됨 |  |  |
+| 투자 기록 | DELETE | `/journal/{entry_id}` | deleteJournal (real.ts) | 구현됨 |  |  |
+| 투자 기록 | PATCH | `/journal/{entry_id}` | updateJournal (real.ts) | 구현됨 |  |  |
 | 캘린더 | GET | `/calendar` | listCalendar (real.ts) | mock |  |  |
 | 캘린더 | POST | `/calendar` | createCalendarEvent (real.ts) | mock |  |  |
 | 인사이트 | GET | `/insights/compare-memos` | listCompareMemos (real.ts) | mock |  |  |
@@ -1334,7 +1334,7 @@ OpenAPI 응답 스키마 `MyStockResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/board/routes.py` `delete_board_item`
 - 프론트: `deleteBoardItem(id: string): Promise<void>`
-  - 호출: board.ts:109 `` deleteBoardItem: (id: string) => http.del<void>(`/board-items/${id}`), ``
+  - 호출: board.ts:110 `` deleteBoardItem: (id: string) => http.del<void>(`/board-items/${id}`), ``
 
 **요청 파라미터**
 
@@ -1352,7 +1352,7 @@ OpenAPI 응답 스키마 `MyStockResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/board/routes.py` `get_board_item`
 - 프론트: `getBoardItem(id: string): Promise<BoardItem>`
-  - 호출: board.ts:95 `` return normalizeBoardItem(await http.get<RawBoardItem>(`/board-items/${id}`)); ``
+  - 호출: board.ts:96 `` return normalizeBoardItem(await http.get<RawBoardItem>(`/board-items/${id}`)); ``
 
 **요청 파라미터**
 
@@ -1465,7 +1465,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/board/routes.py` `update_board_item`
 - 프론트: `updateBoardItem(id: string, patch: BoardItemPatch): Promise<BoardItem>`
-  - 호출: board.ts:107 `` return normalizeBoardItem(await http.patch<RawBoardItem>(`/board-items/${id}`, patch)); ``
+  - 호출: board.ts:108 `` return normalizeBoardItem(await http.patch<RawBoardItem>(`/board-items/${id}`, patch)); ``
 
 **요청 파라미터**
 
@@ -1599,7 +1599,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/board/routes.py` `update_checklist_item`
 - 프론트: `setBoardChecklistItem(checklistId: string, itemId: string, done: boolean): Promise<void>`
-  - 호출: board.ts:116 `` await http.patch<RawBoardItem>(`/checklists/${checklistId}/items/${itemId}`, { done }); ``
+  - 호출: board.ts:117 `` await http.patch<RawBoardItem>(`/checklists/${checklistId}/items/${itemId}`, { done }); ``
 
 **요청 파라미터**
 
@@ -1769,7 +1769,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/board/routes.py` `set_ai_link`
 - 프론트: `setAiLink(memoId: string, enabled: boolean): Promise<Memo>`
-  - 호출: board.ts:112 `` await http.put<RawBoardItem>(`/memos/${memoId}/ai-link`, { enabled }), ``
+  - 호출: board.ts:113 `` await http.put<RawBoardItem>(`/memos/${memoId}/ai-link`, { enabled }), ``
 
 **요청 파라미터**
 
@@ -1988,7 +1988,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/board/routes.py` `list_board`
 - 프론트: `listBoard(code: string): Promise<BoardItem[]>`
-  - 호출: board.ts:91 `` const rows = await http.get<RawBoardItem[]>(`/stocks/${code}/board`); ``
+  - 호출: board.ts:92 `` const rows = await http.get<RawBoardItem[]>(`/stocks/${code}/board`); ``
 
 **요청 파라미터**
 
@@ -2185,7 +2185,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse[]
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/board/routes.py` `create_checklist`
 - 프론트: `createChecklist(code: string, input: ChecklistInput): Promise<Checklist>`
-  - 호출: board.ts:101 `` return normalizeBoardItem(await http.post<RawBoardItem>(`/stocks/${code}/checklists`, input)) as Checklist; ``
+  - 호출: board.ts:102 `` return normalizeBoardItem(await http.post<RawBoardItem>(`/stocks/${code}/checklists`, input)) as Checklist; ``
 
 **요청 파라미터**
 
@@ -2275,6 +2275,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 | `created_at` | `ISODate` | 예 |
 | `updated_at` | `ISODate` | 예 |
 | `items` | `ChecklistItem[]` | 예 |
+| `pinned` | `boolean` |  |
 
 <details><summary>예시</summary>
 
@@ -2293,7 +2294,8 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
       "text": "string",
       "done": false
     }
-  ]
+  ],
+  "pinned": false
 }
 ```
 
@@ -2307,7 +2309,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/board/routes.py` `create_memo`
 - 프론트: `createMemo(code: string, input: MemoInput): Promise<Memo>`
-  - 호출: board.ts:98 `` return normalizeBoardItem(await http.post<RawBoardItem>(`/stocks/${code}/memos`, input)) as Memo; ``
+  - 호출: board.ts:99 `` return normalizeBoardItem(await http.post<RawBoardItem>(`/stocks/${code}/memos`, input)) as Memo; ``
 
 **요청 파라미터**
 
@@ -2449,7 +2451,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/board/routes.py` `create_reference`
 - 프론트: `createReference(code: string, input: ReferenceInput): Promise<ReferenceBoard>`
-  - 호출: board.ts:104 `` return normalizeBoardItem(await http.post<RawBoardItem>(`/stocks/${code}/references`, input)) as ReferenceBoard; ``
+  - 호출: board.ts:105 `` return normalizeBoardItem(await http.post<RawBoardItem>(`/stocks/${code}/references`, input)) as ReferenceBoard; ``
 
 **요청 파라미터**
 
@@ -3060,10 +3062,40 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 
 이번 기간 사용량. 이번 달 기본량을 아직 안 받았으면 여기서 지급한다(쓰기 세션).
 
-- 상태: **백엔드만 있음**
+- 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/credits/routes.py` `get_my_usage`
+- 프론트: `getUsage(): Promise<CreditUsage>`
+  - 호출: real.ts:80 `getUsage: () => http.get('/me/usage'),`
 
 **응답** `200`
+
+프론트 타입 (mock 기준) `CreditUsage`
+
+| 필드 | 타입 | 필수 |
+|---|---|---|
+| `usage_percent` | `number` | 예 |
+| `used` | `number` | 예 |
+| `balance` | `number` | 예 |
+| `period_start` | `string` | 예 |
+| `renews_at` | `ISODate` | 예 |
+| `renew_label` | `string` | 예 |
+| `paused` | `boolean` | 예 |
+
+<details><summary>예시</summary>
+
+```json
+{
+  "usage_percent": 0,
+  "used": 0,
+  "balance": 0,
+  "period_start": "string",
+  "renews_at": "2026-11-20T09:00:00+09:00",
+  "renew_label": "string",
+  "paused": false
+}
+```
+
+</details>
 
 **에러**: `401` 인증 필요 · 토큰 만료/폐기 (프론트는 /auth/refresh 를 한 번 시도)
 
@@ -3072,10 +3104,12 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 <a id="get--journal"></a>
 #### `GET /journal`
 
-- 상태: **mock**
-- 인증: (백엔드 미구현) · 응답은 `frontend/src/api/mock/index.ts`의 같은 함수가 기준
+- 상태: **구현됨**
+- 인증: 필요 · 구현: `backend/app/journal/routes.py` `list_journal`
 - 프론트: `listJournal(): Promise<JournalEntry[]>`
   - 호출: real.ts:46 `listJournal: () => http.get('/journal'),`
+
+**응답** `200`
 
 프론트 타입 (mock 기준) `JournalEntry[]`
 
@@ -3114,14 +3148,26 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 
 </details>
 
+**에러**: `401` 인증 필요 · 토큰 만료/폐기 (프론트는 /auth/refresh 를 한 번 시도) · `503` 서버 설정·의존 서비스 문제
+
 <a id="post--journal"></a>
 #### `POST /journal`
 
-- 상태: **mock**
-- 인증: (백엔드 미구현) · 응답은 `frontend/src/api/mock/index.ts`의 같은 함수가 기준
+- 상태: **구현됨**
+- 인증: 필요 · 구현: `backend/app/journal/routes.py` `create_journal`
 - 프론트: `createJournal(input: JournalInput): Promise<JournalEntry>`
   - 호출: real.ts:47 `createJournal: (input) => http.post('/journal', input),`
 
+**요청 본문** `JournalCreate` (필수)
+
+| 필드 | 타입 | 필수 | 설명·제약 |
+|---|---|---|---|
+| `title` | `string` |  | 최대 길이 500, 기본 `""` |
+| `stock_code` | `string \| null` |  | 형식 `^[0-9A-Z]{6}$` |
+| `blocks` | `TextBlock \| ChecklistBlock \| TableBlock \| AttachmentBlock[]` |  | 최대 개수 500 |
+
+**응답** `201`
+
 프론트 타입 (mock 기준) `JournalEntry`
 
 | 필드 | 타입 | 필수 |
@@ -3157,21 +3203,51 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 
 </details>
 
-<a id="delete--journal-id"></a>
-#### `DELETE /journal/{id}`
+**에러**: `401` 인증 필요 · 토큰 만료/폐기 (프론트는 /auth/refresh 를 한 번 시도) · `403` 권한 없음 · 쿠키 세션의 쓰기 요청에서 CSRF 불일치 · `422` 요청 검증 실패 (FastAPI 형식 detail 배열) · `503` 서버 설정·의존 서비스 문제
 
-- 상태: **mock**
-- 인증: (백엔드 미구현) · 응답은 `frontend/src/api/mock/index.ts`의 같은 함수가 기준
+<a id="delete--journal-entryid"></a>
+#### `DELETE /journal/{entry_id}`
+
+휴지통으로 보낸다 (deleted_at). 복원·영구 삭제는 /trash.
+
+- 상태: **구현됨**
+- 인증: 필요 · 구현: `backend/app/journal/routes.py` `delete_journal`
 - 프론트: `deleteJournal(id: string): Promise<void>`
   - 호출: real.ts:49 `` deleteJournal: (id) => http.del(`/journal/${id}`), ``
 
-<a id="patch--journal-id"></a>
-#### `PATCH /journal/{id}`
+**요청 파라미터**
 
-- 상태: **mock**
-- 인증: (백엔드 미구현) · 응답은 `frontend/src/api/mock/index.ts`의 같은 함수가 기준
+| 이름 | 위치 | 타입 | 필수 | 설명·제약 |
+|---|---|---|---|---|
+| `entry_id` | 경로 | `integer` | 예 |  |
+
+**응답** `204` 본문 없음
+
+**에러**: `401` 인증 필요 · 토큰 만료/폐기 (프론트는 /auth/refresh 를 한 번 시도) · `403` 권한 없음 · 쿠키 세션의 쓰기 요청에서 CSRF 불일치 · `404` 대상 없음 (다른 사용자 것 포함) · `422` 요청 검증 실패 (FastAPI 형식 detail 배열)
+
+<a id="patch--journal-entryid"></a>
+#### `PATCH /journal/{entry_id}`
+
+- 상태: **구현됨**
+- 인증: 필요 · 구현: `backend/app/journal/routes.py` `update_journal`
 - 프론트: `updateJournal(id: string, patch: Partial<JournalInput>): Promise<JournalEntry>`
   - 호출: real.ts:48 `` updateJournal: (id, patch) => http.patch(`/journal/${id}`, patch), ``
+
+**요청 파라미터**
+
+| 이름 | 위치 | 타입 | 필수 | 설명·제약 |
+|---|---|---|---|---|
+| `entry_id` | 경로 | `integer` | 예 |  |
+
+**요청 본문** `JournalPatch` (필수)
+
+| 필드 | 타입 | 필수 | 설명·제약 |
+|---|---|---|---|
+| `title` | `string \| null` |  | 최대 길이 500 |
+| `stock_code` | `string \| null` |  | 형식 `^[0-9A-Z]{6}$` |
+| `blocks` | `TextBlock \| ChecklistBlock \| TableBlock \| AttachmentBlock[] \| null` |  | 최대 개수 500 |
+
+**응답** `200`
 
 프론트 타입 (mock 기준) `JournalEntry`
 
@@ -3207,6 +3283,8 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 ```
 
 </details>
+
+**에러**: `401` 인증 필요 · 토큰 만료/폐기 (프론트는 /auth/refresh 를 한 번 시도) · `403` 권한 없음 · 쿠키 세션의 쓰기 요청에서 CSRF 불일치 · `404` 대상 없음 (다른 사용자 것 포함) · `422` 요청 검증 실패 (FastAPI 형식 detail 배열) · `503` 서버 설정·의존 서비스 문제
 
 ### 캘린더
 
@@ -3457,7 +3535,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **mock**
 - 인증: (백엔드 미구현) · 응답은 `frontend/src/api/mock/index.ts`의 같은 함수가 기준
 - 프론트: `deleteAllData(): Promise<void>`
-  - 호출: real.ts:82 `deleteAllData: () => http.del('/data'),`
+  - 호출: real.ts:83 `deleteAllData: () => http.del('/data'),`
 
 <a id="post--data-export"></a>
 #### `POST /data/export`
@@ -3465,7 +3543,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **mock**
 - 인증: (백엔드 미구현) · 응답은 `frontend/src/api/mock/index.ts`의 같은 함수가 기준
 - 프론트: `exportData(format: 'csv' | 'json'): Promise<{ url: string }>`
-  - 호출: real.ts:81 `exportData: (format) => http.post('/data/export', { format }),`
+  - 호출: real.ts:82 `exportData: (format) => http.post('/data/export', { format }),`
 
 프론트 타입 (mock 기준) `{ url: string }`
 
@@ -3489,7 +3567,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **mock**
 - 인증: (백엔드 미구현) · 응답은 `frontend/src/api/mock/index.ts`의 같은 함수가 기준
 - 프론트: `getDataStats(): Promise<DataStats>`
-  - 호출: real.ts:80 `getDataStats: () => http.get('/data/stats'),`
+  - 호출: real.ts:81 `getDataStats: () => http.get('/data/stats'),`
 
 프론트 타입 (mock 기준) `DataStats`
 
@@ -3519,7 +3597,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **mock**
 - 인증: (백엔드 미구현) · 응답은 `frontend/src/api/mock/index.ts`의 같은 함수가 기준
 - 프론트: `sendFeedback(payload: FeedbackPayload): Promise<void>`
-  - 호출: real.ts:83 `sendFeedback: (payload) => http.post('/feedback', payload),`
+  - 호출: real.ts:84 `sendFeedback: (payload) => http.post('/feedback', payload),`
 
 ### MCP
 
