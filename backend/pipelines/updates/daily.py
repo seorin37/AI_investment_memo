@@ -73,12 +73,20 @@ def lock_connection(shared: bool):
     return psycopg.connect(dsn, autocommit=True)
 
 
+def _write_dsn(shared: bool) -> str:
+    """카드를 쓰는 DB 주소 (experiment와 같은 규칙: 공용 DB는 --allow-shared-write일 때만, 아니면 TEST_DATABASE_URL)."""
+    from .db_store import shared_write_dsn
+    return shared_write_dsn() if shared else os.environ.get("TEST_DATABASE_URL", "")
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="AI 업데이트 매일 실행 (잠금·하루 비용 한도·상태 파일)")
     ap.add_argument("--allow-shared-write", action="store_true", help="공용 DB에 쓴다 (없으면 로컬 테스트 DB 리허설)")
     ap.add_argument("--max-usd-per-day", type=float, help="하루 비용 한도 (기본: 설정 daily.max_usd_per_day)")
     ap.add_argument("--symbols", default="ALL")
     ap.add_argument("--config", default="configs/updates.yaml")
+    ap.add_argument("--credits", action="store_true",
+                    help="크레딧 적용 (잔액 0인 사용자 건너뛰기, 만든 카드마다 차감, configs/credits.yaml). 설정 daily.credits: true와 같다")
     args = ap.parse_args(argv)
 
     from ..common.config import load_config, resolve_path
@@ -106,9 +114,22 @@ def main(argv: list[str] | None = None) -> int:
             print(status["detail"])
             return 0
         from .experiment import main as experiment_main
-        argv2 = ["--llm", "openai", "--store", "db", "--symbols", args.symbols, "--max-usd", str(remaining), "--job", "daily"]
+        argv2 = ["--llm", "openai", "--store", "db", "--symbols", args.symbols, "--max-usd", str(remaining), "--job", "daily",
+                 "--config", args.config]                       # 2026-11-20: 질문 답 설정(updates_exp.yaml 등)도 같은 실행기로
         if args.allow_shared_write:
             argv2.append("--allow-shared-write")
+        credits_on = args.credits or bool(cfg.get("credits", False))
+        if credits_on:                                          # 2026-11-20 크레딧: 잔액 0인 사용자 항목은 건너뜀 (가격 조건은 무료)
+            from app.credits.daily import eligible_item_ids
+            keep, cinfo = eligible_item_ids(_write_dsn(args.allow_shared_write),
+                                            None if args.symbols.upper() == "ALL" else tuple(args.symbols.split(",")),
+                                            args.allow_shared_write)
+            status["credits"] = cinfo
+            if not keep:
+                status.update(status="skipped_no_credit", detail="처리할 항목이 없음 (모든 사용자 크레딧 0 또는 항목 없음)")
+                print(status["detail"])
+                return 0
+            argv2 += ["--item-ids", ",".join(keep)]
         code = experiment_main(argv2)
         usage = last_daily_since(usage_log, status["started_at"]) or {}
         status.update(status="success" if code == 0 else "failed", exit_code=code, run_dir=usage.get("run_dir"),
@@ -117,6 +138,12 @@ def main(argv: list[str] | None = None) -> int:
                       skipped_items=usage.get("skipped_items"))
         if usage.get("budget_stopped"):
             status["status"] = "budget_stopped"
+        if credits_on and usage.get("run_dir"):                 # 이번 실행이 만든 카드마다 차감 (db_rows.json)
+            from app.credits.daily import charge_run
+            rows_path = Path(usage["run_dir"]) / "db_rows.json"
+            made = json.loads(rows_path.read_text(encoding="utf-8")).get("tracking_updates", []) if rows_path.exists() else []
+            status["credits"] = {**status.get("credits", {}),
+                                 **charge_run(_write_dsn(args.allow_shared_write), made, args.allow_shared_write)}
         return 0 if code == 0 else 1
     except (Exception, SystemExit) as exc:                      # 실패(experiment의 SystemExit 포함): 상태 파일·표준 오류, 종료 코드 1
         status.update(status="failed", error=f"{type(exc).__name__}: {str(exc)[:500]}", traceback=traceback.format_exc()[-4000:])

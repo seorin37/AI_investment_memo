@@ -114,6 +114,12 @@ class ReferenceCreate(BaseModel):
         return cleaned
 
 
+class BoardOrderPut(BaseModel):
+    """보드 카드 전체 순서 (왼쪽→오른쪽, 위→아래). 빠진 카드는 서버가 지금 순서대로 맨 뒤에 붙인다."""
+    model_config = ConfigDict(extra="forbid")
+    ids: list[int] = Field(max_length=1000)
+
+
 class BoardItemPatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
     title: str | None = Field(default=None, min_length=1, max_length=500)

@@ -85,12 +85,6 @@ export function normalizeBoardItem(row: RawBoardItem): BoardItem {
   throw new Error(`지원하지 않는 보드 유형입니다: ${text(row.kind) || 'unknown'}`);
 }
 
-function rejectUnsupportedPosition(patch: BoardItemPatch) {
-  if ('position' in patch && patch.position !== undefined) {
-    throw new Error('실제 메모 보드는 순서 변경 저장을 아직 지원하지 않습니다.');
-  }
-}
-
 export function createRealBoardApi(http: BoardHttp) {
   return {
     async listBoard(code: string): Promise<BoardItem[]> {
@@ -110,7 +104,6 @@ export function createRealBoardApi(http: BoardHttp) {
       return normalizeBoardItem(await http.post<RawBoardItem>(`/stocks/${code}/references`, input)) as ReferenceBoard;
     },
     async updateBoardItem(id: string, patch: BoardItemPatch): Promise<BoardItem> {
-      rejectUnsupportedPosition(patch);
       return normalizeBoardItem(await http.patch<RawBoardItem>(`/board-items/${id}`, patch));
     },
     deleteBoardItem: (id: string) => http.del<void>(`/board-items/${id}`),

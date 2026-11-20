@@ -13,6 +13,7 @@ from app.auth.routes import ACCESS_COOKIE, CSRF_COOKIE, REFRESH_COOKIE, router a
 from app.board.routes import router as board_router
 from app.marketdata.routes import router as marketdata_router
 from app.updates.routes import router as updates_router
+from app.credits.routes import router as credits_router
 from app.stocks.routes import router as stocks_router
 from app.trash.routes import router as trash_router
 from pipelines.common.db import DatabaseConfigError, get_read_dsn
@@ -60,6 +61,7 @@ app.include_router(auth_router)
 app.include_router(stocks_router)
 app.include_router(board_router)
 app.include_router(updates_router)
+app.include_router(credits_router)
 app.include_router(account_router)
 app.include_router(marketdata_router)
 app.include_router(trash_router)

@@ -275,3 +275,49 @@ class MemoAnalysisTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AskAnswerTest(unittest.TestCase):
+    """질문(0019 type=ask): 답은 tracking_updates.type='answer', 답하면(합친 카드 포함) 질문 항목을 닫는다."""
+
+    ASK = TrackingItem("50", "005930", "topic", "3분기 영업이익률 얼마인지", category="ask")
+
+    def test_load_items_maps_ask_to_one_time_topic(self):
+        from pipelines.updates.db_store import load_items
+        conn = LoadItemsMemoTextTest.ItemsConn([(50, "005930", "ask", "영업이익률 얼마인지", None, None, "얼마야?", "실적")])
+        item = load_items(conn, ("005930",))[0]
+        self.assertEqual((item.type, item.category), ("topic", "ask"))
+
+    def test_answer_card_and_close_merged_asks(self):
+        conn = Conn()
+        w = DbCardWriter(conn)
+        d = UpdateDraft(self.ASK, "disclosure", "영업이익률 55%", "사실.", "연결", [("disc:R1#0", "사실")], card_schema="v2",
+                        merged_items=[{"item_id": "51"}])
+        w.write(self.ASK, d, {"headline": "영업이익률 55%"})
+        _, p = next(c for c in conn.calls if c[0].lstrip().startswith("INSERT INTO tracking_updates"))
+        self.assertEqual(p["type"], "answer")
+        self.assertEqual(json.loads(p["details"])["answer_status"], "answer")
+        sql, p = next(c for c in conn.calls if c[0].lstrip().startswith("UPDATE tracking_items SET status = 'done'"))
+        self.assertIn("type = 'ask'", sql)                                  # 주제 항목은 닫지 않는다
+        self.assertEqual(p["ids"], [50, 51])
+
+    def test_topic_card_still_closes_merged_ask(self):
+        conn = Conn()
+        d = UpdateDraft(ITEM, "disclosure", "실적", "사실.", "연결", [("disc:R1#0", "사실")], card_schema="v2",
+                        merged_items=[{"item_id": "51"}])
+        DbCardWriter(conn).write(ITEM, d, {})
+        _, p = next(c for c in conn.calls if c[0].lstrip().startswith("INSERT INTO tracking_updates"))
+        self.assertEqual(p["type"], "disclosure")
+        _, p = next(c for c in conn.calls if c[0].lstrip().startswith("UPDATE tracking_items SET status = 'done'"))
+        self.assertEqual(p["ids"], [42, 51])
+
+    def test_no_answer_is_saved_and_closes(self):
+        from pipelines.updates.response import ASK_NO_ANSWER, ASK_NO_ANSWER_TEXT
+        conn = Conn()
+        w = DbCardWriter(conn)
+        w.write_no_answer(self.ASK, Response(ASK_NO_ANSWER, "item", item_id="50", reason="no_candidates",
+                                             message=ASK_NO_ANSWER_TEXT))
+        _, p = next(c for c in conn.calls if c[0].lstrip().startswith("INSERT INTO tracking_updates"))
+        self.assertEqual((p["type"], p["summary"]), ("answer", ASK_NO_ANSWER_TEXT))
+        self.assertEqual(json.loads(p["details"])["answer_status"], "no_answer")
+        self.assertEqual(w.written["no_answer"], 1)
