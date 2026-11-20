@@ -8,6 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.account.routes import router as account_router
 from app.auth.routes import ACCESS_COOKIE, CSRF_COOKIE, REFRESH_COOKIE, router as auth_router
 from app.board.routes import router as board_router
 from app.updates.routes import router as updates_router
@@ -57,6 +58,7 @@ app.include_router(auth_router)
 app.include_router(stocks_router)
 app.include_router(board_router)
 app.include_router(updates_router)
+app.include_router(account_router)
 
 
 @app.get("/health")
