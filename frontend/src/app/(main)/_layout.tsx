@@ -200,6 +200,8 @@ export default function MainLayout() {
         ...mockStudioHead,
         usagePct: mockMyUsage.usage_pct,
         onUsage: () => setStudioPop('usage'),
+        /* 접힌 열: 만드는 중인 기능에 '·' 점 (원본 studio.tsx 177 — 퀴즈 제외) */
+        badges: sp.job?.status === 'run' ? { [sp.job.kind]: '·' } : undefined,
         onFeature: (k) => { setStudioOpen(true); studioFeat(k); },
         /* ⑧-8a 스튜디오 홈 (원본 studio.tsx Home). 오디오·보고서·실험실·퀴즈 화면은 8b~8d */
         content: (

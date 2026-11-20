@@ -1,5 +1,5 @@
-import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { AppIcon, WebIcon } from '@/ui/icons/Icon';
 import { fpx, size, studioFeature, webColor } from '@/ui/theme';
@@ -7,6 +7,27 @@ import { useCoachRef } from '@/ui/shared/Coach';
 import type { StudioColumnFrameProps, StudioFeature } from './WebShell.types';
 
 type HoverState = { pressed: boolean; hovered?: boolean };
+
+/* 접힌 열 기능 점 (원본 .st-dot: 1.6s ease-in-out 무한 · 50% 에서 바깥 5px 링 rgba(229,72,77,.18)) */
+function RailDot({ label }: { label: string }) {
+  const [v] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    const a = Animated.loop(Animated.sequence([
+      Animated.timing(v, { toValue: 1, duration: 800, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
+      Animated.timing(v, { toValue: 0, duration: 800, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
+    ]));
+    a.start();
+    return () => a.stop();
+  }, [v]);
+  return (
+    <View style={st.dotWrap} pointerEvents="none">
+      <Animated.View style={[st.dotRing, { opacity: v }]} />
+      <View style={st.dot}>
+        <Text style={st.dotT}>{label}</Text>
+      </View>
+    </View>
+  );
+}
 
 const FEAT: { key: StudioFeature; label: string }[] = [
   { key: 'audio', label: 'AI 오디오' },
@@ -45,11 +66,7 @@ export function StudioColumnFrame({ open, onToggle, stockCount, aiMemoCount, usa
           {FEAT.map((f) => (
             <Pressable key={f.key} onPress={() => onFeature(f.key)} accessibilityRole="button" accessibilityLabel={f.label} style={[st.railBtn, { backgroundColor: studioFeature[f.key].box }]}>
               <FeatIcon f={f.key} />
-              {badges?.[f.key] ? (
-                <View style={st.dot}>
-                  <Text style={st.dotT}>{badges[f.key]}</Text>
-                </View>
-              ) : null}
+              {badges?.[f.key] ? <RailDot label={badges[f.key]!} /> : null}
             </Pressable>
           ))}
         </View>
@@ -107,6 +124,8 @@ const st = StyleSheet.create({
   railBtn: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   spacer: { height: 16 },
   railLine: { height: 1, width: 32, backgroundColor: webColor.line3 },
-  dot: { position: 'absolute', right: -12, top: -4, height: 16, minWidth: 16, borderRadius: 999, borderWidth: 2, borderColor: '#FFFFFF', backgroundColor: webColor.badge, paddingHorizontal: 3, alignItems: 'center', justifyContent: 'center' },
+  dotWrap: { position: 'absolute', right: -12, top: -4 },
+  dotRing: { position: 'absolute', left: -5, top: -5, right: -5, bottom: -5, borderRadius: 999, backgroundColor: 'rgba(229,72,77,0.18)' },
+  dot: { height: 16, minWidth: 16, borderRadius: 999, borderWidth: 2, borderColor: '#FFFFFF', backgroundColor: webColor.badge, paddingHorizontal: 3, alignItems: 'center', justifyContent: 'center' },
   dotT: { fontSize: 11, lineHeight: 11, fontWeight: '500', color: '#FFFFFF' },
 });

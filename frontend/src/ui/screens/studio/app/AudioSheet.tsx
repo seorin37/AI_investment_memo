@@ -27,7 +27,7 @@ export function AppAudioSheet({ open, stocks, periods, onClose, onMake }: { open
     <Sheet open={open} onClose={onClose} label="AI 오디오 만들기">
       <View style={{ paddingHorizontal: 18 }}>
         <Text style={st.h}>AI 오디오 만들기</Text>
-        <Text style={st.d}>들을 종목과 기간을 골라 주세요</Text>
+        <Text numberOfLines={1} style={st.d}>들을 종목과 기간을 골라 주세요</Text>
         <View style={st.qc}>
           {([['all', '전체 종목'], ['own', '보유 종목 전체'], ['watch', '관심 종목 전체']] as const).map(([q, l]) => {
             const on = same(want(q));

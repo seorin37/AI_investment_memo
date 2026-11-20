@@ -36,13 +36,6 @@ export function AppFirstMemo({ stocks, stock_code, onCancel, onEmpty, onSave }: 
   const ed = useRef<{ focus: () => void; blur: () => void }>(null);
   const scroll = useRef<ScrollViewInstance>(null);
   const empty = !text.trim();
-  /* 말풍선이 뜨면 끝까지 내려 키보드 위로 보이게 (360 에서 키보드에 가려짐) */
-  useEffect(() => {
-    if (tip !== 'open') return;
-    const t = setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 80);
-    return () => clearTimeout(t);
-  }, [tip]);
-
   /* 원본: 열리고 0.4초 뒤 편집 시작 */
   useEffect(() => {
     const t = setTimeout(() => ed.current?.focus(), 400 * k);
@@ -122,14 +115,17 @@ export function AppFirstMemo({ stocks, stock_code, onCancel, onEmpty, onSave }: 
           <Pressable onPress={() => { setText(''); setTyping(true); }} disabled={typing} style={st.fill} accessibilityRole="button" hitSlop={{ top: 8, bottom: 8 }}>
             <Text style={st.fillT}>예시로 채워 보기</Text>
           </Pressable>
-          <View style={st.aisw}>
-            <View style={st.flex}>
-              <Text style={st.aiswB}>AI 연결</Text>
-              <Text keepAll style={st.aiswS}>켜고 완료하면 추적할 항목을 함께 확인해요</Text>
+          {/* 말풍선은 AI 칸 기준 absolute (원본 .tip top:calc(100% + 10px)) — 떠도 메모지·칸이 밀리지 않음 */}
+          <View style={st.aiWrap}>
+            <View style={st.aisw}>
+              <View style={st.flex}>
+                <Text style={st.aiswB}>AI 연결</Text>
+                <Text keepAll style={st.aiswS}>켜고 완료하면 추적할 항목을 함께 확인해요</Text>
+              </View>
+              <Toggle variant="app" on={ai} onChange={(v) => { setAi(v); setTip('done'); }} label="AI 연결" />
             </View>
-            <Toggle variant="app" on={ai} onChange={(v) => { setAi(v); setTip('done'); }} label="AI 연결" />
+            {tip === 'open' ? <Tip onClose={() => setTip('done')} /> : null}
           </View>
-          {tip === 'open' ? <Tip onClose={() => setTip('done')} /> : null}
         </ScrollView>
       </KeyboardAvoidingView>
       <FirstStockSheet
@@ -186,7 +182,8 @@ const st = StyleSheet.create({
   aisw: { backgroundColor: '#F6F6F8', borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 },
   aiswB: { fontSize: 15, lineHeight: 22, fontWeight: '700', color: C.ink },
   aiswS: { fontSize: 12, lineHeight: 17, color: C.ink3 },
-  tip: { alignSelf: 'flex-end', marginTop: 10, marginRight: 6, width: 258, backgroundColor: '#1F2024', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, shadowColor: '#000000', shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 12 }, elevation: 8 },
+  aiWrap: { zIndex: 3 },
+  tip: { position: 'absolute', top: '100%', right: 6, marginTop: 10, width: 258, zIndex: 3, backgroundColor: '#1F2024', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, shadowColor: '#000000', shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 12 }, elevation: 8 },
   tipTail: { position: 'absolute', right: 28, top: -16, width: 0, height: 0, borderWidth: 8, borderColor: 'transparent', borderBottomColor: '#1F2024' },
   tipT: { fontSize: 13, lineHeight: 20.15, color: '#FFFFFF' },
   tipB: { fontWeight: '700', color: '#FFFFFF' },

@@ -23,7 +23,8 @@ export function AppReportSheet({ open, stocks, period, onClose, onMake }: { open
     <Sheet open={open} onClose={onClose} label="AI 주간보고서 만들기">
       <View style={{ paddingHorizontal: 18 }}>
         <Text style={st.h}>AI 주간보고서 만들기</Text>
-        <Text keepAll style={st.d}>고른 종목마다 시세·공시·재무·내 메모를 묶어 회사 보고서 형식으로 정리해요</Text>
+        {/* 412 에서 한 줄 (원본 캡처 데모08 처럼 — 줄을 넘기지 않음) */}
+        <Text numberOfLines={1} style={st.d}>고른 종목마다 시세·공시·재무·내 메모를 묶어 회사 보고서 형식으로 정리해요</Text>
         <View style={st.rper}><Text style={st.rperT}><Text style={st.rperB}>보고 기간  </Text>{period}</Text></View>
         <View style={st.qc}>
           {([['all', '전체 종목'], ['own', '보유 종목 전체'], ['watch', '관심 종목 전체']] as const).map(([q, l]) => {
