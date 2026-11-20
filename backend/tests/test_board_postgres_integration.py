@@ -143,3 +143,62 @@ def test_postgres_transaction_rollback_and_schema_constraints(isolated_db):
         assert connection.execute(text("SELECT count(*) FROM memos WHERE id = :id"), {"id": row_id}).scalar_one() == 0
         constraints = set(connection.execute(text("SELECT constraint_type FROM information_schema.table_constraints WHERE table_schema = 'public' AND table_name IN ('memos', 'checklist_items', 'memo_links')" )).scalars())
         assert {"PRIMARY KEY", "FOREIGN KEY"}.issubset(constraints)
+
+
+def test_postgres_board_order_new_front_after_pinned_and_reorder(isolated_db):
+    """보드 순서 (0019 memos.position): 새 카드는 맨 앞이되 고정 카드들 뒤, 테이프를 붙이면 맨 앞, 전체 순서 저장."""
+    engine, (user_a, user_b) = isolated_db
+    current = {"id": str(user_a)}
+    client = _client(engine, current)
+    board_url = f"/api/v1/stocks/{SYMBOLS[0]}/board"
+
+    def memo(title: str, pinned: bool = False) -> int:
+        response = client.post(f"/api/v1/stocks/{SYMBOLS[0]}/memos", json={
+            "title": title, "body": "b", "tags": [], "color": "yellow", "ai_linked": False, "pinned": pinned,
+        })
+        assert response.status_code == 201
+        return int(response.json()["id"])
+
+    def titles() -> list[str]:
+        board = client.get(board_url).json()
+        assert [item["position"] for item in board] == list(range(len(board)))
+        return [item["title"] for item in board]
+
+    other = client.post(f"/api/v1/stocks/{SYMBOLS[1]}/memos", json={
+        "title": "다른 종목", "body": "b", "tags": [], "color": "yellow", "ai_linked": False,
+    }).json()["id"]
+    a, b, c = memo("A"), memo("B"), memo("C")
+    assert titles() == ["C", "B", "A"]                          # 새 카드는 맨 앞
+    p = memo("P", pinned=True)
+    assert titles() == ["P", "C", "B", "A"]                     # 고정 카드는 맨 앞
+    d = memo("D")
+    assert titles() == ["P", "D", "C", "B", "A"]                # 새 카드는 고정 카드들 뒤
+    checklist = client.post(f"/api/v1/stocks/{SYMBOLS[0]}/checklists", json={"title": "체크", "items": []})
+    assert checklist.json()["position"] == 1
+    assert titles() == ["P", "체크", "D", "C", "B", "A"]
+
+    saved = client.put(f"/api/v1/stocks/{SYMBOLS[0]}/board-order", json={"ids": [a, p]})
+    assert saved.status_code == 200
+    assert [item["title"] for item in saved.json()] == ["A", "P", "체크", "D", "C", "B"]   # 빠진 카드는 지금 순서대로 뒤에
+    assert client.patch(f"/api/v1/board-items/{a}", json={"position": 99}).json()["position"] == 5
+    assert titles() == ["P", "체크", "D", "C", "B", "A"]
+
+    client.patch(f"/api/v1/board-items/{b}", json={"pinned": True})
+    assert titles() == ["B", "P", "체크", "D", "C", "A"]        # 테이프 붙이면 맨 앞
+    client.patch(f"/api/v1/board-items/{b}", json={"pinned": False})
+    assert titles() == ["P", "B", "체크", "D", "C", "A"]        # 떼면 고정 카드들 바로 뒤
+
+    assert client.delete(f"/api/v1/board-items/{d}").status_code == 204
+    assert titles() == ["P", "B", "체크", "C", "A"]
+    assert client.put(f"/api/v1/stocks/{SYMBOLS[0]}/board-order", json={"ids": [d]}).status_code == 422   # 지운 카드
+    assert client.put(f"/api/v1/stocks/{SYMBOLS[0]}/board-order", json={"ids": [int(other)]}).status_code == 422  # 다른 종목
+    assert client.put(f"/api/v1/stocks/{SYMBOLS[0]}/board-order", json={"ids": [c, c]}).status_code == 422
+    with engine.connect() as connection:
+        live = connection.execute(text(
+            "SELECT position FROM memos WHERE user_id = :u AND symbol = :s AND deleted_at IS NULL ORDER BY position"
+        ), {"u": user_a, "s": SYMBOLS[0]}).scalars().all()
+        assert live == [0, 1, 2, 3, 4]                          # 저장값도 0부터 빈틈없이 (지운 카드 뒤 다시 쓴 뒤)
+    assert client.get(f"/api/v1/stocks/{SYMBOLS[1]}/board").json()[0]["position"] == 0   # 다른 보드는 그대로
+
+    current["id"] = str(user_b)
+    assert client.put(f"/api/v1/stocks/{SYMBOLS[0]}/board-order", json={"ids": [a]}).status_code == 404
