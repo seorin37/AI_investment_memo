@@ -171,7 +171,11 @@ function BoardTab({ code, memoParam, ev, firstFlow, stockName, onboardingSelecte
       memo={connect ?? { title: '', body: '', color: 'yellow' }}
       state={cState}
       items={items}
-      onCancel={() => setConnect(null)}
+      onCancel={() => {
+        setConnect(null);
+        /* 첫 메모 흐름: 메모는 일반 메모로 저장됐으니 첫 홈으로 (고른 종목·홈 구성 유지) */
+        if (firstFlow) router.replace({ pathname: '/', params: { onboarding: 'first_saved', selected: onboardingSelected ?? '', home_mode: onboardingHomeMode ?? 'template' } });
+      }}
       onConfirm={() => {
         if (connect?.id) patch(connect.id, (m) => ({ ...m, ai_linked: true, ai_linked_at: mockToday }));
         setConnect(null);
