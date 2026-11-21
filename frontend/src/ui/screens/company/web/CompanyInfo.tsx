@@ -25,7 +25,7 @@ const QX = CW / 690;
 /**
  * 웹 기업정보 (원본 web/src/screens/company.tsx CompanyInfo · Figma 2.5 7 · 7.1 도움말 · 7.2 그래프 호버)
  * 종목 머리 · [보드 | 기업 정보] · 기업 개요 · 주가·거래량 (캔들 42개 · 마우스 따라 안내선) · 시세정보·투자정보 (52주 막대 · ? 도움말)
- * 실적 (매출·영업이익·당기순이익 · 막대 hover 말풍선) · 수익성 (영업이익률·순이익률·ROE·ROA) · 기업 건전성 (레이더 · 지표 고르기)
+ * 실적 (매출·영업이익·당기순이익 · 막대 hover 말풍선) · 수익성 (영업이익률·순이익률·ROE) · 기업 건전성 (레이더 · 지표 고르기)
  */
 export function WebCompanyInfo(p: CompanyInfoProps) {
   const [k, setK] = useState(1);
@@ -62,7 +62,8 @@ export function WebCompanyInfo(p: CompanyInfoProps) {
                   <Text style={st.h20}>기업 개요</Text>
                   <Text style={st.ovT}>{p.profile.overview}</Text>
                 </View>
-                <View style={st.g24}>
+                {/* 도움말이 다음 카드에 가려지지 않게 감싼 줄째 위로 (2026-11-21) */}
+                <View style={[st.g24, { zIndex: open && HELP_SMALL[open] ? 30 : 0 }]}>
                   <PriceChart p={p} k={k} />
                   <Quote p={p} ctl={ctl} />
                 </View>
@@ -180,7 +181,7 @@ function PriceChart({ p, k }: { p: CompanyInfoProps; k: number }) {
             style={{ left: 0, top: 0 }}
           />
           {labels.map(([v, y]) => (
-            <Text key={v} pointerEvents="none" style={[st.lbl11, { position: 'absolute', top: y, left: 596 * PX, width: 37 }]}>
+            <Text key={v} pointerEvents="none" numberOfLines={1} style={[st.lbl11, { position: 'absolute', top: y, left: 596 * PX, width: 62 }]}>
               {won(v)}
             </Text>
           ))}
@@ -195,8 +196,8 @@ function PriceChart({ p, k }: { p: CompanyInfoProps; k: number }) {
               {d}
             </Text>
           ))}
-          <View pointerEvents="none" style={[st.tag, { top: cur.y - 12.8, left: 589 * PX, width: 57 }]}>
-            <Text style={st.tagT}>{price}</Text>
+          <View pointerEvents="none" style={[st.tag, { top: cur.y - 12.8, left: 589 * PX, width: 70 }]}>
+            <Text style={st.tagT} numberOfLines={1}>{price}</Text>
           </View>
           <View pointerEvents="none" style={[st.tag, { top: 247, left: hx * PX - 34, width: 68 }]}>
             <Text style={st.tagD}>{cs[cur.i].date}</Text>
@@ -210,9 +211,9 @@ function PriceChart({ p, k }: { p: CompanyInfoProps; k: number }) {
 /* ---------- 시세정보 · 투자정보 (원본 Quote: 카드 230 · 왼쪽 6칸 · 52주 막대 · 오른쪽 6칸 + ?) ---------- */
 const HELP_SMALL: Record<string, [string, string]> = {
   PER: ['PER · 주가수익비율', '이익에 비해 주가가 얼마나 높은지 보여줘요.\n계산: 주가 ÷ 주당순이익(EPS)'],
-  EPS: ['EPS · 주당순이익', '회사가 벌어들인 순이익 중 보통주 한 주에 해당하는 금액이에요.\n계산: 최근 4개 분기 순이익 합 ÷ 주식 수'],
+  EPS: ['EPS · 주당순이익', '회사가 벌어들인 순이익 중 보통주 한 주에 해당하는 금액이에요.\n직전 사업연도(사업보고서) 기준이에요. 한국투자증권 제공 값'],
   PBR: ['PBR · 주가순자산비율', '순자산에 비해 주가가 얼마나 높은지 보여줘요.\n계산: 주가 ÷ 주당순자산(BPS)'],
-  BPS: ['BPS · 주당순자산', '자산에서 부채를 뺀 순자산 중 보통주 한 주에 해당하는 금액이에요.\n계산: 최근 분기 자본총계 ÷ 주식 수'],
+  BPS: ['BPS · 주당순자산', '자산에서 부채를 뺀 순자산 중 보통주 한 주에 해당하는 금액이에요.\n직전 사업연도(사업보고서) 말 기준이에요. 한국투자증권 제공 값'],
   시가총액: ['시가총액', '주식시장에서 평가하는 기업의 전체 주식 가치예요.\n계산: 현재 주가 × 상장주식 수'],
   상장주수: ['상장주수', '거래소에 상장된 주식의 총수예요. 실제 시장에서 거래 가능한 유통주식 수와는 다를 수 있어요.'],
 };
@@ -267,13 +268,13 @@ function Quote({ p, ctl }: { p: CompanyInfoProps; ctl: TipCtl }) {
           </View>
         ))}
       </View>
-      <Text style={[st.w52, { left: 343.82 * QX, top: 40, textAlign: 'right' }]}>52주 최저</Text>
-      <Text style={[st.w52, st.w52v, { left: 339.33 * QX, top: 55, width: 51, textAlign: 'right' }]}>{won(q.week52_low)}</Text>
-      <Text style={[st.w52, { left: 627.11 * QX, top: 40 }]}>52주 최고</Text>
-      <Text style={[st.w52, st.w52v, { left: 627.11 * QX, top: 55, width: 51 }]}>{won(q.week52_high)}</Text>
+      <Text numberOfLines={1} style={[st.w52, { left: 343.82 * QX + 46 - 72, top: 40, width: 72, textAlign: 'right' }]}>52주 최저</Text>
+      <Text numberOfLines={1} style={[st.w52, st.w52v, { left: 339.33 * QX + 51 - 72, top: 55, width: 72, textAlign: 'right' }]}>{won(q.week52_low)}</Text>
+      <Text numberOfLines={1} style={[st.w52, { left: 627.11 * QX, top: 40, width: 72 }]}>52주 최고</Text>
+      <Text numberOfLines={1} style={[st.w52, st.w52v, { left: 627.11 * QX, top: 55, width: 72 }]}>{won(q.week52_high)}</Text>
       <View style={{ position: 'absolute', top: 54, height: 6, borderRadius: 3, backgroundColor: '#D1D6DE', left: 396.33 * QX, width: 220 * QX + (QX - 1) * 6 }} />
       <View style={[st.pTag, { left: 396.33 * QX + Math.max(0, Math.min(1.74, pos / 0.254)) * 22.36 * QX }]}>
-        <Text style={st.tagT}>{won(price)}</Text>
+        <Text style={st.tagT} numberOfLines={1}>{won(price)}</Text>
       </View>
       <View style={{ position: 'absolute', top: 94, left: 307.56 * QX, width: 358.44 * QX + (QX - 1) * 24, gap: 3 }}>
         {[0, 2, 4].map((i) => (
@@ -333,7 +334,7 @@ function Financials({ all, ctl, k: scale }: { all: CompanyQuarter[]; ctl: TipCtl
   const t = useProgress(true, 1000, k);
   return (
     <View style={[st.card, st.pad24, { zIndex: ctl.open === 'fin' ? 30 : 0 }]}>
-      <View style={st.finHead}>
+      <View style={[st.finHead, ctl.open === 'fin' && { zIndex: 30 }]}>
         <View style={st.finTitle}>
           <Text style={st.h20}>실적</Text>
           <HelpBtn id="fin" ctl={ctl} size={18} label="실적" />
@@ -431,13 +432,12 @@ function Financials({ all, ctl, k: scale }: { all: CompanyQuarter[]; ctl: TipCtl
   );
 }
 
-/* ---------- 수익성 (원본 Profit: 카드 404 · 분기 8개 · 0% 기준선 · ROA 포함) ---------- */
+/* ---------- 수익성 (원본 Profit: 카드 404 · 분기 8개 · 0% 기준선 · ROA는 11-21에 뺌) ---------- */
 const PROFIT = [
   { k: '영업이익률', c: '#000000', key: 'op_margin', help: '매출 중 본업으로 남긴 이익의 비율이에요.\n\n영업이익 ÷ 매출\n× 100' },
   { k: '순이익률', c: '#4A74B8', key: 'net_margin', help: '매출 중 모든 비용과 세금을 뺀 최종 이익의 비율이에요.\n\n당기순이익 ÷ 매출 × 100' },
   { k: 'ROE', c: '#C0392B', key: 'roe', help: '주주의 자본으로 얼마나 이익을 냈는지 보여줘요.\n\n당기순이익(연환산) ÷\n평균 자기자본 × 100' },
-  { k: 'ROA', c: '#2FAE68', key: 'roa', help: '가진 자산 전체로 얼마나 이익을 냈는지 보여줘요.\n\n당기순이익(연환산) ÷\n평균 총자산 × 100' },
-] as const;
+] as const; /* ROA는 빼기로 함 (11-21 결정 ③) */
 function Profit({ all, ctl }: { all: CompanyQuarter[]; ctl: TipCtl }) {
   const X = (i: number) => (95 + (i * 493) / 7) * FX;
   const Q8 = all.slice(-8);
@@ -538,22 +538,22 @@ function Health({ p }: { p: CompanyInfoProps }) {
   const t = useProgress(true, 700);
   const sc = 1 - Math.pow(1 - t, 3);
   const keyOf = (name: string) => HEALTH_KEYS.find((h) => h.k === name)!.key;
-  const R0 = [0, 1, 2, 3, 4].map((i) => {
-    const a = -Math.PI / 2 + (i * 2 * Math.PI) / 5;
-    return [150 + Math.cos(a) * 72, 150 + Math.sin(a) * 72] as const;
-  });
+  /* 값이 있는 축만 그린다 (11-21 결정 ②: 금융사는 부채비율·유보율 두 축 = 선 하나). 다섯 축이면 원본 좌표 그대로 */
+  const axes = AX.map((name, i) => ({ name, lbl: LBL[i] })).filter((a) => p.health[keyOf(a.name)] != null);
+  const n = axes.length;
+  const ang = (i: number) => -Math.PI / 2 + (i * 2 * Math.PI) / Math.max(n, 1);
+  const lblAt = (i: number): [number, number] =>
+    n === AX.length ? axes[i].lbl : [150 + Math.cos(ang(i)) * 100 - 26, 150 + Math.sin(ang(i)) * 100 - 10];
+  const R0 = axes.map((_, i) => [150 + Math.cos(ang(i)) * 72, 150 + Math.sin(ang(i)) * 72] as const);
   const pts = R0.map(([x, y], i) => {
-    const s = healthScore(keyOf(AX[i]), p.health[keyOf(AX[i])]) * sc;
+    const s = healthScore(keyOf(axes[i].name), p.health[keyOf(axes[i].name)]) * sc;
     return [150 + (x - 150) * s, 150 + (y - 150) * s] as const;
   });
   const ring = (r: number) =>
-    [0, 1, 2, 3, 4]
-      .map((i) => {
-        const a = -Math.PI / 2 + (i * 2 * Math.PI) / 5;
-        return `${(150 + Math.cos(a) * r).toFixed(1)},${(150 + Math.sin(a) * r).toFixed(1)}`;
-      })
+    axes
+      .map((_, i) => `${(150 + Math.cos(ang(i)) * r).toFixed(1)},${(150 + Math.sin(ang(i)) * r).toFixed(1)}`)
       .join(' ');
-  const LIST = ['부채비율', '유동비율', '당좌비율', '이자보상비율', '유보율'];
+  const LIST = ['부채비율', '유동비율', '당좌비율', '이자보상비율', '유보율'].filter((name) => p.health[keyOf(name)] != null);
   const val = (name: string) => healthVal(keyOf(name), p.health[keyOf(name)]);
   return (
     <View style={[st.card, st.pad24, { height: 404 }]}>
@@ -573,11 +573,11 @@ function Health({ p }: { p: CompanyInfoProps }) {
           ))}
           <Polygon points={pts.map((q) => q.join(',')).join(' ')} fill="#378ADD" fillOpacity={0.18} stroke="#378ADD" strokeWidth={1.8} />
           {pts.map((q, i) => (
-            <Circle key={i} cx={q[0]} cy={q[1]} r={sel === AX[i] ? 4 : 3} fill="#378ADD" stroke="#FFFFFF" strokeWidth={1.5} />
+            <Circle key={i} cx={q[0]} cy={q[1]} r={sel === axes[i].name ? 4 : 3} fill="#378ADD" stroke="#FFFFFF" strokeWidth={1.5} />
           ))}
         </Svg>
-        {AX.map((a, i) => (
-          <Pressable key={a} onPress={() => setSel(sel === a ? null : a)} accessibilityRole="button" style={{ position: 'absolute', left: LBL[i][0] + HX, top: LBL[i][1] }}>
+        {axes.map(({ name: a }, i) => (
+          <Pressable key={a} onPress={() => setSel(sel === a ? null : a)} accessibilityRole="button" style={{ position: 'absolute', left: lblAt(i)[0] + HX, top: lblAt(i)[1] }}>
             {({ hovered }: Hover) => <Text style={[st.hT, sel === a || hovered ? { color: '#191F28' } : null, sel === a && { fontWeight: '700' }]}>{a}</Text>}
           </Pressable>
         ))}

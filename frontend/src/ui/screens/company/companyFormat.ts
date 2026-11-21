@@ -78,14 +78,14 @@ export function healthScore(key: keyof CompanyHealth, v: number | null): number 
 }
 
 /* ---------- 용어 설명 (원본 앱 TERMS: 풀이와 계산식만 · 좋다·나쁘다 판단 없음) ---------- */
-export type TermKey = 'per' | 'pbr' | 'eps' | 'bps' | 'mc' | 'sh' | 'debt' | 'cur' | 'quick' | 'icr' | 'ret' | 'opm' | 'npm' | 'roe' | 'roa';
+export type TermKey = 'per' | 'pbr' | 'eps' | 'bps' | 'mc' | 'sh' | 'debt' | 'cur' | 'quick' | 'icr' | 'ret' | 'opm' | 'npm' | 'roe';
 export const TERM_TIP = '업종마다 보통 수준이 달라서, 같은 업종끼리 비교하는 게 좋아요. 이 값만으로 좋다·나쁘다를 판단하지 않아요.';
 type TermCtx = { p: StockProfile; price: number; last: CompanyQuarter; health: CompanyHealth };
 export const TERMS: Record<TermKey, [string, string, string, (c: TermCtx) => string]> = {
   per: ['PER', '주가수익비율', '주가 ÷ 주당순이익(EPS). 회사가 1년에 버는 이익에 비해 주가가 몇 배인지 보여 줘요.', ({ p, price }) => (p.per == null || p.eps == null ? '—' : `${p.per.toFixed(2)}배 = ${won(price)}원 ÷ ${won(p.eps)}원`)],
   pbr: ['PBR', '주가순자산비율', '주가 ÷ 주당순자산(BPS). 회사가 가진 순자산에 비해 주가가 몇 배인지 보여 줘요.', ({ p, price }) => (p.pbr == null || p.bps == null ? '—' : `${p.pbr.toFixed(2)}배 = ${won(price)}원 ÷ ${won(p.bps)}원`)],
-  eps: ['EPS', '주당순이익', '순이익 ÷ 주식 수. 주식 1주가 1년 동안 번 이익이에요.', ({ p }) => (p.eps == null ? '—' : `${won(p.eps)}원 (최근 4개 분기 순이익 합 ÷ 주식 수)`)],
-  bps: ['BPS', '주당순자산', '순자산(자본총계) ÷ 주식 수. 주식 1주에 해당하는 순자산이에요.', ({ p }) => (p.bps == null ? '—' : `${won(p.bps)}원 (최근 분기 자본총계 ÷ 주식 수)`)],
+  eps: ['EPS', '주당순이익', '순이익 ÷ 주식 수. 주식 1주가 1년 동안 번 이익이에요.', ({ p }) => (p.eps == null ? '—' : `${won(p.eps)}원 (직전 사업연도 기준 · 한국투자증권)`)],
+  bps: ['BPS', '주당순자산', '순자산(자본총계) ÷ 주식 수. 주식 1주에 해당하는 순자산이에요.', ({ p }) => (p.bps == null ? '—' : `${won(p.bps)}원 (직전 사업연도 말 기준 · 한국투자증권)`)],
   mc: ['시가총액', '', '주가 × 상장주식 수. 시장에서 매겨진 회사 전체의 값이에요. KRX 원천값을 그대로 보여 줘요.', ({ p }) => `${capShort(p.market_cap)} (KRX · 전일 기준)`],
   sh: ['상장주수', '상장주식 수', '거래소에 올라 있는 이 회사 주식의 수예요.', ({ p }) => `${(p.shares_outstanding / 1e8).toFixed(2)}억주 (KRX)`],
   debt: ['부채비율', '', '부채 ÷ 자본 × 100. 자기 돈에 비해 빌린 돈이 얼마나 되는지 보여 줘요.', ({ health }) => `${healthVal('debt', health.debt)} = 부채총계 ÷ 자본총계 × 100`],
@@ -96,5 +96,4 @@ export const TERMS: Record<TermKey, [string, string, string, (c: TermCtx) => str
   opm: ['영업이익률', '', '영업이익 ÷ 매출 × 100. 본업으로 매출 100원당 얼마를 남겼는지예요.', ({ last }) => (last.op_margin == null ? '— · 매출을 공시하지 않는 종목이에요' : `${last.op_margin.toFixed(1)}% = 영업이익 ÷ 매출 × 100 (${last.q})`)],
   npm: ['순이익률', '', '순이익 ÷ 매출 × 100. 세금 등을 다 빼고 매출 100원당 얼마를 남겼는지예요.', ({ last }) => (last.net_margin == null ? '— · 매출을 공시하지 않는 종목이에요' : `${last.net_margin.toFixed(1)}% = 순이익 ÷ 매출 × 100 (${last.q})`)],
   roe: ['ROE', '자기자본이익률', '순이익 ÷ 자본 × 100. 주주의 돈(자본)으로 얼마나 이익을 냈는지예요.', ({ last }) => (last.roe == null ? '—' : `${last.roe.toFixed(1)}% = 순이익(연환산) ÷ 평균 자본 × 100 (${last.q})`)],
-  roa: ['ROA', '총자산이익률', '순이익 ÷ 총자산 × 100. 가진 자산 전체로 얼마나 이익을 냈는지예요. 금융사는 자산이 커서 보통 1% 안팎이에요.', ({ last }) => (last.roa == null ? '—' : `${last.roa.toFixed(1)}% = 순이익(연환산) ÷ 평균 총자산 × 100 (${last.q})`)],
 };

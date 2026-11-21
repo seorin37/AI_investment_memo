@@ -84,7 +84,7 @@
 | 시세·뉴스·기업 | GET | `/market/overview` | getMarketOverview (real.ts) | 구현됨 |  |  |
 | 시세·뉴스·기업 | GET | `/news/headlines` | listNews (real.ts) | 구현됨 |  |  |
 | 시세·뉴스·기업 | GET | `/stocks/{code}/candles` | getCandles (real.ts) | 구현됨 |  |  |
-| 시세·뉴스·기업 | GET | `/stocks/{code}/financials` | getFinancials (real.ts) | 구현됨 |  |  |
+| 시세·뉴스·기업 | GET | `/stocks/{code}/financials` | getFinancials (real.ts) | 구현됨 | 이민성 | 11-21 UI v2 모양: 분기 12개(억원)·건전성 5개·financial·preparing. 금융사 매출·이익률·유동·당좌·이자보상 null, 영업이익은 보냄. 우선주는 본주 재무 |
 | 시세·뉴스·기업 | GET | `/stocks/{code}/profile` | getProfile (real.ts) | 구현됨 |  |  |
 | 시세·뉴스·기업 | GET | `/stocks/{code}/quote` | getQuote (real.ts) | 구현됨 |  |  |
 | 메모 보드 | DELETE | `/board-items/{memo_id}` | deleteBoardItem (board.ts) | 구현됨 |  |  |
@@ -839,7 +839,7 @@ OpenAPI 응답 스키마 `MyStockResponse`
 
 사이드바에서 끌어 옮긴 뒤 내 종목 전체 순서를 저장하고, 새 순서의 목록을 돌려준다 (0021).
 
-- 상태: **백엔드만 있음**
+- 상태: **백엔드만 있음** · 담당: 이민성
 - 인증: 필요 · 구현: `backend/app/stocks/routes.py` `put_stock_order`
 
 **요청 본문** `StockOrderRequest` (필수)
@@ -1212,35 +1212,50 @@ OpenAPI 응답 스키마 `MyStockResponse`
 | 필드 | 타입 | 필수 |
 |---|---|---|
 | `code` | `string` | 예 |
+| `source_code` | `string` | 예 |
+| `sector` | `'general' \| 'financial'` | 예 |
+| `fin_type` | `string \| null` | 예 |
+| `financial` | `boolean` | 예 |
+| `preparing` | `boolean` | 예 |
 | `basis` | `string` | 예 |
-| `annual` | `AnnualFinancial[]` | 예 |
-| `stability` | `Stability` | 예 |
+| `quarters` | `FinancialQuarter[]` | 예 |
+| `health` | `FinancialHealth` | 예 |
+| `health_as_of` | `string \| null` | 예 |
+| `interest_coverage_basis` | `string \| null` | 예 |
 
 <details><summary>예시</summary>
 
 ```json
 {
   "code": "string",
+  "source_code": "string",
+  "sector": "general",
+  "fin_type": "string",
+  "financial": false,
+  "preparing": false,
   "basis": "string",
-  "annual": [
+  "quarters": [
     {
-      "period": "string",
+      "period_end": "string",
+      "q": "string",
+      "label": "string",
       "revenue": 0,
-      "operating_income": 0,
-      "net_income": 0,
-      "operating_margin": 0,
+      "op": 0,
+      "net": 0,
+      "op_margin": 0,
       "net_margin": 0,
       "roe": 0
     }
   ],
-  "stability": {
-    "as_of": "string",
-    "debt_ratio": 0,
-    "current_ratio": 0,
-    "quick_ratio": 0,
-    "interest_coverage": 0,
-    "reserve_ratio": 0
-  }
+  "health": {
+    "debt": 0,
+    "current": 0,
+    "quick": 0,
+    "interest": 0,
+    "reserve": 0
+  },
+  "health_as_of": "string",
+  "interest_coverage_basis": "string"
 }
 ```
 
