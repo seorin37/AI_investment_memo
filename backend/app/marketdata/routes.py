@@ -114,6 +114,16 @@ def list_headlines(
     return service.headlines(limit)
 
 
+@router.get("/news/home")
+def get_home_news(
+    limit: int = Query(default=9, ge=1, le=50),
+    _current: dict = Depends(get_current_user),
+    service: MarketDataService = Depends(get_marketdata_service),
+):
+    """홈 뉴스 위젯: 최신 기사(웹 9개·앱 5개 사용) + 가장 새 기사 날짜의 기사 수."""
+    return service.home_news(limit)
+
+
 @router.get("/market/overview")
 def get_market_overview(
     _current: dict = Depends(get_current_user),

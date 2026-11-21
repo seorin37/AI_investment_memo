@@ -27,6 +27,7 @@ export const qk = {
   market: ['market'] as const,
   calendar: (month: string) => ['calendar', month] as const,
   news: ['news'] as const,
+  homeNews: ['homeNews'] as const,
   pinned: ['pinned'] as const,
   homeChecklist: ['homeChecklist'] as const,
   priceConditions: ['priceConditions'] as const,
@@ -259,6 +260,8 @@ export function useCreateCalendarEvent() {
 }
 
 export const useNews = () => useQuery({ queryKey: qk.news, queryFn: api.listNews, refetchInterval: 5 * 60_000 });
+/** 홈 뉴스 위젯 (웹 9개 · 앱 5개만 그림). 수집이 30분마다라 5분마다 다시 받는다 */
+export const useHomeNews = () => useQuery({ queryKey: qk.homeNews, queryFn: () => api.getHomeNews(9), refetchInterval: 5 * 60_000 });
 export const usePinnedMemos = () => useQuery({ queryKey: qk.pinned, queryFn: api.listPinnedMemos });
 export const useHomeChecklist = () => useQuery({ queryKey: qk.homeChecklist, queryFn: api.listHomeChecklist });
 export const usePriceConditions = () => useQuery({ queryKey: qk.priceConditions, queryFn: api.listPriceConditions });

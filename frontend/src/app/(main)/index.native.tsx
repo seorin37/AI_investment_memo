@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { useCoach } from '@/store/coach';
 import { Linking } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { useMockNotice } from '@/components/layout/MobileScreen';
 import { useUI } from '@/store/ui';
@@ -8,12 +9,18 @@ import type { Checklist } from '@/types/models';
 import { TopBar } from '@/ui/layout/app/TopBar';
 import { AppHome } from '@/ui/screens/home/app/Home';
 import { mockHomeData, mockHomeSearch } from '@/ui/screens/home/Home.mock';
+import { useHomeNewsProps } from '@/ui/screens/home/useHomeNews';
 import type { HomeWidget } from '@/ui/screens/home/Home.types';
 import { useHomeMarket } from '@/ui/screens/home/useHomeMarket';
 import { mockExtract } from '@/ui/screens/memo/MemoDetail.mock';
 import type { FirstMemoSummary } from '@/ui/screens/onboarding/FirstHome.types';
 import { mockFirstHomeStocks } from '@/ui/screens/onboarding/Onboarding.mock';
 import { AppFirstHome } from '@/ui/screens/onboarding/app/FirstHome';
+
+/** 뉴스 원문: 앱 안 시스템 브라우저 (iOS Safari 보기 · Android 크롬 탭). 못 열면 바깥 브라우저 */
+function openArticle(url: string) {
+  WebBrowser.openBrowserAsync(url).catch(() => Linking.openURL(url));
+}
 
 /** 앱 홈 탭. 온보딩 query는 현재 흐름에서만 유지되는 host 임시 상태다. */
 export default function HomeTab() {
@@ -25,6 +32,8 @@ export default function HomeTab() {
   const [widgets, setWidgets] = useState<HomeWidget[]>(mockHomeData.widgets);
   const [checklists, setChecklists] = useState<Record<string, Checklist>>(mockHomeData.checklists);
   const [retried, setRetried] = useState(false);
+  /* 뉴스 위젯만 실제 API (GET /news/home). 나머지 홈 데이터는 아직 mock */
+  const news = useHomeNewsProps();
   const [firstActive, setFirstActive] = useState(!!onboarding);
   const [pickerOpen, setPickerOpen] = useState(false);
   /* 저장한 첫 메모 (memo/new · memo/link 가 홈으로 돌아오며 넘김 — 이번 흐름의 임시 값) */
@@ -70,6 +79,7 @@ export default function HomeTab() {
   return (
     <AppHome
       {...mockHomeData}
+      {...news}
       firstStart={firstStart}
       widgets={widgets}
       checklists={checklists}
@@ -93,7 +103,7 @@ export default function HomeTab() {
       onOpenStockUpdates={(code) => router.navigate({ pathname: '/updates/[code]', params: { code } })}
       onOpenStock={(code) => router.navigate({ pathname: '/stocks/[code]', params: { code } })}
       onOpenMarket={(key) => router.push({ pathname: '/market/[key]', params: { key } })}
-      onOpenNews={(n) => Linking.openURL(n.url)}
+      onOpenNews={(n) => openArticle(n.url)}
       onRetryMarket={() => { setRetried(true); hm.retry(); }}
       onToggleCheck={(code, id) => patchCl(code, (c) => ({ ...c, items: c.items.map((i) => (i.id === id ? { ...i, done: !i.done } : i)) }))}
       onAddCheck={(code, text) => patchCl(code, (c) => ({ ...c, items: [...c.items, { id: `n${Date.now()}`, text, done: false }] }))}

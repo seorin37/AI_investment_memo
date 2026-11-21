@@ -28,6 +28,7 @@ import type {
   MemoUpdateSummary,
   MyStock,
   NewsHeadline,
+  HomeNews,
   PriceConditionRow,
   Quote,
   QuotesResponse,
@@ -141,6 +142,8 @@ export interface Api {
   listCalendar(month: string): Promise<CalendarEvent[]>;
   createCalendarEvent(input: { date: string; title: string }): Promise<CalendarEvent>;
   listNews(): Promise<NewsHeadline[]>;
+  /** 홈 뉴스 위젯 (UI v2) */
+  getHomeNews(limit?: number): Promise<HomeNews>;
   listPinnedMemos(): Promise<PinnedMemo[]>;
   listHomeChecklist(): Promise<HomeChecklistItem[]>;
   setChecklistItem(checklistId: string, itemId: string, done: boolean): Promise<void>;
