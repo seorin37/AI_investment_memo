@@ -451,3 +451,67 @@
 | C-26 오디오 파일 제공 | 엔드포인트(파일 내려받기·스트리밍) + 서버 저장 위치 | N | audio_assets.storage_path. 앱 재생 패키지 설치 필요 |
 | C-27 플랜 이름 | 엔드포인트 응답 칸(`/auth/me` 또는 `/me/usage` 에 plan) | N (users.plan 있음) | 3단계(PLUS) 쓰려면 enum 추가 → Y |
 | C-28 스튜디오 단계 진행 | DB칸(studio_items.progress 등) 또는 화면 단계 표시 빼기 | Y(칸 추가 시) | 결정 필요 |
+
+### 묶음 5: 투자 기록
+
+공통 사실:
+- 화면은 `fe/store/journal.ts` `useJournal`(zustand, 메모리만)을 씀. `fe/types/models.ts JournalEntry`·`hooks/queries.ts useJournal/useCreateJournal/useUpdateJournal/useDeleteJournal`·`fe/api/real.ts listJournal…` 는 있지만 화면은 `fe/ui/screens/journal/Journal.types.ts` 의 **다른 `JournalEntry`·`JBlock`** 을 씀(이름이 같아 헷갈림 주의).
+- 백엔드: be/journal/routes.py (GET·POST /journal, PATCH·DELETE /journal/{id}) · be/journal/schemas.py `JournalCreate`·`JournalPatch`·블록 5종 (`extra="forbid"`) · be/journal/service.py `entry` · be/journal/markdown.py `blocks_to_markdown`(blocks → body Markdown, 한 방향).
+- DB: `0001sql journal_entries`(title, body, kind, status, **is_pinned**, folder_id, parent_id, created_at, updated_at, deleted_at) + `0020 blocks`(jsonb) + `0019 source_memo_id` · `0001sql journal_entry_stocks` · `journal_folders`.
+
+#### 표 A 데이터
+
+| 화면 | mock 출처(파일·상수/함수) | 필드 | 백엔드(파일·스키마.필드) | 판정 | 메모 |
+|---|---|---|---|---|---|
+| 목록·기록 | fe/ui/screens/journal/Journal.mock.ts `mockJournal` (Journal.types.ts `JournalEntry`) | id | be/journal/service.py `entry.id` | 그대로 | |
+| 목록·기록 | 〃 | title (첫 줄, journalParts.ts `titleOf`) | `entry.title` · `JournalCreate.title` | 계산 필요(프론트) | 화면은 blocks[0](s='title') 가 제목. 보낼 때 title 칸으로 떼고, 받을 때 title 을 첫 줄로 다시 붙이기 |
+| 목록·기록 | 〃 | blocks[] `JBlock` {s, text, check?, l?, b?, i?, u?, x?} | `entry.blocks[]` `TextBlock`·`ChecklistBlock`·`TableBlock`·`AttachmentBlock` {id, type, text, highlight?, checked} | 계산 필요(프론트) | 변환표 필요(아래 줄들). 백엔드 블록은 id 필수 → 프론트가 만들어야 함 |
+| 기록 | 〃 | s='body' | `TextBlock.type='paragraph'` | 이름만 다름(→paragraph) | |
+| 기록 | 〃 | s='head' | `TextBlock.type='heading'` | 이름만 다름(→heading) | |
+| 기록 | 〃 | s='sub' (작은 제목) | — | 없음 | heading 하나뿐. 담당자 상의(level 칸) 또는 heading 으로 합치기 |
+| 기록 | 〃 | check (true·false) | `ChecklistBlock.type='checklist'` · `.checked` | 이름만 다름(→checklist·checked) | |
+| 기록 | 〃 | l (dot·dash·num·quote 목록) | — | 없음 | `extra="forbid"` 라 보내면 422. 표 C-29 |
+| 기록 | 〃 | b · i · u · x (굵게·기울임·밑줄·취소선) | — (`highlight` 만) | 없음 | 보내면 422. 표 C-29 |
+| 기록(웹) | Journal.types.ts `html` (웹 편집기 글자 일부 서식) | 본문 HTML | — | 없음 | 서버 저장 칸 없음 → 새로 열면 서식 사라짐. 결정 필요 |
+| 기록 | — | table · attachment 블록 | `TableBlock`(rows) · `AttachmentBlock`(name·url) | 계산 필요(프론트) | 화면에 표·첨부 줄 없음 → 받은 블록을 고쳐 쓸 때 **지우지 말고 그대로 다시 보내기**(보관) |
+| 목록·기록 | 〃 | date · web_date · full · group (날짜 글자·묶음) | `entry.created_at` · `entry.updated_at` | 계산 필요(프론트) | Journal.mock.ts 주석도 같은 계획. 화면은 '고친 날' 기준(saveApp 이 고치면 날짜를 지금으로) → updated_at |
+| 기록 | Journal.mock.ts `mockJournalNow` | 지금 | 응답 `updated_at` | 이름만 다름(→updated_at) | 저장 응답 값을 씀 |
+| 목록 | 〃 | pinned | — (응답·`JournalPatch` 에 없음. DB `0001sql journal_entries.is_pinned` 있음) | 없음 | 표 C-30 (DB 변경 없음) |
+| 목록 | — | stock_code · stock_name | `entry.stock_code` · `.stock_name` (journal_entry_stocks 첫 번째) | 그대로 | 화면에 종목 칸 없음 → 프론트 미사용 |
+| 목록 | — | source_memo_id (결론 → 기록) | — (응답에 없음. DB `0019 journal_entries.source_memo_id`, be/journal/repository.py 는 비워 둠) | 없음 | 결론 내기 API(`/memos/{id}/conclude`)는 fe/api/index.ts `MOCK_ONLY`. 화면 위젯도 없음 |
+| 목록 | journalParts.ts `preview` · `firstSentence` | 미리보기 | `entry.blocks` | 계산 필요(프론트) | 백엔드 `body`(Markdown)는 응답에 없음 |
+| 목록 | (목록 길이) | 개수 | GET /journal 길이 (최대 500, be/journal/repository.py `list limit`) · be/stats `data_stats.journals` | 계산 필요(프론트) | |
+| 목록 | Journal.mock.ts `mockJournalGroupOrder` · `mockJournalRecentCount` · `mockJournalLoadMs` | 묶음 순서 · 최근 3개 · 뼈대 시간 | — | 그대로 | 고정 값. LoadMs 는 연결 뒤 '불러오는 동안'으로 |
+
+#### 표 B 동작 (store/journal.ts 함수 전부)
+
+| 화면 | 동작 | 프론트 위치(파일·함수) | 엔드포인트(METHOD 경로·파일) | 판정 | 메모 |
+|---|---|---|---|---|---|
+| 목록 | 불러오기 | store/journal.ts 초기값 `entries: mockJournal` | GET /journal · be/journal/routes.py `list_journal` | 그대로 | 0020 전 DB 면 `_not_ready`(503) |
+| 목록 | 정렬 | 화면: 새 기록·고친 기록을 맨 위로(`saveApp`) | 서버: `ORDER BY created_at DESC` (be/journal/repository.py `list`) | 계산 필요(프론트) | 서버는 만든 순, 화면은 고친 순 → 프론트에서 updated_at 으로 다시 정렬(또는 담당자 상의) |
+| 목록 | `reset(empty)` | store/journal.ts (`__DEV__` 캡처용) | — | 그대로 | 개발용 |
+| 목록·기록 | `pin(ids, on)` 고정 | store/journal.ts `pin` · fe/app/(detail)/journal/[id].tsx `onPin` | — | 없음 | C-30 |
+| 목록 | `trash(ids)` 휴지통으로 | store/journal.ts `trash` · [id].tsx `onTrash` | DELETE /journal/{id} · be/journal/routes.py | 그대로 | 소프트 삭제 → /trash `journal-{id}`. 여러 개면 N번 |
+| 목록 | `restore(list)` 되돌리기 | store/journal.ts `restore` (옮기기 전 목록 통째로) | POST /trash/journal-{id}/restore · be/trash/routes.py | 계산 필요(프론트) | 지운 id 마다 복원 호출 |
+| 기록(앱) | `saveApp(id, blocks)` 나갈 때 저장 | store/journal.ts `saveApp` · [id].tsx `onBack`·`onNew` | 새 기록 POST /journal · 고친 기록 PATCH /journal/{id} `JournalPatch`(title·blocks) | 그대로 | 빈 기록은 안 보냄(화면 규칙 유지). 블록 변환 필요 |
+| 기록(웹) | `addWeb()` 새 기록 바로 만들기 | store/journal.ts `addWeb` · web/Journal.tsx `onNew` | POST /journal (빈 title·빈 blocks 허용) | 그대로 | |
+| 기록(웹) | `updateWeb(id, p)` 쓰는 대로 반영 | store/journal.ts `updateWeb` | PATCH /journal/{id} | 계산 필요(프론트) | 글자마다 보내지 않게 모아 보내기(디바운스) |
+| 기록(웹) | `dropEmpty(id)` 빈 새 기록 지우기 | store/journal.ts `dropEmpty` | DELETE /journal/{id} | 확인 필요 | DELETE 는 휴지통으로 감 → 빈 기록이 휴지통에 쌓임. 서버에 '영구 삭제'(DELETE /trash/journal-{id})를 이어 부르거나, 첫 글자 칠 때 POST 하기 → 결정 필요 |
+| 목록 | `setFlash` 저장 알림·반짝임 | store/journal.ts `setFlash` | — | 그대로 | 화면 상태 |
+| 목록 | 검색 | journalParts.ts `searchJournal` | — | 그대로 | 프론트 검색(서버 불필요) |
+| 기록 | 공유 | 앱 Note.tsx · Journal.tsx SelBar '공유' (안내만) · 웹 `copyJ` (클립보드) | — | 그대로 | 서버 불필요. 앱은 RN 내장 `Share` 로 가능(새 패키지 없음) |
+| 기록 | 사진 넣기 | 웹 Journal.tsx 도구 막대 '사진' (안내만) | POST /files (없음, fe/api/index.ts `MOCK_ONLY uploadFile`) | 없음 | 서버 필요. 받은 주소로 `AttachmentBlock`. 표 C-31. 앱 사진 고르기는 expo-image-picker 없음(`expo-document-picker` 는 있음) |
+| 목록 | 받아쓰기 | 앱 Journal.tsx '받아쓰기' (안내만) | — | 그대로 | 서버 불필요(기기 키보드 음성 입력). 직접 녹음·변환이면 외부 STT 필요 → 결정 필요 |
+| 목록 | 알림(종) | fe/app/(main)/journal.native.tsx 머리 '알림' (안내만) | — | 없음 | 묶음 6 알림함 |
+| 기록 | 내용 복사 | 앱 Note.tsx (안내만) · 웹 `copyJ` | — | 그대로 | 서버 불필요. 앱 클립보드는 expo-clipboard 없음 → 설치 필요 |
+| 기록 | 기록 안에서 찾기 | 앱 Note.tsx (안내만) · 웹 journalEditor.web.tsx `FindBar` | — | 그대로 | 서버 불필요 |
+| 기록 | 종목 연결 | — (화면 없음) | `JournalCreate.stock_code` · `JournalPatch.stock_code`(null 이면 해제) | 그대로 | 프론트 미사용 |
+
+#### 표 C 새로 만들 것
+
+| 항목 | 종류(엔드포인트·DB칸·표·프론트) | DB 변경(Y/N) | 메모 |
+|---|---|---|---|
+| C-29 기록 서식 | 엔드포인트 스키마(`TextBlock` 에 list·marks·level 칸, `extra` 허용) | N (blocks jsonb) | 담당자 상의. 안 하면 프론트가 서식을 버리고 보냄(422 피하기) |
+| C-30 기록 고정 | 엔드포인트 칸(`entry.pinned` 응답 · `JournalPatch.pinned`) | N (is_pinned 있음) | 담당자 상의 |
+| C-31 파일 올리기 | 엔드포인트 POST /files + 저장 위치 | N | 참고자료·기록 사진 같이 씀. 시연 범위 밖 후보 |
+| C-32 블록 변환 함수 | 프론트(JBlock ↔ JournalBlock, title 분리, id 만들기, table·attachment 보관) | N | |
