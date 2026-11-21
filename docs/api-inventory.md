@@ -276,6 +276,7 @@
 
 공통 사실:
 - 기업정보·홈·업데이트 화면도 mock 직접 import. `hooks/queries.ts` `useQuote`·`useCandles`·`useProfile`·`useFinancials`·`useMarketOverview`·`useNews`·`useUpdates` 는 있지만 화면 미사용.
+- **11/21 dev 병합 반영** (c6da2d0, PR #56·#57): 기업정보 탭만 실제 API 로 바뀜. fe/ui/screens/company/useCompanyInfo.ts `useCompanyInfo(code)` 가 `useProfile`·`useQuote`·`useFinancials`·`useCandles`(1W·1M·3M·1Y)·`useMyStocks` 를 묶어 `toCompanyData` 로 화면 props 를 만든다(mock 모드는 같은 함수의 mock 응답, fe/api/mock/financials.ts `mockFinancials`). [code].tsx·[code].native.tsx 의 기업정보 탭이 이것을 씀. 보드 탭 머리는 아직 `mockBoardStock`. 백엔드 `GET /stocks/{code}/financials` 응답은 `annual`·`stability` → `quarters`(분기 12개, 억원)·`health`·`financial`·`preparing` 으로 바뀜(be/marketdata/service.py `financials`, repository.py `financial_profile`·`quarterly_financials`). 아래 기업정보 행은 이 코드 기준으로 다시 판정했다.
 - `fe/features/home/widgets/MarketWidgets.tsx`(macro 지표·`useCalendar`·`useNews` 사용)는 어느 화면에서도 import 되지 않는다(옛 화면, 미사용).
 - DB: `0001sql prices_daily`(+`0004 trading_value`·`0011 volume`) · `0010 adjusted_prices_daily` · `0011 stock_fundamentals_snapshot`(per·pbr·eps·bps·w52·market_cap·listed_shares) · `0001sql financials`·`financials_fin`(+`0012` 금융 칸, `stocks.fin_type`) · `0016 financials_quarterly`·`financials_fin_quarterly` · `0017 financial_metrics` · `0001sql market_indices`·`economic_indicators`(source ECOS·FRED)·`economic_observations`·`commodity_prices_daily` · `0001sql market_events`(+`0004 user_id`·`kind` market·earnings·user) · `0001sql news_articles`·`news_stocks`.
 
@@ -287,18 +288,18 @@
 | 종목 머리 | 〃 | price · change · change_pct | be/marketdata/service.py `quote` → price · change · change_pct | 그대로 | 원시 종가(prices_daily) |
 | 종목 머리 | 〃 | as_of ('MM.DD') | `quote.as_of` (ISO, 15:30 KST) | 계산 필요(프론트) | 'MM.DD 종가 기준' 표시 |
 | 종목 머리 | 〃 | closes (작은 선) | `quote.spark` (최근 24개 종가) | 이름만 다름(→spark) | mock 은 10~16개 |
-| 종목 머리 | 〃 | logo · logo_bg · logo_ink | — | 계산 필요(프론트) | 묶음 1 C-6 |
-| 기업정보 | fe/ui/screens/company/CompanyInfo.mock.ts `profile()` (models.ts `StockProfile`) | code · name · market · overview · prev_close · open · high · low · volume · trading_value · per · pbr · eps · bps · market_cap · shares_outstanding · week52_low · week52_high | be/marketdata/service.py `profile` 같은 18개 키 | 그대로 | overview 없으면 '기업 개요를 준비 중이에요.' (`DEFAULT_OVERVIEW_TEXT`). market_cap·shares 는 null 가능(프론트 타입은 number) |
-| 기업정보 | companyData.mock.ts `quoteSK`·`quoteKB` | div_yield · foreign_pct | — | 없음 | 화면 props(`StockProfile`)에도 없음 → 화면이 안 쓰면 무시. 확인 필요 |
-| 기업정보 | CompanyInfo.mock.ts `quote_as_of` | 시세 기준 시각 | `quote.as_of` | 이름만 다름(→as_of) | |
-| 기업정보 | CompanyInfo.mock.ts `candleSet` (companyData.mock.ts `candlesSK`·`candlesKB`) | 1W·1M·3M 일봉 | be/marketdata/service.py `candles` (`RANGE_SIZES` 5·22·64) | 그대로 | 기본 수정주가(`adjusted=true`, adjusted_prices_daily), `adjusted=false` 면 원시 |
-| 기업정보 | 〃 | 1Y **주봉** (CompanyInfo.types.ts 주석) | `candles` 1Y = **일봉 250개** | 계산 필요(프론트) | 주 단위로 묶기. 또는 백엔드 interval 추가(담당자 상의) |
-| 기업정보 | CompanyInfo.mock.ts `quarters` (CompanyInfo.types.ts `CompanyQuarter` 12개) | q · label · revenue · op · net · op_margin · net_margin · roe · roa (억원·%) | be/marketdata/service.py `financials.annual` (연간 7개: period · revenue · operating_income · net_income · operating_margin · net_margin · roe, 원 단위) | 없음 | **분기 API 없음**. DB 에는 `0016 financials_quarterly` 있음. roa 는 DB·API 모두 없음. 표 C-14 |
-| 기업정보 | CompanyInfo.mock.ts `health` (`CompanyHealth`) | debt · current · quick · interest · reserve | `financials.stability.debt_ratio` · `.current_ratio` · `.quick_ratio` · `.interest_coverage` · `.reserve_ratio` | 이름만 다름(→*_ratio·interest_coverage) | financial_metrics 최신 기간 |
-| 기업정보 | CompanyInfo.mock.ts `health_as_of` ('YYYY-MM-DD') | 기준 분기 말 | `financials.stability.as_of` ('YYYY-MM') · `.basis` 문장 | 계산 필요(프론트) | |
-| 기업정보 | CompanyInfo.mock.ts `financial` (금융업 여부) | true·false | — (API 응답에 없음. DB `0001sql stocks.sector`='financial' · `0012 stocks.fin_type`) | 없음 | profile 응답에 sector·fin_type 추가(DB 변경 없음) → 표 C-15 |
-| 기업정보(KB금융) | finKB.quarters (revenue·op null, net 만) | 금융업 실적 | `financials.annual` 은 `financials` 표만 읽음 (be/marketdata/repository.py `annual_financials`) | 확인 필요 | `financials_fin`·`financials_fin_quarterly`(순이자이익·수수료이익 등)는 API 가 읽지 않음. 금융업 화면 문구('매출 —')와 맞는지 담당자 상의 |
-| 기업정보 | CompanyInfo.types.ts `preparing` (시범 종목 밖) | 준비 중 | quote·profile 404 (`PriceDataNotFoundError`·`StockNotFoundError`) | 계산 필요(프론트) | 404 → preparing |
+| 종목 머리 | 〃 | logo · logo_bg · logo_ink | — | 계산 필요(프론트) | 묶음 1 C-6. 11/21 dev 병합 반영: 기업정보 탭은 useCompanyInfo.ts `fallbackLogo`(이름 첫 글자 + 코드로 고른 색)로 이미 계산. 보드 탭은 아직 mock |
+| 기업정보 | fe/ui/screens/company/CompanyInfo.mock.ts `profile()` (models.ts `StockProfile`) | code · name · market · overview · prev_close · open · high · low · volume · trading_value · per · pbr · eps · bps · market_cap · shares_outstanding · week52_low · week52_high | be/marketdata/service.py `profile` 같은 18개 키 | 그대로 | overview 없으면 '기업 개요를 준비 중이에요.' (`DEFAULT_OVERVIEW_TEXT`). market_cap·shares 는 null 가능(프론트 타입은 number). 11/21 dev 병합 반영: per·pbr·eps·bps 는 KIS 값 그대로(직전 사업연도), KIS 가 0 을 주면 null(`_kis`). 프론트 타입도 number\|null. `useProfile` 로 연결됨 |
+| 기업정보 | companyData.mock.ts `quoteSK`·`quoteKB` | div_yield · foreign_pct | — | 없음 | 화면 props(`StockProfile`)에도 없음 → 화면이 안 쓰면 무시. 확인 필요. 11/21 dev 병합 반영: company/*.tsx 에서 grep 0건 → 화면이 안 씀(버려도 됨) |
+| 기업정보 | CompanyInfo.mock.ts `quote_as_of` | 시세 기준 시각 | `quote.as_of` | 이름만 다름(→as_of) | 11/21 dev 병합 반영: `toCompanyData` 가 quote.as_of(없으면 1M 마지막 날)로 채움 |
+| 기업정보 | CompanyInfo.mock.ts `candleSet` (companyData.mock.ts `candlesSK`·`candlesKB`) | 1W·1M·3M 일봉 | be/marketdata/service.py `candles` (`RANGE_SIZES` 5·22·64) | 그대로 | 기본 수정주가(`adjusted=true`, adjusted_prices_daily), `adjusted=false` 면 원시. 11/21 dev 병합 반영: `useCandles` 4기간 미리 받음 |
+| 기업정보 | 〃 | 1Y **주봉** (CompanyInfo.types.ts 주석) | `candles` 1Y = **일봉 250개** | 계산 필요(프론트) | 11/21 dev 병합 반영: useCompanyInfo.ts `weekly()` 가 월요일 시작 주봉으로 묶음(구현됨). 백엔드 interval 추가 불필요 |
+| 기업정보 | CompanyInfo.mock.ts `quarters` (CompanyInfo.types.ts `CompanyQuarter` 12개) | q · label · revenue · op · net · op_margin · net_margin · roe (억원·%) | be/marketdata/service.py `financials.quarters[]` (period_end · q · label · revenue · op · net · op_margin · net_margin · roe, 억원) | 그대로 | 11/21 dev 병합 반영(이전 판정: 없음). 분기 단독 최대 12개, 오래된→최근, 라벨은 달력 분기('26.3Q'). `period_end` 는 `toCompanyData` 가 떼어 냄. roa 는 화면 타입·용어(`TermKey`)에서 빠짐(팀 결정 ③). 자본잠식 분기 roe null. 우선주는 본주 재무(`source_code`). C-14 끝 |
+| 기업정보 | CompanyInfo.mock.ts `health` (`CompanyHealth`) | debt · current · quick · interest · reserve | `financials.health.debt` · `.current` · `.quick` · `.interest` · `.reserve` | 그대로 | 11/21 dev 병합 반영(이전 판정: 이름만 다름). financial_metrics 최신 기간. 금융사는 current·quick·interest null |
+| 기업정보 | CompanyInfo.mock.ts `health_as_of` ('YYYY-MM-DD') | 기준 분기 말 | `financials.health_as_of` (ISO 날짜, null 가능) · `.basis` 문장 | 그대로 | 11/21 dev 병합 반영(이전 판정: 계산 필요). null 이면 `toCompanyData` 가 마지막 분기 period_end 로 채움 |
+| 기업정보 | CompanyInfo.mock.ts `financial` (금융업 여부) | true·false | `financials.financial` (+ `.sector` · `.fin_type`, DB `stocks.sector`·`fin_type`) | 그대로 | 11/21 dev 병합 반영(이전 판정: 없음). profile 이 아니라 financials 응답에 들어감. DB 변경 없음. C-15 끝 |
+| 기업정보(KB금융) | finKB.quarters (revenue·op null, net 만) | 금융업 실적 | `financials.quarters` — 금융사면 revenue·op_margin·net_margin null, op·net 은 보냄 (be/marketdata/service.py `_quarter`) | 그대로 | 11/21 dev 병합 반영(이전 판정: 확인 필요). 응답 모양은 화면 '매출 —' 와 맞음. `financials_quarterly` 만 읽고 `financials_fin*`(순이자이익 등)은 여전히 안 읽음(팀 결정). mock `finKB` 는 op null, 실제는 op 값 있음 → mock 과 화면 값이 다를 수 있음. 금융사 분기 행이 DB 에 실제로 있는지는 DB 미접속이라 확인 못 함 |
+| 기업정보 | CompanyInfo.types.ts `preparing` (시범 종목 밖) | 준비 중 | `financials.preparing`(분기 재무 0개, 404 대신) · 모르는 종목·시세 없음은 profile·candles 404 | 계산 필요(프론트) | 11/21 dev 병합 반영: `useCompanyInfo` 가 `!fin \|\| fin.preparing` → preparing, profile·1M candles 실패 → mock 틀 + 종목코드 + preparing (구현됨) |
 | 홈 | fe/ui/screens/home/Home.mock.ts `mockHomeData.user_name` | user_name | be/auth/service.py `_public_user.name` | 이름만 다름(→name) | |
 | 홈 | `mockHomeData.counts` | holding · watching | GET /stocks `MyStockResponse.status` | 계산 필요(프론트) | |
 | 홈 | `mockHomeData.counts` | ai_memos | be/stats/routes.py `ai_stats.linked_memos` | 이름만 다름(→linked_memos) | |
@@ -335,10 +336,10 @@
 
 | 화면 | 동작 | 프론트 위치(파일·함수) | 엔드포인트(METHOD 경로·파일) | 판정 | 메모 |
 |---|---|---|---|---|---|
-| 종목 머리 | 시세 | [code].tsx · [code].native.tsx (`mockBoardStock`) | GET /stocks/{code}/quote · be/marketdata/routes.py | 그대로 | `hooks/queries.ts useQuote` 60초마다 다시 읽음 — 종가 하루 1번이라 과함(프론트에서 조절) |
-| 기업정보 | 차트 기간 바꾸기 | fe/ui/screens/company/*/CompanyInfo.tsx (candles 4개 미리 받음) | GET /stocks/{code}/candles?range=1W·1M·3M·1Y&adjusted= | 그대로 | 4번 호출 or 고를 때 호출 |
-| 기업정보 | 투자정보 | 〃 | GET /stocks/{code}/profile | 그대로 | |
-| 기업정보 | 분기 실적 · 건전성 | 〃 | GET /stocks/{code}/financials | 확인 필요 | 건전성은 됨, 분기 표는 C-14 |
+| 종목 머리 | 시세 | [code].tsx · [code].native.tsx (`mockBoardStock`) | GET /stocks/{code}/quote · be/marketdata/routes.py | 그대로 | `hooks/queries.ts useQuote` 60초마다 다시 읽음 — 종가 하루 1번이라 과함(프론트에서 조절). 11/21 dev 병합 반영: 기업정보 탭 머리는 `useQuote` 연결됨, 보드 탭은 아직 `mockBoardStock` |
+| 기업정보 | 차트 기간 바꾸기 | fe/ui/screens/company/*/CompanyInfo.tsx (candles 4개 미리 받음) | GET /stocks/{code}/candles?range=1W·1M·3M·1Y&adjusted= | 그대로 | 11/21 dev 병합 반영: `useCompanyInfo` 가 4번 미리 호출(연결됨) |
+| 기업정보 | 투자정보 | 〃 | GET /stocks/{code}/profile | 그대로 | 11/21 dev 병합 반영: `useProfile` 연결됨 |
+| 기업정보 | 분기 실적 · 건전성 | 〃 | GET /stocks/{code}/financials | 그대로 | 11/21 dev 병합 반영(이전 판정: 확인 필요): 분기 12개·건전성·금융사 규칙 모두 응답에 있음, `useFinancials` 연결됨 |
 | 기업정보 | 넛지(주간보고서) | `onNudge` | — | 그대로 | 화면 이동만(묶음 4) |
 | 홈 | 시장 지수 | fe/app/(main)/index.tsx · index.native.tsx (`mockHomeData.market`) | GET /market/overview · be/marketdata/routes.py | 그대로 | 실패 시 위젯만 오류(`onRetryMarket`) |
 | 홈 | 지수 자세히(앱) | `onOpenMarket` → fe/app/(detail)/market/[key].tsx | GET /market/overview | 그대로 | days 없음(C-16) |
@@ -367,8 +368,8 @@
 
 | 항목 | 종류(엔드포인트·DB칸·표·프론트) | DB 변경(Y/N) | 메모 |
 |---|---|---|---|
-| C-14 분기 재무 | 엔드포인트(GET /stocks/{code}/financials 에 quarterly[] 추가 또는 새 경로) | N | DB `0016 financials_quarterly` 있음. roa 는 계산(net_income / 총자산) — 담당자 상의 |
-| C-15 금융업 여부 | 엔드포인트 응답 칸(profile 에 sector·fin_type) | N | DB 칸 있음 |
+| C-14 분기 재무 | 엔드포인트(GET /stocks/{code}/financials 에 quarterly[] 추가 또는 새 경로) | N | **11/21 dev 병합 반영: 끝(PR #56)**. financials 응답이 `quarters[]` 12개로 바뀜. roa 는 보내지 않기로 팀 결정(화면에서도 뺌) |
+| C-15 금융업 여부 | 엔드포인트 응답 칸(profile 에 sector·fin_type) | N | **11/21 dev 병합 반영: 끝(PR #56)**. profile 이 아니라 financials 응답에 `financial`·`sector`·`fin_type` |
 | C-16 지수 날짜 | 엔드포인트 응답 칸(overview.indices[].days 또는 series 를 {date,value}) | N | 담당자 상의 |
 | C-17 맞춤 홈 배치 | 엔드포인트 스키마(`WidgetInstance` 에 x·y·w·h, 'schedule' 종류) | N | user_settings.home_layout jsonb 그대로. 담당자 상의 |
 | C-18 달력 | 엔드포인트 GET·POST /calendar | N | market_events 표 있음. 일정 데이터 채우는 작업 별도 |
@@ -602,7 +603,7 @@
 
 #### 가장 큰 사실 (연결 순서에 영향)
 
-- **화면이 `api.*` 를 거의 안 쓴다.** 화면 파일은 `*.mock.ts`·mock store 를 직접 import 한다. `fe/api/index.ts` 의 `EXPO_PUBLIC_USE_REAL_STOCKS`·`USE_REAL_BOARD`·`USE_MOCK=false` 스위치를 켜도 바뀌는 곳은 로그인(store/auth.ts) 뿐이다. 연결 = 화면마다 mock import 를 `hooks/queries.ts` 로 바꾸는 작업이다.
+- **화면이 `api.*` 를 거의 안 쓴다.** 화면 파일은 `*.mock.ts`·mock store 를 직접 import 한다. `fe/api/index.ts` 의 `EXPO_PUBLIC_USE_REAL_STOCKS`·`USE_REAL_BOARD`·`USE_MOCK=false` 스위치를 켜도 바뀌는 곳은 로그인(store/auth.ts) 뿐이다. 연결 = 화면마다 mock import 를 `hooks/queries.ts` 로 바꾸는 작업이다. (11/21 dev 병합 반영: 기업정보 탭이 `useCompanyInfo` 로 이 작업을 처음 끝냄 → 다른 화면도 같은 틀(화면별 hook + `toXxxData` 변환)을 따르면 된다.)
 - `fe/types/models.ts`·`fe/api/*`(계약 쪽 타입)과 화면 타입(`ui/screens/**/*.types.ts`)이 따로 있다. 필드 이름(stock_code↔code 등)·모양(JBlock↔JournalBlock 등)을 바꾸는 변환 층이 필요하다.
 
 #### 판정 개수 (표 A + 표 B, 자동 집계)
@@ -611,12 +612,12 @@
 |---|---|---|---|---|---|---|
 | 1 로그인·온보딩 | 20 | 7 | 6 | 5 | 4 | 42 |
 | 2 보드·메모·AI 연결 | 35 | 17 | 18 | 9 | 7 | 86 |
-| 3 기업정보·홈·업데이트 | 25 | 17 | 15 | 14 | 3 | 74 |
+| 3 기업정보·홈·업데이트 (11/21 dev 병합 반영, 이전 25·17·15·14·3) | 31 | 16 | 14 | 12 | 1 | 74 |
 | 4 스튜디오 | 3 | 4 | 7 | 30 | 0 | 44 |
 | 5 투자 기록 | 15 | 4 | 9 | 9 | 1 | 38 |
 | 6 MY·설정·휴지통·알림함 | 14 | 10 | 7 | 16 | 5 | 52 |
 | 누락 표(아래) | 26 | 1 | 12 | 8 | 5 | 52 |
-| **합** | **138** | **60** | **74** | **91** | **25** | **388** |
+| **합** | **144** | **59** | **73** | **89** | **23** | **388** |
 
 #### 누락 표 (묶음 1~6 표에 이름이 한 번도 안 나온 화면·mock 값)
 
@@ -628,7 +629,7 @@
 | mock | fe/ui/screens/home/Home.mock.ts `mockHomeNow` | 홈 '지금' | — | 계산 필요(프론트) | 기기 시각(`mockHomeData.now` 와 같은 값) |
 | mock | fe/ui/screens/memo/MemoDetail.mock.ts `mockMemoById` (fe/app/(detail)/memo/link.tsx) | 메모 하나 찾기 | GET /board-items/{id} `MemoResponse` | 그대로 | |
 | mock | fe/ui/screens/board/MemoBoard.mock.ts `mockEmptyStock` | 빈 보드 종목(KB금융) | GET /stocks/{code}/board 빈 배열 + quote | 그대로 | |
-| mock | fe/ui/screens/company/CompanyInfo.mock.ts `mockCompanySK` · `mockCompanyKB` · `mockCompanyByCode` | 기업정보 한 화면 값 묶음 | quote + profile + candles(4기간) + financials | 계산 필요(프론트) | 분기 C-14, 금융업 여부 C-15 |
+| mock | fe/ui/screens/company/CompanyInfo.mock.ts `mockCompanySK` · `mockCompanyKB` · `mockCompanyByCode` | 기업정보 한 화면 값 묶음 | quote + profile + candles(4기간) + financials | 계산 필요(프론트) | 11/21 dev 병합 반영: useCompanyInfo.ts `toCompanyData` 로 구현됨. `mockCompanyByCode` 는 이제 '준비 중' 화면 틀로만 씀. C-14·C-15 끝 |
 | mock | fe/ui/screens/company/companyData.mock.ts `CandleRow` · `finSK` (`health_prev` 포함) | 원시 캔들 줄 · SK 분기·건전성 | candles · financials | 계산 필요(프론트) | `health_prev`(이전 분기 건전성)는 화면에서 안 씀(grep 0건) → 버려도 됨 |
 | mock | fe/ui/screens/my/My.mock.ts `PlanInfo` | 플랜 타입 | DB `plan_type` free·pro | 확인 필요 | 묶음 6 플랜 줄 |
 | store | fe/store/auth.ts `useAuth` | 로그인 상태 | 묶음 1 표 B (refresh·logout·me) | 그대로 | |
@@ -655,7 +656,7 @@
 | 화면 | fe/ui/screens/memo/web/ConnectDialog.tsx | 웹 AI 연결 창 | PUT /memos/{id}/ai-link · POST memos | 확인 필요 | 흐름 차이(C-11) |
 | 화면 | fe/ui/screens/memo/app/MemoMoreSheet.tsx | 색 · 고정 · 복사 · 삭제 메뉴 | 묶음 2 표 B | 그대로 | 복사는 API 없음 |
 | 화면 | fe/ui/screens/stocks/app/AddStockSheet.tsx | 앱 종목 추가 시트 | GET /stocks/search · POST /stocks | 확인 필요 | '많이 찾는' 없음(C-2), KOSPI 만(C-13) |
-| 계산 | fe/ui/screens/company/companyFormat.ts (`yoyAt`·`healthScore`·`TERMS` roa 포함) | 전년 대비 · 건전성 점수 · 용어 | financials | 계산 필요(프론트) | 전년 대비는 분기 필요(C-14) |
+| 계산 | fe/ui/screens/company/companyFormat.ts (`yoyAt`·`healthScore`·`TERMS`) | 전년 대비 · 건전성 점수 · 용어 | financials | 계산 필요(프론트) | 11/21 dev 병합 반영: 분기 12개가 와서 전년 대비 계산 가능. `TERMS` 에서 roa 빠짐, EPS·BPS 설명은 '직전 사업연도 · 한국투자증권' |
 | 화면 | fe/ui/screens/company/app/CompanyCharts.tsx | 기업정보 차트 | candles | 그대로 | |
 | 타입 | fe/ui/screens/updates/Updates.types.ts | 타입 | 묶음 3 | 그대로 | |
 | 계산 | fe/ui/screens/updates/updatesFormat.ts (`ago`·`dayGroup`·`unreadOf`) | 시간 · 날짜 묶음 · 안 읽음 수 | GET /updates | 계산 필요(프론트) | |
@@ -719,8 +720,8 @@
 | C-11 AI 연결 흐름(미리보기 없음) | 프론트(또는 분석 전용 엔드포인트) | N | Y | 결정 필요 7번 | Y (엔드포인트 안이면) |
 | C-32 투자 기록 블록 변환 | 프론트 | N | Y | — | N |
 | C-40 기기 저장 모음(최근 로그인 · 안내 본 상태 · 넛지 · 다크 · 최근 검색 · 보드 순서 안내) | 프론트(AsyncStorage 이미 설치) | N | Y | 결정 필요 5번 | N |
-| C-14 분기 재무 | 엔드포인트 | N | Y | — | Y |
-| C-15 금융업 여부(profile 에 sector·fin_type) | 응답 칸 | N | Y | — | Y |
+| C-14 분기 재무 | 엔드포인트 | N | Y | — | 11/21 dev 병합 반영: 끝(PR #56) |
+| C-15 금융업 여부(financials 에 financial·sector·fin_type) | 응답 칸 | N | Y | — | 11/21 dev 병합 반영: 끝(PR #56) |
 | C-16 지수 날짜 | 응답 칸 | N | Y | — | Y |
 | C-10 확인 질문 화면 | 프론트 | N | N | C-7 · C-8 | N |
 | C-20 질문 답 화면 | 프론트 | N | N | C-7 | N |
@@ -767,7 +768,7 @@ DB 변경 항목을 마이그레이션 하나(0022 후보)로 묶을 수 있는�
 | AI 연결 | 있음·그대로 | 있음·흐름 결정 필요 | 분석 미리보기 없음(PUT 한 번에 켜기+분석), 추적 문장 없음, 확인 질문 화면·함수 없음 |
 | 업데이트 타임라인 | 있음·그대로 | 있음·보강 | 조건가는 메모 price_conditions 와 맞춰야 함, quote_mark·provider·근거 차트 기간 없음, 메모 색 없음 |
 | 지수·매크로 | 있음·보강 (매크로 지표 없음) | 있음·보강 (지수 날짜 없음) | 매크로 5개는 `overview.macro` 에 있음(be/marketdata/service.py `MACROS`). 모자란 것은 지수 series 의 날짜 |
-| 재무 | 있음·그대로 | 있음·보강 | 연간만, 분기·ROA·금융업 여부 없음, financials_fin 안 읽음 |
+| 재무 | 있음·그대로 | 있음·보강 → **11/21 dev 병합 반영: 있음·그대로** | 병합 전: 연간만, 분기·ROA·금융업 여부 없음. 병합 후: 분기 12개·금융사 규칙·preparing 응답, ROA 는 팀 결정으로 뺌. financials_fin 은 여전히 안 읽음(팀 결정) |
 | 투자 기록 (blocks) | 있음·그대로 | 있음·보강 | 고정·서식·작은 제목 없음, 정렬 기준 다름, 화면 블록 모양과 다름 |
 | 사용자 설정 (user_settings) | 있음·그대로 | 있음·보강 | 화면 알림 1칸 ↔ 서버 3칸, 스튜디오 알림 칸 없음, auto_audio·auto_report 매핑 없음 |
 
@@ -812,5 +813,5 @@ DB 변경 항목을 마이그레이션 하나(0022 후보)로 묶을 수 있는�
 |---|---|
 | ① 인증 · 종목 | 스위치만으로 화면이 안 바뀜 → 온보딩·내 종목·사이드바 화면의 mock import 를 `useMyStocks` 등으로 바꾸는 작업 포함. 신규 판별(C-5) · 온보딩 종목 저장(POST /stocks 반복) 추가. KOSDAQ 범위(결정 10) 먼저 정하기 |
 | ② 보드 · 메모 · AI 연결 | C-7(API 함수) · C-8(analysis) · AI 연결 흐름 결정(결정 7)이 **선행**. 체크리스트 1개 규칙(결정 8) |
-| ③ 업데이트 · 기업정보 · 홈 | 백엔드 보강 3개(C-14 분기 재무 · C-15 금융업 여부 · C-16 지수 날짜)를 담당자와 먼저 맞춰야 화면이 mock 과 같아짐. 업데이트 피드는 ② 타임라인 변환을 같이 씀 |
+| ③ 업데이트 · 기업정보 · 홈 | 백엔드 보강 3개(C-14 분기 재무 · C-15 금융업 여부 · C-16 지수 날짜)를 담당자와 먼저 맞춰야 화면이 mock 과 같아짐. 업데이트 피드는 ② 타임라인 변환을 같이 씀. **11/21 dev 병합 반영: 기업정보 탭은 연결 끝(C-14·C-15 포함). 남은 것은 C-16 지수 날짜와 홈·업데이트 화면** |
 | ④ 투자 기록 · MY · 휴지통 | 투자 기록은 블록 변환(C-32) 선행. 휴지통은 ②·④ 삭제가 다 붙은 뒤. **스튜디오는 ④ 뒤 별도 단계**(백엔드 API 없음) |
