@@ -34,7 +34,8 @@ export const mockHomeData: HomeData = {
     { stock_code: '005930', name: '삼성전자', logo: '삼', logo_bg: '#1428A0', status: 'watching', new_count: 0, latest: { kind: '뉴스', title: '삼성전자 자사주 관련 신규 계약 소식', memo_title: '자사주 매입 나오면 다시 보기', memo_color: 'yellow' } },
     { stock_code: '035420', name: '네이버', logo: '네', logo_bg: '#03C75A', status: 'watching', new_count: 1, latest: { kind: '뉴스', title: '네이버, AI 검색 관련 보도 뒤 거래 늘어', memo_title: 'AI 검색 반응 보기', memo_color: 'green' } },
   ],
-  market: HOME_INDICES,
+  /* 지표마다 자기 날짜 (예시는 셋 다 HOME_DAYS) */
+  market: HOME_INDICES.map((m) => ({ ...m, dates: HOME_DAYS.slice(-m.closes.length) })),
   days: HOME_DAYS,
   news: HOME_NEWS,
   news_day_total: HOME_NEWS_DAY_TOTAL,

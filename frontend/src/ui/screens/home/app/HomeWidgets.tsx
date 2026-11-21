@@ -11,7 +11,7 @@ import { useProgress } from '@/ui/motion/useProgress';
 import { StockLogo } from '@/ui/shared/StockLogo';
 import { appColor, curve, ft } from '@/ui/theme';
 import type { HomeNewsItem, HomeUpdateRow, HomeWidget, MarketIndex } from '../Home.types';
-import { APP_SPARK_N, ago, hm, mmdd, nf, spark } from '../homeFormat';
+import { APP_SPARK_N, ago, basisText, hm, mmdd, nf, spark } from '../homeFormat';
 import { PopBurst } from '@/components/motion/Celebrate';
 
 /* 원본 home.html confetti 색 */
@@ -121,7 +121,7 @@ function MarketCell({ q, draw, onPress }: { q: MarketIndex; draw: boolean; onPre
           <Path d={s.d} fill="none" stroke={col} strokeWidth={1.6} strokeDasharray="300" strokeDashoffset={300 * (1 - e)} />
           <Path d={`M0 22H${w}`} stroke="#C9CDD4" strokeDasharray="2 3" />
         </Svg>
-        <Text style={st.mcT}>{mmdd(q.as_of)} 종가 기준</Text>
+        <Text style={st.mcT}>{basisText(q)}</Text>
       </Pressable>
     </View>
   );

@@ -9,7 +9,7 @@ import { NudgePill } from '@/ui/shared/NudgePill';
 import { PillSeg } from '@/ui/shared/PillSeg';
 import { appColor, curve, ft } from '@/ui/theme';
 import type { MarketDetailProps } from '../Home.types';
-import { APP_PERIODS, mmdd, nf, spark, type AppPeriod } from '../homeFormat';
+import { APP_PERIODS, basisText, nf, pointText, spark, type AppPeriod } from '../homeFormat';
 import { useNudge } from '@/store/nudge';
 
 const CH = 230;
@@ -101,6 +101,8 @@ export function AppMarketDetail({ index: q, header, onNudge }: MarketDetailProps
   const c = (idx === null ? last : data[idx]) - first;
   const pc = (c / first) * 100;
   const ago = data.length - 1 - i;
+  /* 짚은 점의 실제 날짜 (그 지표 자신의 dates, 2026-11-21) */
+  const pointDate = q.dates.slice(-n)[i];
   const p = s.pts[i];
   /* 색이 남는 구간: 훑는 중 = 손가락까지 · 놓은 뒤 = 그 자리에서 끝까지 늘어남 */
   const clipW = idx !== null ? p[0] + 20 : back ? s.pts[back.from][0] + 20 + (W - (s.pts[back.from][0] + 20)) * curve.ease(tb) : W;
@@ -117,7 +119,7 @@ export function AppMarketDetail({ index: q, header, onNudge }: MarketDetailProps
           {nf(c)} ({c > 0 ? '+' : ''}
           {pc.toFixed(2)}%) · {per} 전보다
         </Text>
-        <Text style={st.when}>{ago === 0 ? `${mmdd(q.as_of)} 종가 기준` : `${ago}거래일 전 종가`}</Text>
+        <Text style={st.when}>{ago === 0 ? basisText(q) : pointText(q, pointDate) || `${ago}${q.key === 'usd' ? '번 전 관측값' : '거래일 전 종가'}`}</Text>
       </View>
       <View style={st.chart} {...pan.panHandlers} accessibilityLabel={`${q.name} ${per} 선 그래프`}>
         <Svg width={W} height={CH} viewBox={`-20 0 ${W} ${CH}`}>
@@ -154,7 +156,7 @@ export function AppMarketDetail({ index: q, header, onNudge }: MarketDetailProps
         fontSize={14}
         style={st.per}
       />
-      <Text style={st.mfoot}>선을 손가락으로 훑으면 그날의 값이 보여요. 전일 확정 종가 기준이에요</Text>
+      <Text style={st.mfoot}>{q.key === 'usd' ? '선을 손가락으로 훑으면 그날의 값이 보여요. 한국은행(ECOS) 관측값이에요' : '선을 손가락으로 훑으면 그날의 값이 보여요. 전일 확정 종가 기준이에요'}</Text>
       {q.key === 'usd' && onNudge && nudge ? (
         <View style={[st.nudge, { bottom: 28 + insets.bottom }]} pointerEvents="box-none">
           <NudgePill text="환율이 바뀌면 내 종목은? 실험해 보기" onGo={onNudge} onClose={() => setNudge(false)} />

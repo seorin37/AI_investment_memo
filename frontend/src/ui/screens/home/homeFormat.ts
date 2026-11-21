@@ -21,6 +21,18 @@ export function ago(iso: string, now: string) {
   return mmdd(iso);
 }
 
+/**
+ * 기준 문구 (2026-11-21). 지수 = 거래소 종가 → 'MM.DD 종가 기준'.
+ * 원/달러 = ECOS 731Y003/0000003 관측값 → 'MM.DD 기준' (종가라고 쓰지 않음)
+ */
+export function basisText(q: Pick<MarketIndex, 'key' | 'as_of'>) {
+  return `${mmdd(q.as_of)} ${q.key === 'usd' ? '기준' : '종가 기준'}`;
+}
+/** 차트 점을 짚었을 때: 그 점의 실제 날짜 ('MM.DD 종가' · 원/달러 'MM.DD 기준'). 날짜가 없으면 '' */
+export function pointText(q: Pick<MarketIndex, 'key'>, date: string | undefined) {
+  return date ? `${mmdd(date)} ${q.key === 'usd' ? '기준' : '종가'}` : '';
+}
+
 /** 상승 #E5484D · 하락 #2F6BDB */
 export const upDown = (up: boolean) => (up ? '#E5484D' : '#2F6BDB');
 
@@ -79,14 +91,15 @@ export function mkData(q: MarketIndex, r: WebRange) {
     base: Y(first),
     up: chg >= 0,
     label: `${sign}${nf(Math.abs(chg))} (${sign}${Math.abs(pct).toFixed(2)}%)`,
-    when: `${r} · ${mmdd(q.as_of)} 종가 기준`,
+    when: `${r} · ${basisText(q)}`,
     v: nf(last),
   };
 }
 
-/** 원본 rangeLabels: x축 날짜 5개 */
+/** 원본 rangeLabels: x축 날짜 5개. days = 그 지표의 dates (2026-11-21). 날짜가 없으면 빈 축 */
 export function rangeLabels(r: WebRange, days: string[]): string[] {
   const n = r === '1주' ? 5 : r === '1달' ? 22 : 250;
   const d = days.slice(-n);
+  if (!d.length) return [];
   return Array.from({ length: 5 }, (_, i) => d[Math.round((i / 4) * (d.length - 1))]).map((t) => (r === '1년' ? `${t.slice(2, 4)}.${t.slice(5, 7)}` : mmdd(t)));
 }

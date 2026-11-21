@@ -16,10 +16,12 @@ export interface MarketIndex {
   change: number;
   /** 전일 대비 % */
   pct: number;
-  /** 기준 거래일 YYYY-MM-DD */
+  /** 기준일 YYYY-MM-DD (지수 = 거래일, 원/달러 = ECOS 관측일) */
   as_of: string;
-  /** 일별 종가 (오래된 → 최근, days 와 같은 길이) */
+  /** 일별 값 (오래된 → 최근). 지표마다 자기 날짜 시리즈 */
   closes: number[];
+  /** closes 와 같은 길이의 실제 날짜 (2026-11-21: 지표마다 따로, 다른 지표 축에 맞추지 않음) */
+  dates: string[];
 }
 
 /** 홈 업데이트 위젯 한 줄 (종목별 새 소식) */
