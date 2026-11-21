@@ -83,7 +83,13 @@
 - '그대로 · 이름만 다름'은 백엔드 파일·클래스명을 반드시 적는다. 근거 없으면 '확인 필요'. DB 적용 상태는 확인 불가(마이그레이션 파일 기준만).
 - 팀원 백엔드는 고치지 않는다. 고칠 게 보이면 메모에 '담당자 상의'.
 - 경로 줄임: 프론트 `fe/` = `frontend/src/`, 백엔드 `be/` = `backend/app/`. 백엔드 경로는 모두 `/api/v1` 접두.
-- 참고: `backend/app/**/models.py` 파일은 없다(SQL 직접 사용). DB 칸은 `alembic/versions` 기준.
+- DB 칸 근거는 ORM 정의(파일·클래스) 우선, 없으면 마이그레이션.
+  - 확인 결과(`grep -rn "__tablename__" backend/app`): 0건. `models.py`·`DeclarativeBase`·`mapped_column`도 없다(백엔드는 SQL 직접 사용).
+  - 그래서 DB 칸 근거 = `alembic/sql/0001_schema_full_v1_2.sql`(0001이 이 파일을 실행) + `alembic/versions/0002~0021`의 `ALTER TABLE`·`CREATE TABLE`. 표기: `0001sql users` · `0019 studio_items` 처럼.
+- 메모 — 기기 저장소 패키지(`frontend/package.json`):
+  - `expo-secure-store ~58.0.2` 있음 → `fe/lib/storage.ts` `storage.get/set/remove` (앱: SecureStore, 웹: `localStorage`). 지금 쓰는 키: `memos.refresh_token` · `memos.mock_token` (store/auth.ts).
+  - `@react-native-async-storage/async-storage 2.2.0` 있음, 그러나 `frontend/src`에서 import 0건(미사용).
+  - SecureStore는 값 크기 제한(약 2KB)이 있어 테마·안내 본 상태 같은 일반 값은 AsyncStorage가 맞다 → 결정 필요 표에 올림.
 
 ### 묶음 1: 로그인 · 온보딩 · 첫 시작
 
@@ -99,8 +105,8 @@
 | 로그인·공통 | fe/store/auth.ts `User` (fe/types/models.ts `User`) | id · name · bio · avatar_url · email · providers | be/auth/service.py `_public_user` → id · name · bio · avatar_url · email · providers | 그대로 | |
 | 로그인·공통 | fe/types/models.ts `AuthToken` | access_token · refresh_token · token_type · expires_in · user | be/auth/routes.py `TokenResponse` | 그대로 | |
 | 종목 고르기 | fe/ui/screens/onboarding/Onboarding.mock.ts `mockOnboardingStocks`(웹) · `mockAppPopularStocks`(앱) | stock_code | be/stocks/schemas.py `StockMasterResponse.code` | 이름만 다름(→code) | |
-| 종목 고르기 | 〃 | name · market | `StockMasterResponse.name` · `.market` | 그대로 | 백엔드 market 에 KONEX 추가(프론트 OnboardingStock 은 KOSPI·KOSDAQ 만) |
-| 종목 고르기 | 〃 | category (반도체·금융 …) | — (`StockMasterResponse` 에 없음) | 확인 필요 | alembic 0012_financials_sector_columns 의 업종 칸을 쓸 수 있는지 담당자 상의 |
+| 종목 고르기 | 〃 | name · market | `StockMasterResponse.name` · `.market` | 그대로 | 스키마 market 은 KONEX 포함, DB `0001sql market_type` 은 KOSPI·KOSDAQ 만 → 실제로 KONEX 는 안 옴(0단계 수정) |
+| 종목 고르기 | 〃 | category (반도체·금융 …) | — (`StockMasterResponse` 에 없음. DB `0001sql stocks.sector` 는 `sector_type`=general·financial 두 값뿐이라 업종이 아님) | 없음 | 0단계 수정(전: 확인 필요 · 0012 는 은행·보험 재무 칸이라 업종과 무관). 표 C-6 |
 | 종목 고르기 | 〃 | logo · logo_bg · logo_ink | — | 계산 필요(프론트) | 이름 첫 글자 + 색 규칙. 회사별 색이면 표 C |
 | 종목 고르기 | `mockAppPopularStocks` (12개, 원본 login.html 순서) | '많이 찾는 종목' 목록·순위 | — (popular·search_count 없음) | 없음 | 표 C-2. 웹은 `mockOnboardingStocks` 18개로 출처가 다름 |
 | 종목 고르기 | fe/app/onboarding/pick.tsx `selected` | {code: holding\|watching} | be/stocks/schemas.py `StockCreateRequest.code` · `.status` | 이름만 다름(→code) | 지금은 URL query 로만 넘김, 서버 저장 없음 |
@@ -148,4 +154,4 @@
 | C-3 온보딩 종목 한 번에 저장 | 엔드포인트(POST /stocks/bulk) | N | 선택. 없으면 POST /stocks 반복 |
 | C-4 종목별 메모 수·AI 연결 수 | `MyStockResponse` 칸 추가(memo_count · ai_linked_count) | N (집계) | 선택. 담당자 상의 (be/stocks) |
 | C-5 신규 사용자 판별 함수 | 프론트(store/auth.ts 또는 login 후 공통 함수: GET /stocks 길이 0 → /terms) | N | 약관 동의(C-1) 생기면 '동의 안 함 → /terms'를 먼저 본다 |
-| C-6 종목 업종·로고 | 프론트(로고 규칙) + `StockMasterResponse.category` 추가 여부 | 확인 필요 | 0012 업종 칸 재사용 가능 여부 담당자 상의 |
+| C-6 종목 업종·로고 | 프론트(로고 규칙) + DB칸 `stocks.industry`(가칭) + `StockMasterResponse.category` | Y (업종을 보여 줄 경우) | 0단계 수정: `stocks.sector` 는 general·financial 뿐이라 재사용 불가. 업종 출처(KRX 업종 분류 등) 담당자 상의. 시연은 프론트 고정값으로 가능 |
