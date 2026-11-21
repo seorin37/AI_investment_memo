@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { mockMyStocksData } from '@/ui/screens/stocks/MyStocks.mock';
 import type { MyStock } from '@/ui/screens/stocks/MyStocks.types';
+import { useStockPrices } from '@/ui/screens/stocks/useStockPrices';
 import { WebMyStocks } from '@/ui/screens/stocks/web/MyStocks';
 
 /**
@@ -11,10 +12,12 @@ import { WebMyStocks } from '@/ui/screens/stocks/web/MyStocks';
 export default function MyStocksPage() {
   const router = useRouter();
   const [stocks, setStocks] = useState<MyStock[]>(mockMyStocksData.stocks);
+  /* 가격: 실제 모드면 GET /quotes 한 번 (2026-11-21), mock 모드면 mock 가격 */
+  const priced = useStockPrices(stocks, mockMyStocksData.universe, mockMyStocksData.as_of);
   return (
       <WebMyStocks
         {...mockMyStocksData}
-        stocks={stocks}
+        {...priced}
         onOpenStock={(code) => router.navigate({ pathname: '/stocks/[code]', params: { code } })}
         onOpenCompany={(code) => router.navigate({ pathname: '/stocks/[code]', params: { code, tab: 'info' } })}
         onAdd={(code, hold) => {

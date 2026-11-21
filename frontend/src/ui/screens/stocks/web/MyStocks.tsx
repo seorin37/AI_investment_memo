@@ -126,7 +126,7 @@ export function WebMyStocks(p: WebMyStocksProps) {
                       <Text style={st.cardHS}>{l.length}종목</Text>
                     </View>
                     {l.map((s) => {
-                      const up = s.change_pct >= 0;
+                      const up = (s.change_pct ?? 0) >= 0;
                       const on = !!sel?.has(s.stock_code);
                       return (
                         <View key={s.stock_code} {...({ dataSet: { mine: s.stock_code } } as object)}>
@@ -149,11 +149,13 @@ export function WebMyStocks(p: WebMyStocksProps) {
                               </Text>
                             </View>
                             <View style={st.pr}>
-                              <Text style={st.prB}>{s.price.toLocaleString('ko-KR')}원</Text>
-                              <Text style={[st.prS, { color: up ? '#E5484D' : '#2F6BDB' }]}>
-                                {up ? '+' : ''}
-                                {s.change_pct.toFixed(2)}%
-                              </Text>
+                              <Text style={st.prB}>{s.price == null ? '—' : `${s.price.toLocaleString('ko-KR')}원`}</Text>
+                              {s.change_pct == null ? null : (
+                                <Text style={[st.prS, { color: up ? '#E5484D' : '#2F6BDB' }]}>
+                                  {up ? '+' : ''}
+                                  {s.change_pct.toFixed(2)}%
+                                </Text>
+                              )}
                             </View>
                             {!sel ? (
                               <Pressable
@@ -178,7 +180,7 @@ export function WebMyStocks(p: WebMyStocksProps) {
                   </Appear>
                 ))}
               <Text style={st.foot}>
-                시세는 {`${p.as_of.slice(5, 7)}.${p.as_of.slice(8, 10)}`} 종가 기준 · 종목을 우클릭하면 바로 옮기거나 뺄 수 있어요
+                {p.as_of ? `시세는 ${p.as_of.slice(5, 7)}.${p.as_of.slice(8, 10)} 종가 기준` : '시세 데이터가 아직 연결되지 않았어요'} · 종목을 우클릭하면 바로 옮기거나 뺄 수 있어요
               </Text>
             </View>
           </View>

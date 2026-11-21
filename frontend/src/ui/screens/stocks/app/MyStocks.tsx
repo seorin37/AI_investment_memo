@@ -275,7 +275,7 @@ export function AppMyStocks(p: AppMyStocksProps) {
                 </Reveal>
               );
             })}
-            <Text style={st.foot2}>시세는 {`${p.as_of.slice(5, 7)}.${p.as_of.slice(8, 10)}`} 종가 기준</Text>
+            <Text style={st.foot2}>{p.as_of ? `시세는 ${p.as_of.slice(5, 7)}.${p.as_of.slice(8, 10)} 종가 기준` : '시세 데이터가 아직 연결되지 않았어요'}</Text>
             <Text style={st.hint2}>종목을 꾹 누르면 여러 개를 옮기거나 빼고, ⋮⋮를 끌어 순서를 바꿀 수 있어요</Text>
           </>
         )}
@@ -410,7 +410,7 @@ function StockRow({ s, sel, on, fresh, lifted, dragY, shift, group, api, onPress
       }),
     [api, s.stock_code, groupKey],
   );
-  const up = s.change_pct >= 0;
+  const up = (s.change_pct ?? 0) >= 0;
   return (
     <Animated.View
       onLayout={(e) => {
@@ -440,11 +440,13 @@ function StockRow({ s, sel, on, fresh, lifted, dragY, shift, group, api, onPress
           </Text>
         </View>
         <View style={st.pr}>
-          <Text style={st.prB}>{won(s.price)}</Text>
-          <Text style={[st.prS, { color: up ? appColor.up : appColor.down }]}>
-            {up ? '+' : ''}
-            {s.change_pct.toFixed(2)}%
-          </Text>
+          <Text style={st.prB}>{s.price == null ? '—' : won(s.price)}</Text>
+          {s.change_pct == null ? null : (
+            <Text style={[st.prS, { color: up ? appColor.up : appColor.down }]}>
+              {up ? '+' : ''}
+              {s.change_pct.toFixed(2)}%
+            </Text>
+          )}
         </View>
         {sel ? (
           <View {...pan.panHandlers} style={st.hdl} accessible accessibilityLabel={`${s.name} 끌어서 순서 바꾸기`}>

@@ -15,10 +15,10 @@ export interface MyStock {
   ai_count: number;
   /** 읽지 않은 새 소식 */
   new_count: number;
-  /** 전일 확정 종가 */
-  price: number;
+  /** 전일 확정 종가. null = 시세 미연결 (실제 API 모드에서 시세가 없는 종목, 화면은 '—') */
+  price: number | null;
   /** 전일 대비 % */
-  change_pct: number;
+  change_pct: number | null;
   /** AI 연결 가능한 종목 (시범 종목) */
   ai_ready: boolean;
 }
@@ -34,14 +34,14 @@ export interface StockCandidate {
   /** 웹 종목 추가 창의 분야 칩 */
   sector: string;
   ai_ready: boolean;
-  /** 전일 확정 종가 · 등락률 (추가하면 줄에 바로 보임) */
-  price: number;
-  change_pct: number;
+  /** 전일 확정 종가 · 등락률 (추가하면 줄에 바로 보임). null = 시세 미연결 */
+  price: number | null;
+  change_pct: number | null;
 }
 
 export interface MyStocksData {
   stocks: MyStock[];
-  /** 시세 기준일 YYYY-MM-DD */
+  /** 시세 기준일 YYYY-MM-DD. '' = 시세 미연결 (안내 문구) */
   as_of: string;
   /** 종목 추가: 검색 대상 · 처음에 보이는 많이 찾는 종목 */
   universe: StockCandidate[];
