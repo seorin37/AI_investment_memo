@@ -210,3 +210,61 @@ class MarketDataRepository:
             {"code": product_code, "limit": limit},
         )
         return list(reversed(rows))
+
+    # ─── 여러 종목 시세 (보드·사이드바·내 종목 목록). 원시 종가(prices_daily)만 읽는다
+    def recent_prices_many(self, codes: list[str], limit: int) -> dict[str, list[dict[str, Any]]]:
+        """종목마다 최근 거래일부터 limit개. 반환은 {코드: 날짜 오름차순 행}. 없는 종목은 키가 없다."""
+        rows = self._rows(
+            """
+            SELECT code, trade_date, close FROM (
+              SELECT btrim(symbol) AS code, trade_date, close,
+                     row_number() OVER (PARTITION BY symbol ORDER BY trade_date DESC) AS rn
+              FROM prices_daily
+              WHERE symbol = ANY(CAST(:codes AS char(6)[]))
+            ) t
+            WHERE rn <= :limit
+            ORDER BY code, trade_date
+            """,
+            {"codes": list(codes), "limit": limit},
+        )
+        out: dict[str, list[dict[str, Any]]] = {}
+        for row in rows:
+            out.setdefault(row["code"], []).append(row)
+        return out
+
+    # ─── 거시 지표 (ECOS·FRED 관측값 + KRX 금). 반환은 지표별 날짜 오름차순 [{day, value, source, series_code}]
+    def latest_observations(self, indicator_codes: list[str], per_code: int) -> dict[str, list[dict[str, Any]]]:
+        rows = self._rows(
+            """
+            SELECT o.indicator_code AS code, o.observation_date AS day, o.value,
+                   i.source, i.series_code
+            FROM (
+              SELECT indicator_code, observation_date, value,
+                     row_number() OVER (PARTITION BY indicator_code ORDER BY observation_date DESC) AS rn
+              FROM economic_observations
+              WHERE indicator_code = ANY(CAST(:codes AS text[])) AND value IS NOT NULL
+            ) o
+            JOIN economic_indicators i ON i.code = o.indicator_code
+            WHERE o.rn <= :n
+            ORDER BY o.indicator_code, o.observation_date
+            """,
+            {"codes": list(indicator_codes), "n": per_code},
+        )
+        out: dict[str, list[dict[str, Any]]] = {}
+        for row in rows:
+            out.setdefault(row["code"], []).append(row)
+        return out
+
+    def latest_commodity(self, product_code: str, n: int) -> list[dict[str, Any]]:
+        rows = self._rows(
+            """
+            SELECT p.trade_date AS day, p.close AS value, c.source, c.code AS series_code
+            FROM commodity_prices_daily p
+            JOIN commodity_products c ON c.code = p.product_code
+            WHERE p.product_code = :code
+            ORDER BY p.trade_date DESC
+            LIMIT :n
+            """,
+            {"code": product_code, "n": n},
+        )
+        return list(reversed(rows))

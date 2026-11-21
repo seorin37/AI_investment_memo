@@ -37,6 +37,22 @@ MACROS = [
     ("WTI", "WTI 유가", "$", "observation", "WTI_SPOT"),
 ]
 
+# 거시 API (GET /market/macro). (key, label, unit, 읽을 곳, 코드). 값은 수집된 원천값 그대로(가공·예측 없음)
+MACRO_INDICATORS = [
+    ("USD_KRW", "원/달러 환율", "원", "observation", "USD_KRW"),
+    ("KR_POLICY_RATE", "한국 기준금리", "%", "observation", "KR_POLICY_RATE"),
+    ("KR_GOV_3Y", "국고채 3년", "%", "observation", "KR_GOV_3Y"),
+    ("KR_GOV_10Y", "국고채 10년", "%", "observation", "KR_GOV_10Y"),
+    ("KR_GOV_30Y", "국고채 30년", "%", "observation", "KR_GOV_30Y"),
+    ("US_TREASURY_2Y", "미국 국채 2년", "%", "observation", "US_TREASURY_2Y"),
+    ("US_TREASURY_10Y", "미국 국채 10년", "%", "observation", "US_TREASURY_10Y"),
+    ("US_TREASURY_30Y", "미국 국채 30년", "%", "observation", "US_TREASURY_30Y"),
+    ("WTI_SPOT", "WTI 유가", "달러/배럴", "observation", "WTI_SPOT"),
+    ("GOLD", "금 99.99K", "원/g", "commodity", "04020000"),
+]
+
+QUOTES_MAX = 50  # GET /quotes 한 번에 받는 종목 수
+
 DEFAULT_OVERVIEW_TEXT = "기업 개요를 준비 중이에요."
 
 
@@ -109,6 +125,17 @@ class MarketDataService:
         rows = self.repo.recent_prices(code, SPARK_SIZE)
         if not rows:
             raise PriceDataNotFoundError(code)
+        return self._quote(code, rows)
+
+    def quotes(self, codes: list[str]) -> dict[str, Any]:
+        """여러 종목 시세를 한 번에 (보드·사이드바·내 종목 목록). 현재가·등락은 원시 종가. 시세가 없는 종목은 missing."""
+        by_code = self.repo.recent_prices_many(codes, SPARK_SIZE)
+        quotes = [self._quote(code, by_code[code]) for code in codes if by_code.get(code)]
+        return {"quotes": quotes, "missing": [code for code in codes if not by_code.get(code)]}
+
+    @staticmethod
+    def _quote(code: str, rows: list[dict[str, Any]]) -> dict[str, Any]:
+        """rows: 날짜 오름차순 prices_daily 행 (원시 종가)."""
         last = rows[-1]
         price = Decimal(last["close"])
         prev = Decimal(rows[-2]["close"]) if len(rows) >= 2 else price
@@ -120,6 +147,7 @@ class MarketDataService:
             "change": num(change),
             "change_pct": change_pct,
             "as_of": _close_time(last["trade_date"]),
+            "trade_date": last["trade_date"].isoformat(),
             "spark": [num(row["close"]) for row in rows],
         }
 
@@ -280,6 +308,9 @@ class MarketDataService:
                         name: [float(round(v, 2)) for v in values[-size:]]
                         for name, size in INDEX_SERIES_SIZES.items()
                     },
+                    # C-16: 지수별 기준일과 series['1Y'] 와 같은 길이의 날짜 (다른 기간은 뒤에서 같은 개수)
+                    "trade_date": rows[-1]["day"].isoformat(),
+                    "dates": [r["day"].isoformat() for r in rows[-INDEX_SERIES_SIZES["1Y"]:]],
                 }
             )
         macro = []
@@ -305,3 +336,41 @@ class MarketDataService:
             )
         as_of = _close_time(max(latest_days)) if latest_days else datetime.now(KST).isoformat()
         return {"indices": indices, "macro": macro, "as_of": as_of}
+
+    # ─── 거시 지표 (GET /market/macro)
+    def macro(self) -> dict[str, Any]:
+        """지표별 최신값·직전값·관측일·출처. economic_observations(ECOS·FRED) + commodity_prices_daily(KRX 금).
+
+        - 값은 원천값 그대로(소수 4자리 반올림만). change = 최신 − 직전 (단위가 % 면 %p), change_pct = 등락률
+        - 관측값이 없는 지표는 indicators 에서 빼고 missing 에 키를 넣는다
+        """
+        obs_codes = [code for _, _, _, source, code in MACRO_INDICATORS if source == "observation"]
+        obs = self.repo.latest_observations(obs_codes, 2)
+        indicators: list[dict[str, Any]] = []
+        missing: list[str] = []
+        for key, label, unit, source, code in MACRO_INDICATORS:
+            rows = obs.get(code, []) if source == "observation" else self.repo.latest_commodity(code, 2)
+            if not rows:
+                missing.append(key)
+                continue
+            last, prev = rows[-1], (rows[-2] if len(rows) >= 2 else None)
+            value = Decimal(last["value"])
+            prev_value = Decimal(prev["value"]) if prev else None
+            change = value - prev_value if prev_value is not None else None
+            indicators.append(
+                {
+                    "key": key,
+                    "label": label,
+                    "unit": unit,
+                    "value": _round(value, 4),
+                    "prev_value": _round(prev_value, 4),
+                    "change": _round(change, 4),
+                    "change_pct": float(round(change / prev_value * 100, 2)) if change is not None and prev_value else None,
+                    "observed_date": last["day"].isoformat(),
+                    "prev_date": prev["day"].isoformat() if prev else None,
+                    "source": last.get("source"),
+                    "series_code": last.get("series_code"),
+                }
+            )
+        as_of = max((i["observed_date"] for i in indicators), default=None)
+        return {"indicators": indicators, "missing": missing, "as_of": as_of}
