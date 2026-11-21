@@ -376,3 +376,78 @@
 | C-19 모두 읽음 | 엔드포인트 POST /ai-updates/read-all (선택) | N | |
 | C-20 질문 답 화면 | 프론트(메모 상세 'AI 업데이트' 탭에 질문·답) | N | 백엔드 있음 |
 | C-21 업데이트 메모 색 | 엔드포인트 응답 칸(`_ai_update.memo_color`) | N | 담당자 상의 |
+
+### 묶음 4: 스튜디오
+
+공통 사실:
+- 백엔드에 스튜디오 라우트 없음(be/main.py include_router 12개 중 없음). backend/pipelines 에도 오디오·보고서·퀴즈·실험실 생성 코드 없음(`grep studio_items·audio_assets·tts·quiz` 0건, `pipelines/economic/ecos.py`·`fred.py` 는 지표 수집만).
+- DB 는 있음: `0019 studio_items`(kind report·audio·lab, trigger auto·request, status queued·generating·ready·failed, title, period_start·end, symbols[], content jsonb, sources jsonb, error, credits_used, created_at, ready_at, **expires_at = now()+30일**, 자동 생성은 (user, kind, period_start) 하나) · `0019 audio_assets`(storage_path, mime_type, bytes, duration_sec, provider, voice, text_hash, play_position_sec) · `0019 user_settings.auto_audio`(기본 false)·`auto_report`(기본 true) · `0019 credit_grants`·`credit_ledger`(reason 에 report·audio·lab 있음) · `0019 plan_limits.monthly_credits`.
+- 크레딧: be/credits/ledger.py `spend`·`usage`·`grant_purchase`, 규칙 configs/credits.yaml (report 5 · audio 5 · lab 3 · card 1 · answer 1 · price_condition 0, 월 기본 free 30 · pro 300, 산 크레딧 365일). API 는 `GET /me/usage` 하나. 차감은 매일 실행(be/credits/daily.py `charge_run`)의 카드·답만, 스튜디오 차감 호출 없음. 산 크레딧 넣기는 관리자 명령(be/credits/admin.py)뿐.
+- 화면 상태는 `fe/store/studioPlayer.ts` (메모리만, mock 타이머 · 소리 없음).
+- 프론트 package.json 에 소리 재생(expo-audio·expo-av 등)·알림(expo-notifications) 패키지 없음.
+
+#### 표 A 데이터
+
+| 화면 | mock 출처(파일·상수/함수) | 필드 | 백엔드(파일·스키마.필드) | 판정 | 메모 |
+|---|---|---|---|---|---|
+| 스튜디오 홈 | fe/ui/screens/studio/Studio.mock.ts `mockStudioFeatures` | key · title · desc | — | 그대로 | 고정 문구 |
+| 스튜디오 홈 | Studio.mock.ts `mockMade` · store/studioPlayer.ts `made` (Studio.types.ts `MadeItem`) | id · kind · title | — (API 없음. DB `0019 studio_items.id` · `.kind` · `.title`) | 없음 | 표 C-22 |
+| 스튜디오 홈 | 〃 | left ('N일 뒤 삭제') | DB `studio_items.expires_at` | 없음 | API 생기면 계산 필요(프론트) |
+| 스튜디오 홈 | 〃 | sub · meta · foot (종목 수·기간 글) | DB `studio_items.symbols` · `period_start`·`period_end` | 없음 | API 생기면 계산 필요(프론트) |
+| 스튜디오 홈 | 〃 | dur (오디오 길이) | DB `0019 audio_assets.duration_sec` | 없음 | |
+| 스튜디오 홈 | 〃 | codes · market (보고서) · lab{code·dirs} | DB `studio_items.symbols` · `content`(jsonb) | 없음 | content 모양 정해야 함(결정 필요) |
+| 스튜디오 홈 | fe/ui/screens/my/My.mock.ts `mockMyUsage.usage_pct` | 사용량 % | be/credits/ledger.py `Usage.usage_percent` (GET /me/usage) | 이름만 다름(→usage_percent) | |
+| 스튜디오 홈 | `mockMyUsage.usage_refill` ('12월 1일') · `usage_renew` ('11.30') | 갱신일 | `Usage.renews_at` · `renew_label`('11.30 갱신') | 계산 필요(프론트) | |
+| 스튜디오 홈 | `mockMyUsage.plan_name` ('무료 플랜') | 플랜 이름 | — (`/auth/me`·`/me/usage` 응답에 없음. DB `0001sql users.plan` free·pro) | 없음 | 응답 칸 추가(DB 변경 없음). 프론트 플랜은 무료·PLUS·PRO 3개, DB enum 은 free·pro 2개 → 결정 필요 |
+| 스튜디오 홈 | Studio.mock.ts `mockStudioCounts` · fe/ui/layout/web/WebShell.mock.ts `mockStudioHead` | stock_count · ai_memo_count | be/stats/routes.py `ai_stats.linked_memos` · GET /stocks 길이 (또는 `data_stats.stocks`) | 이름만 다름(→linked_memos · stocks) | WebShell `usagePct` 는 /me/usage |
+| 오디오 만들기 | Studio.mock.ts `mockAudioStocks` (`AudioStock` news[전날·3일·7일]) | 종목 · 기간별 새 소식 수 · 보유/관심 | GET /stocks (code·name·status) · GET /updates?stock_code= | 계산 필요(프론트) | 기간별 개수 API 없음. /updates 를 날짜로 세기(최근 30일까지) |
+| 오디오 만들기 | `mockAudioPeriods` · `mockLastClose` | 전날·최근 3일·최근 7일 · 직전 거래일 | `quote.as_of` | 계산 필요(프론트) | |
+| 오디오 만들기 | `mockAudioGen` steps · result_title | 단계 글 | DB `studio_items.status` | 없음 | 단계별 진행률 칸 없음(queued·generating·ready·failed 만) → 결정 필요 |
+| 플레이어 | `mockAudioEpisode` hosts · dur · chapters · script · sources · market_source · memo_link | 대본 · 챕터 · 출처 · 연결 메모 | DB `studio_items.content`·`sources` · `audio_assets` | 없음 | 생성기(LLM 대본 + TTS) 없음. 외부 API: LLM, TTS(제공사 미정). 새 패키지: 서버 TTS SDK, 앱 재생(expo-audio 등) |
+| 플레이어 | studioPlayer.ts `t` (재생 위치) | 이어 듣기 | DB `audio_assets.play_position_sec` | 없음 | |
+| 주간보고서 | Studio.mock.ts `mockReport` · `mockReportStocks` (`ReportStock`·`ReportItem`) | 주·기간·시장·흐름·종목별 등락·이야기·소식·메모·볼 것·출처 | DB `studio_items(kind='report').content`·`sources` | 없음 | 생성기 없음. 시세(prices_daily)·공시·뉴스는 DB 에 있음, 문장은 LLM. 금지 문구 규칙 검사 필요 |
+| 주간보고서 | `mockReport.market` (코스피·코스닥·원/달러 주간) | 주간 지수 | `overview.indices[].series['1W']` | 계산 필요 | 생성기가 쓰거나 프론트 계산 |
+| 퀴즈 | Studio.mock.ts `mockQuiz` | label · q · options · answer · exp · concept · src | — | 없음 | API·DB·생성기 모두 없음. 출제는 KRX 거래 데이터(prices_daily trade_value 등) + LLM 문장. 표 C-24 |
+| 퀴즈 | `mockQuiz.streak` · `week` | 연속 기록 · 이번 주 참여 | — | 없음 | 하루 1회 제출 기록 표 필요(C-24) |
+| 실험실 | Studio.mock.ts `mockLabVars` (name · now · def · mid) | 변수 4개 · 지금 값 | `overview.macro[]` (BASE_RATE · US10Y · WTI) · `overview.indices[USDKRW]` | 이름만 다름(→macro[].value 등) | 'now' 문장은 계산 필요(프론트). ECOS·FRED 수집은 있음(pipelines/economic) |
+| 실험실 | `mockLabStocks` (fx_strong · memo · memo_text) | 종목 · 달러 매출 비중 큼 · 연결 메모 | GET /stocks · 메모는 GET /stocks/{code}/board | 계산 필요(프론트) | fx_strong 근거(사업보고서 환율 민감도) 칸 없음 → 생성기 몫 |
+| 실험실 | `mockLabLeaves(i, fxStrong)` (`LabLeaf` t · ev · why · base · note · check) | 영향 경로 | DB `studio_items(kind='lab').content` | 없음 | 생성기 없음. 공시 민감도는 disclosure_chunks 검색 + LLM. 예측 금지 문구 규칙 |
+| 실험실 | `mockLabDirs` · `mockLabNote` · `mockLabDisclaimer` | 고정 문구 | — | 그대로 | |
+| 충전 | My.mock.ts `mockCreditPacks` · `mockCreditDefault` · `mockPayMethods` | 상품 · 기본 · 결제 수단 | — (be/credits/ledger.py `grant_purchase` 만, 결제 연동 없음) | 없음 | 가격 미정. 결제 대행 외부 API 필요. 표 C-25 |
+| 설정 | — (화면에 토글 없음) | 자동 오디오 · 자동 보고서 | DB `0019 user_settings.auto_audio`·`auto_report` | 없음 | GET·PATCH /settings 응답에 없음(be/account/service.py 매핑 표에 없음), 화면에도 없음. C-23 |
+
+#### 표 B 동작
+
+| 화면 | 동작 | 프론트 위치(파일·함수) | 엔드포인트(METHOD 경로·파일) | 판정 | 메모 |
+|---|---|---|---|---|---|
+| 스튜디오 홈 | 만든 항목 목록(30일) | fe/app/(main)/studio/index.tsx · 웹 fe/app/(main)/_layout.tsx (`useStudioPlayer().made`) | — | 없음 | C-22 GET /studio/items. 30일 지난 항목 정리 작업도 없음 |
+| 스튜디오 홈 | 사용량 보기 | `usage_pct`(My.mock) · 웹 `WebUsageSheet` | GET /me/usage · be/credits/routes.py | 그대로 | 호출 때 이번 달 기본량 지급·만료 처리(서버) |
+| 오디오 | 만들기 | studio/index.tsx `AudioSheet.onMake` → `useStudioPlayer.startAudio` · 웹 `WebAudioPopup` | — | 없음 | C-22 POST /studio/audio. 외부 API: LLM · TTS. 크레딧 audio 5 차감(`ledger.spend`) |
+| 오디오 | 만드는 중 · 실패 · 다시 시도 | fe/app/(detail)/studio-gen.tsx (`job`·`retry`) | — | 없음 | 상태 조회 GET /studio/items/{id} (폴링) |
+| 오디오 | 재생 · 넘기기 · 속도 | fe/app/(detail)/studio-player.tsx · 웹 `WebPlayer` (mock 타이머) | — (파일 주소) | 없음 | 오디오 파일 제공 경로(정적 파일·서명 URL) 필요. 앱 재생 패키지 필요 |
+| 오디오 | 이어 듣기 위치 저장 | studioPlayer.ts `seek`·`leavePlayer` | — | 없음 | `audio_assets.play_position_sec` PATCH |
+| 오디오 | 연결 메모 열기 | studio-player.tsx `onOpenMemo` (000660 고정) | — | 계산 필요(프론트) | content 의 memo 정보로 |
+| 주간보고서 | 만들기 | studio/index.tsx `ReportSheet.onMake` → `startReport` · 웹 `WebReportPopup` | — | 없음 | C-22 POST /studio/report. LLM. 크레딧 report 5 |
+| 주간보고서 | 자동 생성 | — | — | 없음 | `auto_report` 기본 true 인데 생성기·스케줄 없음. `uq_studio_items_auto_period` 로 주마다 1개 |
+| 주간보고서 | 보기 | fe/app/(detail)/studio-report.tsx · fe/app/(main)/report.tsx | — | 없음 | GET /studio/items/{id} |
+| 주간보고서 | '볼 것' 추가(메모로) | studio-report.tsx `onWatch` (안내만) | POST /stocks/{code}/memos (ai_linked) | 계산 필요(프론트) | 문구 '추가하면 AI 연결도 켜져요' → ai_linked=true 로 저장 |
+| 퀴즈 | 문제 받기 | fe/app/(detail)/studio-quiz.tsx (`mockQuiz`) | — | 없음 | C-24 GET /studio/quiz/today. 무료(크레딧 0) |
+| 퀴즈 | 제출 · 하루 1회 · 연속 기록 | `submitQuiz` (화면 상태만) | — | 없음 | C-24 POST /studio/quiz/{id}/answer |
+| 실험실 | 조건 고르기 · 실행 | fe/app/(detail)/studio-lab.tsx `onRun` → `addLab` (크레딧 차감 없음) | — | 없음 | C-22 POST /studio/lab. LLM + 공시 검색. 크레딧 lab 3 |
+| 실험실 | 결과 보기 · 다시 | studio-lab-result.tsx | — | 없음 | |
+| 충전 | 크레딧 사기 | fe/app/(detail)/studio-charge.tsx `onPay` · 웹 `WebChargePopup` (안내만) | — | 없음 | C-25 결제. 지금은 be/credits/admin.py 명령으로만 넣을 수 있음 |
+| 스튜디오 | 사용량 다 씀 → 만들기 막기 | 웹 _layout.tsx `studioFeat` (`usageSpent`) | GET /me/usage `paused` | 이름만 다름(→paused) | 퀴즈는 제외(무료) |
+| 스튜디오 | 완료 알림 | studioPlayer.ts `showToast` (화면 안 토스트) · My.mock.ts `mockInbox` kind='studio' | — | 없음 | 알림함 없음(묶음 6). 푸시는 expo-notifications 없음 |
+| 설정 | 자동 오디오·보고서 켜기 | — | — | 없음 | C-23 |
+
+#### 표 C 새로 만들 것
+
+| 항목 | 종류(엔드포인트·DB칸·표·프론트) | DB 변경(Y/N) | 메모 |
+|---|---|---|---|
+| C-22 스튜디오 결과물 API | 엔드포인트 GET /studio/items · GET /studio/items/{id} · POST /studio/{audio\|report\|lab} · DELETE · 30일 정리 작업 | N (0019 표 있음) | 생성기(LLM·TTS)는 별도. content·sources 모양 결정 필요. 크레딧 `ledger.spend` 호출 |
+| C-23 자동 생성 설정 | 엔드포인트 응답 칸(`Settings.studio.auto_audio·auto_report`, be/account/service.py 매핑) + 프론트 설정 토글 | N (0019 칸 있음) | 스케줄 작업 별도 |
+| C-24 퀴즈 | 표(quiz_questions · quiz_answers) + 엔드포인트 2개 | Y | 하루 1회 = (user, quiz_date) 유일. 연속 기록은 계산 |
+| C-25 결제·충전 | 엔드포인트(결제 확인 → `grant_purchase`) + 외부 결제 대행 | N (credit_grants.payment_ref 있음) | 가격·대행사 미정. 시연 범위 밖 후보 |
+| C-26 오디오 파일 제공 | 엔드포인트(파일 내려받기·스트리밍) + 서버 저장 위치 | N | audio_assets.storage_path. 앱 재생 패키지 설치 필요 |
+| C-27 플랜 이름 | 엔드포인트 응답 칸(`/auth/me` 또는 `/me/usage` 에 plan) | N (users.plan 있음) | 3단계(PLUS) 쓰려면 enum 추가 → Y |
+| C-28 스튜디오 단계 진행 | DB칸(studio_items.progress 등) 또는 화면 단계 표시 빼기 | Y(칸 추가 시) | 결정 필요 |
