@@ -22,6 +22,7 @@ import { WebFail, WebGen, WebMini, WebPlayer } from '@/ui/screens/studio/web/Aud
 import { WebReportPopup, WebReportSum } from '@/ui/screens/studio/web/Report';
 import { WebLab, WebLabResult, WebQuiz } from '@/ui/screens/studio/web/QuizLab';
 import { labGroups, labTitle } from '@/ui/screens/studio/labParts';
+import { useLabVars } from '@/ui/screens/studio/useLabVars';
 import { WebAudioPopup } from '@/ui/screens/studio/web/AudioPopup';
 import type { StudioKind } from '@/ui/screens/studio/Studio.types';
 import { WebChargePopup, WebCreditPopup, WebUsageSheet } from '@/ui/screens/studio/web/Credit';
@@ -85,6 +86,8 @@ export default function MainLayout() {
   }, [coachStep]);
   /* ⑥ 사이드바 종목: 순서 끌기 · 우클릭/⋯ 메뉴 · + 종목 추가 (mock: 이 셸 안에서만) */
   const [sideStocks, setSideStocks] = useState<SideStock[]>(mockSideStocks);
+  /* 투자 실험실 변수 '지금 값': 실제 모드면 GET /market/macro (2026-11-21) */
+  const labVars = useLabVars();
   const [smenu, setSmenu] = useState<{ code: string; at: { x: number; y: number } } | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [ask, setAsk] = useState<string | null>(null);
@@ -210,7 +213,7 @@ export default function MainLayout() {
               : sp.webView === 'quiz' ? <WebQuiz q={mockQuiz} done={sp.quizPick} onBack={() => sp.setWebView('home')} onSubmit={sp.submitQuiz} />
               : sp.webView === 'lab' ? (
                 <WebLab
-                  vars={mockLabVars}
+                  vars={labVars}
                   stocks={mockLabStocks}
                   code={sp.labCode}
                   dirs={sp.labDirs}
@@ -229,7 +232,7 @@ export default function MainLayout() {
               : sp.webView === 'labResult' && labItem?.lab ? (
                 <WebLabResult
                   stock={mockLabStocks.find((s) => s.stock_code === labItem.lab?.code) ?? mockLabStocks[0]}
-                  vars={mockLabVars}
+                  vars={labVars}
                   groups={labGroups(labItem.lab.code, labItem.lab.dirs)}
                   disclaimer={mockLabDisclaimer}
                   onBack={() => sp.setWebView('home')}
