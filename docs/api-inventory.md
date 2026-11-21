@@ -515,3 +515,86 @@
 | C-30 기록 고정 | 엔드포인트 칸(`entry.pinned` 응답 · `JournalPatch.pinned`) | N (is_pinned 있음) | 담당자 상의 |
 | C-31 파일 올리기 | 엔드포인트 POST /files + 저장 위치 | N | 참고자료·기록 사진 같이 씀. 시연 범위 밖 후보 |
 | C-32 블록 변환 함수 | 프론트(JBlock ↔ JournalBlock, title 분리, id 만들기, table·attachment 보관) | N | |
+
+### 묶음 6: MY · 설정 · 휴지통 · 알림함 · 피드백
+
+공통 사실:
+- 앱은 fe/app/(detail)/my*.tsx, 웹은 fe/app/(main)/_layout.tsx 의 `WebSettings`·`WebTrash`·`WebInbox`·`WebFeedback`. 상태는 `fe/store/myMock.ts` `useMyMock`(프로필·다크·알림 설정·휴지통·읽음), `fe/store/theme.ts`, `fe/store/coach.ts`, `fe/store/nudge.ts` — 모두 메모리만.
+- `fe/features/settings/SettingsModal.tsx`(GET·PATCH /settings, /ai/stats, /data/stats, /me/usage, MCP 를 쓰던 옛 설정 창)는 어디서도 import 되지 않음(미사용). UI v2 화면에는 세부 알림·AI 출처·민감도·MCP 설정이 없다(fe/ui 에서 `mcp`·`sensitivity`·`quiet` grep 0건).
+- 백엔드 설정은 be/account/service.py `FIELD_MAP` 26칸(user_settings 20 · mcp_settings 6). `auto_audio`·`auto_report`·`home_template` 은 매핑 없음.
+
+#### 표 A 데이터
+
+| 화면 | mock 출처(파일·상수/함수) | 필드 | 백엔드(파일·스키마.필드) | 판정 | 메모 |
+|---|---|---|---|---|---|
+| MY·프로필 | fe/ui/screens/my/My.mock.ts `mockMyProfile` (My.types.ts `MyProfile`) · fe/ui/layout/web/WebShell.mock.ts `mockSideProfile` | name | be/auth/service.py `_public_user.name` (GET /auth/me · GET·PATCH /me) | 그대로 | |
+| MY·프로필 | 〃 | intro (한 줄 소개) · `mockSideProfile.job` | `_public_user.bio` · be/account/schemas.py `ProfilePatch.bio`(100자) | 이름만 다름(→bio) | |
+| MY·프로필 | 〃 | email | `_public_user.email` | 그대로 | |
+| MY·프로필 | 〃 | provider (지금 로그인 수단) | `_public_user.providers[].current` | 확인 필요 | `current` 는 로그인 응답에서만 true. GET /auth/me·/me 는 be/auth/repository.py `get_user` → `list_identities(current_provider 없음)` 이라 **모두 false** → 최근 로그인 수단은 기기 저장 필요(결정 필요) |
+| MY·프로필 | `mockSideProfile.photoUrl` | 사진 | `_public_user.avatar_url` (DB `0004 users.avatar_url`) | 그대로 | 읽기만 됨. 올리기·지우기 API 없음(C-31·C-33) |
+| MY | My.mock.ts `mockMyUsage` usage_pct · usage_renew · plan_name | 사용량·갱신일·플랜 | GET /me/usage `usage_percent` · `renew_label` / plan 없음 | 이름만 다름(→usage_percent·renew_label) | plan_name 은 묶음 4 C-27 |
+| MY | `version` (app.json) | 버전 | — | 그대로 | expo-constants |
+| MY | store/theme.ts `dark` · store/myMock.ts `dark` (두 곳) | 다크 모드 | be/account `Settings.theme` system·light·dark (DB user_settings.theme) | 이름만 다름(dark→theme) | 서버 저장할지 기기 저장할지 결정 필요. 상태가 두 군데라 하나로 |
+| 알림 설정 | store/myMock.ts `noti` (`NotiSettings` ai · studio) | AI 소식 알림 | `Settings.notifications.disclosure`·`news`·`price_condition` (DB notify_disclosure·notify_news·notify_price_condition) | 확인 필요 | 화면 1칸 ↔ 서버 3칸. 셋을 같이 켜고 끄기로 할지 결정 필요 |
+| 알림 설정 | 〃 | 스튜디오 완료 알림 | — | 없음 | user_settings 에 칸 없음 → 표 C-34 |
+| 사용법 안내 | store/coach.ts `seen` | 본 상태 | — | 없음 | 기기 저장 or 서버 칸(결정 필요) |
+| 넛지 | store/nudge.ts `off` | 닫은 넛지 | — | 없음 | 기기 저장 or 서버 칸(결정 필요) |
+| 로그인 | fe/app/login.tsx `params.recent` | 최근 로그인 수단 | — (위 provider 줄) | 없음 | 기기 저장(fe/lib/storage.ts 또는 AsyncStorage) |
+| 사용량 | My.mock.ts `mockTracked` (`TrackedStock`·`TrackedMemo` title · chips) | 종목별 AI 연결 메모 · 추적 항목 칩 | GET /stocks + GET /stocks/{code}/board (ai_linked) + GET /memos/{id}/timeline `.tracking_items[].description` | 계산 필요(프론트) | 종목 수 × 메모 수만큼 호출 → 많아지면 표 C-35. 칩 '가격 조건 · 종가 150,000원 이하' 는 price_conditions 로 |
+| 사용량 | 〃 | 메모 id | — (mock 에 id 없음, `onOpenMemo(code, title)`) | 계산 필요(프론트) | 연결하면 메모 id 를 가지고 열기 |
+| 데이터 · 탈퇴 | My.mock.ts `mockWithdrawCounts` (memo · journal · stock · ai) | 개수 | be/stats/routes.py `data_stats` memos · journals · stocks + `ai_stats.linked_memos` | 이름만 다름(→memos·journals·stocks·linked_memos) | data_stats.memos 는 kind='note' 만(체크리스트 제외) |
+| 플랜 | My.mock.ts `mockPlans` · `mockPlanCompare` · `mockPlanNotes` · `mockPlanDefault` | 무료·PLUS·PRO | DB `plan_type` free·pro · configs/credits.yaml monthly | 확인 필요 | 3단계 ↔ 2단계. 가격 미정. 묶음 4 C-27 |
+| 휴지통 | My.mock.ts `mockTrash` · store/myMock.ts `trash` (`TrashItem`) | id | be/trash/service.py `list[].id` (`memo-{id}`·`journal-{id}`·`stock-{code}`) | 그대로 | 화면 id 와 모양이 다름(t1…) — 서버 값을 그대로 쓰면 됨 |
+| 휴지통 | 〃 | kind 메모·투자 기록·종목 | `list[].kind` memo·checklist·reference·journal·stock | 이름만 다름(→kind) | 화면에 체크리스트·참고자료 종류 없음 → 값 바꾸기 표 필요 |
+| 휴지통 | 〃 | title | `list[].title` | 그대로 | |
+| 휴지통 | 〃 | sub ('SK하이닉스 · 메모') | `list[].context` ('SK하이닉스 / 메모') | 이름만 다름(→context) | 구분자 '/' vs '·' |
+| 휴지통 | 〃 | ago ('2시간 전') | `list[].deleted_at` | 계산 필요(프론트) | |
+| 휴지통 | 〃 | stock_code | — (be/trash/repository.py 는 symbol 을 읽지만 응답에 안 넣음) | 없음 | 담당자 상의(복원 후 보드 열기에 필요) |
+| 알림함 | My.mock.ts `mockInbox` (`InboxItem` id · kind ai·studio · day · title · sub · when · stock_code) · `mockInboxUnread` | 알림 목록 · 안 읽음 | — (API·표 없음) | 없음 | 표 C-36. AI 소식은 tracking_updates 로 대신 만들 수 있음(결정 필요) |
+| 알림함 | WebShell.mock.ts `mockUnreadNotifs` | 종 숫자 | — | 없음 | 묶음 3 과 같음 |
+| 피드백 | My.mock.ts `mockReportKinds` · `mockStarLabels` | 오류 종류 · 별점 글 | be/stats/routes.py `FeedbackPayload.categories` · `.rating` | 이름만 다름(→categories·rating) | 종류 글은 고정 |
+| 피드백 | My.types.ts `FeedbackDraft` mode · star · text · where · kinds · detail | 보낼 내용 | `FeedbackPayload` kind general·bug · rating · screen · categories · message | 이름만 다름(mode→kind, star→rating, where→screen, kinds→categories) | text·detail 두 칸 → message 하나로 합치기(계산 필요, 프론트) |
+| 도움말 · 정보 | My.mock.ts `mockFaq` · `mockDataSources` · `mockOss` · fe/ui/screens/auth/AuthLegal.ts | 고정 문서 | — | 그대로 | |
+| 탈퇴 | My.types.ts `WITHDRAW_REASONS` | 탈퇴 이유 | — | 없음 | 저장 칸 없음(C-37) |
+
+#### 표 B 동작
+
+| 화면 | 동작 | 프론트 위치(파일·함수) | 엔드포인트(METHOD 경로·파일) | 판정 | 메모 |
+|---|---|---|---|---|---|
+| 프로필 | 로그아웃 | fe/app/(detail)/my-profile.tsx `onLogout` · 웹 _layout.tsx `logout` → store/auth.ts `signOut` | POST /auth/logout · be/auth/routes.py | 그대로 | 이미 연결됨(mock 인증이 아니면) |
+| 프로필 | 이름 · 한 줄 소개 저장 | my-profile.tsx `onChange` → `useMyMock.setProfile` · 웹 `onChangeProfile` | PATCH /me `ProfilePatch`(name ≤40 · bio ≤100) · be/account/routes.py | 이름만 다름(intro→bio) | `fe/api/real.ts updateMe`·`hooks/queries.ts useUpdateMe` 있음. 저장 뒤 store/auth `setUser` |
+| 프로필 | 사진 바꾸기 · 지우기 | `onPhoto` · `onPhotoDelete` (안내만) | — | 없음 | C-31(파일 올리기) + C-33(avatar_url 바꾸기) |
+| 프로필 | 소셜 계정 연결 | 앱 `onLink` (토스트만 '계정을 연결했어요') | — | 없음 | 로그인한 사용자에 두 번째 소셜을 붙이는 API 없음(be/auth/repository.py `get_or_create_user` 는 로그인용). 표 C-38. 지금 토스트는 거짓 성공 문구 → 빼거나 안내로 |
+| MY | 다크 모드 | fe/app/(detail)/my.tsx `onToggleDark` → store/theme.ts | PATCH /settings `theme` (선택) | 확인 필요 | 결정 필요(기기 vs 서버) |
+| 알림 설정 | AI · 스튜디오 알림 켜기 | fe/app/(detail)/my-noti.tsx `onChange` · 웹 `onNoti` | PATCH /settings `notifications.*` | 확인 필요 | 위 표 A 참고 |
+| 사용량 | 사용량 · 추적 현황 | fe/app/(detail)/my-usage.tsx (`mockMyUsage`·`mockTracked`) | GET /me/usage · GET /stocks · board · timeline | 계산 필요(프론트) | |
+| 사용량 | 추적 메모 → 메모 열기 | `onOpenMemo(code, title)` → /stocks/{code} (보드만 엶) | — | 계산 필요(프론트) | 메모 id 로 /memo/{id} (앱) · /stocks/{code}?memo= (웹) |
+| 플랜 | 플랜 시작(결제) | fe/app/(detail)/my-plans.tsx `onStart` (안내만) | — | 없음 | 묶음 4 C-25 |
+| 데이터 | 개수 | fe/app/(detail)/my-data.tsx (`mockWithdrawCounts`) | GET /data/stats · GET /ai/stats · be/stats/routes.py | 그대로 | `hooks/queries.ts useDataStats`·`useAiStats` 있음 |
+| 데이터 | 내보내기(웹) | 웹 `onExport` (안내만) | POST /data/export (없음, fe/api/index.ts `MOCK_ONLY exportData`) | 없음 | 표 C-39 |
+| 데이터 | 전체 삭제 | `onWipe` (안내만) | DELETE /data (없음, `MOCK_ONLY deleteAllData`) | 없음 | 표 C-39 |
+| 탈퇴 | 탈퇴 | fe/app/(detail)/my-withdraw.tsx `onConfirm` · 웹 `onWithdraw` (안내만) | — | 없음 | DB `users.deleted_at` 칸은 있음(be/account/service.py `get_me` 가 deleted_at 이면 404). 표 C-37 |
+| 휴지통 | 목록 | fe/app/(detail)/my-trash.tsx · 웹 `WebTrash` (`useMyMock.trash`) | GET /trash · be/trash/routes.py | 그대로 | 메모·체크리스트·참고자료·투자 기록·종목 함께, 지운 시각 최신순 |
+| 휴지통 | 복원 | `onRestore(item)` | POST /trash/{id}/restore | 그대로 | 메모 복원 시 종목도 되살림(be/trash/repository.py `restore_memo`) |
+| 휴지통 | 복원 되돌리기 | `onUndo(item)` → `undoRestore` | memo: DELETE /board-items/{id} · journal: DELETE /journal/{id} · stock: DELETE /stocks/{code} | 계산 필요(프론트) | 종류별로 다른 삭제를 다시 부름 |
+| 휴지통 | 영구 삭제 | `onPurge(item)` (안내만) | DELETE /trash/{id} · 409(AI 추적 사용 기록이 있는 메모) | 그대로 | 409 문구 화면에 필요 |
+| 휴지통 | 비우기 | `onPurge(null)` (안내만) | — (일괄 API 없음) | 계산 필요(프론트) | 항목마다 DELETE. 409 난 항목은 남김 |
+| 알림함 | 목록 · 열기 | fe/app/(detail)/my-inbox.tsx · 웹 `WebInbox` (`mockInbox`) | — | 없음 | C-36 |
+| 알림함 | 읽음 · 모두 읽음 | `read(id)` · `readAll` | — | 없음 | C-36 |
+| 피드백 | 보내기 | fe/app/(detail)/my-feedback.tsx `onSend` · 웹 `WebFeedback.onSend` (안내만) | POST /feedback `FeedbackPayload` · be/stats/routes.py (204) | 이름만 다름 | `hooks/queries.ts useSendFeedback` 있음 |
+| 도움말 | 사용법 다시 보기 | my-help.tsx `onReplayGuide` → store/coach.ts `replay` | — | 그대로 | |
+| 정보 | 약관·개인정보·투자 안내·오픈소스 | my-doc.tsx | — | 그대로 | 고정 문서 |
+
+#### 표 C 새로 만들 것
+
+| 항목 | 종류(엔드포인트·DB칸·표·프론트) | DB 변경(Y/N) | 메모 |
+|---|---|---|---|
+| C-33 프로필 사진 | 엔드포인트(PATCH /me avatar_url 또는 POST /me/avatar) | N (users.avatar_url 있음) | C-31 파일 올리기 필요 |
+| C-34 스튜디오 알림 설정 | DB칸(user_settings.notify_studio) + Settings 매핑 | Y | |
+| C-35 추적 현황 묶음 응답 | 엔드포인트(GET /me/tracking: 종목별 AI 메모·항목) | N | 선택. 호출 수 줄이기 |
+| C-36 알림함 | 표(notifications: user_id · kind · title · sub · ref · read_at · created_at) + 엔드포인트(GET /notifications · POST read · read-all) + 만드는 쪽(매일 실행·스튜디오 완료) | Y | 담당자 상의. 시연 대안: AI 소식은 tracking_updates 를 알림처럼 보여 주기(DB 변경 없음) |
+| C-37 탈퇴 | 엔드포인트(DELETE /me: users.deleted_at · 세션 끊기 · 데이터 정리) + 이유 저장(feedbacks kind='withdraw' 재사용 가능) | N | 담당자 상의. 개인정보 삭제 기준 결정 필요 |
+| C-38 소셜 계정 연결 | 엔드포인트(GET /auth/{provider}/link/start 등) | N (auth_identities 있음) | 시연 범위 밖 후보 |
+| C-39 내보내기 · 전체 삭제 | 엔드포인트 POST /data/export · DELETE /data | N | 시연 범위 밖 후보 |
+| C-40 기기 저장 모음 | 프론트(AsyncStorage: 최근 로그인 수단 · 사용법 본 상태 · 닫은 넛지 · 다크 · 최근 검색 · 보드 순서 안내) | N | 결정 필요(서버로 올릴 것과 나누기) |
+| C-41 휴지통 종목 코드 | 엔드포인트 응답 칸(`TrashItem.stock_code`) | N | 담당자 상의 |
