@@ -50,6 +50,22 @@ function candlesOf(code: string) {
   return db.candles.get(code)!;
 }
 
+/** 실제 GET /stocks/{code}/quote 와 같은 모양 (원시 종가 · trade_date) */
+function quoteOf(code: string) {
+  const c = candlesOf(code);
+  const last = c[c.length - 1];
+  const prev = c[c.length - 2];
+  return {
+    code,
+    price: last.close,
+    change: last.close - prev.close,
+    change_pct: Math.round(((last.close - prev.close) / prev.close) * 10000) / 100,
+    as_of: new Date(last.date + 'T15:30:00+09:00').toISOString(),
+    trade_date: last.date,
+    spark: c.slice(-24).map((x) => x.close),
+  };
+}
+
 const stockName = (code: string) =>
   db.stocks.find((s) => s.code === code)?.name ?? seed.stockMaster.find((s) => s.code === code)?.name ?? code;
 
@@ -166,20 +182,8 @@ export const mockApi: Api = {
     }
     return wait(undefined);
   },
-  getQuote: async (code) => {
-    const c = candlesOf(code);
-    const last = c[c.length - 1];
-    const prev = c[c.length - 2];
-    const asOf = new Date(last.date + 'T15:30:00+09:00');
-    return wait({
-      code,
-      price: last.close,
-      change: last.close - prev.close,
-      change_pct: Math.round(((last.close - prev.close) / prev.close) * 10000) / 100,
-      as_of: asOf.toISOString(),
-      spark: c.slice(-24).map((x) => x.close),
-    });
-  },
+  getQuote: async (code) => wait(quoteOf(code)),
+  getQuotes: async (codes) => wait({ quotes: [...new Set(codes)].map(quoteOf), missing: [] }),
   getCandles: async (code, range) => {
     const n = { '1W': 5, '1M': 22, '3M': 64, '1Y': 250 }[range];
     return wait(candlesOf(code).slice(-n));
@@ -355,6 +359,7 @@ export const mockApi: Api = {
     return wait(layout);
   },
   getMarketOverview: async () => wait(seed.marketOverview),
+  getMacro: async () => wait(seed.macroOverview),
   listCalendar: async (month) => wait(db.calendar.filter((e) => e.date.startsWith(month))),
   createCalendarEvent: async (input) => {
     const e = { id: uid('e'), date: input.date, title: input.title, category: 'mine' as const, stock_code: null };
