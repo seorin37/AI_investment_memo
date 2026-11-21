@@ -177,7 +177,6 @@
 | 보드 | MemoBoard.types.ts `checklist: Checklist \| null` (종목마다 하나) | 체크리스트 개수 | `GET /stocks/{code}/board` 는 체크리스트 여러 개 가능 | 확인 필요 | 화면은 1개만 그림. 2개 이상일 때 규칙 결정 필요 |
 | 보드(웹) | MemoBoard.mock.ts `mockBoardOrder` (`'cl'` + 메모 id) | 카드 순서 | `BoardBase.position` · `BoardOrderPut.ids`(int) | 이름만 다름(→position · ids) | 웹 순서 키 `'cl'` → 체크리스트 실제 id 로 바꿔야 함 |
 | 보드(웹) | fe/app/(main)/stocks/[code].tsx `customized` | orderCustomized ('꾹 눌러 끌면' 안내 여부) | — | 없음 | 서버 칸 없음. 기기 저장으로 충분 → 결정 필요(기기 저장 범위) |
-| 보드 | MemoBoard.mock.ts `mockBoardStock` · `mockEmptyStock` | 종목 머리(이름·상태·가격·차트) | 묶음 3 (quote·candles) | — | 묶음 3 표 A 에 적음 |
 | 보드 | MemoBoard.types.ts `aiSpent` | AI 사용량 소진 | be/credits `GET /me/usage` `paused` | 이름만 다름(→paused) | 묶음 4 에서 자세히 |
 | 보드 | MemoBoard.types.ts `BoardFilter` all·ai·new | 거르기 | `MemoResponse.ai_linked` · `.unread_updates` | 계산 필요(프론트) | |
 | 메모 상세 | fe/ui/screens/memo/MemoDetail.mock.ts `mockVersions` (`MemoVersion`) | version · title · body · saved_at | be/updates/service.py `memo_timeline` entries[kind=memo_created·memo_edit].version (`revision_no`·title·content·created_at) | 계산 필요(프론트) | 수정 이력 전용 API 없음. 타임라인에서 뽑아 최신순 정렬 |
@@ -598,3 +597,220 @@
 | C-39 내보내기 · 전체 삭제 | 엔드포인트 POST /data/export · DELETE /data | N | 시연 범위 밖 후보 |
 | C-40 기기 저장 모음 | 프론트(AsyncStorage: 최근 로그인 수단 · 사용법 본 상태 · 닫은 넛지 · 다크 · 최근 검색 · 보드 순서 안내) | N | 결정 필요(서버로 올릴 것과 나누기) |
 | C-41 휴지통 종목 코드 | 엔드포인트 응답 칸(`TrashItem.stock_code`) | N | 담당자 상의 |
+
+### 합본
+
+#### 가장 큰 사실 (연결 순서에 영향)
+
+- **화면이 `api.*` 를 거의 안 쓴다.** 화면 파일은 `*.mock.ts`·mock store 를 직접 import 한다. `fe/api/index.ts` 의 `EXPO_PUBLIC_USE_REAL_STOCKS`·`USE_REAL_BOARD`·`USE_MOCK=false` 스위치를 켜도 바뀌는 곳은 로그인(store/auth.ts) 뿐이다. 연결 = 화면마다 mock import 를 `hooks/queries.ts` 로 바꾸는 작업이다.
+- `fe/types/models.ts`·`fe/api/*`(계약 쪽 타입)과 화면 타입(`ui/screens/**/*.types.ts`)이 따로 있다. 필드 이름(stock_code↔code 등)·모양(JBlock↔JournalBlock 등)을 바꾸는 변환 층이 필요하다.
+
+#### 판정 개수 (표 A + 표 B, 자동 집계)
+
+| 묶음 | 그대로 | 이름만 다름 | 계산 필요 | 없음 | 확인 필요 | 합 |
+|---|---|---|---|---|---|---|
+| 1 로그인·온보딩 | 20 | 7 | 6 | 5 | 4 | 42 |
+| 2 보드·메모·AI 연결 | 35 | 17 | 18 | 9 | 7 | 86 |
+| 3 기업정보·홈·업데이트 | 25 | 17 | 15 | 14 | 3 | 74 |
+| 4 스튜디오 | 3 | 4 | 7 | 30 | 0 | 44 |
+| 5 투자 기록 | 15 | 4 | 9 | 9 | 1 | 38 |
+| 6 MY·설정·휴지통·알림함 | 14 | 10 | 7 | 16 | 5 | 52 |
+| 누락 표(아래) | 26 | 1 | 12 | 8 | 5 | 52 |
+| **합** | **138** | **60** | **74** | **91** | **25** | **388** |
+
+#### 누락 표 (묶음 1~6 표에 이름이 한 번도 안 나온 화면·mock 값)
+
+뽑은 방법: `ui/screens/**` 파일 이름 · `*.mock.ts` 와 `store/*.ts` 의 export 이름 · `app/**` 라우트 경로를 이 절 본문과 grep 으로 대조. 아래 표를 넣은 뒤 다시 돌려 누락 0 확인.
+
+| 구분 | 파일 · 이름 | 무엇 | 백엔드 · 엔드포인트 | 판정 | 메모 |
+|---|---|---|---|---|---|
+| mock | fe/ui/layout/app/BottomTabBar.mock.ts `mockTabBadges` (fe/app/(main)/_layout.native.tsx) | 앱 탭 '업데이트' 숫자 5 | GET /stocks `MyStockResponse.unread_updates` 합 | 계산 필요(프론트) | |
+| mock | fe/ui/screens/home/Home.mock.ts `mockHomeNow` | 홈 '지금' | — | 계산 필요(프론트) | 기기 시각(`mockHomeData.now` 와 같은 값) |
+| mock | fe/ui/screens/memo/MemoDetail.mock.ts `mockMemoById` (fe/app/(detail)/memo/link.tsx) | 메모 하나 찾기 | GET /board-items/{id} `MemoResponse` | 그대로 | |
+| mock | fe/ui/screens/board/MemoBoard.mock.ts `mockEmptyStock` | 빈 보드 종목(KB금융) | GET /stocks/{code}/board 빈 배열 + quote | 그대로 | |
+| mock | fe/ui/screens/company/CompanyInfo.mock.ts `mockCompanySK` · `mockCompanyKB` · `mockCompanyByCode` | 기업정보 한 화면 값 묶음 | quote + profile + candles(4기간) + financials | 계산 필요(프론트) | 분기 C-14, 금융업 여부 C-15 |
+| mock | fe/ui/screens/company/companyData.mock.ts `CandleRow` · `finSK` (`health_prev` 포함) | 원시 캔들 줄 · SK 분기·건전성 | candles · financials | 계산 필요(프론트) | `health_prev`(이전 분기 건전성)는 화면에서 안 씀(grep 0건) → 버려도 됨 |
+| mock | fe/ui/screens/my/My.mock.ts `PlanInfo` | 플랜 타입 | DB `plan_type` free·pro | 확인 필요 | 묶음 6 플랜 줄 |
+| store | fe/store/auth.ts `useAuth` | 로그인 상태 | 묶음 1 표 B (refresh·logout·me) | 그대로 | |
+| store | fe/store/coach.ts `useCoach` | 사용법 안내 단계 · 본 상태 | — | 없음 | C-40 |
+| store | fe/store/journal.ts `JournalFlashIn` · `JournalFlash` | 저장 알림 · 반짝임 | — | 그대로 | 화면 상태 |
+| store | fe/store/nudge.ts `NudgeId` · `useNudgeStore` · `useNudge` | 넛지 닫힘 | — | 없음 | C-40 |
+| store | fe/store/studioPlayer.ts `StepState` · `GenJob` · `WebStudioView` | 만들기 작업·화면 상태 | DB `studio_items.status` | 없음 | C-22 · C-28 |
+| store | fe/store/studioPlayer.ts `fmt` · `chapterAt` · `lineAt` | 재생 시각 · 챕터 · 대본 줄 | — | 계산 필요(프론트) | 결과물 content 의 chapters·script 로 |
+| store | fe/store/theme.ts `useTheme` | 다크 | `Settings.theme` | 이름만 다름(→theme) | store/myMock.ts `dark` 와 중복 |
+| store | fe/store/ui.ts `SettingsSection` · `ModalState` · `useUI` | 탭바 숨김 · 토스트 · 옛 모달 | — | 그대로 | 모달은 옛 셸용, 쓰는 곳 없음(정리 대상) |
+| 화면 | fe/ui/screens/auth/AuthGlyphs.tsx · IntroArtwork.tsx · app/IntroArtwork.tsx · LegalDocumentView.tsx · web/authKeyboard.web.ts | 그림 · 문서 보기 · 키보드 | — | 그대로 | 서버 불필요 |
+| 타입 | fe/ui/screens/auth/Auth.types.ts · onboarding/Onboarding.types.ts · onboarding/FirstHome.types.ts | 타입 | 묶음 1 표 A | 그대로 | 필드는 묶음 1 |
+| 화면 | fe/ui/screens/onboarding/web/OnboardingFlow.tsx · app/OnboardingFlow.tsx · app/FirstMemo.tsx | 종목 고르기 · 첫 메모 | 묶음 1 표 B (onboarding/pick.tsx · memo/new.tsx) | 그대로 | |
+| 화면 | fe/ui/screens/home/web/CustomHome.tsx | 맞춤 홈 격자 | — | 없음 | C-17 |
+| 화면 | fe/ui/screens/home/web/HomeWidgets.tsx · app/HomeWidgets.tsx | 홈 위젯 | 묶음 3 | 그대로 | |
+| 화면 | fe/ui/screens/home/app/MarketDetail.tsx | 지수 자세히 | GET /market/overview | 그대로 | days 없음(C-16) |
+| 화면 | fe/ui/screens/home/app/NewsBrowser.tsx | 앱 안 뉴스 브라우저(뼈대 뒤 제목만) | — | 그대로 | 서버 불필요. 실제 페이지는 expo-web-browser(있음) 또는 react-native-webview(없음, 설치 필요) |
+| 타입 | fe/ui/screens/home/Home.types.ts | 타입 | 묶음 3 표 A | 그대로 | |
+| 계산 | fe/ui/screens/home/homeFormat.ts (`ago`·`mmdd`·`spark`·`webSeries`·`rangeLabels`) | 홈 숫자·날짜·차트 | overview | 계산 필요(프론트) | `rangeLabels` 는 days 가 있어야 함(C-16) |
+| 부품 | fe/ui/screens/home/web/homeDom.web.tsx · board/web/boardDom.web.tsx · stocks/web/stocksDom.web.tsx · stocks/app/stockGlyphs.tsx · journal/app/journalGlyphs.tsx · my/web/inboxKeys.web.ts · my/web/parts.tsx · my/app/parts.tsx · memo/web/parts.tsx | DOM · 그림 · 공용 부품 | — | 그대로 | 서버 불필요 |
+| 타입 | fe/ui/screens/board/Checklist.types.ts | 체크리스트 화면 props | 묶음 2 | 그대로 | |
+| 계산 | fe/ui/screens/memo/memoTimeline.ts `buildTimeline` (`TimelineRow`) | AI 업데이트 탭 줄 만들기 | GET /memos/{id}/timeline entries | 계산 필요(프론트) | 서버 entries(memo_created·memo_edit·ai_linked·update)를 rev·ai·feed 로. 서버가 이미 최신순 정렬 |
+| 화면 | fe/ui/screens/memo/HistoryContent.tsx | 수정 이력 | timeline | 계산 필요(프론트) | 묶음 2 |
+| 화면 | fe/ui/screens/memo/web/ConnectDialog.tsx | 웹 AI 연결 창 | PUT /memos/{id}/ai-link · POST memos | 확인 필요 | 흐름 차이(C-11) |
+| 화면 | fe/ui/screens/memo/app/MemoMoreSheet.tsx | 색 · 고정 · 복사 · 삭제 메뉴 | 묶음 2 표 B | 그대로 | 복사는 API 없음 |
+| 화면 | fe/ui/screens/stocks/app/AddStockSheet.tsx | 앱 종목 추가 시트 | GET /stocks/search · POST /stocks | 확인 필요 | '많이 찾는' 없음(C-2), KOSPI 만(C-13) |
+| 계산 | fe/ui/screens/company/companyFormat.ts (`yoyAt`·`healthScore`·`TERMS` roa 포함) | 전년 대비 · 건전성 점수 · 용어 | financials | 계산 필요(프론트) | 전년 대비는 분기 필요(C-14) |
+| 화면 | fe/ui/screens/company/app/CompanyCharts.tsx | 기업정보 차트 | candles | 그대로 | |
+| 타입 | fe/ui/screens/updates/Updates.types.ts | 타입 | 묶음 3 | 그대로 | |
+| 계산 | fe/ui/screens/updates/updatesFormat.ts (`ago`·`dayGroup`·`unreadOf`) | 시간 · 날짜 묶음 · 안 읽음 수 | GET /updates | 계산 필요(프론트) | |
+| 계산 | fe/ui/screens/studio/labParts.ts (`labGroups`·`labTitle`) | 실험 결과 묶기 | — | 없음 | C-22 |
+| 계산 | fe/ui/screens/studio/reportParts.tsx (`reportSummary`·차트) | 보고서 요약 문장 · 주간 차트 | — | 없음 | C-22. 요약 문장을 프론트가 만드는 부분은 생성기와 역할이 겹침 → 결정 필요 |
+| 화면 | fe/ui/screens/studio/web/QuizLab.tsx · web/StudioHome.tsx · app/StudioHome.tsx · app/LabResult.tsx · app/MiniPlayer.tsx | 스튜디오 화면 | 묶음 4 | 없음 | API 없음 |
+| 화면 | fe/ui/screens/my/web/Help.tsx · app/Help.tsx | 도움말 | — | 그대로 | |
+| 화면 | fe/ui/screens/my/web/SettingsTabs.tsx | 웹 설정 탭(알림·사용량·플랜·데이터·정보) | 묶음 6 | 확인 필요 | 알림 1칸↔3칸 등 |
+| 라우트 | fe/app/ui-v2-check.tsx | 부품 확인 화면(`__DEV__`, 삭제 예정) | — | 그대로 | |
+| 라우트 | fe/app/+not-found.tsx | 없는 주소 | — | 그대로 | |
+| 라우트 | fe/app/intro.tsx | 인트로(`mockIntroPages`) | — | 그대로 | |
+| 라우트 | fe/app/(main)/_layout.native.tsx | 앱 탭 · 로그인 확인 · `mockTabBadges` | GET /stocks | 계산 필요(프론트) | |
+| 라우트 | fe/app/(main)/help.tsx | 웹 도움말(`mockFaq`) | — | 그대로 | |
+| 라우트 | fe/app/(main)/journal.tsx | 웹 투자 기록 | GET·POST·PATCH·DELETE /journal | 계산 필요(프론트) | 블록 변환(C-32) |
+| 라우트 | fe/app/(main)/stocks/index.tsx · fe/app/(main)/stocks/index.native.tsx | 내 종목 | GET /stocks · 묶음 2 | 그대로 | |
+| 라우트 | fe/app/(main)/stocks/_layout.tsx · fe/app/(main)/stocks/_layout.native.tsx · fe/app/(main)/updates/_layout.tsx · fe/app/(main)/updates/_layout.native.tsx · fe/app/(detail)/_layout.tsx | 화면 쌓기 | — | 그대로 | |
+| 라우트 | fe/app/(main)/updates/index.tsx · fe/app/(main)/updates/index.native.tsx · fe/app/(main)/updates/[code].tsx · fe/app/(main)/updates/[code].native.tsx | 업데이트 · 종목 업데이트 | GET /updates | 그대로 | |
+| 라우트 | fe/app/(detail)/my-info.tsx · fe/app/(detail)/my-doc.tsx · fe/app/(detail)/my-help.tsx | 정보 · 문서 · 도움말 | — | 그대로 | |
+| 라우트 | fe/app/(detail)/studio-lab-result.tsx | 실험 결과 | — | 없음 | C-22 |
+| 화면 | fe/features/home/widgets/MarketWidgets.tsx · fe/features/settings/SettingsModal.tsx · fe/features/board/BoardCards.tsx · fe/features/company/glossary.ts | 옛 화면·부품 | (hooks/queries 사용) | 확인 필요 | `features/` 는 대상 밖이지만 참고: MarketWidgets·SettingsModal 은 import 0건(미사용). 지울지 결정 필요 |
+
+#### 프론트 미사용 엔드포인트
+
+전체 60개(backend/app 라우터 12개 + main.py health 2개, `grep @router.` 기준. 이 문서 1절은 같은 목록을 60개로 셈).
+
+(가) 프론트 어디에도 대응이 없음 (api 함수 · 화면 둘 다 없음) — **5개**
+
+| METHOD 경로 | 파일 | 메모 |
+|---|---|---|
+| POST /api/v1/memos/{memo_id}/confirmations | be/board/routes.py | C-7 · C-10 |
+| GET /api/v1/memos/{memo_id}/answers | be/answers/routes.py | C-7 · C-20 |
+| GET /api/v1/me | be/account/routes.py | 프론트는 GET /auth/me 를 씀(같은 User 모양). 중복 |
+| GET /health | be/main.py | 운영 점검용 |
+| GET /health/db | be/main.py | 운영 점검용 |
+
+(나) api 함수는 있으나 화면 대응이 없음 — **8개**
+
+| METHOD 경로 | 파일 | 프론트 함수 | 메모 |
+|---|---|---|---|
+| GET /api/v1/stocks/{code} | be/stocks/routes.py | `getStock` | |
+| GET /api/v1/memos/pinned | be/board/routes.py | `listPinnedMemos` | 고정 메모 위젯 없음 |
+| POST /api/v1/stocks/{code}/references | be/board/routes.py | `createReference` | 참고자료 화면 없음 |
+| GET /api/v1/stocks/{code}/ai-updates | be/updates/routes.py | `listStockAiUpdates` | |
+| GET /api/v1/price-conditions | be/home/routes.py | `listPriceConditions` | 가격 조건 위젯 없음 |
+| PATCH /api/v1/memos/{memo_id}/price-conditions/{condition_id} | be/home/routes.py | `setPriceConditionTracking` | 〃 |
+| GET /api/v1/settings | be/account/routes.py | `getSettings` | UI v2 는 theme·알림 일부만(확인 필요). 세부 알림·AI·MCP 화면 없음 |
+| PATCH /api/v1/settings | be/account/routes.py | `updateSettings` | 〃 |
+
+참고 — (다) 화면 동작은 있는데 api 함수가 없음: PUT /api/v1/stocks/order · PUT /api/v1/stocks/{code}/board-order (C-7). (라) 프론트 함수만 있고 백엔드가 없음(fe/api/index.ts `MOCK_ONLY`): GET·POST /calendar · GET /insights/memo-backtest · /insights/compare-memos · /insights/conclude-candidates · POST /memos/{id}/conclude · POST /files · POST /data/export · DELETE /data · DELETE /mcp/apps/{id}. 그 밖에 GET /market/overview 의 `macro` 부분은 화면이 안 씀.
+
+#### 표 C 합본 (중복 제거)
+
+'11/27 시연 필요' 는 내 판단이다: 기준 흐름 = docs/pr-ui-v2-draft.md '확인 방법' 흐름 중 소개 → 로그인 → 약관 → 종목 고르기 → 첫 메모 → 홈 · 보드 · 메모 · 기업정보 · 업데이트 · 투자 기록. 스튜디오·MY 는 mock 유지로 가정(결정 필요 표 15번).
+
+| 항목 | 종류 | DB 변경 | 11/27 시연 필요(Y/N) | 선행 조건 | 담당자 상의 |
+|---|---|---|---|---|---|
+| 화면 → hooks/queries 바꾸기 (가장 큰 일) | 프론트 | N | Y | 아래 C-7·C-8·변환 층 | N |
+| C-5 신규 사용자 판별 | 프론트 | N | Y | GET /stocks 연결 | N |
+| C-7 프론트 API 함수 4개(board-order · stocks/order · confirmations · answers) | 프론트 | N | Y | — | N |
+| C-8 analysis 받기 | 프론트 | N | Y | — | N |
+| C-11 AI 연결 흐름(미리보기 없음) | 프론트(또는 분석 전용 엔드포인트) | N | Y | 결정 필요 7번 | Y (엔드포인트 안이면) |
+| C-32 투자 기록 블록 변환 | 프론트 | N | Y | — | N |
+| C-40 기기 저장 모음(최근 로그인 · 안내 본 상태 · 넛지 · 다크 · 최근 검색 · 보드 순서 안내) | 프론트(AsyncStorage 이미 설치) | N | Y | 결정 필요 5번 | N |
+| C-14 분기 재무 | 엔드포인트 | N | Y | — | Y |
+| C-15 금융업 여부(profile 에 sector·fin_type) | 응답 칸 | N | Y | — | Y |
+| C-16 지수 날짜 | 응답 칸 | N | Y | — | Y |
+| C-10 확인 질문 화면 | 프론트 | N | N | C-7 · C-8 | N |
+| C-20 질문 답 화면 | 프론트 | N | N | C-7 | N |
+| C-1 약관 동의 저장 | DB칸 또는 표 + 엔드포인트 | Y | N | 결정 필요 1번 | Y |
+| C-2 '많이 찾는 종목' | 엔드포인트 + 출처 | 출처 따라(고정 목록이면 N) | N | 결정 필요 2번 | Y |
+| C-3 온보딩 종목 일괄 저장 | 엔드포인트 | N | N | — | Y |
+| C-4 종목별 메모 수·AI 연결 수 | 응답 칸 | N | N | 결정 필요 3번 | Y |
+| C-6 종목 업종 · 로고 | DB칸 + 응답 칸 + 프론트 | Y | N | 업종 출처 | Y |
+| C-9 근거 차트 기간 | 엔드포인트 | N | N | — | Y |
+| C-12 추적 문장(quote) 응답 | 응답 칸 | N | N | — | Y |
+| C-13 KOSDAQ 검색 | 백엔드 쿼리 | N | N | 결정 필요 10번 | Y |
+| C-17 맞춤 홈 배치 | 스키마 | N | N | — | Y |
+| C-18 달력 | 엔드포인트 | N | N | 일정 데이터 채우기 | Y |
+| C-19 모두 읽음 | 엔드포인트 | N | N | — | Y |
+| C-21 업데이트 메모 색 | 응답 칸 | N | N | — | Y |
+| C-22 · C-26 스튜디오 결과물 API · 생성기 · 오디오 파일 | 엔드포인트 + 작업 + 외부 API(LLM·TTS) + 앱 재생 패키지 | N (0019 표 있음) | N | 결정 필요 15번 | Y |
+| C-28 스튜디오 단계 진행 | DB칸 | Y(칸 추가 시) | N | C-22 | Y |
+| C-23 자동 생성 설정 | 응답 칸 + 설정 토글 | N | N | C-22 | Y |
+| C-24 퀴즈 | 표 + 엔드포인트 + 생성기 | Y | N | — | Y |
+| C-25 결제 · 충전 | 엔드포인트 + 외부 결제 | N | N | 가격 · 대행사 | Y |
+| C-27 플랜 이름(· PLUS 단계) | 응답 칸(+ enum 값) | PLUS 쓰면 Y | N | 결정 필요 16번 | Y |
+| C-29 기록 서식 | 스키마 | N | N | 결정 필요 17번 | Y |
+| C-30 기록 고정 | 응답 칸 · patch 칸 | N | N | — | Y |
+| C-31 · C-33 파일 올리기 · 프로필 사진 | 엔드포인트 + 저장 위치 | N | N | 저장 위치 | Y |
+| C-34 스튜디오 알림 설정 | DB칸 | Y | N | C-36 | Y |
+| C-35 추적 현황 묶음 응답 | 엔드포인트 | N | N | — | Y |
+| C-36 알림함 | 표 + 엔드포인트 + 만드는 작업 | Y | N | 결정 필요 22번 | Y |
+| C-37 탈퇴 | 엔드포인트 | N | N | 삭제 기준 | Y |
+| C-38 소셜 계정 연결 | 엔드포인트 | N | N | — | Y |
+| C-39 내보내기 · 전체 삭제 | 엔드포인트 | N | N | — | Y |
+| C-41 휴지통 종목 코드 | 응답 칸 | N | N | — | Y |
+
+DB 변경 항목을 마이그레이션 하나(0022 후보)로 묶을 수 있는지:
+- 대상: C-1 약관(users 칸 또는 user_consents 표) · C-6 `stocks.industry` · C-24 quiz 표 2개 · C-34 `user_settings.notify_studio` · C-36 notifications 표, 조건부 C-27 `plan_type` 값 추가 · C-28 `studio_items.progress`.
+- 지금 head 는 `0021_user_stocks_position`(가지 없음, 0006 두 개는 `511517f9874b` 에서 이미 합쳐짐). 모두 새 표이거나 NULL 허용·기본값 칸이라 기존 데이터를 안 바꾼다 → **0022 하나로 묶을 수 있다.**
+- 단 enum 값 추가(C-27)는 0019 처럼 `autocommit_block` 에서 먼저 실행해야 한다(0019 `ENUM_SQL` 방식). 같은 파일 안에서 가능.
+- 시연(11/27)에 필요한 DB 변경은 없다(위 표에서 DB 변경 Y 항목은 모두 시연 N).
+
+#### 11:45 빠른 조사 표(2절)에서 판정이 바뀐 것만
+
+| 항목 | 11:45 판정 | 전수 검사 판정 | 근거 |
+|---|---|---|---|
+| 종목 | 있음·그대로 | 있음·보강 | 검색·조회가 KOSPI 만(be/stocks/repository.py `search_kospi`·`get_kospi`), 업종·로고·많이 찾는 종목 없음 |
+| AI 연결 | 있음·그대로 | 있음·흐름 결정 필요 | 분석 미리보기 없음(PUT 한 번에 켜기+분석), 추적 문장 없음, 확인 질문 화면·함수 없음 |
+| 업데이트 타임라인 | 있음·그대로 | 있음·보강 | 조건가는 메모 price_conditions 와 맞춰야 함, quote_mark·provider·근거 차트 기간 없음, 메모 색 없음 |
+| 지수·매크로 | 있음·보강 (매크로 지표 없음) | 있음·보강 (지수 날짜 없음) | 매크로 5개는 `overview.macro` 에 있음(be/marketdata/service.py `MACROS`). 모자란 것은 지수 series 의 날짜 |
+| 재무 | 있음·그대로 | 있음·보강 | 연간만, 분기·ROA·금융업 여부 없음, financials_fin 안 읽음 |
+| 투자 기록 (blocks) | 있음·그대로 | 있음·보강 | 고정·서식·작은 제목 없음, 정렬 기준 다름, 화면 블록 모양과 다름 |
+| 사용자 설정 (user_settings) | 있음·그대로 | 있음·보강 | 화면 알림 1칸 ↔ 서버 3칸, 스튜디오 알림 칸 없음, auto_audio·auto_report 매핑 없음 |
+
+(빠른 조사에 없던 '없음' 항목: 홈 달력 API · 퀴즈 · 파일 올리기 · 분기 재무 · 소셜 계정 연결 · 알림함 표)
+
+#### 결정 필요
+
+| # | 무엇 | 선택지 | 나온 곳 |
+|---|---|---|---|
+| 1 | 약관 동의 저장 방식 | users 칸(terms_agreed_at·terms_version) / user_consents 표(항목별·버전별) / 저장 안 함 | 묶음 1 C-1 |
+| 2 | '많이 찾는 종목' 출처 | 고정 목록(웹·앱 하나로 통일) / 조회 집계 | 묶음 1 C-2 · 묶음 2·3 |
+| 3 | 메모 수·AI 연결 수 계산 위치 | 프론트(종목마다 board 호출) / `MyStockResponse` 칸 추가 | 묶음 1 C-4 · 묶음 2 |
+| 4 | 건너뛰기 뒤 재온보딩 | 종목 0개면 매번 온보딩 / 한 번 끝나면 다시 안 띄움(서버 또는 기기에 '온보딩 끝' 저장) | 묶음 1 |
+| 5 | 기기 저장 범위 | 최근 로그인 · 안내 본 상태 · 넛지 · 다크 · 최근 검색 · 보드 순서 안내 중 무엇을 기기(AsyncStorage)로, 무엇을 서버로 | 묶음 1 · 6 C-40 |
+| 6 | NAVER 표기 | 종목 마스터 이름 그대로 / '네이버' 바꿔 보이기 유지 | 묶음 1 |
+| 7 | AI 연결 흐름 | 저장=켜기, '일반 메모로 두기'=끄기 / 분석만 하는 엔드포인트 추가 | 묶음 2 C-11 |
+| 8 | 체크리스트 종목당 개수 | 화면처럼 1개로 제한 / 여러 개 그리기 | 묶음 2 |
+| 9 | '시범 종목'(ai_ready · preparing) 기준 | 서버 칸 / 시세 404 로 판단 / 고정 목록 | 묶음 2 · 3 |
+| 10 | KOSDAQ 포함 | 검색·추가에 KOSDAQ 넣기 / KOSPI 만 유지 | 묶음 2 C-13 |
+| 11 | 가격 소식 'away' | 백엔드가 away 를 더 안 만들기 / 화면에 away 모양 추가 | 묶음 2 |
+| 12 | 메모 복사 | 같은 내용 새 메모(AI 연결 끔·켬) / 기능 빼기 | 묶음 2 |
+| 13 | 업데이트 '안 읽음으로' | 기능 빼기 / 엔드포인트 추가 | 묶음 3 |
+| 14 | 홈 '하루 뉴스 수' · 종 숫자 | 문구 빼기 / 칸 추가 · 종 숫자 = unread_updates 합으로 대신 | 묶음 3 |
+| 15 | 스튜디오 시연 범위 | 전부 mock 유지 / 일부(보고서 등) 생성기 연결 · content 모양 · 단계 진행 표시 | 묶음 4 C-22 · C-28 |
+| 16 | 플랜 단계와 가격 | 무료·PLUS·PRO(enum 추가) / free·pro 두 개 | 묶음 4 · 6 C-27 |
+| 17 | 투자 기록 서식 | 목록·굵게 등 서버 저장(C-29) / 보낼 때 버리기, 웹 HTML 저장 여부, 작은 제목(sub) 처리 | 묶음 5 |
+| 18 | 빈 새 기록(웹) | 첫 글자 칠 때 POST / 바로 만들고 지울 때 영구 삭제까지 | 묶음 5 |
+| 19 | 투자 기록 정렬 | 고친 순(화면) / 만든 순(서버) | 묶음 5 |
+| 20 | 알림 설정 매핑 | 'AI 소식' 1칸 = 서버 3칸 같이 켜고 끄기 / 화면을 3칸으로 · 스튜디오 알림 칸 추가(C-34) | 묶음 6 |
+| 21 | 다크 모드 저장 위치 | 서버 `theme` / 기기 | 묶음 6 |
+| 22 | 알림함 | 새 표(C-36) / 시연은 tracking_updates 를 알림처럼 | 묶음 6 |
+| 23 | 받아쓰기 | 기기 키보드 음성 입력(서버 불필요) / 녹음 + STT(외부 API) | 묶음 5 |
+| 24 | 옛 코드 정리 | features/ MarketWidgets·SettingsModal, store/ui `modal` 지우기 / 남기기 | 누락 표 |
+| 25 | 프로필 '계정을 연결했어요' 토스트 | 빼기 / '아직 연결되지 않았어요' 안내로 | 묶음 6 |
+| 26 | 기존 연결 순서 ①~④ 원문 | 저장소(docs·frontend/docs grep)에서 못 찾음 → 아래 수정안이 원문과 맞는지 확인 | 합본 |
+
+#### 연결 순서 수정안 (기존 ①~④ 기준, 바뀐 것만)
+
+기존 ①~④ 원문은 저장소에서 찾지 못했다(결정 필요 26). 아래는 `fe/api/index.ts` 의 단계 스위치(인증·종목 → 보드 → 전체)를 ①~④ 로 보고, 이번 검사로 **바뀐 점만** 적은 것이다.
+
+| 단계 | 바뀐 점 |
+|---|---|
+| ① 인증 · 종목 | 스위치만으로 화면이 안 바뀜 → 온보딩·내 종목·사이드바 화면의 mock import 를 `useMyStocks` 등으로 바꾸는 작업 포함. 신규 판별(C-5) · 온보딩 종목 저장(POST /stocks 반복) 추가. KOSDAQ 범위(결정 10) 먼저 정하기 |
+| ② 보드 · 메모 · AI 연결 | C-7(API 함수) · C-8(analysis) · AI 연결 흐름 결정(결정 7)이 **선행**. 체크리스트 1개 규칙(결정 8) |
+| ③ 업데이트 · 기업정보 · 홈 | 백엔드 보강 3개(C-14 분기 재무 · C-15 금융업 여부 · C-16 지수 날짜)를 담당자와 먼저 맞춰야 화면이 mock 과 같아짐. 업데이트 피드는 ② 타임라인 변환을 같이 씀 |
+| ④ 투자 기록 · MY · 휴지통 | 투자 기록은 블록 변환(C-32) 선행. 휴지통은 ②·④ 삭제가 다 붙은 뒤. **스튜디오는 ④ 뒤 별도 단계**(백엔드 API 없음) |
