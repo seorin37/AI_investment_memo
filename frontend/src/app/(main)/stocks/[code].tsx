@@ -4,6 +4,7 @@ import { useCoach } from '@/store/coach';
 import type { Checklist, Memo, MemoColor, MemoVersion } from '@/types/models';
 import { mockCompanyByCode } from '@/ui/screens/company/CompanyInfo.mock';
 import { WebCompanyInfo } from '@/ui/screens/company/web/CompanyInfo';
+import { useCompanyInfo } from '@/ui/screens/company/useCompanyInfo';
 import { mockBoardChecklist, mockBoardMemos, mockBoardOrder, mockBoardStock, mockEmptyStock } from '@/ui/screens/board/MemoBoard.mock';
 import { WebMemoBoard } from '@/ui/screens/board/web/MemoBoard';
 import { mockExtract, mockFeed, mockToday, mockTrackItems, mockVersions } from '@/ui/screens/memo/MemoDetail.mock';
@@ -216,8 +217,13 @@ function BoardTab({ code, memoParam, ev, firstFlow, stockName, onboardingSelecte
   );
 }
 
-/* 기업 정보 = UI v2 (ui/screens/company/web · ⑤). mock: 000660 일반 종목 · 105560 금융업 */
+/* 기업 정보 = UI v2 (ui/screens/company/web · ⑤). 2026-11-21: profile·quote·candles·financials API (mock 모드는 같은 함수의 mock) */
 function InfoTab({ code }: { code: string }) {
   const router = useRouter();
-  return <WebCompanyInfo {...mockCompanyByCode(code)} onBack={() => router.back()} onChangeTab={(t) => router.setParams({ tab: t === 'company' ? 'info' : 'board' })} onNudge={() => {}} />;
+  const { data, error } = useCompanyInfo(code);
+  const onChangeTab = (t: 'board' | 'company') => router.setParams({ tab: t === 'company' ? 'info' : 'board' });
+  /* 주가 데이터도 없는 종목: 예시 값을 지어내지 않고 '준비 중' (머리는 예시 틀에 종목코드만) */
+  if (error) return <WebCompanyInfo {...mockCompanyByCode(code)} stock={{ ...mockCompanyByCode(code).stock, stock_code: code }} preparing onBack={() => router.back()} onChangeTab={onChangeTab} />;
+  if (!data) return null;
+  return <WebCompanyInfo {...data} onBack={() => router.back()} onChangeTab={onChangeTab} onNudge={() => {}} />;
 }

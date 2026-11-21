@@ -22,6 +22,7 @@ import type {
 } from '@/types/models';
 import type { Api, DeepPartial, PinnedMemo } from '../types';
 import * as seed from './seed';
+import { mockFinancials } from './financials';
 
 const clone = <T>(v: T): T => (v === undefined ? v : JSON.parse(JSON.stringify(v)));
 const wait = <T>(v: T, ms = env.mockLatency): Promise<T> => new Promise((r) => setTimeout(() => r(clone(v)), ms));
@@ -206,7 +207,7 @@ export const mockApi: Api = {
     };
     return wait(profile);
   },
-  getFinancials: async (code) => wait(seed.financials[code] ?? seed.financials['000660']),
+  getFinancials: async (code) => wait(mockFinancials(code)),
 
   // ─── 메모 보드
   listBoard: async (code) => {

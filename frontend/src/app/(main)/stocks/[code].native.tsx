@@ -4,6 +4,8 @@ import { useMockNotice } from '@/components/layout/MobileScreen';
 import { useUI } from '@/store/ui';
 import type { Checklist, Memo } from '@/types/models';
 import { AppCompanyInfo } from '@/ui/screens/company/app/CompanyInfo';
+import type { CompanyInfoProps } from '@/ui/screens/company/CompanyInfo.types';
+import { useCompanyInfo } from '@/ui/screens/company/useCompanyInfo';
 import { mockCompanyByCode } from '@/ui/screens/company/CompanyInfo.mock';
 import { TopBar } from '@/ui/layout/app/TopBar';
 import { AiOffSheet } from '@/ui/shared/AiOffSheet';
@@ -34,7 +36,7 @@ export default function StockDetail() {
   useFocusEffect(useCallback(() => () => setTabBarHidden(false), [setTabBarHidden]));
   const onSelectionChange = useCallback((n: number) => setTabBarHidden(n > 0), [setTabBarHidden]);
 
-  if (tab === 'company') return <AppCompanyInfo {...mockCompanyByCode(code)} onBack={() => router.back()} onMore={() => notice('종목 메뉴')} onChangeTab={setTab} onNudge={() => notice('주간보고서')} />;
+  if (tab === 'company') return <AppCompanyTab code={code} onBack={() => router.back()} onMore={() => notice('종목 메뉴')} onChangeTab={setTab} onNudge={() => notice('주간보고서')} />;
 
   return (
     <>
@@ -87,4 +89,12 @@ export default function StockDetail() {
     />
     </>
   );
+}
+
+/* 기업정보 (앱, 2026-11-21): 실제 API 4개 → 화면 props (useCompanyInfo). 주가 데이터도 없으면 '준비 중' */
+function AppCompanyTab({ code, ...handlers }: { code: string } & Pick<CompanyInfoProps, 'onBack' | 'onMore' | 'onChangeTab' | 'onNudge'>) {
+  const { data, error } = useCompanyInfo(code);
+  if (error) return <AppCompanyInfo {...mockCompanyByCode(code)} stock={{ ...mockCompanyByCode(code).stock, stock_code: code }} preparing {...handlers} />;
+  if (!data) return null;
+  return <AppCompanyInfo {...data} {...handlers} />;
 }

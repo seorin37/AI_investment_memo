@@ -84,30 +84,42 @@ export interface StockProfile {
   week52_high: number;
 }
 
-export interface AnnualFinancial {
-  period: string; // '2025-12'
-  revenue: number; // 원
-  operating_income: number;
-  net_income: number;
-  operating_margin: number; // %
-  net_margin: number; // %
-  roe: number; // %
+/**
+ * 기업정보 재무 (GET /stocks/{code}/financials, 2026-11-21 UI v2 · docs/company-page-data-gaps-plan.md 11-21 결정).
+ * 분기 단독 최대 12개(화면 8 + 전년 동기 4), 금액은 억원, 비율은 %. 값이 없으면 null → 화면에서 '—' 또는 그 항목을 뺀다.
+ */
+export interface FinancialQuarter {
+  period_end: string; // '2026-09-30'
+  q: string; // '26.3Q' (period_end 의 달력 분기)
+  label: string; // '2026년 3분기'
+  revenue: number | null; // 억원. 금융사 null
+  op: number | null; // 영업이익 (금융사도 보냄)
+  net: number | null;
+  op_margin: number | null; // %. 금융사 null
+  net_margin: number | null;
+  roe: number | null; // % (TTM). 자본잠식 분기 null
 }
 
-export interface Stability {
-  as_of: string; // '2026-06'
-  debt_ratio: number; // 부채비율 %
-  current_ratio: number; // 유동비율 %
-  quick_ratio: number; // 당좌비율 %
-  interest_coverage: number; // 이자보상배율 (배)
-  reserve_ratio: number; // 유보율 %
+export interface FinancialHealth {
+  debt: number | null; // 부채비율 %
+  current: number | null; // 유동비율 %. 금융사 null
+  quick: number | null; // 당좌비율 %. 금융사 null
+  interest: number | null; // 이자보상배율 (배). 금융사 null
+  reserve: number | null; // 유보율 %
 }
 
 export interface Financials {
   code: string;
-  basis: string; // '2026년 06월 기준 · 연결재무제표'
-  annual: AnnualFinancial[];
-  stability: Stability;
+  source_code: string; // 우선주면 재무를 읽은 본주
+  sector: 'general' | 'financial';
+  fin_type: string | null;
+  financial: boolean;
+  preparing: boolean; // 분기 재무가 하나도 없음 (리츠·인프라펀드 등)
+  basis: string; // '2026년 09월 기준 · 연결재무제표'
+  quarters: FinancialQuarter[];
+  health: FinancialHealth;
+  health_as_of: string | null;
+  interest_coverage_basis: string | null;
 }
 
 // ─── 메모 보드 ───────────────────────────────────────────────

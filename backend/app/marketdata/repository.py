@@ -121,11 +121,56 @@ class MarketDataRepository:
         )
         return list(reversed(rows))
 
+    def financial_profile(self, code: str) -> dict[str, Any] | None:
+        """재무를 읽을 종목(우선주면 보통주, pipelines.updates.preferred와 같은 규칙)과 업종."""
+        row = self._row(
+            """
+            SELECT btrim(symbol) AS code, name, dart_corp_code, sector::text AS sector, fin_type
+            FROM stocks WHERE symbol = :code
+            """,
+            {"code": code},
+        )
+        if row is None:
+            return None
+        from pipelines.updates.preferred import is_preferred, rule_common
+        if is_preferred(row["name"]):
+            common = None
+            if row.get("dart_corp_code"):
+                cands = [r for r in self._rows(
+                    "SELECT btrim(symbol) AS code, name FROM stocks WHERE dart_corp_code = :c AND symbol <> :code",
+                    {"c": row["dart_corp_code"], "code": code}) if not is_preferred(r["name"])]
+                common = cands[0]["code"] if len(cands) == 1 else None
+            if common is None and self._row("SELECT 1 AS ok FROM stocks WHERE symbol = :r", {"r": rule_common(code)}):
+                common = rule_common(code)
+            if common:
+                base = self._row("SELECT sector::text AS sector, fin_type FROM stocks WHERE symbol = :c", {"c": common}) or {}
+                return {**row, **base, "source_code": common}
+        return {**row, "source_code": row["code"]}
+
+    def quarterly_financials(self, code: str, limit: int) -> list[dict[str, Any]]:
+        """분기 단독 실적(0016) + 그 분기 지표(0017) + 그 분기 말 자본총계(자본잠식 판단). 날짜 오름차순."""
+        rows = self._rows(
+            """
+            SELECT q.period_end, q.fs_div, q.revenue, q.operating_income, q.net_income,
+                   m.operating_margin, m.net_margin, m.roe,
+                   (SELECT f.total_equity FROM financials f
+                     WHERE f.symbol = q.symbol AND f.period_end = q.period_end
+                     ORDER BY (f.fs_div = q.fs_div) DESC, (f.fs_div = 'consolidated') DESC LIMIT 1) AS total_equity
+            FROM financials_quarterly q
+            LEFT JOIN financial_metrics m ON m.symbol = q.symbol AND m.period_end = q.period_end
+            WHERE q.symbol = :code
+            ORDER BY q.period_end DESC
+            LIMIT :limit
+            """,
+            {"code": code, "limit": limit},
+        )
+        return list(reversed(rows))
+
     def latest_metrics(self, code: str) -> dict[str, Any] | None:
         return self._row(
             """
             SELECT period_end, fs_div, debt_ratio, current_ratio, quick_ratio,
-                   interest_coverage, reserve_ratio
+                   interest_coverage, interest_coverage_basis, reserve_ratio
             FROM financial_metrics
             WHERE symbol = :code
             ORDER BY period_end DESC

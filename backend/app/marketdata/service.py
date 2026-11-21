@@ -17,6 +17,7 @@ RANGE_SIZES = {"1W": 5, "1M": 22, "3M": 64, "1Y": 250}
 SPARK_SIZE = 24
 YEAR_DAYS = 250
 ANNUAL_YEARS = 7
+QUARTERS = 12           # 기업정보 분기 재무: 화면 8 + 전년 동기 비교 4 (UI v2)
 
 # 시장 개요 지수 그래프. 장중 데이터가 없어 1D 는 전일·최근 종가 두 점이다.
 INDEX_SERIES_SIZES = {"1D": 2, "1W": 5, "1M": 22, "1Y": 250}
@@ -68,6 +69,11 @@ def _ratio(part: Any, whole: Any) -> float | None:
     if part is None or not whole:
         return None
     return round(float(Decimal(part) / Decimal(whole) * 100), 1)
+
+
+def _eok(value: Any) -> int | None:
+    """원 → 억원 (반올림 정수). 화면 CompanyQuarter 단위."""
+    return None if value is None else int(round(float(value) / 1e8))
 
 
 def _iso(value: Any) -> Any:
@@ -178,44 +184,61 @@ class MarketDataService:
         }
 
     def financials(self, code: str) -> dict[str, Any]:
-        if not self.repo.stock(code):
+        """기업정보 재무 (UI v2 CompanyInfo 모양, 2026-11-21 · docs/company-page-data-gaps-plan.md 11-21 결정).
+
+        - quarters: 분기 단독 최대 12개(화면 8 + 전년 동기 4), 오래된 → 최근, 금액 억원. 적으면 있는 만큼(⑤)
+        - 라벨은 period_end의 달력 분기 '26.3Q'(④). ROA는 보내지 않는다(③)
+        - 금융사(sector='financial'): 매출·이익률·유동·당좌·이자보상은 null, 영업이익은 보낸다(①, 11-16 결정)
+        - 자본총계 0 이하인 분기의 ROE는 null(⑦). 우선주는 본주 재무(⑧)
+        - 분기 재무가 하나도 없으면 404 대신 preparing=true (리츠·인프라펀드 등, ⑥). 모르는 종목만 404
+        """
+        fp = self.repo.financial_profile(code)
+        if not fp:
             raise StockNotFoundError(code)
-        annual_rows = self.repo.annual_financials(code, ANNUAL_YEARS)
-        metrics = self.repo.latest_metrics(code)
-        if not annual_rows and not metrics:
-            raise FinancialsNotFoundError(code)
-        annual = [
-            {
-                "period": row["period_end"].strftime("%Y-%m"),
-                "revenue": num(row["revenue"]),
-                "operating_income": num(row["operating_income"]),
-                "net_income": num(row["net_income"]),
-                # financial_metrics 의 이익률은 분기 단독 값이라 연간 표는 연간 합계로 다시 계산한다.
-                "operating_margin": _ratio(row["operating_income"], row["revenue"]),
-                "net_margin": _ratio(row["net_income"], row["revenue"]),
-                # ROE 는 metrics(연말 TTM = 연간) 값을 쓰고, 없으면 순이익/자본총계
-                "roe": _round(row["metric_roe"], 1)
-                if row.get("metric_roe") is not None
-                else _ratio(row["net_income"], row["total_equity"]),
-            }
-            for row in annual_rows
-        ]
-        basis_row = metrics or annual_rows[-1]
-        basis_end: date = basis_row["period_end"]
-        fs_label = "별도재무제표" if basis_row.get("fs_div") == "separate" else "연결재무제표"
-        stability = {
-            "as_of": basis_end.strftime("%Y-%m"),
-            "debt_ratio": _round((metrics or {}).get("debt_ratio"), 1),
-            "current_ratio": _round((metrics or {}).get("current_ratio"), 1),
-            "quick_ratio": _round((metrics or {}).get("quick_ratio"), 1),
-            "interest_coverage": _round((metrics or {}).get("interest_coverage"), 1),
-            "reserve_ratio": _round((metrics or {}).get("reserve_ratio"), 1),
+        src = fp["source_code"]
+        financial = fp.get("sector") == "financial"
+        rows = self.repo.quarterly_financials(src, QUARTERS)
+        metrics = self.repo.latest_metrics(src) or {}
+        quarters = [self._quarter(r, financial) for r in rows]
+        basis_row = rows[-1] if rows else metrics
+        basis_end = basis_row.get("period_end") if basis_row else None
+        fs_label = "별도재무제표" if (basis_row or {}).get("fs_div") == "separate" else "연결재무제표"
+        hide = {"current", "quick", "interest"} if financial else set()
+        health = {
+            key: (None if key in hide else _round(metrics.get(col), 1))
+            for key, col in (("debt", "debt_ratio"), ("current", "current_ratio"), ("quick", "quick_ratio"),
+                             ("interest", "interest_coverage"), ("reserve", "reserve_ratio"))
         }
+        as_of = metrics.get("period_end")
         return {
             "code": code,
-            "basis": f"{basis_end.year}년 {basis_end.month:02d}월 기준 · {fs_label}",
-            "annual": annual,
-            "stability": stability,
+            "source_code": src,                       # 우선주면 재무를 읽은 본주 코드
+            "sector": fp.get("sector") or "general",
+            "fin_type": fp.get("fin_type"),
+            "financial": financial,
+            "preparing": not quarters,
+            "basis": f"{basis_end.year}년 {basis_end.month:02d}월 기준 · {fs_label}" if basis_end else "",
+            "quarters": quarters,
+            "health": health,
+            "health_as_of": as_of.isoformat() if as_of else None,
+            "interest_coverage_basis": None if financial else metrics.get("interest_coverage_basis"),
+        }
+
+    @staticmethod
+    def _quarter(r: dict[str, Any], financial: bool) -> dict[str, Any]:
+        end: date = r["period_end"]
+        qn = (end.month - 1) // 3 + 1
+        equity = r.get("total_equity")
+        return {
+            "period_end": end.isoformat(),
+            "q": f"{end.year % 100:02d}.{qn}Q",
+            "label": f"{end.year}년 {qn}분기",
+            "revenue": None if financial else _eok(r.get("revenue")),
+            "op": _eok(r.get("operating_income")),
+            "net": _eok(r.get("net_income")),
+            "op_margin": None if financial else _round(r.get("operating_margin"), 1),
+            "net_margin": None if financial else _round(r.get("net_margin"), 1),
+            "roe": None if (equity is not None and equity <= 0) else _round(r.get("roe"), 1),
         }
 
     # ─── 시장 개요 (B)
