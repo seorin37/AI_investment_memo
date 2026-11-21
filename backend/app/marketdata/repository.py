@@ -78,10 +78,13 @@ class MarketDataRepository:
         )
 
     def linked_news_count(self, start: datetime, end: datetime) -> int:
-        """[start, end) 사이에 나온 기사 중 종목과 연결된 기사 수 (홈 뉴스 '오늘 N건')."""
+        """[start, end) 사이에 나온 기사 중 종목과 연결된 기사 수 (홈 뉴스 '오늘 N건').
+
+        같은 제목(여러 언론사의 같은 속보)은 한 번만 센다 — 위젯 목록과 같은 기준.
+        """
         row = self._row(
             """
-            SELECT count(*) AS n
+            SELECT count(DISTINCT regexp_replace(btrim(a.title), '\\s+', ' ', 'g')) AS n
             FROM news_articles a
             WHERE a.published_at >= :start AND a.published_at < :end
               AND EXISTS (SELECT 1 FROM news_stocks ns WHERE ns.news_id = a.id)

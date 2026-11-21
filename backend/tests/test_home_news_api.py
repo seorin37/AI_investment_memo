@@ -85,11 +85,24 @@ class HomeNewsTest(unittest.TestCase):
         self.assertEqual(start, datetime(2026, 11, 21, 0, 0, tzinfo=KST))
         self.assertEqual(end - start, timedelta(days=1))
 
+    def test_same_title_from_several_outlets_shows_once(self):
+        t = datetime(2026, 11, 20, 9, 20, tzinfo=KST)
+        rows = [_row(1, t), _row(2, t - timedelta(minutes=5)), _row(3, t - timedelta(minutes=9))]
+        rows[0]["title"] = "[속보] 코스피  사이드카 발동"
+        rows[1]["title"] = " [속보] 코스피 사이드카 발동"  # 빈칸만 다름 → 같은 제목
+        rows[1]["source"] = "서울경제"
+        rows += [_row(i, t - timedelta(minutes=10 + i)) for i in range(4, 12)]
+        body = _client(FakeNewsRepo(rows)).get("/api/v1/news/home").json()
+        ids = [it["id"] for it in body["items"]]
+        self.assertEqual(ids[0], "1")  # 가장 새 기사가 남는다
+        self.assertNotIn("2", ids)
+        self.assertEqual(len(ids), 9)  # 걸러진 만큼 뒤에서 채운다
+
     def test_default_limit_is_nine_and_bounded(self):
         repo = FakeNewsRepo([])
         client = _client(repo)
         client.get("/api/v1/news/home")
-        self.assertEqual(repo.limits, [9])
+        self.assertEqual(repo.limits, [27])  # 같은 제목을 거르려고 3배 받는다
         self.assertEqual(client.get("/api/v1/news/home?limit=0").status_code, 422)
         self.assertEqual(client.get("/api/v1/news/home?limit=51").status_code, 422)
 
