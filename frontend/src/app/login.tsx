@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Platform } from 'react-native';
 import { Redirect, useLocalSearchParams, useRouter, type Href } from 'expo-router';
+import { api } from '@/api';
 import { env } from '@/config/env';
+import { routeAfterLogin, type AfterLoginRoute } from '@/lib/afterLogin';
 import { startSocialLogin } from '@/lib/oauth';
 import { useAuth } from '@/store/auth';
 import type { LoginErrorKind } from '@/ui/screens/auth/Auth.types';
@@ -26,9 +28,13 @@ export default function LoginScreen() {
   const [busy, setBusy] = useState<AuthProvider | null>(() => demo === 'loading' ? 'kakao' : null);
   const [error, setError] = useState<LoginErrorKind>(() => demo === 'offline' ? 'network' : demo === 'error' ? 'login' : null);
   const [recent, setRecent] = useState<AuthProvider | null>(params.recent ?? null);
-  const [continueToTerms, setContinueToTerms] = useState(false);
+  /* 버튼으로 로그인한 뒤 갈 곳: 신규 판별(lib/afterLogin) 결과. 판별 중이면 'deciding' */
+  const [next, setNext] = useState<AfterLoginRoute | 'deciding' | null>(null);
 
-  if (status === 'signedIn') return <Redirect href={(continueToTerms ? '/terms' : '/') as Href} />;
+  if (status === 'signedIn') {
+    if (next === 'deciding') return null;
+    return <Redirect href={(next ?? '/') as Href} />;
+  }
 
   async function social(provider: AuthProvider) {
     if (busy) return;
@@ -37,16 +43,19 @@ export default function LoginScreen() {
     setRecent(provider);
     try {
       if (env.useMockAuth) {
-        setContinueToTerms(true);
+        setNext('deciding');
         await mockSignIn();
+        setNext(await routeAfterLogin(api.listMyStocks));
         return;
       }
       const session = await startSocialLogin(provider);
       if (session) {
-        setContinueToTerms(true);
+        setNext('deciding');
         await acceptSession(session);
+        setNext(await routeAfterLogin(api.listMyStocks));
       }
     } catch (cause) {
+      setNext(null);
       setError(networkFailure(cause) ? 'network' : 'login');
     } finally {
       setBusy(null);
