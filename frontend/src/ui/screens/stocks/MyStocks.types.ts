@@ -19,6 +19,8 @@ export interface MyStock {
   price: number | null;
   /** 전일 대비 % */
   change_pct: number | null;
+  /** 이 줄의 종가 날짜 YYYY-MM-DD. 목록 종목끼리 날짜가 다를 때만 (화면 'MM.DD') */
+  as_of?: string;
   /** AI 연결 가능한 종목 (시범 종목) */
   ai_ready: boolean;
 }
@@ -43,6 +45,8 @@ export interface MyStocksData {
   stocks: MyStock[];
   /** 시세 기준일 YYYY-MM-DD. '' = 시세 미연결 (안내 문구) */
   as_of: string;
+  /** 종목마다 종가 날짜가 다름 → 아래 문구 '시세는 종목별 종가 기준' + 줄마다 날짜 */
+  as_of_mixed?: boolean;
   /** 종목 추가: 검색 대상 · 처음에 보이는 많이 찾는 종목 */
   universe: StockCandidate[];
   popular: string[];

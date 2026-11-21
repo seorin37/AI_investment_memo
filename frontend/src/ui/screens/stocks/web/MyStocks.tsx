@@ -156,6 +156,7 @@ export function WebMyStocks(p: WebMyStocksProps) {
                                   {s.change_pct.toFixed(2)}%
                                 </Text>
                               )}
+                              {s.as_of ? <Text style={[st.prS, { color: '#8B95A1' }]}>{`${s.as_of.slice(5, 7)}.${s.as_of.slice(8, 10)}`}</Text> : null}
                             </View>
                             {!sel ? (
                               <Pressable
@@ -180,7 +181,7 @@ export function WebMyStocks(p: WebMyStocksProps) {
                   </Appear>
                 ))}
               <Text style={st.foot}>
-                {p.as_of ? `시세는 ${p.as_of.slice(5, 7)}.${p.as_of.slice(8, 10)} 종가 기준` : '시세 데이터가 아직 연결되지 않았어요'} · 종목을 우클릭하면 바로 옮기거나 뺄 수 있어요
+                {p.as_of_mixed ? '시세는 종목별 종가 기준' : p.as_of ? `시세는 ${p.as_of.slice(5, 7)}.${p.as_of.slice(8, 10)} 종가 기준` : '시세 데이터가 아직 연결되지 않았어요'} · 종목을 우클릭하면 바로 옮기거나 뺄 수 있어요
               </Text>
             </View>
           </View>

@@ -275,7 +275,7 @@ export function AppMyStocks(p: AppMyStocksProps) {
                 </Reveal>
               );
             })}
-            <Text style={st.foot2}>{p.as_of ? `시세는 ${p.as_of.slice(5, 7)}.${p.as_of.slice(8, 10)} 종가 기준` : '시세 데이터가 아직 연결되지 않았어요'}</Text>
+            <Text style={st.foot2}>{p.as_of_mixed ? '시세는 종목별 종가 기준' : p.as_of ? `시세는 ${p.as_of.slice(5, 7)}.${p.as_of.slice(8, 10)} 종가 기준` : '시세 데이터가 아직 연결되지 않았어요'}</Text>
             <Text style={st.hint2}>종목을 꾹 누르면 여러 개를 옮기거나 빼고, ⋮⋮를 끌어 순서를 바꿀 수 있어요</Text>
           </>
         )}
@@ -447,6 +447,7 @@ function StockRow({ s, sel, on, fresh, lifted, dragY, shift, group, api, onPress
               {s.change_pct.toFixed(2)}%
             </Text>
           )}
+          {s.as_of ? <Text style={[st.prS, { color: appColor.ink3 }]}>{`${s.as_of.slice(5, 7)}.${s.as_of.slice(8, 10)}`}</Text> : null}
         </View>
         {sel ? (
           <View {...pan.panHandlers} style={st.hdl} accessible accessibilityLabel={`${s.name} 끌어서 순서 바꾸기`}>
