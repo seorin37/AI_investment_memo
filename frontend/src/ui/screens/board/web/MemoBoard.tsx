@@ -15,6 +15,7 @@ import { WebSelectBar } from '@/ui/shared/SelectBar';
 import { WebSnackbar } from '@/ui/shared/Snackbar';
 import { SpentBox } from '@/ui/shared/SpentBox';
 import { WebStockHead } from '@/ui/shared/StockHead';
+import { PriceNoteHead } from '../PriceNoteHead';
 import { WebViewToggle, type BoardView } from '@/ui/shared/ViewToggle';
 import { fpx, webColor } from '@/ui/theme';
 import type { BoardFilter, MemoBoardProps } from '../MemoBoard.types';
@@ -124,7 +125,7 @@ export function WebMemoBoard(p: MemoBoardProps) {
       <ScrollView style={st.flex} showsVerticalScrollIndicator={false}>
         <FixedFrame onScale={setK}>
           <View style={st.page}>
-            <WebStockHead {...p.stock} />
+            {p.priceNote ? <PriceNoteHead stock={p.stock} note={p.priceNote} variant="web" /> : <WebStockHead {...p.stock} />}
             <View style={st.tabs}>
               {(['board', 'company'] as const).map((t) => (
                 <Pressable key={t} onPress={() => t === 'company' && p.onChangeTab('company')} accessibilityRole="tab" accessibilityState={{ selected: t === 'board' }} style={[st.tab, t === 'board' ? st.tabOn : st.tabOff]}>

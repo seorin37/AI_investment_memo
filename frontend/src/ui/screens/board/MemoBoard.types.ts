@@ -10,6 +10,8 @@ export type BoardKey = string;
 /** 메모 보드 (웹·앱 같은 props) */
 export interface MemoBoardProps {
   stock: StockHeadProps;
+  /** 시세가 없을 때 머리 숫자 대신 보여 줄 안내 (실제 API 모드, 2026-11-21). 없으면 숫자 머리 */
+  priceNote?: string;
   /** 이 종목의 메모 */
   memos: Memo[];
   /** 이 종목의 체크리스트 (원본: 종목마다 하나) */

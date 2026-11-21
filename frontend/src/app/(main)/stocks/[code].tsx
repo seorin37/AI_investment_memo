@@ -6,6 +6,7 @@ import { mockCompanyByCode } from '@/ui/screens/company/CompanyInfo.mock';
 import { WebCompanyInfo } from '@/ui/screens/company/web/CompanyInfo';
 import { useCompanyInfo } from '@/ui/screens/company/useCompanyInfo';
 import { mockBoardChecklist, mockBoardMemos, mockBoardOrder, mockBoardStock, mockEmptyStock } from '@/ui/screens/board/MemoBoard.mock';
+import { useBoardStock } from '@/ui/screens/board/useBoardStock';
 import { WebMemoBoard } from '@/ui/screens/board/web/MemoBoard';
 import { mockExtract, mockFeed, mockToday, mockTrackItems, mockVersions } from '@/ui/screens/memo/MemoDetail.mock';
 import type { AiLinkState } from '@/ui/screens/memo/MemoDetail.types';
@@ -32,7 +33,9 @@ type Connect = { id: string | null; title: string; body: string; color: MemoColo
 function BoardTab({ code, memoParam, ev, firstFlow, stockName, onboardingSelected, onboardingHomeMode }: { code: string; memoParam?: string; ev?: string; firstFlow: boolean; stockName?: string; onboardingSelected?: string; onboardingHomeMode?: string }) {
   const router = useRouter();
   const empty = firstFlow || code === mockEmptyStock.stock_code;
-  const stock = firstFlow && stockName ? { ...mockEmptyStock, stock_code: code, name: stockName } : empty ? mockEmptyStock : mockBoardStock;
+  const baseStock = firstFlow && stockName ? { ...mockEmptyStock, stock_code: code, name: stockName } : empty ? mockEmptyStock : mockBoardStock;
+  /* 종목 머리 시세: 실제 모드면 GET /stocks/{code}/quote (2026-11-21), mock 모드면 위 mock 그대로 */
+  const { stock, priceNote } = useBoardStock(code, baseStock);
   const [memos, setMemos] = useState<Memo[]>(empty ? [] : mockBoardMemos);
   const [checklist, setChecklist] = useState<Checklist | null>(empty ? null : mockBoardChecklist);
   const [order, setOrder] = useState<string[]>(mockBoardOrder);
@@ -97,6 +100,7 @@ function BoardTab({ code, memoParam, ev, firstFlow, stockName, onboardingSelecte
     <>
     <WebMemoBoard
       stock={stock}
+      priceNote={priceNote}
       memos={memos}
       checklist={checklist}
       order={order}
