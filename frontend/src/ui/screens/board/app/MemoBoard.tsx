@@ -16,6 +16,7 @@ import { Sheet } from '@/ui/shared/Sheet';
 import { AppSnackbar } from '@/ui/shared/Snackbar';
 import { SpentBox } from '@/ui/shared/SpentBox';
 import { AppStockCard } from '@/ui/shared/StockHead';
+import { PriceNoteHead } from '../PriceNoteHead';
 import { SwipeRow } from '@/ui/shared/SwipeRow';
 import { AppViewToggle, type BoardView } from '@/ui/shared/ViewToggle';
 import { appColor, ft } from '@/ui/theme';
@@ -176,7 +177,7 @@ export function AppMemoBoard(p: MemoBoardProps & { header: React.ReactNode }) {
       {sel ? <AppSelectHeader count={sel.length} allSelected={sel.length === items.length} onClose={() => setSel(null)} onToggleAll={() => setSel(sel.length === items.length ? null : items.map((i) => i.key))} /> : p.header}
       <ScrollView style={st.flex} contentContainerStyle={st.content} showsVerticalScrollIndicator={false} onScrollBeginDrag={() => openRow && setOpenRow(null)}>
         <View style={st.cardWrap}>
-          <AppStockCard {...p.stock} />
+          {p.priceNote ? <PriceNoteHead stock={p.stock} note={p.priceNote} variant="app" /> : <AppStockCard {...p.stock} />}
         </View>
         <View style={st.seg}>
           <Seg variant="appBoard" value="board" onChange={(k) => k === 'company' && p.onChangeTab('company')} options={[{ key: 'board', label: '메모 보드' }, { key: 'company', label: '기업정보' }]} />

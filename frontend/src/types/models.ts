@@ -49,7 +49,15 @@ export interface Quote {
   change: number;
   change_pct: number;
   as_of: ISODate;
+  /** 종가 거래일 YYYY-MM-DD (2026-11-21 백엔드 추가) */
+  trade_date?: string;
   spark: number[]; // 당일/최근 추이 (헤더 스파크라인)
+}
+
+/** GET /quotes?codes= — 여러 종목 시세 한 번에. 시세가 없는 종목은 missing */
+export interface QuotesResponse {
+  quotes: Quote[];
+  missing: string[];
 }
 
 export interface Candle {
@@ -259,6 +267,33 @@ export interface MarketIndex {
   change: number;
   change_pct: number;
   series: Record<IndexRange, number[]>;
+  /** 기준 거래일(관측일) YYYY-MM-DD (C-16, 2026-11-21) */
+  trade_date?: string;
+  /** series['1Y'] 와 같은 길이의 날짜 (다른 기간은 뒤에서 같은 개수) */
+  dates?: string[];
+}
+
+/** GET /market/macro 지표 하나 (ECOS·FRED·KRX 금 원천값) */
+export interface MacroIndicator {
+  key: string; // 'USD_KRW' | 'KR_POLICY_RATE' | 'KR_GOV_3Y' | … | 'WTI_SPOT' | 'GOLD'
+  label: string;
+  unit: string; // '원' | '%' | '달러/배럴' | '원/g'
+  value: number;
+  prev_value: number | null;
+  /** 최신 − 직전 (단위가 % 면 %p) */
+  change: number | null;
+  change_pct: number | null;
+  observed_date: string; // YYYY-MM-DD
+  prev_date: string | null;
+  source: string | null; // 'ECOS' | 'FRED' | 'KRX'
+  series_code: string | null;
+}
+
+export interface MacroOverview {
+  indicators: MacroIndicator[];
+  /** 관측값이 없는 지표 키 */
+  missing: string[];
+  as_of: string | null;
 }
 
 export interface MacroItem {

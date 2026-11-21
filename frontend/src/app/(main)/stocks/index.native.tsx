@@ -6,6 +6,7 @@ import { TopBar } from '@/ui/layout/app/TopBar';
 import { AppMyStocks } from '@/ui/screens/stocks/app/MyStocks';
 import { mockMyStocksData } from '@/ui/screens/stocks/MyStocks.mock';
 import type { MyStock } from '@/ui/screens/stocks/MyStocks.types';
+import { useStockPrices } from '@/ui/screens/stocks/useStockPrices';
 
 /**
  * 앱 내 종목 탭 = UI v2 (ui/screens/stocks/app · ⑥). 웹은 index.tsx.
@@ -16,12 +17,14 @@ export default function MyStocksTab() {
   const notice = useMockNotice();
   const setTabBarHidden = useUI((s) => s.setTabBarHidden);
   const [stocks, setStocks] = useState<MyStock[]>(mockMyStocksData.stocks);
+  /* 가격: 실제 모드면 GET /quotes 한 번 (2026-11-21), mock 모드면 mock 가격 */
+  const priced = useStockPrices(stocks, mockMyStocksData.universe, mockMyStocksData.as_of);
   useFocusEffect(useCallback(() => () => setTabBarHidden(false), [setTabBarHidden]));
   const onSelectionChange = useCallback((n: number) => setTabBarHidden(n > 0), [setTabBarHidden]);
   return (
     <AppMyStocks
       {...mockMyStocksData}
-      stocks={stocks}
+      {...priced}
       header={({ onSearch }) => (
         <TopBar
           preset="stocks"

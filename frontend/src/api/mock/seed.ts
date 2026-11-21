@@ -10,6 +10,8 @@ import type {
   CompareMemoCard,
   JournalEntry,
   MarketIndex,
+  MacroIndicator,
+  MacroOverview,
   MarketOverview,
   MarketUpdate,
   MemoVersion,
@@ -437,6 +439,28 @@ export const marketOverview: MarketOverview = {
     { key: 'GOLD', label: '금', value: 2415.3, unit: '$', change: 0.6 },
     { key: 'WTI', label: 'WTI 유가', value: 78.4, unit: '$', change: -0.9 },
   ],
+};
+
+/** GET /market/macro 예시 (실험실 mockLabVars 와 같은 숫자 · 11.18 기준) */
+const mi = (key: string, label: string, unit: string, value: number, prev: number, source: string, series_code: string | null = null): MacroIndicator => ({
+  key, label, unit, value, prev_value: prev, change: Math.round((value - prev) * 10000) / 10000,
+  change_pct: Math.round(((value - prev) / prev) * 10000) / 100, observed_date: '2026-11-18', prev_date: '2026-11-17', source, series_code,
+});
+export const macroOverview: MacroOverview = {
+  indicators: [
+    mi('USD_KRW', '원/달러 환율', '원', 1350.2, 1347.0, 'ECOS'),
+    mi('KR_POLICY_RATE', '한국 기준금리', '%', 2.5, 2.5, 'ECOS'),
+    mi('KR_GOV_3Y', '국고채 3년', '%', 2.61, 2.63, 'ECOS'),
+    mi('KR_GOV_10Y', '국고채 10년', '%', 2.89, 2.9, 'ECOS'),
+    mi('KR_GOV_30Y', '국고채 30년', '%', 2.71, 2.72, 'ECOS'),
+    mi('US_TREASURY_2Y', '미국 국채 2년', '%', 4.05, 4.03, 'FRED', 'DGS2'),
+    mi('US_TREASURY_10Y', '미국 국채 10년', '%', 4.32, 4.29, 'FRED', 'DGS10'),
+    mi('US_TREASURY_30Y', '미국 국채 30년', '%', 4.51, 4.5, 'FRED', 'DGS30'),
+    mi('WTI_SPOT', 'WTI 유가', '달러/배럴', 71.2, 71.9, 'FRED', 'DCOILWTICO'),
+    mi('GOLD', '금 99.99K', '원/g', 191900, 190000, 'KRX', '04020000'),
+  ],
+  missing: [],
+  as_of: '2026-11-18',
 };
 
 export const calendar: CalendarEvent[] = [

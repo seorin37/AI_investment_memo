@@ -5,6 +5,7 @@ import { useStudioPlayer } from '@/store/studioPlayer';
 import { mockLabNote, mockLabStocks, mockLabVars } from '@/ui/screens/studio/Studio.mock';
 import { AppLab } from '@/ui/screens/studio/app/Lab';
 import { labTitle } from '@/ui/screens/studio/labParts';
+import { useLabVars } from '@/ui/screens/studio/useLabVars';
 
 /** 앱 투자 실험실 (원본 studio.html pgLab). 실행은 크레딧 차감 없이 mock 결과를 만든 항목에 추가하고 결과 화면으로 */
 export default function StudioLabScreen() {
@@ -13,10 +14,12 @@ export default function StudioLabScreen() {
   const dirs = useStudioPlayer((s) => s.labDirs);
   const setLab = useStudioPlayer((s) => s.setLab);
   const addLab = useStudioPlayer((s) => s.addLab);
+  /* 변수 '지금 값': 실제 모드면 GET /market/macro (2026-11-21) */
+  const vars = useLabVars();
   if (Platform.OS === 'web') return <Redirect href="/" />;
   return (
     <AppLab
-      vars={mockLabVars}
+      vars={vars}
       stocks={mockLabStocks}
       code={code}
       dirs={dirs}

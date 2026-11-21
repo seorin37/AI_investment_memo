@@ -13,7 +13,7 @@ import { Sheet } from '@/ui/shared/Sheet';
 import { WebSnackbar } from '@/ui/shared/Snackbar';
 import { curve, fpx } from '@/ui/theme';
 import type { HomeWidget, MarketIndex, MarketKey, WebHomeProps } from '../Home.types';
-import { WEB_RANGES, mkData, mmdd, rangeLabels, type WebRange } from '../homeFormat';
+import { WEB_RANGES, basisText, mkData, pointText, rangeLabels, type WebRange } from '../homeFormat';
 import { CustomHome } from './CustomHome';
 import { HomeGrip } from './homeDom.web';
 import { CheckWidget, MarketWidget, NewsWidget, Plug12, UpdatesWidget } from './HomeWidgets';
@@ -251,7 +251,7 @@ function TemplateHome(p: WebHomeProps) {
           setSnack({ msg: '기본 구성으로 되돌렸어요', check: true, key: nextKey() });
         }}
       />
-      <MarketDetailDialog q={p.market?.find((m) => m.key === market) ?? null} days={p.days} onClose={() => setMarket(null)} />
+      <MarketDetailDialog q={p.market?.find((m) => m.key === market) ?? null} onClose={() => setMarket(null)} />
     </View>
   );
 }
@@ -362,7 +362,7 @@ function WidgetCell({ id, editing, lifted, gone, onStart, onOver, onEnd, onRemov
 }
 
 /* ───────── 시장 상세 창 (원본 MarketDetail: 680 · 라운드 28 · 선 616×220 · 마우스로 훑으면 그때 값) ───────── */
-function MarketDetailDialog({ q, days, onClose }: { q: MarketIndex | null; days: string[]; onClose: () => void }) {
+function MarketDetailDialog({ q, onClose }: { q: MarketIndex | null; onClose: () => void }) {
   const [last, setLast] = useState(q);
   if (q && q !== last) setLast(q);
   const [r, setR] = useState<WebRange>('1달');
@@ -379,11 +379,12 @@ function MarketDetailDialog({ q, days, onClose }: { q: MarketIndex | null; days:
   const X = (i: number) => (i / (sr.length - 1)) * W;
   const Y = (v: number) => 10 + ((mx - v) / (mx - mn || 1)) * (H - 40);
   const col = md.up ? '#E5484D' : '#2F6BDB';
-  const labels = rangeLabels(r, days);
-  const ds = days.slice(-sr.length);
+  /* 축·짚은 점의 날짜 = 그 지표 자신의 dates (2026-11-21) */
+  const labels = rangeLabels(r, shown.dates);
+  const ds = shown.dates.slice(-sr.length);
   const idx = hx === null ? null : Math.max(0, Math.min(sr.length - 1, Math.round((hx / W) * (sr.length - 1))));
   const fmt = (n: number) => n.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const when = (i: number) => (ds[i] ? `${mmdd(ds[i])} 종가` : '');
+  const when = (i: number) => pointText(shown, ds[i]);
   const line = sr.map((v, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(v).toFixed(1)}`).join('');
   const e = curve.ease(t);
   return (
@@ -437,7 +438,7 @@ function MarketDetailDialog({ q, days, onClose }: { q: MarketIndex | null; days:
           ))}
         </View>
         <Text style={st.mdFoot}>
-          {`선을 마우스로 훑으면 그때의 값이 보여요 · ${mmdd(shown.as_of)} 종가 기준`}
+          {`선을 마우스로 훑으면 그때의 값이 보여요 · ${basisText(shown)}`}
         </Text>
       </View>
     </Sheet>

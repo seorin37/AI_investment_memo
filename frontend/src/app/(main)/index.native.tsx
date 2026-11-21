@@ -11,6 +11,7 @@ import { AppHome } from '@/ui/screens/home/app/Home';
 import { mockHomeData, mockHomeSearch } from '@/ui/screens/home/Home.mock';
 import { useHomeNewsProps } from '@/ui/screens/home/useHomeNews';
 import type { HomeWidget } from '@/ui/screens/home/Home.types';
+import { useHomeMarket } from '@/ui/screens/home/useHomeMarket';
 import { mockExtract } from '@/ui/screens/memo/MemoDetail.mock';
 import type { FirstMemoSummary } from '@/ui/screens/onboarding/FirstHome.types';
 import { mockFirstHomeStocks } from '@/ui/screens/onboarding/Onboarding.mock';
@@ -45,6 +46,8 @@ export default function HomeTab() {
   }, [onboarding, first_code, first_title, first_body, first_ai]);
   const firstStocks = useMemo(() => mockFirstHomeStocks(selected, firstMemo), [selected, firstMemo]);
   const marketOk = !(__DEV__ && fail === '1') || retried;
+  /* 시장 지수: 실제 모드면 GET /market/overview, mock 모드면 Home.mock (2026-11-21) */
+  const hm = useHomeMarket();
   useFocusEffect(useCallback(() => () => setTabBarHidden(false), [setTabBarHidden]));
   /* 가입 직후 첫 홈에서 0.7초 뒤 사용법 안내 (원본 start.html MX.coach(-1)) — 처음 한 번만 */
   const startCoach = useCoach((s) => s.startFirst);
@@ -80,7 +83,8 @@ export default function HomeTab() {
       firstStart={firstStart}
       widgets={widgets}
       checklists={checklists}
-      market={marketOk ? mockHomeData.market : null}
+      market={marketOk ? hm.market : null}
+      days={hm.days}
       search={mockHomeSearch}
       header={({ line, onSearch }) => (
         <TopBar
@@ -100,7 +104,7 @@ export default function HomeTab() {
       onOpenStock={(code) => router.navigate({ pathname: '/stocks/[code]', params: { code } })}
       onOpenMarket={(key) => router.push({ pathname: '/market/[key]', params: { key } })}
       onOpenNews={(n) => openArticle(n.url)}
-      onRetryMarket={() => setRetried(true)}
+      onRetryMarket={() => { setRetried(true); hm.retry(); }}
       onToggleCheck={(code, id) => patchCl(code, (c) => ({ ...c, items: c.items.map((i) => (i.id === id ? { ...i, done: !i.done } : i)) }))}
       onAddCheck={(code, text) => patchCl(code, (c) => ({ ...c, items: [...c.items, { id: `n${Date.now()}`, text, done: false }] }))}
       onNudge={() => notice('주간보고서')}

@@ -18,6 +18,7 @@ import type {
   HomeLayout,
   JournalBlock,
   JournalEntry,
+  MacroOverview,
   MarketOverview,
   MarketUpdate,
   Memo,
@@ -30,6 +31,7 @@ import type {
   HomeNews,
   PriceConditionRow,
   Quote,
+  QuotesResponse,
   ReferenceBoard,
   ReferenceLink,
   Settings,
@@ -101,6 +103,8 @@ export interface Api {
   updateStock(code: string, patch: Partial<Pick<MyStock, 'status' | 'tags'>>): Promise<MyStock>;
   removeStock(code: string): Promise<void>;
   getQuote(code: string): Promise<Quote>;
+  /** 여러 종목 시세 한 번에 (보드·내 종목 목록) */
+  getQuotes(codes: string[]): Promise<QuotesResponse>;
   getCandles(code: string, range: ChartRange): Promise<Candle[]>;
   getProfile(code: string): Promise<StockProfile>;
   getFinancials(code: string): Promise<Financials>;
@@ -133,6 +137,8 @@ export interface Api {
   getHomeLayout(): Promise<HomeLayout>;
   saveHomeLayout(layout: HomeLayout): Promise<HomeLayout>;
   getMarketOverview(): Promise<MarketOverview>;
+  /** 거시 지표 (ECOS·FRED·KRX 금) */
+  getMacro(): Promise<MacroOverview>;
   listCalendar(month: string): Promise<CalendarEvent[]>;
   createCalendarEvent(input: { date: string; title: string }): Promise<CalendarEvent>;
   listNews(): Promise<NewsHeadline[]>;

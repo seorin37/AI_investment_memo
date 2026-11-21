@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Platform } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
+import { markIntroSeen } from '@/lib/introSeen';
 import { useAuth } from '@/store/auth';
 import { mockIntroPages } from '@/ui/screens/auth/Auth.mock';
 import { AppIntro } from '@/ui/screens/auth/app/Intro';
@@ -15,7 +16,11 @@ export default function IntroScreen() {
     pages: mockIntroPages,
     page,
     onPageChange: setPage,
-    onDone: () => router.replace('/login'),
+    /* 본 상태 저장 (웹은 다음부터 /login 으로 바로, 앱은 지금 동작 그대로) */
+    onDone: () => {
+      void markIntroSeen();
+      router.replace('/login');
+    },
   };
   return Platform.OS === 'web' ? <WebIntro {...props} /> : <AppIntro {...props} />;
 }

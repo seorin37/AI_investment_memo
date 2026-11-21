@@ -86,7 +86,7 @@ class MarketDataApiTest(unittest.TestCase):
         res = self.client.get("/api/v1/stocks/005930/quote")
         self.assertEqual(res.status_code, 200)
         body = res.json()
-        self.assertEqual(set(body), {"code", "price", "change", "change_pct", "as_of", "spark"})
+        self.assertEqual(set(body), {"code", "price", "change", "change_pct", "as_of", "trade_date", "spark"})
         last = 100_000 + 299 * 100
         self.assertEqual(body["code"], "005930")
         self.assertEqual(body["price"], last)

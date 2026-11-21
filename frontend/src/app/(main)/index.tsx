@@ -5,6 +5,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from 'expo
 import type { Checklist } from '@/types/models';
 import { mockCustomBoard, mockHomeData, mockHomeSchedule } from '@/ui/screens/home/Home.mock';
 import type { CustomItem, HomeWidget } from '@/ui/screens/home/Home.types';
+import { useHomeMarket } from '@/ui/screens/home/useHomeMarket';
 import { WebHome } from '@/ui/screens/home/web/Home';
 import { useHomeNewsProps } from '@/ui/screens/home/useHomeNews';
 import { mockOnboardingStocks } from '@/ui/screens/onboarding/Onboarding.mock';
@@ -42,6 +43,8 @@ export default function HomeScreen() {
     return () => clearTimeout(t);
   }, [onboarding, guideOpen, pickerOpen, startCoach]));
   const marketOk = !(__DEV__ && fail === '1') || retried;
+  /* 시장 지수: 실제 모드면 GET /market/overview, mock 모드면 Home.mock (2026-11-21) */
+  const hm = useHomeMarket();
   const patchCl = (code: string, f: (c: Checklist) => Checklist) => setChecklists((all) => (all[code] ? { ...all, [code]: f(all[code]) } : all));
   const firstStart = firstActive ? (
     <WebFirstHome
@@ -65,7 +68,8 @@ export default function HomeScreen() {
       widgets={widgets}
       checklists={checklists}
       {...news}
-      market={marketOk ? mockHomeData.market : null}
+      market={marketOk ? hm.market : null}
+      days={hm.days}
       schedule={mockHomeSchedule}
       board={board}
       onChangeBoard={setBoard}
@@ -75,7 +79,7 @@ export default function HomeScreen() {
       onOpenStockUpdates={(code) => router.navigate({ pathname: '/updates/[code]', params: { code } })}
       onOpenStock={(code) => router.navigate({ pathname: '/stocks/[code]', params: { code } })}
       onOpenNews={(n) => Linking.openURL(n.url)}
-      onRetryMarket={() => setRetried(true)}
+      onRetryMarket={() => { setRetried(true); hm.retry(); }}
       onToggleCheck={(code, id) => patchCl(code, (c) => ({ ...c, items: c.items.map((i) => (i.id === id ? { ...i, done: !i.done } : i)) }))}
       onAddCheck={(code, text) => patchCl(code, (c) => ({ ...c, items: [...c.items, { id: `n${c.items.length + 1}`, text, done: false }] }))}
       onNudge={() => {}}

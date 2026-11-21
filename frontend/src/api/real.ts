@@ -23,6 +23,7 @@ export const realApi: Api = {
   // 종목
   ...realStockApi,
   getQuote: (code) => http.get(`/stocks/${code}/quote`),
+  getQuotes: (codes) => http.get('/quotes', { codes: codes.join(',') }),
   getCandles: (code, range) => http.get(`/stocks/${code}/candles`, { range }),
   getProfile: (code) => http.get(`/stocks/${code}/profile`),
   getFinancials: (code) => http.get(`/stocks/${code}/financials`),
@@ -52,6 +53,7 @@ export const realApi: Api = {
   getHomeLayout: () => http.get('/home/layout'),
   saveHomeLayout: (layout) => http.put('/home/layout', layout),
   getMarketOverview: () => http.get('/market/overview'),
+  getMacro: () => http.get('/market/macro'),
   listCalendar: (month) => http.get('/calendar', { month }),
   createCalendarEvent: (input) => http.post('/calendar', input),
   listNews: () => http.get('/news/headlines'),

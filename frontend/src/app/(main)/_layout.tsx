@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useCoach } from '@/store/coach';
 import { View, useWindowDimensions } from 'react-native';
 import { Redirect, Stack, useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
+import { useIntroSeen } from '@/lib/introSeen';
 import { useAuth } from '@/store/auth';
 import { mockPopular, mockRecentSearches, mockSideProfile, mockSideStocks, mockStudioHead } from '@/ui/layout/web/WebShell.mock';
 import { WebShell } from '@/ui/layout/web/WebShell';
@@ -22,6 +23,7 @@ import { WebFail, WebGen, WebMini, WebPlayer } from '@/ui/screens/studio/web/Aud
 import { WebReportPopup, WebReportSum } from '@/ui/screens/studio/web/Report';
 import { WebLab, WebLabResult, WebQuiz } from '@/ui/screens/studio/web/QuizLab';
 import { labGroups, labTitle } from '@/ui/screens/studio/labParts';
+import { useLabVars } from '@/ui/screens/studio/useLabVars';
 import { WebAudioPopup } from '@/ui/screens/studio/web/AudioPopup';
 import type { StudioKind } from '@/ui/screens/studio/Studio.types';
 import { WebChargePopup, WebCreditPopup, WebUsageSheet } from '@/ui/screens/studio/web/Credit';
@@ -53,6 +55,8 @@ function sideKeyOf(path: string): SideKey {
  */
 export default function MainLayout() {
   const status = useAuth((s) => s.status);
+  /* 로그인 전: 서비스 설명을 본 적 없으면 /intro (원본 웹처럼 처음 한 번만), 봤으면 /login */
+  const introSeen = useIntroSeen(status === 'signedOut');
   const router = useRouter();
   const pathname = usePathname();
   const { width } = useWindowDimensions();
@@ -85,6 +89,8 @@ export default function MainLayout() {
   }, [coachStep]);
   /* ⑥ 사이드바 종목: 순서 끌기 · 우클릭/⋯ 메뉴 · + 종목 추가 (mock: 이 셸 안에서만) */
   const [sideStocks, setSideStocks] = useState<SideStock[]>(mockSideStocks);
+  /* 투자 실험실 변수 '지금 값': 실제 모드면 GET /market/macro (2026-11-21) */
+  const labVars = useLabVars();
   const [smenu, setSmenu] = useState<{ code: string; at: { x: number; y: number } } | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [ask, setAsk] = useState<string | null>(null);
@@ -135,7 +141,10 @@ export default function MainLayout() {
     const c = w.charCodeAt(w.length - 1);
     return c >= 0xac00 && c <= 0xd7a3 && (c - 0xac00) % 28 ? '을' : '를';
   };
-  if (status !== 'signedIn') return <Redirect href="/login" />;
+  if (status !== 'signedIn') {
+    if (status === 'loading' || introSeen === null) return null;
+    return <Redirect href={introSeen ? '/login' : '/intro'} />;
+  }
 
   /* 로그아웃: mock 세션을 지우고 로그인으로 replace (로그인 뒤 화면은 위 Redirect 로 다시 못 들어옴) */
   const logout = () => {
@@ -210,7 +219,7 @@ export default function MainLayout() {
               : sp.webView === 'quiz' ? <WebQuiz q={mockQuiz} done={sp.quizPick} onBack={() => sp.setWebView('home')} onSubmit={sp.submitQuiz} />
               : sp.webView === 'lab' ? (
                 <WebLab
-                  vars={mockLabVars}
+                  vars={labVars}
                   stocks={mockLabStocks}
                   code={sp.labCode}
                   dirs={sp.labDirs}
@@ -229,7 +238,7 @@ export default function MainLayout() {
               : sp.webView === 'labResult' && labItem?.lab ? (
                 <WebLabResult
                   stock={mockLabStocks.find((s) => s.stock_code === labItem.lab?.code) ?? mockLabStocks[0]}
-                  vars={mockLabVars}
+                  vars={labVars}
                   groups={labGroups(labItem.lab.code, labItem.lab.dirs)}
                   disclaimer={mockLabDisclaimer}
                   onBack={() => sp.setWebView('home')}

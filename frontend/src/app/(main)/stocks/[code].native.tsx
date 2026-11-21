@@ -10,6 +10,7 @@ import { mockCompanyByCode } from '@/ui/screens/company/CompanyInfo.mock';
 import { TopBar } from '@/ui/layout/app/TopBar';
 import { AiOffSheet } from '@/ui/shared/AiOffSheet';
 import { AppMemoBoard } from '@/ui/screens/board/app/MemoBoard';
+import { useBoardStock } from '@/ui/screens/board/useBoardStock';
 import { mockBoardChecklist, mockBoardMemos, mockBoardStock, mockEmptyStock } from '@/ui/screens/board/MemoBoard.mock';
 
 /**
@@ -27,7 +28,8 @@ export default function StockDetail() {
   const setTabBarHidden = useUI((s) => s.setTabBarHidden);
   const [tab, setTab] = useState<'board' | 'company'>(tabParam === 'company' || tabParam === 'info' ? 'company' : 'board');
   const empty = code === mockEmptyStock.stock_code;
-  const stock = empty ? mockEmptyStock : mockBoardStock;
+  /* 종목 머리 시세: 실제 모드면 GET /stocks/{code}/quote (2026-11-21), mock 모드면 mock 그대로 */
+  const { stock, priceNote } = useBoardStock(code, empty ? mockEmptyStock : mockBoardStock);
   const [memos, setMemos] = useState<Memo[]>(empty ? [] : mockBoardMemos);
   const [checklist, setChecklist] = useState<Checklist | null>(empty ? null : mockBoardChecklist);
   const removed = useRef<Memo[]>([]);
@@ -43,6 +45,7 @@ export default function StockDetail() {
     <AppMemoBoard
       header={<TopBar preset="board" title={stock.name} onBack={() => router.back()} actions={[{ icon: 'moreV2', label: '종목 메뉴', onPress: () => notice('종목 메뉴') }]} />}
       stock={stock}
+      priceNote={priceNote}
       memos={memos}
       checklist={checklist}
       notice={boardNotice}

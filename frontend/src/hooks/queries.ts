@@ -12,6 +12,8 @@ export const qk = {
   stockSearch: (q: string) => ['stockSearch', q] as const,
   stock: (code: string) => ['stock', code] as const,
   quote: (code: string) => ['quote', code] as const,
+  quotes: (codes: string) => ['quotes', codes] as const,
+  macro: ['macro'] as const,
   candles: (code: string, range: ChartRange) => ['candles', code, range] as const,
   profile: (code: string) => ['profile', code] as const,
   financials: (code: string) => ['financials', code] as const,
@@ -57,7 +59,25 @@ export const useStockSearch = (q: string) =>
 export const useStock = (code: string) =>
   useQuery({ queryKey: qk.stock(code), queryFn: () => api.getStock(code), enabled: code.length > 0 });
 
-export const useQuote = (code: string) => useQuery({ queryKey: qk.quote(code), queryFn: () => api.getQuote(code), refetchInterval: 60_000 });
+/** enabled: 기본 true (기업정보처럼 늘 읽음). mock 화면을 그대로 두는 곳은 false 로 끈다 */
+export const useQuote = (code: string, enabled = true) =>
+  useQuery({ queryKey: qk.quote(code), queryFn: () => api.getQuote(code), refetchInterval: 60_000, enabled: enabled && code.length > 0 });
+
+/** 여러 종목 시세 한 번에 (GET /quotes). 받은 값은 종목별 useQuote 캐시에도 넣어 같은 값을 쓰게 한다 */
+export function useQuotes(codes: string[], enabled = true) {
+  const qc = useQueryClient();
+  const sorted = [...new Set(codes)].sort();
+  return useQuery({
+    queryKey: qk.quotes(sorted.join(',')),
+    queryFn: async () => {
+      const res = await api.getQuotes(sorted);
+      for (const q of res.quotes) qc.setQueryData(qk.quote(q.code), q);
+      return res;
+    },
+    enabled: enabled && sorted.length > 0,
+    staleTime: 60_000,
+  });
+}
 
 export const useCandles = (code: string, range: ChartRange) =>
   useQuery({ queryKey: qk.candles(code, range), queryFn: () => api.getCandles(code, range), placeholderData: keepPreviousData });
@@ -224,7 +244,10 @@ export function useSaveHomeLayout() {
   });
 }
 
-export const useMarketOverview = () => useQuery({ queryKey: qk.market, queryFn: api.getMarketOverview, refetchInterval: 60_000 });
+export const useMarketOverview = (enabled = true) =>
+  useQuery({ queryKey: qk.market, queryFn: api.getMarketOverview, refetchInterval: 60_000, enabled });
+/** 거시 지표 (GET /market/macro). 관측값은 하루 한 번 바뀌어 5분 동안 다시 읽지 않는다 */
+export const useMacro = (enabled = true) => useQuery({ queryKey: qk.macro, queryFn: api.getMacro, staleTime: 5 * 60_000, enabled });
 export const useCalendar = (month: string) =>
   useQuery({ queryKey: qk.calendar(month), queryFn: () => api.listCalendar(month), placeholderData: keepPreviousData });
 
