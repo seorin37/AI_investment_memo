@@ -272,3 +272,107 @@
 | C-11 AI 연결 미리보기 흐름 | 프론트 흐름 변경(저장=켜기, '일반 메모로 두기'=끄기) 또는 엔드포인트(분석만 하는 POST /memos/analyze) | N | 결정 필요 |
 | C-12 추적 문장(quote) 응답 | 엔드포인트 응답 칸(analysis.items[].sentence 등) | N | 담당자 상의 (be/board/service.py `_item_out`) |
 | C-13 KOSDAQ 검색 | 백엔드 쿼리(be/stocks/repository.py `search_kospi`·`get_kospi`) | N | 담당자 상의. 시범 범위가 KOSPI 만이면 그대로 |
+
+### 묶음 3: 기업정보 · 홈 · 업데이트
+
+공통 사실:
+- 기업정보·홈·업데이트 화면도 mock 직접 import. `hooks/queries.ts` `useQuote`·`useCandles`·`useProfile`·`useFinancials`·`useMarketOverview`·`useNews`·`useUpdates` 는 있지만 화면 미사용.
+- `fe/features/home/widgets/MarketWidgets.tsx`(macro 지표·`useCalendar`·`useNews` 사용)는 어느 화면에서도 import 되지 않는다(옛 화면, 미사용).
+- DB: `0001sql prices_daily`(+`0004 trading_value`·`0011 volume`) · `0010 adjusted_prices_daily` · `0011 stock_fundamentals_snapshot`(per·pbr·eps·bps·w52·market_cap·listed_shares) · `0001sql financials`·`financials_fin`(+`0012` 금융 칸, `stocks.fin_type`) · `0016 financials_quarterly`·`financials_fin_quarterly` · `0017 financial_metrics` · `0001sql market_indices`·`economic_indicators`(source ECOS·FRED)·`economic_observations`·`commodity_prices_daily` · `0001sql market_events`(+`0004 user_id`·`kind` market·earnings·user) · `0001sql news_articles`·`news_stocks`.
+
+#### 표 A 데이터
+
+| 화면 | mock 출처(파일·상수/함수) | 필드 | 백엔드(파일·스키마.필드) | 판정 | 메모 |
+|---|---|---|---|---|---|
+| 종목 머리(보드·기업정보) | fe/ui/screens/board/MemoBoard.mock.ts `mockBoardStock` (fe/ui/shared/StockHead.types.ts) | stock_code · name · market · status | be/stocks `MyStockResponse.code` · `.name` · `.market` · `.status` | 이름만 다름(stock_code→code) | |
+| 종목 머리 | 〃 | price · change · change_pct | be/marketdata/service.py `quote` → price · change · change_pct | 그대로 | 원시 종가(prices_daily) |
+| 종목 머리 | 〃 | as_of ('MM.DD') | `quote.as_of` (ISO, 15:30 KST) | 계산 필요(프론트) | 'MM.DD 종가 기준' 표시 |
+| 종목 머리 | 〃 | closes (작은 선) | `quote.spark` (최근 24개 종가) | 이름만 다름(→spark) | mock 은 10~16개 |
+| 종목 머리 | 〃 | logo · logo_bg · logo_ink | — | 계산 필요(프론트) | 묶음 1 C-6 |
+| 기업정보 | fe/ui/screens/company/CompanyInfo.mock.ts `profile()` (models.ts `StockProfile`) | code · name · market · overview · prev_close · open · high · low · volume · trading_value · per · pbr · eps · bps · market_cap · shares_outstanding · week52_low · week52_high | be/marketdata/service.py `profile` 같은 18개 키 | 그대로 | overview 없으면 '기업 개요를 준비 중이에요.' (`DEFAULT_OVERVIEW_TEXT`). market_cap·shares 는 null 가능(프론트 타입은 number) |
+| 기업정보 | companyData.mock.ts `quoteSK`·`quoteKB` | div_yield · foreign_pct | — | 없음 | 화면 props(`StockProfile`)에도 없음 → 화면이 안 쓰면 무시. 확인 필요 |
+| 기업정보 | CompanyInfo.mock.ts `quote_as_of` | 시세 기준 시각 | `quote.as_of` | 이름만 다름(→as_of) | |
+| 기업정보 | CompanyInfo.mock.ts `candleSet` (companyData.mock.ts `candlesSK`·`candlesKB`) | 1W·1M·3M 일봉 | be/marketdata/service.py `candles` (`RANGE_SIZES` 5·22·64) | 그대로 | 기본 수정주가(`adjusted=true`, adjusted_prices_daily), `adjusted=false` 면 원시 |
+| 기업정보 | 〃 | 1Y **주봉** (CompanyInfo.types.ts 주석) | `candles` 1Y = **일봉 250개** | 계산 필요(프론트) | 주 단위로 묶기. 또는 백엔드 interval 추가(담당자 상의) |
+| 기업정보 | CompanyInfo.mock.ts `quarters` (CompanyInfo.types.ts `CompanyQuarter` 12개) | q · label · revenue · op · net · op_margin · net_margin · roe · roa (억원·%) | be/marketdata/service.py `financials.annual` (연간 7개: period · revenue · operating_income · net_income · operating_margin · net_margin · roe, 원 단위) | 없음 | **분기 API 없음**. DB 에는 `0016 financials_quarterly` 있음. roa 는 DB·API 모두 없음. 표 C-14 |
+| 기업정보 | CompanyInfo.mock.ts `health` (`CompanyHealth`) | debt · current · quick · interest · reserve | `financials.stability.debt_ratio` · `.current_ratio` · `.quick_ratio` · `.interest_coverage` · `.reserve_ratio` | 이름만 다름(→*_ratio·interest_coverage) | financial_metrics 최신 기간 |
+| 기업정보 | CompanyInfo.mock.ts `health_as_of` ('YYYY-MM-DD') | 기준 분기 말 | `financials.stability.as_of` ('YYYY-MM') · `.basis` 문장 | 계산 필요(프론트) | |
+| 기업정보 | CompanyInfo.mock.ts `financial` (금융업 여부) | true·false | — (API 응답에 없음. DB `0001sql stocks.sector`='financial' · `0012 stocks.fin_type`) | 없음 | profile 응답에 sector·fin_type 추가(DB 변경 없음) → 표 C-15 |
+| 기업정보(KB금융) | finKB.quarters (revenue·op null, net 만) | 금융업 실적 | `financials.annual` 은 `financials` 표만 읽음 (be/marketdata/repository.py `annual_financials`) | 확인 필요 | `financials_fin`·`financials_fin_quarterly`(순이자이익·수수료이익 등)는 API 가 읽지 않음. 금융업 화면 문구('매출 —')와 맞는지 담당자 상의 |
+| 기업정보 | CompanyInfo.types.ts `preparing` (시범 종목 밖) | 준비 중 | quote·profile 404 (`PriceDataNotFoundError`·`StockNotFoundError`) | 계산 필요(프론트) | 404 → preparing |
+| 홈 | fe/ui/screens/home/Home.mock.ts `mockHomeData.user_name` | user_name | be/auth/service.py `_public_user.name` | 이름만 다름(→name) | |
+| 홈 | `mockHomeData.counts` | holding · watching | GET /stocks `MyStockResponse.status` | 계산 필요(프론트) | |
+| 홈 | `mockHomeData.counts` | ai_memos | be/stats/routes.py `ai_stats.linked_memos` | 이름만 다름(→linked_memos) | |
+| 홈 | `mockHomeData.updates` (`HomeUpdateRow`) | stock_code · name · status · new_count | GET /stocks `MyStockResponse` (code · name · status · unread_updates) | 이름만 다름(→code · unread_updates) | |
+| 홈 | 〃 | latest {kind · title · memo_title · memo_color} | be/updates/service.py `summary` (stock_code · stock_name · new_count · memos[memo_id·title·color·updates[]]) | 계산 필요(프론트) | summary 는 읽지 않은 카드가 있는 종목만. new_count 0 인 종목의 latest(mock 삼성전자)는 GET /updates?stock_code= 로 따로 |
+| 홈 | homeData.mock.ts `HOME_INDICES` (`MarketIndex`) | key kospi·kosdaq·usd | be/marketdata/service.py `INDICES` key KOSPI·KOSDAQ·USDKRW | 이름만 다름(→KOSPI·KOSDAQ·USDKRW) | |
+| 홈 | 〃 | name · value · change · pct | `overview.indices[].label` · `.value` · `.change` · `.change_pct` | 이름만 다름(name→label, pct→change_pct) | sub('KOSPI 지수')는 프론트 고정 문구 |
+| 홈 | 〃 | as_of (지수별 YYYY-MM-DD) | `overview.as_of` (전체 하나, 가장 늦은 날 15:30) | 계산 필요(프론트) | 지수별 기준일 없음 |
+| 홈 | 〃 | closes (250개) | `overview.indices[].series['1Y']` (250) · 1D 2 · 1W 5 · 1M 22 | 이름만 다름(→series) | |
+| 홈 | homeData.mock.ts `HOME_DAYS` | days (closes 날짜) | — (series 는 값만) | 없음 | 차트 날짜 축·'MM.DD 기준'에 필요 → 표 C-16 |
+| 홈 · 지수 자세히 | fe/app/(detail)/market/[key].tsx (`mockHomeData.market`) | 지수 하나 | `overview.indices[]` | 이름만 다름(위와 같음) | |
+| 홈(매크로) | — (화면 없음) | 기준금리·국고채 3년·미 국채 10년·금·WTI | `overview.macro[]` key · label · value · unit · change | 그대로 | 지금 화면 어디에도 매크로 지표가 없다(MarketWidgets 미사용). 프론트 미사용 |
+| 홈 | homeData.mock.ts `HOME_NEWS` (`HomeNewsItem`) | id · title · url | be/marketdata/service.py `headlines` id · title · url | 그대로 | |
+| 홈 | 〃 | src · at | `headlines.source` · `.published_at` | 이름만 다름(→source · published_at) | 추가 값 summary · stock_codes |
+| 홈 | homeData.mock.ts `HOME_NEWS_DAY_TOTAL` | 기준일 뉴스 수 | — (headlines limit 최대 50) | 없음 | 개수 API 없음 → 결정 필요(문구 빼기 or 칸 추가) |
+| 홈 | `mockHomeData.now` | 지금 ('N시간 전') | — | 계산 필요(프론트) | 기기 시각 |
+| 홈 | `mockHomeData.checklists` (종목별 `Checklist`) | 체크리스트 위젯 | be/home/service.py `list_checklist` (`HomeChecklistItem` id · checklist_id · text · done · stock_code · stock_name, 평평한 목록) | 계산 필요(프론트) | 종목별로 묶기 |
+| 홈 | `mockHomeData.stocks` (`HomeStock`) | stock_code · name | GET /stocks | 이름만 다름(→code) | |
+| 홈 | `mockHomeData.widgets` · Home.mock.ts `mockHomeDefaultWidgets` (`HomeWidget` market·updates·news·check) | 켠 위젯·순서 | be/account/schemas.py `HomeLayout.widgets[]` (`WidgetInstance` id·type·span, type 13가지) | 이름만 다름(check→checklist) | 프론트 위젯 4종 ⊂ 백엔드 13종. span 값을 프론트가 안 씀 → 고정값 |
+| 홈(웹 맞춤) | Home.mock.ts `mockCustomBoard` (`CustomItem` id·x·y·w·h) | 맞춤 홈 배치(24px 격자) | `WidgetInstance` 는 span 만(좌표 없음) · `CustomWidget` 'schedule' 은 백엔드 'calendar' | 없음 | x·y·w·h 저장 칸 없음 → 표 C-17. DB `0001sql user_settings.home_layout`(jsonb)이라 모양만 바꾸면 DB 변경 없음 |
+| 홈(웹 맞춤) | Home.mock.ts `mockHomeSchedule` (homeData.mock.ts `HOME_SCHEDULE`) | 증시 일정 | — (`/calendar` 라우트 없음, fe/api/index.ts `MOCK_ONLY`) | 없음 | DB `market_events`(+0004 user_id·kind) 는 있음 → 엔드포인트만. 표 C-18 |
+| 홈(앱 검색) | Home.mock.ts `mockHomeSearch` recent · popular · all | 최근 · 많이 찾는 · 전체 | all ← GET /stocks/search · popular ← 없음(C-2) · recent ← 없음 | 확인 필요 | recent 는 기기 저장(결정 필요) |
+| 홈 | 앱 머리 '알림'(종) · fe/ui/layout/web/WebShell.mock.ts `mockUnreadNotifs` | 종 숫자 | — | 없음 | 알림함 API 없음(묶음 6). 시연은 `MyStockResponse.unread_updates` 합으로 대신할지 결정 필요 |
+| 업데이트 | fe/ui/screens/updates/Updates.mock.ts `mockUpdateItems` (`UpdateItem` = MemoFeedItem + 4칸) | MemoFeedItem 칸 | GET /updates → be/updates/service.py `market_updates` (= `_ai_update` 모양) | 이름만 다름 | 칸별 판정은 묶음 2 메모 상세 `mockFeed` 줄과 같음 |
+| 업데이트 | 〃 | stock_code · memo_id · memo_title | `_ai_update.stock_code` · `.memo_id` · `.memo_title` | 그대로 | |
+| 업데이트 | 〃 | memo_color | — (`_ai_update` 에 없음, CARD_SQL 은 m.color 를 읽지만 응답에 안 넣음) | 없음 | 담당자 상의(be/updates/service.py `_ai_update` 에 color 한 줄) |
+| 업데이트 | Updates.mock.ts `mockUpdateStocks` (`UpdateStock`) | stock_code · name · market · status | GET /stocks | 이름만 다름(→code) | 내 종목 순서(position) |
+| 업데이트 | 〃 | ai_ready | — | 없음 | 묶음 2 와 같음 |
+| 업데이트 | Updates.mock.ts `mockUpdatesNow` | now | — | 계산 필요(프론트) | |
+| 업데이트 | Updates.mock.ts `mockOtherMemos`·`mockOtherVersions`·`mockOtherFeed`·`findMemo`·`feedOf`·`versionsOf` | 다른 종목 메모·소식 | GET /board-items/{id} · GET /memos/{id}/timeline | 계산 필요(프론트) | |
+| 질문 답 | — (화면 없음) | 질문 · 상태 · 답 | be/answers/routes.py `memo_answers` (id · question · asked_at · status pending·answered·no_answer · answer{headline·summary·text·calculations·sources·answered_at·read}) | 그대로 | 프론트에 화면·타입·API 함수 모두 없음(C-7). 타임라인에서는 answer 카드가 news·disclosure 로 섞여 보임 |
+
+#### 표 B 동작
+
+| 화면 | 동작 | 프론트 위치(파일·함수) | 엔드포인트(METHOD 경로·파일) | 판정 | 메모 |
+|---|---|---|---|---|---|
+| 종목 머리 | 시세 | [code].tsx · [code].native.tsx (`mockBoardStock`) | GET /stocks/{code}/quote · be/marketdata/routes.py | 그대로 | `hooks/queries.ts useQuote` 60초마다 다시 읽음 — 종가 하루 1번이라 과함(프론트에서 조절) |
+| 기업정보 | 차트 기간 바꾸기 | fe/ui/screens/company/*/CompanyInfo.tsx (candles 4개 미리 받음) | GET /stocks/{code}/candles?range=1W·1M·3M·1Y&adjusted= | 그대로 | 4번 호출 or 고를 때 호출 |
+| 기업정보 | 투자정보 | 〃 | GET /stocks/{code}/profile | 그대로 | |
+| 기업정보 | 분기 실적 · 건전성 | 〃 | GET /stocks/{code}/financials | 확인 필요 | 건전성은 됨, 분기 표는 C-14 |
+| 기업정보 | 넛지(주간보고서) | `onNudge` | — | 그대로 | 화면 이동만(묶음 4) |
+| 홈 | 시장 지수 | fe/app/(main)/index.tsx · index.native.tsx (`mockHomeData.market`) | GET /market/overview · be/marketdata/routes.py | 그대로 | 실패 시 위젯만 오류(`onRetryMarket`) |
+| 홈 | 지수 자세히(앱) | `onOpenMarket` → fe/app/(detail)/market/[key].tsx | GET /market/overview | 그대로 | days 없음(C-16) |
+| 홈 | 뉴스 | `HOME_NEWS` | GET /news/headlines?limit= · be/marketdata/routes.py | 그대로 | 종목과 연결된 기사만(news_stocks) |
+| 홈 | 뉴스 열기 | `onOpenNews` → `Linking.openURL` | — | 그대로 | |
+| 홈 | 업데이트 위젯 | `mockHomeData.updates` | GET /ai-updates/summary · GET /stocks | 계산 필요(프론트) | |
+| 홈 | 체크리스트 위젯 체크 | `onToggleCheck(code, itemId)` | PATCH /checklists/{id}/items/{item_id} · be/board/routes.py | 그대로 | checklist_id 는 GET /checklist-items 값 |
+| 홈 | 체크리스트 위젯 항목 추가 | `onAddCheck(code, text)` | POST /checklist-items `{stock_code, text}` · be/home/routes.py | 그대로 | 체크리스트가 없으면 서버가 만듦 |
+| 홈 | 위젯 켜기·순서 저장 | `onChangeWidgets` → `setWidgets` | PUT /home/layout · be/account/routes.py | 이름만 다름(check→checklist) | 위젯마다 id·span 필요 |
+| 홈(웹 맞춤) | 위젯 배치 저장 | `onChangeBoard` → `setBoard` | — | 없음 | C-17 |
+| 홈(웹 맞춤) | 달력 일정 · 내 일정 추가 | `schedule` | GET·POST /calendar (없음) | 없음 | C-18 |
+| 홈 | 첫 시작 가이드로 | `onGoStart` → /onboarding/pick | — | 그대로 | |
+| 홈 | 가격 조건 위젯 | — (지금 홈 위젯 4종에 없음) | GET /price-conditions · PATCH /memos/{id}/price-conditions/{cid} · be/home/routes.py | 그대로 | 프론트 화면 없음 → 프론트 미사용 |
+| 홈 | 고정한 메모 위젯 | — (위젯 없음) | GET /memos/pinned · be/board/routes.py | 그대로 | 프론트 미사용 |
+| 홈 | 종(알림) 누르기 | 앱 `router.push('/my-inbox')` | — | 없음 | 묶음 6 알림함 |
+| 업데이트 | 목록 · 종목 고르기 | fe/app/(main)/updates/index*.tsx · [code]*.tsx (`mockUpdateItems`) | GET /updates?stock_code=&limit= · be/updates/routes.py | 그대로 | 최근 30일, 같은 근거는 한 줄로 합침(서버) |
+| 업데이트 | 읽음 표시 | `onMarkRead(ids, true)` | POST /ai-updates/{id}/read | 그대로 | 건마다 1번 |
+| 업데이트 | 안 읽음으로 되돌리기 | `onMarkRead(ids, false)` | — | 없음 | 서버는 읽음만. 결정 필요(기능 빼기 or 엔드포인트) |
+| 업데이트 | 모두 읽음(앱) | `onReadAll` | — (일괄 API 없음) | 계산 필요(프론트) | 건마다 POST. 많으면 표 C-19 |
+| 업데이트 | 근거 자세히 | `onOpenEvidence` → /memo/evidence · 웹 /stocks/{code}?memo=&ev= | GET /memos/{id}/timeline | 계산 필요(프론트) | 묶음 2 와 같음 |
+| 업데이트 | 원문 열기 | `onOpenSource` → `Linking.openURL(u.url)` | — | 그대로 | 가격 카드는 url null |
+| 업데이트 | 넛지(오늘 소식 라디오) | `onNudge` | — | 그대로 | 묶음 4 |
+| 질문 답 | 질문 답 보기 | — | GET /memos/{id}/answers · be/answers/routes.py | 그대로 | 프론트 미사용(C-7·C-20) |
+
+#### 표 C 새로 만들 것
+
+| 항목 | 종류(엔드포인트·DB칸·표·프론트) | DB 변경(Y/N) | 메모 |
+|---|---|---|---|
+| C-14 분기 재무 | 엔드포인트(GET /stocks/{code}/financials 에 quarterly[] 추가 또는 새 경로) | N | DB `0016 financials_quarterly` 있음. roa 는 계산(net_income / 총자산) — 담당자 상의 |
+| C-15 금융업 여부 | 엔드포인트 응답 칸(profile 에 sector·fin_type) | N | DB 칸 있음 |
+| C-16 지수 날짜 | 엔드포인트 응답 칸(overview.indices[].days 또는 series 를 {date,value}) | N | 담당자 상의 |
+| C-17 맞춤 홈 배치 | 엔드포인트 스키마(`WidgetInstance` 에 x·y·w·h, 'schedule' 종류) | N | user_settings.home_layout jsonb 그대로. 담당자 상의 |
+| C-18 달력 | 엔드포인트 GET·POST /calendar | N | market_events 표 있음. 일정 데이터 채우는 작업 별도 |
+| C-19 모두 읽음 | 엔드포인트 POST /ai-updates/read-all (선택) | N | |
+| C-20 질문 답 화면 | 프론트(메모 상세 'AI 업데이트' 탭에 질문·답) | N | 백엔드 있음 |
+| C-21 업데이트 메모 색 | 엔드포인트 응답 칸(`_ai_update.memo_color`) | N | 담당자 상의 |
