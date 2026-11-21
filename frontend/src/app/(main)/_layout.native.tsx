@@ -10,6 +10,7 @@ import { AppMiniPlayer } from '@/ui/screens/studio/app/MiniPlayer';
 import { size } from '@/ui/theme';
 import { useUI } from '@/store/ui';
 import { BottomTabBar } from '@/ui/layout/app/BottomTabBar';
+import { AppSnackbar } from '@/ui/shared/Snackbar';
 import { mockTabBadges } from '@/ui/layout/app/BottomTabBar.mock';
 import type { AppTab } from '@/ui/layout/app/BottomTabBar.types';
 
@@ -52,9 +53,21 @@ export default function MainTabsLayout() {
         <Tabs.Screen name="report" options={{ href: null }} />
       </Tabs>
       <Mini hidden={hidden} />
+      <TabToast hidden={hidden} />
       <CoachDriver />
     </View>
   );
+}
+
+/**
+ * 공통 안내 (store/ui showToast) — 탭 위 16 자리 새 UI 스낵바.
+ * 상세 화면((detail))에서 안내를 띄우고 뒤로 오면(예: 체크리스트 완료) 상세 쪽 안내가 같이 사라지므로 탭 쪽에서도 보여 줌.
+ */
+function TabToast({ hidden }: { hidden: boolean }) {
+  const toast = useUI((s) => s.toast);
+  const insets = useSafeAreaInsets();
+  const bottom = (hidden ? 0 : 1 + 65 + Math.max(size.tabBarPadBottom, insets.bottom)) + 16;
+  return <AppSnackbar visible={!!toast} message={toast?.message ?? ''} style={{ position: 'absolute', left: 12, right: 12, bottom }} />;
 }
 
 /**

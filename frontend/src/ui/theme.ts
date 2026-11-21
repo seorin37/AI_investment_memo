@@ -205,6 +205,16 @@ export const paperDarkPre: Record<MemoColor, { bg: string; accent: string; label
 };
 export const checklistColor = { tape: '#FF7A1A', paper: '#FFEADB', ink: '#C2410C' } as const;
 
+/**
+ * 체크리스트 페이지 · 카드 색 (원본 app/memo.html .ckp · .item.ck).
+ * dark = 원본 html.dark .dev 값 (--ckbg #E2B199 · --ckc #CE4900 · --ckdk #973300 · 상자 #4E240D · × #60361D) —
+ * 화면이 통째로 반전되므로 '반전 뒤에 원본 다크 색으로 보이도록' 넣는 값 (메모지 paperDarkPre 와 같은 방식).
+ */
+export const checklistTone = {
+  light: { tape: '#FF7A1A', paper: '#FFEADB', ink: '#C2410C', box: '#E7B08C', boxBg: '#FFFFFF', cardBox: '#E9B48F', cardBoxBg: 'rgba(255,255,255,0.7)', del: '#C9A792' },
+  dark: { tape: '#CE4900', paper: '#E2B199', ink: '#973300', box: '#4E240D', boxBg: 'transparent', cardBox: '#4E240D', cardBoxBg: 'transparent', del: '#60361D' },
+} as const;
+
 /** 소식 종류 태그 (웹 kit.tsx KindTag) */
 export const webKindTag = {
   공시: { bg: tw.red50, ink: tw.red600 },

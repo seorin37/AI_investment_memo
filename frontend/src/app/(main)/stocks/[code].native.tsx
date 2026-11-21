@@ -47,7 +47,7 @@ export default function StockDetail() {
       onOpenMemo={(id, t) => router.push({ pathname: '/memo/[id]', params: { id, tab: t } })}
       onOpenChecklist={() => router.push({ pathname: '/checklist/[id]', params: { id: checklist?.id ?? 'new' } })}
       onNewMemo={(first) => router.push({ pathname: '/memo/new', params: { code: stock.stock_code, name: stock.name, first_line: first ?? '' } })}
-      onNewChecklist={() => router.push({ pathname: '/checklist/[id]', params: { id: 'new' } })}
+      onNewChecklist={() => router.push({ pathname: '/checklist/[id]', params: { id: 'new', code: stock.stock_code, name: stock.name } })}
       onToggleChecklistItem={(iid) => setChecklist((c) => (c ? { ...c, items: c.items.map((i) => (i.id === iid ? { ...i, done: !i.done } : i)) } : c))}
       onPin={(ids, pinned) => setMemos((all) => all.map((m) => (ids.includes(m.id) ? { ...m, pinned } : m)))}
       onTogglePin={(pinned) => setChecklist((c) => (c ? { ...c, pinned } : c))}

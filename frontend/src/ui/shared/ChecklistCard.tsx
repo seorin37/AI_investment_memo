@@ -6,6 +6,7 @@ import type { Checklist, ChecklistItem } from '@/types/models';
 import { AppPin, CheckMark, CkiMark } from '@/ui/icons/BoardGlyphs';
 import { appColor, checklistColor, fpx, ft } from '@/ui/theme';
 import { DotBurst } from '@/components/motion/Celebrate';
+import { useChecklistTone } from './Dark';
 import { SelCircle } from './MemoCard';
 import { AppTape } from './MemoPaper';
 import { ListCheck } from './MemoRow';
@@ -59,9 +60,11 @@ export function AppChecklistCard({ checklist, width, height, selecting, selected
   };
   const d = checklist.items.filter((x) => x.done).length;
   const ord = useDelayedOrder(checklist.items);
+  /* 다크면 원본 다크 체크리스트 색 (반전 전 값) */
+  const tone = useChecklistTone();
   return (
     <View ref={outer} collapsable={false} style={{ width, height }}>
-      <Pressable onPress={onPress} onLongPress={onLongPress} delayLongPress={480} accessibilityRole="button" accessibilityLabel={checklist.title || '체크리스트'} style={[st.face, { width, height }, selected && st.faceSel]}>
+      <Pressable onPress={onPress} onLongPress={onLongPress} delayLongPress={480} accessibilityRole="button" accessibilityLabel={checklist.title || '체크리스트'} style={[st.face, { width, height, backgroundColor: tone.paper }, selected && st.faceSel]}>
         <View style={st.ckh}>
           <View style={st.cki}>
             <CkiMark size={14} />
@@ -69,7 +72,7 @@ export function AppChecklistCard({ checklist, width, height, selecting, selected
           <Text style={st.ckhT} numberOfLines={1}>
             {checklist.title || '체크리스트'}
           </Text>
-          <Text style={st.ckn}>
+          <Text style={[st.ckn, { color: tone.ink }]}>
             {d}/{L}
           </Text>
         </View>
@@ -77,7 +80,7 @@ export function AppChecklistCard({ checklist, width, height, selecting, selected
           {L ? (
             ord.slice(0, 3).map((x) => (
               <Pressable key={x.id} onPress={() => (selecting ? onPress() : toggle(x.id))} onLongPress={onLongPress} delayLongPress={480} accessibilityRole="checkbox" accessibilityState={{ checked: x.done }} accessibilityLabel={x.text} style={({ pressed }) => [st.cr, pressed && { backgroundColor: 'rgba(255,122,26,0.12)' }]}>
-                <View style={[st.cc, x.done ? st.ccOn : st.ccOff]}>
+                <View style={[st.cc, x.done ? [st.ccOn, { backgroundColor: tone.tape }] : [st.ccOff, { borderColor: tone.cardBox, backgroundColor: tone.cardBoxBg }]]}>
                   {x.done ? <CheckMark kind="cki" size={11} stroke={1.9} /> : null}
                   <DotBurst fire={pop?.id === x.id ? pop.n : 0} size={17} />
                 </View>
@@ -93,7 +96,7 @@ export function AppChecklistCard({ checklist, width, height, selecting, selected
         </View>
       </Pressable>
       {/* 원본 renderCheck: 고정하면 귤색 테이프 (메모와 같은 자리) */}
-      {checklist.pinned ? <AppTape color={checklistColor.tape} /> : null}
+      {checklist.pinned ? <AppTape color={tone.tape} /> : null}
       <SelCircle visible={selecting} on={selected} style={st.gchk} />
     </View>
   );

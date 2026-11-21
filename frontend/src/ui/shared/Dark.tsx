@@ -2,7 +2,7 @@ import React from 'react';
 import { Platform, View, type StyleProp, type ViewProps, type ViewStyle } from 'react-native';
 import { useTheme } from '@/store/theme';
 import type { MemoColor } from '@/types/models';
-import { paper, paperDarkPre } from '@/ui/theme';
+import { checklistTone, paper, paperDarkPre } from '@/ui/theme';
 
 /*
  * 다크 모드 = 원본과 같은 반전 방식 (웹 theme.css · 앱 x/app.css)
@@ -47,4 +47,9 @@ export function Keep({ children, style, ...rest }: ViewProps & { children: React
  */
 export function usePaper(): Record<MemoColor, { bg: string; accent: string; label: string }> {
   return useDark() ? paperDarkPre : paper;
+}
+
+/** 체크리스트 색: 다크면 원본 다크 체크리스트 색이 반전 뒤에 보이도록 미리 계산한 값 */
+export function useChecklistTone() {
+  return useDark() ? checklistTone.dark : checklistTone.light;
 }
