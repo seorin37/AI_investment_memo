@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useCoach } from '@/store/coach';
 import { Linking } from 'react-native';
-import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import type { Checklist } from '@/types/models';
 import { mockCustomBoard, mockHomeData, mockHomeSchedule } from '@/ui/screens/home/Home.mock';
 import type { CustomItem, HomeWidget } from '@/ui/screens/home/Home.types';
@@ -31,12 +31,13 @@ export default function HomeScreen() {
   const saved = onboarding === 'first_saved';
   /* 종목 고르기를 마치고 처음 홈에 오면 0.6초 뒤 사용법 안내 (원본 App.tsx coachPending) — 처음 한 번만 */
   const startCoach = useCoach((s) => s.startFirst);
-  useEffect(() => {
+  /* 홈이 보이는 동안에만 — 종목을 골라 첫 메모로 넘어가면 타이머를 끊고, 저장 후 돌아오면 시작 */
+  useFocusEffect(useCallback(() => {
     /* 첫 홈 안내 창 · 종목 고르기 창이 떠 있는 동안은 기다림 (창이 안내보다 위에 그려져서) */
     if (!onboarding || guideOpen || pickerOpen) return;
     const t = setTimeout(startCoach, 600);
     return () => clearTimeout(t);
-  }, [onboarding, guideOpen, pickerOpen, startCoach]);
+  }, [onboarding, guideOpen, pickerOpen, startCoach]));
   const marketOk = !(__DEV__ && fail === '1') || retried;
   const patchCl = (code: string, f: (c: Checklist) => Checklist) => setChecklists((all) => (all[code] ? { ...all, [code]: f(all[code]) } : all));
   const firstStart = firstActive ? (

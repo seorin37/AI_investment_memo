@@ -43,7 +43,7 @@ export function BottomTabBar({ current, onPress, badges, hidden = false }: Botto
           const ink = on ? appColor.deepPurple : appColor.tabInk;
           return (
             <Pressable key={t.key} style={st.tab} onPress={() => onPress(t.key)} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={t.label}>
-              <View style={[st.ic, on && st.icOn]}>
+              <View collapsable={false} style={[st.ic, on && st.icOn]}>
                 <AppIcon name={t.icon} color={ink} />
                 <CountBadge count={badges?.[t.key] ?? 0} style={st.badge} />
               </View>
@@ -61,6 +61,7 @@ export function BottomTabBar({ current, onPress, badges, hidden = false }: Botto
 const st = StyleSheet.create({
   bar: { flexDirection: 'row', backgroundColor: appColor.surface, borderTopWidth: 1, borderTopColor: appColor.line },
   tab: { flex: 1, height: 65, alignItems: 'center', justifyContent: 'center', gap: 3 },
+  /* 아이콘 칸은 collapsable={false} — 꺼진 탭(배경 없음)이 합쳐졌다가 켜지며 다시 생길 때 안드로이드(New Arch)에서 둥근 모서리가 빠져 네모로 그려짐 */
   ic: { width: 50, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
   icOn: { backgroundColor: appColor.accentSoft },
   badge: { position: 'absolute', top: -4, right: 4 },
