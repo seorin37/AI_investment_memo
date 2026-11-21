@@ -204,6 +204,12 @@ class ProfileFinancialsOverviewTest(unittest.TestCase):
         self.assertEqual(body["week52_high"], 1102)
         self.assertIsNone(body["market_cap"])
 
+    def test_profile_kis_zero_is_missing(self):
+        """KIS가 0을 주는 종목(리츠 등)은 PER·PBR·EPS·BPS null."""
+        self.repo.snapshots["105560"] = {"per": Decimal(0), "pbr": Decimal(0), "eps": Decimal(0), "bps": Decimal(0)}
+        body = self.client.get("/api/v1/stocks/105560/profile").json()
+        self.assertEqual((body["per"], body["pbr"], body["eps"], body["bps"]), (None,) * 4)
+
     def test_profile_unknown_stock_is_404(self):
         self.assertEqual(self.client.get("/api/v1/stocks/999999/profile").status_code, 404)
 

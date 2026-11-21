@@ -62,7 +62,8 @@ export function WebCompanyInfo(p: CompanyInfoProps) {
                   <Text style={st.h20}>기업 개요</Text>
                   <Text style={st.ovT}>{p.profile.overview}</Text>
                 </View>
-                <View style={st.g24}>
+                {/* 도움말이 다음 카드에 가려지지 않게 감싼 줄째 위로 (2026-11-21) */}
+                <View style={[st.g24, { zIndex: open && HELP_SMALL[open] ? 30 : 0 }]}>
                   <PriceChart p={p} k={k} />
                   <Quote p={p} ctl={ctl} />
                 </View>
@@ -180,7 +181,7 @@ function PriceChart({ p, k }: { p: CompanyInfoProps; k: number }) {
             style={{ left: 0, top: 0 }}
           />
           {labels.map(([v, y]) => (
-            <Text key={v} pointerEvents="none" style={[st.lbl11, { position: 'absolute', top: y, left: 596 * PX, width: 37 }]}>
+            <Text key={v} pointerEvents="none" numberOfLines={1} style={[st.lbl11, { position: 'absolute', top: y, left: 596 * PX, width: 62 }]}>
               {won(v)}
             </Text>
           ))}
@@ -195,8 +196,8 @@ function PriceChart({ p, k }: { p: CompanyInfoProps; k: number }) {
               {d}
             </Text>
           ))}
-          <View pointerEvents="none" style={[st.tag, { top: cur.y - 12.8, left: 589 * PX, width: 57 }]}>
-            <Text style={st.tagT}>{price}</Text>
+          <View pointerEvents="none" style={[st.tag, { top: cur.y - 12.8, left: 589 * PX, width: 70 }]}>
+            <Text style={st.tagT} numberOfLines={1}>{price}</Text>
           </View>
           <View pointerEvents="none" style={[st.tag, { top: 247, left: hx * PX - 34, width: 68 }]}>
             <Text style={st.tagD}>{cs[cur.i].date}</Text>
@@ -210,9 +211,9 @@ function PriceChart({ p, k }: { p: CompanyInfoProps; k: number }) {
 /* ---------- 시세정보 · 투자정보 (원본 Quote: 카드 230 · 왼쪽 6칸 · 52주 막대 · 오른쪽 6칸 + ?) ---------- */
 const HELP_SMALL: Record<string, [string, string]> = {
   PER: ['PER · 주가수익비율', '이익에 비해 주가가 얼마나 높은지 보여줘요.\n계산: 주가 ÷ 주당순이익(EPS)'],
-  EPS: ['EPS · 주당순이익', '회사가 벌어들인 순이익 중 보통주 한 주에 해당하는 금액이에요.\n계산: 최근 4개 분기 순이익 합 ÷ 주식 수'],
+  EPS: ['EPS · 주당순이익', '회사가 벌어들인 순이익 중 보통주 한 주에 해당하는 금액이에요.\n직전 사업연도(사업보고서) 기준이에요. 한국투자증권 제공 값'],
   PBR: ['PBR · 주가순자산비율', '순자산에 비해 주가가 얼마나 높은지 보여줘요.\n계산: 주가 ÷ 주당순자산(BPS)'],
-  BPS: ['BPS · 주당순자산', '자산에서 부채를 뺀 순자산 중 보통주 한 주에 해당하는 금액이에요.\n계산: 최근 분기 자본총계 ÷ 주식 수'],
+  BPS: ['BPS · 주당순자산', '자산에서 부채를 뺀 순자산 중 보통주 한 주에 해당하는 금액이에요.\n직전 사업연도(사업보고서) 말 기준이에요. 한국투자증권 제공 값'],
   시가총액: ['시가총액', '주식시장에서 평가하는 기업의 전체 주식 가치예요.\n계산: 현재 주가 × 상장주식 수'],
   상장주수: ['상장주수', '거래소에 상장된 주식의 총수예요. 실제 시장에서 거래 가능한 유통주식 수와는 다를 수 있어요.'],
 };
@@ -267,13 +268,13 @@ function Quote({ p, ctl }: { p: CompanyInfoProps; ctl: TipCtl }) {
           </View>
         ))}
       </View>
-      <Text style={[st.w52, { left: 343.82 * QX, top: 40, textAlign: 'right' }]}>52주 최저</Text>
-      <Text style={[st.w52, st.w52v, { left: 339.33 * QX, top: 55, width: 51, textAlign: 'right' }]}>{won(q.week52_low)}</Text>
-      <Text style={[st.w52, { left: 627.11 * QX, top: 40 }]}>52주 최고</Text>
-      <Text style={[st.w52, st.w52v, { left: 627.11 * QX, top: 55, width: 51 }]}>{won(q.week52_high)}</Text>
+      <Text numberOfLines={1} style={[st.w52, { left: 343.82 * QX + 46 - 72, top: 40, width: 72, textAlign: 'right' }]}>52주 최저</Text>
+      <Text numberOfLines={1} style={[st.w52, st.w52v, { left: 339.33 * QX + 51 - 72, top: 55, width: 72, textAlign: 'right' }]}>{won(q.week52_low)}</Text>
+      <Text numberOfLines={1} style={[st.w52, { left: 627.11 * QX, top: 40, width: 72 }]}>52주 최고</Text>
+      <Text numberOfLines={1} style={[st.w52, st.w52v, { left: 627.11 * QX, top: 55, width: 72 }]}>{won(q.week52_high)}</Text>
       <View style={{ position: 'absolute', top: 54, height: 6, borderRadius: 3, backgroundColor: '#D1D6DE', left: 396.33 * QX, width: 220 * QX + (QX - 1) * 6 }} />
       <View style={[st.pTag, { left: 396.33 * QX + Math.max(0, Math.min(1.74, pos / 0.254)) * 22.36 * QX }]}>
-        <Text style={st.tagT}>{won(price)}</Text>
+        <Text style={st.tagT} numberOfLines={1}>{won(price)}</Text>
       </View>
       <View style={{ position: 'absolute', top: 94, left: 307.56 * QX, width: 358.44 * QX + (QX - 1) * 24, gap: 3 }}>
         {[0, 2, 4].map((i) => (
@@ -333,7 +334,7 @@ function Financials({ all, ctl, k: scale }: { all: CompanyQuarter[]; ctl: TipCtl
   const t = useProgress(true, 1000, k);
   return (
     <View style={[st.card, st.pad24, { zIndex: ctl.open === 'fin' ? 30 : 0 }]}>
-      <View style={st.finHead}>
+      <View style={[st.finHead, ctl.open === 'fin' && { zIndex: 30 }]}>
         <View style={st.finTitle}>
           <Text style={st.h20}>실적</Text>
           <HelpBtn id="fin" ctl={ctl} size={18} label="실적" />

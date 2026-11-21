@@ -79,6 +79,11 @@ def _eok(value: Any) -> int | None:
     return None if value is None else int(round(float(value) / 1e8))
 
 
+def _kis(value: Any) -> Any:
+    """KIS 투자지표는 값이 없을 때 0을 준다(리츠·인프라펀드 등) → None."""
+    return None if value in (None, 0) else value
+
+
 def _iso(value: Any) -> Any:
     return value.isoformat() if hasattr(value, "isoformat") else value
 
@@ -213,10 +218,11 @@ class MarketDataService:
             "low": num(last["low"]),
             "volume": int(last["volume"]),
             "trading_value": num(Decimal(trading_value).quantize(Decimal(1))),
-            "per": _round(snap.get("per"), 2),
-            "pbr": _round(snap.get("pbr"), 2),
-            "eps": num(snap.get("eps")),
-            "bps": num(snap.get("bps")),
+            # PER·PBR·EPS·BPS는 KIS 값 그대로(직전 사업연도 기준, 2026-11-21 팀 결정). KIS는 값이 없으면 0을 줘서 null로
+            "per": _round(_kis(snap.get("per")), 2),
+            "pbr": _round(_kis(snap.get("pbr")), 2),
+            "eps": num(_kis(snap.get("eps"))),
+            "bps": num(_kis(snap.get("bps"))),
             "market_cap": num(Decimal(market_cap).quantize(Decimal(1))) if market_cap is not None else None,
             "shares_outstanding": int(shares) if shares else None,
             "week52_low": num(week52_low),
