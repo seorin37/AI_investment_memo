@@ -55,6 +55,7 @@ export const realApi: Api = {
   listCalendar: (month) => http.get('/calendar', { month }),
   createCalendarEvent: (input) => http.post('/calendar', input),
   listNews: () => http.get('/news/headlines'),
+  getHomeNews: (limit) => http.get('/news/home', { limit }),
   listPinnedMemos: () => http.get('/memos/pinned'),
   listHomeChecklist: () => http.get('/checklist-items'),
   setChecklistItem: (checklistId, itemId, done) =>

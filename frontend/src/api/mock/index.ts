@@ -23,6 +23,7 @@ import type {
 import type { Api, DeepPartial, PinnedMemo } from '../types';
 import * as seed from './seed';
 import { mockFinancials } from './financials';
+import { HOME_NEWS, HOME_NEWS_DAY_TOTAL } from '@/ui/screens/home/homeData.mock';
 
 const clone = <T>(v: T): T => (v === undefined ? v : JSON.parse(JSON.stringify(v)));
 const wait = <T>(v: T, ms = env.mockLatency): Promise<T> => new Promise((r) => setTimeout(() => r(clone(v)), ms));
@@ -362,6 +363,8 @@ export const mockApi: Api = {
     return wait(e);
   },
   listNews: async () => wait(seed.news),
+  getHomeNews: async (limit = 9) =>
+    wait({ day: HOME_NEWS[0]?.at.slice(0, 10) ?? null, day_total: HOME_NEWS_DAY_TOTAL, items: HOME_NEWS.slice(0, limit) }),
   listPinnedMemos: async () =>
     wait(
       memosOf()

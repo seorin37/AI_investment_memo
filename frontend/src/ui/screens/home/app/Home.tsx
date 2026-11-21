@@ -10,10 +10,9 @@ import { NudgePill } from '@/ui/shared/NudgePill';
 import { Sheet } from '@/ui/shared/Sheet';
 import { AppSnackbar } from '@/ui/shared/Snackbar';
 import { appColor, curve, ft } from '@/ui/theme';
-import type { AppHomeProps, HomeNewsItem, HomeWidget } from '../Home.types';
+import type { AppHomeProps, HomeWidget } from '../Home.types';
 import { HomeSearch } from './HomeSearch';
 import { CheckWidget, HeroCard, MarketFail, MarketWidget, NewsWidget, UpdatesWidget, WidgetShell } from './HomeWidgets';
-import { NewsBrowser } from './NewsBrowser';
 import { useNudge } from '@/store/nudge';
 
 const ALL: HomeWidget[] = ['market', 'updates', 'news', 'check'];
@@ -50,7 +49,6 @@ export function AppHome(p: AppHomeProps) {
   const setNudge = (v: boolean) => {
     if (!v) nudgeS.hide();
   };
-  const [browser, setBrowser] = useState<HomeNewsItem | null>(null);
   const [editV] = useState(() => new Animated.Value(0));
   const [tys] = useState<Shift>(() => ({ market: new Animated.Value(0), updates: new Animated.Value(0), news: new Animated.Value(0), check: new Animated.Value(0) }));
   const order = p.widgets;
@@ -200,7 +198,7 @@ export function AppHome(p: AppHomeProps) {
   const body = (id: HomeWidget) => {
     if (id === 'market') return p.market ? <MarketWidget indices={p.market} ready={ready} draw={ready} onOpen={(key) => !editing && p.onOpenMarket(key)} /> : <MarketFail onRetry={p.onRetryMarket} />;
     if (id === 'updates') return <UpdatesWidget rows={p.updates} ready={ready} editing={editing} onAll={p.onOpenUpdates} onRow={p.onOpenStockUpdates} />;
-    if (id === 'news') return <NewsWidget items={p.news} day={p.days[p.days.length - 1] ?? ''} total={p.news_day_total} now={p.now} ready={ready} editing={editing} onOpen={setBrowser} />;
+    if (id === 'news') return <NewsWidget items={p.news} day={p.news_day || (p.days[p.days.length - 1] ?? '')} total={p.news_day_total} now={p.now} ready={ready} editing={editing} onOpen={p.onOpenNews} />;
     const cl = checkCode ? (p.checklists[checkCode] ?? null) : null;
     return <CheckWidget cl={cl} editing={editing} onToggle={(iid) => checkCode && p.onToggleCheck(checkCode, iid)} onAdd={(t) => checkCode && p.onAddCheck(checkCode, t)} />;
   };
@@ -327,7 +325,6 @@ export function AppHome(p: AppHomeProps) {
           setFresh({ ids: DEFAULT_W, key: nextKey(), flash: false });
         }}
       />
-      <NewsBrowser item={browser} onClose={() => setBrowser(null)} onOpenExternal={() => browser && p.onOpenNews(browser)} />
     </View>
   );
 }

@@ -128,7 +128,7 @@ function TemplateHome(p: WebHomeProps) {
     ) : id === 'updates' ? (
       <UpdatesWidget rows={p.updates} w={w === undefined ? '100%' : w} onAll={p.onOpenUpdates} onRow={p.onOpenStockUpdates} />
     ) : id === 'news' ? (
-      <NewsWidget items={p.news} day={day} total={p.news_day_total} now={p.now} onOpen={p.onOpenNews} />
+      <NewsWidget items={p.news} day={p.news_day || day} total={p.news_day_total} now={p.now} onOpen={p.onOpenNews} />
     ) : (
       <CheckWidget stocks={p.stocks} checklists={p.checklists} onToggle={p.onToggleCheck} onAdd={p.onAddCheck} onEdit={p.onOpenStock} />
     );

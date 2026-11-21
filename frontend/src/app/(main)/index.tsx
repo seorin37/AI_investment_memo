@@ -6,6 +6,7 @@ import type { Checklist } from '@/types/models';
 import { mockCustomBoard, mockHomeData, mockHomeSchedule } from '@/ui/screens/home/Home.mock';
 import type { CustomItem, HomeWidget } from '@/ui/screens/home/Home.types';
 import { WebHome } from '@/ui/screens/home/web/Home';
+import { useHomeNewsProps } from '@/ui/screens/home/useHomeNews';
 import { mockOnboardingStocks } from '@/ui/screens/onboarding/Onboarding.mock';
 import { WebFirstHome } from '@/ui/screens/onboarding/web/FirstHome';
 
@@ -20,6 +21,8 @@ export default function HomeScreen() {
   const [board, setBoard] = useState<CustomItem[]>(mockCustomBoard);
   const [checklists, setChecklists] = useState<Record<string, Checklist>>(mockHomeData.checklists);
   const [retried, setRetried] = useState(false);
+  /* 뉴스 위젯만 실제 API (GET /news/home). 나머지 홈 데이터는 아직 mock */
+  const news = useHomeNewsProps();
   const [firstActive, setFirstActive] = useState(!!onboarding);
   const [guideOpen, setGuideOpen] = useState(onboarding === 'welcome');
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -61,6 +64,7 @@ export default function HomeScreen() {
       firstStart={firstStart}
       widgets={widgets}
       checklists={checklists}
+      {...news}
       market={marketOk ? mockHomeData.market : null}
       schedule={mockHomeSchedule}
       board={board}
