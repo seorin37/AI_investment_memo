@@ -18,6 +18,8 @@ export default function DetailLayout() {
       <Stack screenOptions={PUSH_SCREEN_OPTIONS}>
         <Stack.Screen name="memo/link" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="memo/new" options={{ animation: 'slide_from_bottom' }} />
+        {/* 원본 openCheck: 보드에서 열면 밀려 들어오고, + 버튼으로 새로 만들면 아래에서 올라옴 */}
+        <Stack.Screen name="checklist/[id]" options={({ route }) => ((route.params as { id?: string } | undefined)?.id === 'new' ? { animation: 'slide_from_bottom' } : {})} />
       </Stack>
       <MobileToast bottom={32} />
     </View>

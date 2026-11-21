@@ -1,60 +1,48 @@
 import React, { useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { MobileScreen, useMockNotice } from '@/components/layout/MobileScreen';
-import { TopBar } from '@/components/layout/TopBar';
-import { MemoDetail } from '@/features/board/MemoDetail';
-import { mockMemoDetailProps } from '@/features/board/MemoDetail.mock';
-import type { MemoDetailTab } from '@/features/board/MemoDetail.types';
-import { useBackClose } from '@/hooks/useBackClose';
-import { joinMemo, splitMemo } from '@/lib/memoText';
-import { useUI } from '@/store/ui';
+import { useMockNotice } from '@/components/layout/MobileScreen';
+import type { Memo, MemoVersion } from '@/types/models';
+import { AppMemoDetail } from '@/ui/screens/memo/app/MemoDetail';
+import { mockDetailStockName, mockLastChecked, mockToday, mockTrackItems } from '@/ui/screens/memo/MemoDetail.mock';
+import { feedOf, findMemo, mockUpdateStocks, versionsOf } from '@/ui/screens/updates/Updates.mock';
 
-/** 메모 상세 (메모 · AI 업데이트 탭). 편집은 한 칸 글 → 저장할 때 웹과 같은 규칙으로 제목 · 본문 (lib/memoText). mock 단계 */
+/**
+ * 앱 메모 상세 = UI v2 (ui/screens/memo/app). mock 단계: 보드 예시 메모(m1~m5)를 id 로 찾아 보여 주고, 바꾼 내용은 이 화면 안에서만.
+ * AI 연결 켜기 → AI 연결 창 (/memo/link) · 근거 상세 · 원문 · 주간보고서 넛지는 다음 묶음.
+ */
 export default function MemoDetailScreen() {
-  const { tab: tabParam } = useLocalSearchParams<{ id: string; tab?: string }>();
+  const { id, tab, t } = useLocalSearchParams<{ id: string; tab?: string; t?: string }>();
   const router = useRouter();
   const notice = useMockNotice();
-  const toast = useUI((s) => s.showToast);
-  const [tab, setTab] = useState<MemoDetailTab>(tabParam === 'ai' ? 'ai' : 'memo');
-  const [memo, setMemo] = useState(mockMemoDetailProps.memo);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState('');
-  /* 안드로이드 뒤로가기: 편집 중이면 편집 취소가 먼저 */
-  useBackClose(() => {
-    if (editing) { setEditing(false); return true; }
-    return false;
-  });
-  const save = () => {
-    const { title, body } = splitMemo(draft);
-    setMemo((m) => ({ ...m, title, body }));
-    setEditing(false);
-    toast(`저장했어요 (예시) · 제목 "${title}"`);
-  };
+  const [memo, setMemo] = useState<Memo>(() => findMemo(id));
+  const [versions, setVersions] = useState<MemoVersion[]>(() => versionsOf(memo.id));
+  const [feed, setFeed] = useState(() => feedOf(memo.id));
   return (
-    <MobileScreen
-      bar={
-        <TopBar
-          left="back"
-          title="메모 보드"
-          onBack={() => (editing ? setEditing(false) : router.back())}
-          actions={editing ? [{ kind: 'text', label: '완료', emphasis: true, onPress: save }] : []}
-        />
-      }
-    >
-      <MemoDetail
-        {...mockMemoDetailProps}
-        memo={memo}
-        tab={tab}
-        onChangeTab={setTab}
-        editing={editing}
-        draft={draft}
-        onStartEdit={() => { setDraft(joinMemo(memo.title, memo.body)); setEditing(true); }}
-        onChangeDraft={setDraft}
-        onOpenEvidence={() => notice('근거 보기')}
-        onOpenOriginal={() => notice('원문 열기')}
-        onToggleAi={() => (memo.ai_linked ? notice('AI 연결 끄기') : router.push({ pathname: '/memo/link', params: { title: memo.title, body: memo.body } }))}
-        onOpenHistory={() => notice('메모 이력')}
-      />
-    </MobileScreen>
+    <AppMemoDetail
+      memo={memo}
+      stockName={mockUpdateStocks.find((s) => s.stock_code === memo.stock_code)?.name ?? mockDetailStockName}
+      versions={versions}
+      feed={feed}
+      trackItems={mockTrackItems[memo.id] ?? []}
+      lastChecked={mockLastChecked}
+      initialTab={tab === 'ai' ? 'ai' : 'memo'}
+      tabRequest={t ? { tab: tab === 'ai' ? 'ai' : 'memo', key: t } : undefined}
+      onBack={() => router.back()}
+      onSave={({ title, body }) => {
+        setVersions((v) => [{ version: (v[0]?.version ?? 0) + 1, title, body, saved_at: mockToday }, ...v]);
+        setMemo((m) => ({ ...m, title, body, updated_at: mockToday }));
+      }}
+      onChangeColor={(color) => setMemo((m) => ({ ...m, color }))}
+      onTogglePin={(pinned) => setMemo((m) => ({ ...m, pinned }))}
+      onDelete={() => router.back()}
+      onCopy={() => {}}
+      onConnectAi={() => router.push({ pathname: '/memo/link', params: { id: memo.id } })}
+      onDisconnectAi={() => setMemo((m) => ({ ...m, ai_linked: false }))}
+      onSeenUpdates={() => setTimeout(() => setFeed((f) => f.map((x) => ({ ...x, unread: false }))), 4000)}
+      onOpenSource={() => notice('원문 열기')}
+      onOpenEvidence={(f) => router.push({ pathname: '/memo/evidence', params: { id: memo.id, fid: f.id } })}
+      onNudge={() => notice('주간보고서')}
+      onSpentAction={(a) => notice(a === 'credit' ? '크레딧 구매' : '플랜 변경')}
+    />
   );
 }
