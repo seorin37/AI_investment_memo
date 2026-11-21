@@ -558,8 +558,22 @@ def analysis_ratios(row: dict) -> dict[str, Decimal | None]:
     }
 
 
-def verify_raw_daily_against_krx(raw_daily: dict, krx_row: dict) -> None:
-    """Require an exact KRX regular-session OHLCV match when requested."""
+ZERO_VOLUME_OHL_DIFFERENCE = "zero_volume_ohl_representation_difference"
+ZERO_VOLUME_OHL_EXCEPTION_SYMBOLS = frozenset({"002410", "069460", "074610"})
+
+
+def verify_raw_daily_against_krx(
+    raw_daily: dict,
+    krx_row: dict,
+    *,
+    adjusted_daily: dict | None = None,
+) -> str | None:
+    """Require exact KRX OHLCV, except one fully proven no-trade representation.
+
+    The exception is deliberately unavailable unless both KIS raw and adjusted
+    rows are supplied and all three sources agree on date, symbol, close and
+    zero volume.  No value is rewritten.
+    """
 
     field_map = {
         "open": "TDD_OPNPRC",
@@ -567,6 +581,7 @@ def verify_raw_daily_against_krx(raw_daily: dict, krx_row: dict) -> None:
         "low": "TDD_LWPRC",
         "close": "TDD_CLSPRC",
     }
+    official_prices: dict[str, Decimal] = {}
     mismatches: list[str] = []
     for local_field, krx_field in field_map.items():
         try:
@@ -577,26 +592,72 @@ def verify_raw_daily_against_krx(raw_daily: dict, krx_row: dict) -> None:
             raise FundamentalsSnapshotError(
                 f"KRX 공식 {krx_field} 값이 숫자가 아닙니다."
             ) from exc
+        if not official.is_finite() or official < 0:
+            raise FundamentalsSnapshotError(
+                f"KRX 공식 {krx_field} 값이 0 이상의 유한수가 아닙니다."
+            )
+        official_prices[local_field] = official
         if official != raw_daily[local_field]:
             mismatches.append(local_field)
     try:
-        official_volume = int(
+        official_volume_decimal = Decimal(
             str(krx_row.get("ACC_TRDVOL") or "").replace(",", "").strip()
         )
-    except ValueError as exc:
+    except InvalidOperation as exc:
         raise FundamentalsSnapshotError(
             "KRX 공식 ACC_TRDVOL 값이 정수가 아닙니다."
         ) from exc
+    if (
+        not official_volume_decimal.is_finite()
+        or official_volume_decimal < 0
+        or official_volume_decimal != official_volume_decimal.to_integral_value()
+    ):
+        raise FundamentalsSnapshotError(
+            "KRX 공식 ACC_TRDVOL 값이 0 이상의 정수가 아닙니다."
+        )
+    official_volume = int(official_volume_decimal)
     if official_volume != raw_daily["volume"]:
         mismatches.append("volume")
     expected_date = raw_daily["trade_date"].strftime("%Y%m%d")
     if str(krx_row.get("BAS_DD") or "").strip() != expected_date:
         mismatches.append("trade_date")
+    if str(krx_row.get("ISU_CD") or "").strip() != raw_daily.get("symbol"):
+        mismatches.append("symbol")
+    if not mismatches:
+        return None
+
+    zero_volume_exception = (
+        adjusted_daily is not None
+        and raw_daily.get("symbol") in ZERO_VOLUME_OHL_EXCEPTION_SYMBOLS
+        and set(mismatches) == {"open", "high", "low"}
+        and official_prices["open"] == 0
+        and official_prices["high"] == 0
+        and official_prices["low"] == 0
+        and official_prices["close"] > 0
+        and official_volume == 0
+        and raw_daily["volume"] == 0
+        and adjusted_daily.get("volume") == 0
+        and adjusted_daily.get("symbol") == raw_daily.get("symbol")
+        and adjusted_daily.get("trade_date") == raw_daily.get("trade_date")
+        and raw_daily["close"] == official_prices["close"]
+        and adjusted_daily.get("close") == official_prices["close"]
+        and all(
+            raw_daily[field] == raw_daily["close"]
+            for field in ("open", "high", "low")
+        )
+        and all(
+            adjusted_daily.get(field) == adjusted_daily.get("close")
+            for field in ("open", "high", "low")
+        )
+    )
+    if zero_volume_exception:
+        return ZERO_VOLUME_OHL_DIFFERENCE
     if mismatches:
         raise FundamentalsSnapshotError(
             "KIS 원시 일봉과 KRX 공식 정규장 값이 다릅니다: "
             + ", ".join(sorted(mismatches))
         )
+    return None
 
 
 def finalize_snapshots(
@@ -610,6 +671,7 @@ def finalize_snapshots(
     krx_lookup_error: str | None = None,
     price_saver: Callable[[list[dict], list[dict]], int] | None = None,
     fundamentals_saver: Callable[[list[dict]], int] | None = None,
+    summary_path: Path | None = None,
 ) -> dict:
     """Combine staged fundamentals with confirmed bars; savers enable apply mode."""
 
@@ -666,8 +728,15 @@ def finalize_snapshots(
                         }
                     else:
                         try:
-                            verify_raw_daily_against_krx(raw_rows[0], krx_row)
+                            representation_reason = verify_raw_daily_against_krx(
+                                raw_rows[0],
+                                krx_row,
+                                adjusted_daily=adjusted_rows[0],
+                            )
                             comparison = {"status": "matched"}
+                            if representation_reason is not None:
+                                comparison["reason"] = representation_reason
+                                krx_warnings.append(representation_reason)
                         except FundamentalsSnapshotError as exc:
                             comparison = {
                                 "status": "mismatched",
@@ -731,7 +800,11 @@ def finalize_snapshots(
                     "error_type": type(exc).__name__,
                     "error": str(exc)[:300],
                 }
-            _atomic_json(root / trade_date.isoformat() / "finalize_summary.json", result)
+            _atomic_json(
+                summary_path
+                or root / trade_date.isoformat() / "finalize_summary.json",
+                result,
+            )
     finally:
         if own_client:
             api.close()

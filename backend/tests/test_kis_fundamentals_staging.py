@@ -84,6 +84,124 @@ def krx_api_row(close="100", volume="1000"):
     }
 
 
+def normalized_daily(
+    symbol="002410", *, open_="100", high="100", low="100",
+    close="100", volume=0, trade_date=TRADE_DATE,
+):
+    return {
+        "symbol": symbol,
+        "trade_date": trade_date,
+        "open": Decimal(open_),
+        "high": Decimal(high),
+        "low": Decimal(low),
+        "close": Decimal(close),
+        "volume": volume,
+    }
+
+
+def zero_volume_krx(symbol="002410", *, close="100", **overrides):
+    row = {
+        "ISU_CD": symbol,
+        "BAS_DD": TRADE_DATE.strftime("%Y%m%d"),
+        "TDD_OPNPRC": "0",
+        "TDD_HGPRC": "0",
+        "TDD_LWPRC": "0",
+        "TDD_CLSPRC": close,
+        "ACC_TRDVOL": "0",
+    }
+    row.update(overrides)
+    return row
+
+
+def test_zero_volume_ohl_representation_difference_is_strictly_allowed():
+    raw = normalized_daily()
+    adjusted = normalized_daily()
+    assert staged.verify_raw_daily_against_krx(
+        raw, zero_volume_krx(), adjusted_daily=adjusted
+    ) == staged.ZERO_VOLUME_OHL_DIFFERENCE
+
+
+def test_same_zero_volume_pattern_is_not_allowed_for_other_symbols():
+    raw = normalized_daily(symbol="005930")
+    adjusted = normalized_daily(symbol="005930")
+    with pytest.raises(staged.FundamentalsSnapshotError):
+        staged.verify_raw_daily_against_krx(
+            raw,
+            zero_volume_krx(symbol="005930"),
+            adjusted_daily=adjusted,
+        )
+
+
+@pytest.mark.parametrize(
+    "raw,adjusted,krx",
+    [
+        (normalized_daily(volume=1), normalized_daily(), zero_volume_krx()),
+        (normalized_daily(close="101", open_="101", high="101", low="101"), normalized_daily(), zero_volume_krx()),
+        (normalized_daily(), normalized_daily(volume=1), zero_volume_krx()),
+        (normalized_daily(), normalized_daily(open_="99"), zero_volume_krx()),
+        (normalized_daily(), normalized_daily(), zero_volume_krx(TDD_OPNPRC="1")),
+        (normalized_daily(symbol="000001"), normalized_daily(symbol="000001"), zero_volume_krx()),
+        (normalized_daily(trade_date=date(2026, 11, 2)), normalized_daily(trade_date=date(2026, 11, 2)), zero_volume_krx()),
+    ],
+)
+def test_zero_volume_exception_rejects_any_failed_condition(raw, adjusted, krx):
+    with pytest.raises(staged.FundamentalsSnapshotError):
+        staged.verify_raw_daily_against_krx(
+            raw, krx, adjusted_daily=adjusted
+        )
+
+
+def test_regular_trading_strict_mismatch_stays_blocked():
+    raw = normalized_daily(open_="95", high="105", low="90", volume=1000)
+    adjusted = dict(raw)
+    with pytest.raises(staged.FundamentalsSnapshotError):
+        staged.verify_raw_daily_against_krx(
+            raw,
+            krx_api_row(close="101", volume="1000"),
+            adjusted_daily=adjusted,
+        )
+
+
+class ZeroVolumeDailyClient:
+    def __init__(self, close="100"):
+        self.close = close
+
+    def daily_page(self, symbol, start_date, end_date, *, adjusted):
+        return [{
+            "stck_bsop_date": TRADE_DATE.strftime("%Y%m%d"),
+            "stck_oprc": self.close,
+            "stck_hgpr": self.close,
+            "stck_lwpr": self.close,
+            "stck_clpr": self.close,
+            "acml_vol": "0",
+            "acml_tr_pbmn": "0",
+        }]
+
+
+def test_finalize_records_zero_volume_representation_reason(tmp_path):
+    staged.capture_snapshots(
+        ("002410",),
+        TRADE_DATE,
+        client=CaptureClient(),
+        root=tmp_path,
+        now=lambda: COLLECTED_AT,
+    )
+    result = staged.finalize_snapshots(
+        ("002410",),
+        TRADE_DATE,
+        client=ZeroVolumeDailyClient(),
+        root=tmp_path,
+        krx_rows={"002410": zero_volume_krx()},
+    )
+    assert result["ready_symbols"] == ["002410"]
+    assert result["failed_symbols"] == []
+    assert result["krx_comparison"]["002410"] == {
+        "status": "matched",
+        "reason": staged.ZERO_VOLUME_OHL_DIFFERENCE,
+    }
+    assert staged.ZERO_VOLUME_OHL_DIFFERENCE in result["warnings"]["002410"]
+
+
 def test_price_and_volume_mismatch_preserve_eps_bps():
     row, warnings = staged.normalize_staged_fundamentals(
         snapshot(stck_prpr="101", acml_vol="999"),

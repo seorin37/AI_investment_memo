@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "trade_date": "2026-11-18",
+  "description": "Frozen hashes of the initial 635 completed / 169 Finalize OPSQ0008 / 132 Capture OPSQ0008 classification.",
+  "groups": {
+    "targets": {
+      "count": 936,
+      "sha256": "b2657660e87229258f4b90177d644fb08ddbe76393d194072bc27792dd30c03a"
+    },
+    "captured": {
+      "count": 804,
+      "sha256": "90217a57380401613a86a068cd4e5d0db3c6fa5d559c6312006d151dfbfc2d65"
+    },
+    "capture_failed": {
+      "count": 132,
+      "sha256": "90fc06e788d96b9f4e3b7d03e1212989504998d59fa90981e3820c98dcac3c23"
+    },
+    "finalize_opsq0008": {
+      "count": 169,
+      "sha256": "7b33b9d79ef1a09acf00005ba150c72487e29fd64039748e35e7eb4937c5dbcd"
+    },
+    "baseline_completed": {
+      "count": 635,
+      "sha256": "d2d773b8e5e2d554da82be2962819bc994227da3bdc3903384c9701f9cfc6d70"
+    }
+  }
+}

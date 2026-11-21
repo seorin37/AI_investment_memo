@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "trade_date": "2026-11-18",
+      "status": "prices_only_complete",
+      "manifest": "configs/recovery/kis_20261118.json",
+      "symbols_field": "price_only_symbols",
+      "symbols_sha256": "90fc06e788d96b9f4e3b7d03e1212989504998d59fa90981e3820c98dcac3c23"
+    }
+  ]
+}
