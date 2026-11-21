@@ -48,7 +48,6 @@ function sideKeyOf(path: string): SideKey {
 
 /**
  * 웹 로그인 후 영역: UI v2 WebShell (사이드바 250/72 · 가운데 · 스튜디오 열 436/96).
- * 옛 AppShell(components/layout)은 지우지 않고 여기서만 뺌. 탭 안 화면은 아직 옛 화면.
  * 앱(안드로이드·iOS)은 같은 폴더의 _layout.native.tsx.
  * mock 단계: 사이드바·스튜디오 머리 숫자는 WebShell.mock. 설정·휴지통·피드백·알림함 창은 이 셸에서 연다 (⑨-3).
  */

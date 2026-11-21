@@ -1,8 +1,8 @@
 /**
- * 앱(안드로이드·iOS) 화면 공통 틀 — 위 상단 바(TopBar) + 화면 본문. 웹용 AppShell 과 따로 쓴다 (11.18).
+ * 앱(안드로이드·iOS) 화면 공통 틀 — 위 상단 바(TopBar) + 화면 본문 (11.18).
  * - useProfileAction(): 상단 바 오른쪽 프로필 → MY (/my)
  * - useMockNotice(): mock 단계에서 아직 연결하지 않은 동작을 누르면 짧은 알림
- * - MobileToast: useUI().showToast 알림을 앱 화면 아래에 띄움 (웹은 AppShell 의 Toast)
+ * - MobileToast: useUI().showToast 알림을 앱 상세 화면((detail)) 아래에 띄움 (탭 화면은 (main)/_layout.native 의 TabToast)
  */
 import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';

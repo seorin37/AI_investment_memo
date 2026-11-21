@@ -16,7 +16,6 @@ import type { AppTab } from '@/ui/layout/app/BottomTabBar.types';
 
 /**
  * 앱(안드로이드·iOS) 로그인 후 영역: UI v2 아래 탭 5개. 웹은 같은 폴더의 _layout.tsx(WebShell).
- * 옛 탭바(components/layout/BottomTabBar)·MobileToast 는 지우지 않고 여기서만 뺌. 탭 안 화면은 아직 옛 화면.
  * 탭 안 화면 밀기는 updates/ · stocks/ 의 _layout.native.tsx(Stack), 탭바를 가리는 화면은 app/(detail)/.
  */
 const ROUTE_OF: Record<AppTab, string> = { home: 'index', updates: 'updates', stocks: 'stocks', journal: 'journal', studio: 'studio/index' };

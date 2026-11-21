@@ -5,7 +5,7 @@ import { WebJournal } from '@/ui/screens/journal/web/Journal';
 
 /**
  * 웹 투자 기록 = UI v2 (ui/screens/journal/web · ⑦). 앱은 journal.native.tsx.
- * 기록은 store/journal (mock · 켜 둔 동안) — 쓰는 대로 바로 반영. 옛 화면은 features/journal/LegacyJournalRoute.tsx 로 옮겨 보관.
+ * 기록은 store/journal (mock · 켜 둔 동안) — 쓰는 대로 바로 반영.
  */
 export default function JournalPage() {
   const sp = useLocalSearchParams<{ id?: string; empty?: string }>();

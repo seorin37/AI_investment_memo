@@ -3,7 +3,7 @@ import type { BoardItemKind } from '@/types/models';
 
 export type SettingsSection = 'profile' | 'display' | 'notifications' | 'ai' | 'usage' | 'mcp' | 'data' | 'about';
 
-/** 전역 모달 — AppShell 의 <ModalHost/> 가 렌더링 */
+/** 전역 모달 상태 (옛 웹 셸 ModalHost 가 쓰던 값 · 11/21 옛 셸 삭제 뒤에는 렌더링하는 곳 없음 · 연결 단계에서 정리) */
 export type ModalState =
   | { type: 'addStock' }
   | { type: 'trash' }

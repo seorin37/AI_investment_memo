@@ -10,7 +10,6 @@ const NOT_YET = '아직 연결되지 않았어요 · 데이터는 그대로예�
 /**
  * 앱 투자 기록 탭 = UI v2 (ui/screens/journal/app · ⑦). 웹은 journal.tsx.
  * 기록은 store/journal (mock · 앱을 켜 둔 동안) — 기록 화면(/journal/[id])과 같이 씀.
- * 옛 목록(features/journal/JournalList)은 지우지 않고 라우트에서만 뺌.
  */
 export default function JournalTab() {
   const router = useRouter();

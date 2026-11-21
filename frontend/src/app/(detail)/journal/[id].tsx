@@ -7,7 +7,6 @@ import { mockJournalNow } from '@/ui/screens/journal/Journal.mock';
 /**
  * 앱 투자 기록 보기·쓰기 = UI v2 (ui/screens/journal/app/Note · ⑦-7b). id 'new' = 새 기록.
  * 저장은 store/journal (mock · 앱을 켜 둔 동안). 나갈 때 확인창 없이 저장 (원본 back) → 목록이 알림·반짝임.
- * 옛 화면(JournalEditor)은 features/journal/LegacyJournalDetailRoute.tsx 로 옮겨 보관.
  */
 export default function JournalNoteScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();

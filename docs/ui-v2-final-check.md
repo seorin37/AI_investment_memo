@@ -13,7 +13,8 @@
 |---|---|---|---|---|---|---|
 | ① 토대 | 앱 아래 탭 · 웹 사이드바 · 스튜디오 열 | ✓ | ✓ (1280 ✓) | ✓ | 3-①, **탭 알약 해결** | 비교_1묶음_셸 · 비교_4단계_전체점검 |
 | ② 홈 | 홈 · 지수 자세히 · 맞춤 홈(웹) | ✓ | ✓ (1280 ✓) | ✓ | 3-② | 비교_2묶음_홈 |
-| ③ 메모 보드 | 2열 ↔ 목록 · 체크리스트 카드 · 끌어 옮기기 | ✓ | ✓ (1280 ✓) | ✓ | 3-③, **앱 체크리스트 상세는 옛 화면** | 비교_3묶음_메모보드 |
+| ③ 메모 보드 | 2열 ↔ 목록 · 체크리스트 카드 · 끌어 옮기기 | ✓ | ✓ (1280 ✓) | ✓ | 3-③ | 비교_3묶음_메모보드 |
+| ⑪ 체크리스트 | 앱 체크리스트 페이지 (보드 카드 · 목록 줄 · + 버튼에서) | ✓ | — (웹은 보드 안 카드) | ✓ | 3-③ | 비교_11_체크리스트 |
 | ④ 메모 상세 | 메모 상세 · 새 메모 · AI 연결 | ✓ | ✓ | ✓ | 3-④ | 비교_4묶음_메모상세 |
 | ④-2 근거 상세 | 근거 상세 · 수정 이력 | ✓ | ✓ | ✓ | — | 비교_4-2묶음_근거상세 |
 | ⑤ 기업정보 | 기업정보 탭 | ✓ | ✓ | ✓ | — | 비교_5묶음_기업정보 |
@@ -37,8 +38,10 @@
 | 개발 상태 문구 | 첫 홈 '예시 데이터가 채워진 홈이에요', '많이 찾는 종목 · 예시' | **고침** — 뺌 |
 | 연결 안 된 동작 | 사진 올리기 '준비 중이에요', 체크리스트 '저장했어요 (예시)' | **고침** — "아직 연결되지 않았어요 · 데이터는 그대로예요" |
 | 확인용 주소 값 | `?demo=` · `?fail=1` 이 배포 빌드에서도 작동 | **고침** — 개발 빌드에서만 |
-| 앱 체크리스트 상세 | 보드에서 체크리스트를 열면 옛 화면(`features/board/ChecklistDetail`) | **새로 찾음 · 못 고침** — 화면 하나를 새로 추출해야 함 |
-| 플랜 · 충전 가격 | `[가격]` 자리표시 (원본도 같음) | **새로 찾음 · 연결 단계** — 가격이 정해지면 mock 값 교체 |
+| 앱 체크리스트 상세 | 보드에서 체크리스트를 열면 옛 화면(`features/board/ChecklistDetail`) | **고침(⑪)** — 원본 `app/memo.html .ckp` 기준으로 새로 추출 |
+| 앱 탭 화면 공통 안내 | 상세 화면에서 띄운 안내(`showToast`)가 뒤로 오면 사라짐 | **고침(⑪)** — 탭 레이아웃에 안내 자리 |
+| 플랜 · 충전 가격 | `[가격]` 자리표시 (원본도 같음). `My.mock`에도 실제 값이 없어 바꾸지 않음 | **연결 단계** — 가격이 정해지면 `My.mock` 한 곳만 바꿈 |
+| 옛 화면 | `features/` 등 참조 0인 옛 화면 78개 | **지움(11/21)** — 5장 |
 
 ## 3. 원본과 다른 곳 (묶음 보고 모음)
 
@@ -63,7 +66,9 @@
 ### ③ 메모 보드
 | 곳 | 원본과 다른 점 | 구분 |
 |---|---|---|
-| 앱 체크리스트 상세 | 옛 화면으로 열림 | 못 고침(4단계에서 찾음) |
+| 앱 체크리스트 상세 | ~~옛 화면으로 열림~~ 원본 `.ckp` 기준 새 화면 | 해결(⑪) |
+| 체크리스트 보드 ↔ 페이지 상태 | 페이지에서 체크해도 보드 카드에는 안 남음 (화면마다 mock) | 연결 단계 |
+| 새 체크리스트 완료 | 원본은 보드에 저장 · '체크리스트를 저장했어요' → 공통 미연결 안내 | 연결 단계 |
 | 앱 체크리스트 점 터짐 | ~~에뮬레이터에서 캡처 못 함~~ 모두 끝내면 색종이 · 안내 확인 | 해결(4단계 확인) |
 
 ### ④ 메모 상세 · ⑨ 시작
@@ -132,11 +137,28 @@
 
 ## 4. 라우트와 옛 화면
 
-`frontend/src/app/` 아래 라우트는 모두 새 UI(`ui/screens/*`)를 씁니다. 예외는 하나입니다.
+`frontend/src/app/` 아래 라우트는 모두 새 UI(`ui/screens/*`)를 씁니다(⑪ 뒤 `features/` import 0곳). `ui-v2-check`는 공통 부품 확인 화면으로 개발 빌드에서만 열립니다.
 
-| 라우트 | 쓰는 화면 | 비고 |
-|---|---|---|
-| `(detail)/checklist/[id]` (앱) | `features/board/ChecklistDetail` (옛 화면) | 새로 추출 필요 |
-| `ui-v2-check` | 공통 부품 확인 화면 | 개발 빌드에서만 열림 |
+## 5. 지운 옛 화면 (11/21)
 
-옛 화면(`LegacyJournalRoute` · `LegacyJournalDetailRoute` · `LegacyHelpScreen` · `LegacyQuizRoute` · `LegacyReportRoute` 등)은 `features/`에 보관만 하고, 라우트·링크에서 쓰는 곳은 0곳입니다. 옛 웹 셸(`components/layout/AppShell` · `ModalHost`)도 라우트에서 쓰지 않습니다.
+라우트에서 import를 따라가 닿지 않는(참조 0) 화면 · 화면 전용 부품 78개를 지웠습니다.
+
+| 폴더 | 지운 파일 |
+|---|---|
+| `features/board` (22) | AiLinkConfirm(.mock · .types) · AiTimeline · AiUpdatePanel · BoardItemEditor · BoardScreen · ChecklistDetail(.mock · .types) · MemoBoard(.mock · .types) · MemoDetail(.mock · .types) · MemoDetailModal · MemoParts · NewMemo(.mock · .types) · boardTokens |
+| `features/company` (4) | CompanyInfo · CompanyOverview(.mock · .types) |
+| `features/home` (8) | HomeScreen · MobileHome(.mock · .types) · registry · widgets/MemoWidgets · widgets/WidgetCard · widgets/WidgetSheet |
+| `features/journal` (6) | JournalEditor · JournalList(.mock · .types) · LegacyJournalDetailRoute · LegacyJournalRoute |
+| `features/onboarding` (6) | IntroSlides(.mock · .types) · StockPick(.mock · .types) |
+| `features/settings` (3) | MyPage(.mock · .types) |
+| `features/stock` (5) | AddStockModal · MyStocks(.mock · .types) · StockHeader |
+| `features/studio` (11) | DailyQuiz(.mock · .types) · LegacyQuizRoute · LegacyReportRoute · StudioHome(.mock · .types) · WeeklyReport(.mock · .types) |
+| `features/updates` (4) | UpdateFeed(.mock · .types) · UpdatesScreens |
+| `features/feedback` · `help` · `trash` (3) | FeedbackModal · LegacyHelpScreen · TrashModal |
+| `components/layout` (5) | AppShell · BottomTabBar · ModalHost · Page · Sidebar (옛 셸) |
+| `components/mobile` (1) | StockSummaryCard |
+
+남긴 것:
+- **dev에서 팀원이 고친 옛 파일** (Seorin Eum, 11/20): `features/board/BoardCards.tsx` · `features/home/widgets/MarketWidgets.tsx` · `features/settings/SettingsModal.tsx`
+- **남길 것**: `hooks/`(queries · useBackClose · useLayout), `api/`, `types/`, `lib/`, `store/`, mock 응답
+- **애매해서 남김**: `features/company/glossary.ts`(용어 자료), 공용 `components/motion/*`, `components/ui/Modal`, `components/charts/*`(Sparkline은 팀원 파일이 씀), `ui/shared/EmptyState`

@@ -11,7 +11,7 @@ import { AppReportSheet } from '@/ui/screens/studio/app/ReportSheet';
 import { AppStudioHome } from '@/ui/screens/studio/app/StudioHome';
 
 /**
- * 앱 스튜디오 탭 = UI v2 (원본 app/studio.html · ⑧). 옛 화면 features/studio/StudioHome 은 라우트에서만 뺌.
+ * 앱 스튜디오 탭 = UI v2 (원본 app/studio.html · ⑧).
  * 사용량·갱신일은 My.mock. 오디오(8b): 시트 → 만드는 중 → 플레이어 · 미니 플레이어(탭 레이아웃).
  * 주간보고서(8c): 시트 → 만드는 중 → 보고서. 실험실·퀴즈는 8d 전까지 안내만 (옛 화면으로 보내지 않음).
  * mock: 개발 빌드(__DEV__)에서만 ?fail=1 이면 다음 만들기가 실패로 끝남 (실패 화면 확인용 · 배포 빌드는 무시). ?make=audio 면 시트를 열고 시작.

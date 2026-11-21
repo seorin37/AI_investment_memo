@@ -38,6 +38,8 @@
 - import는 '@/ui/...', PascalCase, named export
 - 옛 화면(src/features/, src/components/motion/, src/components/layout/, src/components/mobile/)은
   참고·수정·재사용 금지
+- 옛 화면은 새 UI로 바뀌고 참조 0이면 지움(11/21). API 호출 코드·훅·타입·유틸·mock 응답은 참조 0이어도 남김,
+  dev에서 팀원이 고친 옛 파일도 남김
 
 ## 4. 데이터
 - 데이터는 props로만, 버튼 동작은 콜백 props로만 (onSave, onDelete, onToggleAi 등)
