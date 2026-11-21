@@ -134,7 +134,7 @@
 | 로그아웃(약관 '취소') | 약관 화면에서 나가기 | fe/app/terms.tsx → store/auth.ts `signOut` | POST /auth/logout · be/auth/routes.py `logout` | 그대로 | |
 | 로그인 후 | 신규 사용자 판별 → 약관·온보딩 / 기존 → 홈 | fe/app/login.tsx `continueToTerms` (로그인하면 항상 /terms) | GET /stocks · be/stocks/routes.py `list_my_stocks` | 계산 필요(프론트) | 지금은 판별 없음. 내 종목 0개 → /terms, 1개 이상 → /. 자동 로그인(bootstrap) 경로에도 같은 판별 필요 |
 | 약관 | 동의 저장 | fe/app/terms.tsx `onContinue` (화면 이동만) | — | 없음 | 표 C-1. 동의 안 하고 앱 재시작 시 다시 약관을 띄울 근거 없음 |
-| 종목 고르기 | 종목 검색 | fe/app/onboarding/pick.tsx `onQueryChange` (mock 목록 필터) | GET /stocks/search?q= · be/stocks/routes.py `search_stocks` | 그대로 | 계약상 최대 8개 |
+| 종목 고르기 | 종목 검색 | fe/app/onboarding/pick.tsx `onQueryChange` (mock 목록 필터) | GET /stocks/search?q= · be/stocks/routes.py `search_stocks` | 그대로 | 계약상 최대 8개. (묶음 2 확인) be/stocks/repository.py `search_kospi`·`get_kospi` 가 `market = 'KOSPI'` 만 → KOSDAQ 종목은 검색·추가 불가. 담당자 상의 |
 | 종목 고르기 | '많이 찾는 종목' 불러오기 | pick.tsx `stocks` (`mockAppPopularStocks`/`mockOnboardingStocks`) | — | 없음 | 표 C-2 |
 | 종목 고르기 | 선택 종목 저장(보유·관심) | pick.tsx `finish` (URL `selected` 로만 넘김) | POST /stocks (종목마다 1번) · be/stocks/routes.py · `StockCreateRequest` | 그대로 | 여러 개 한 번에 저장하는 API 없음 → 표 C-3(선택) |
 | 종목 고르기 | 홈 방식 선택(템플릿·직접) | pick.tsx `onChooseHome` | PUT /home/layout · be/account/routes.py · `HomeLayout` | 그대로 | template 선택 시 기본 widgets 는 be/account/defaults.py 확인 필요 |
@@ -155,3 +155,120 @@
 | C-4 종목별 메모 수·AI 연결 수 | `MyStockResponse` 칸 추가(memo_count · ai_linked_count) | N (집계) | 선택. 담당자 상의 (be/stocks) |
 | C-5 신규 사용자 판별 함수 | 프론트(store/auth.ts 또는 login 후 공통 함수: GET /stocks 길이 0 → /terms) | N | 약관 동의(C-1) 생기면 '동의 안 함 → /terms'를 먼저 본다 |
 | C-6 종목 업종·로고 | 프론트(로고 규칙) + DB칸 `stocks.industry`(가칭) + `StockMasterResponse.category` | Y (업종을 보여 줄 경우) | 0단계 수정: `stocks.sector` 는 general·financial 뿐이라 재사용 불가. 업종 출처(KRX 업종 분류 등) 담당자 상의. 시연은 프론트 고정값으로 가능 |
+
+### 묶음 2: 보드 · 메모 · AI 연결 · 근거
+
+공통 사실 (아래 표의 근거):
+- 화면은 아직 `api.*`를 쓰지 않는다. 보드·메모 화면은 `*.mock.ts`를 직접 import. 연결용 코드 `fe/api/board.ts` `createRealBoardApi`·`fe/hooks/queries.ts` (`useBoard`·`useCreateBoardItem`·`useSetAiLink`·`useMemoTimeline` …)는 있지만 화면에서 import 0건(`hooks/queries`를 쓰는 곳은 features/home/widgets/MarketWidgets.tsx · features/settings/SettingsModal.tsx 두 곳뿐).
+- `fe/api/types.ts` `Api`에는 보드 순서(board-order)·종목 순서(stocks/order)·확인 질문(confirmations)·질문 답(answers) 함수가 없다 → 표 C-7.
+- DB: `0001sql memos`(kind=note·checklist·reference, title, content, color, is_pinned, ai_linked, ai_linked_at, deleted_at) + `0019 memos.position` · `0001sql memo_revisions`(+`0005 revision_no`, 저장 때 트리거 `capture_memo_revision`이 자동 생성) · `0001sql checklist_items`(label, is_done, sort_order) · `0001sql memo_links`(+`0004 link_type`·`is_file`) · `0001sql tracking_items`(+`0019 topic`·`target_symbol`) · `0001sql tracking_updates`(+`0004 memo_revision_id`·`price_state`·`details`, `0005 observed_trade_date`) · `0001sql update_sources`(news_id · disclosure_rcept_no · quote) · `0001sql user_stocks` + `0021 position`.
+- 0004 제약 `ck_memos_ai_only_note`: AI 연결은 일반 메모(note)만.
+
+#### 표 A 데이터
+
+| 화면 | mock 출처(파일·상수/함수) | 필드 | 백엔드(파일·스키마.필드) | 판정 | 메모 |
+|---|---|---|---|---|---|
+| 보드 | fe/ui/screens/board/MemoBoard.mock.ts `mockBoardMemos` (fe/types/models.ts `Memo`) | id · kind · stock_code · title · position · created_at · updated_at | be/board/schemas.py `BoardBase` · `MemoResponse.kind`(="memo") | 그대로 | DB kind `note` → 응답 `memo` 변환은 be/board/service.py `_response` |
+| 보드 | 〃 | body · tags · color · pinned · ai_linked · ai_linked_at | `MemoResponse.body` · `.tags` · `.color` · `.pinned` · `.ai_linked` · `.ai_linked_at` | 그대로 | DB 는 content · is_pinned · memo_tags. 화면은 tags 미사용 |
+| 보드 | 〃 | price_conditions[] (id · direction · price · tracking · status · reached_at) | `MemoResponse.price_conditions` ← be/board/tracking.py `price_conditions` | 그대로 | 스키마는 `list`(형 없음)지만 tracking.py 가 같은 6개 키로 채움 |
+| 보드 | 〃 | unread_updates | `MemoResponse.unread_updates` ← tracking.py `unread_updates` | 그대로 | |
+| 보드 | — | analysis | `MemoResponse.analysis` (생성·수정·ai-link·confirmations 응답에만) | 그대로 | fe `Memo` 타입·`normalizeBoardItem` 에 analysis 없음 → 버려짐. 표 C-8 |
+| 보드 | MemoBoard.mock.ts `mockBoardChecklist` | id · kind · title · position · created_at · updated_at · items[id·text·done] · pinned | be/board/schemas.py `ChecklistResponse` · `ChecklistItemResponse` | 그대로 | DB checklist_items.label·is_done → text·done 변환(be/board/repository.py) |
+| 보드 | MemoBoard.types.ts `checklist: Checklist \| null` (종목마다 하나) | 체크리스트 개수 | `GET /stocks/{code}/board` 는 체크리스트 여러 개 가능 | 확인 필요 | 화면은 1개만 그림. 2개 이상일 때 규칙 결정 필요 |
+| 보드(웹) | MemoBoard.mock.ts `mockBoardOrder` (`'cl'` + 메모 id) | 카드 순서 | `BoardBase.position` · `BoardOrderPut.ids`(int) | 이름만 다름(→position · ids) | 웹 순서 키 `'cl'` → 체크리스트 실제 id 로 바꿔야 함 |
+| 보드(웹) | fe/app/(main)/stocks/[code].tsx `customized` | orderCustomized ('꾹 눌러 끌면' 안내 여부) | — | 없음 | 서버 칸 없음. 기기 저장으로 충분 → 결정 필요(기기 저장 범위) |
+| 보드 | MemoBoard.mock.ts `mockBoardStock` · `mockEmptyStock` | 종목 머리(이름·상태·가격·차트) | 묶음 3 (quote·candles) | — | 묶음 3 표 A 에 적음 |
+| 보드 | MemoBoard.types.ts `aiSpent` | AI 사용량 소진 | be/credits `GET /me/usage` `paused` | 이름만 다름(→paused) | 묶음 4 에서 자세히 |
+| 보드 | MemoBoard.types.ts `BoardFilter` all·ai·new | 거르기 | `MemoResponse.ai_linked` · `.unread_updates` | 계산 필요(프론트) | |
+| 메모 상세 | fe/ui/screens/memo/MemoDetail.mock.ts `mockVersions` (`MemoVersion`) | version · title · body · saved_at | be/updates/service.py `memo_timeline` entries[kind=memo_created·memo_edit].version (`revision_no`·title·content·created_at) | 계산 필요(프론트) | 수정 이력 전용 API 없음. 타임라인에서 뽑아 최신순 정렬 |
+| 메모 상세 | MemoDetail.mock.ts `mockFeed` (`MemoFeedItem`) | id · headline · summary · url · memo_version | timeline entries[kind=update].update (be/updates/service.py `_ai_update`) `.id` · `.headline` · `.summary` · `.url` · `.memo_version` | 그대로 | |
+| 메모 상세 | 〃 | kind 뉴스·공시·주가 | `_ai_update.type` news·disclosure·price | 이름만 다름(→type) | 값 바꾸기 표 필요. 질문 답(answer)은 news·disclosure 로 바뀌어 옴(`card_type` 에 원래 값) |
+| 메모 상세 | 〃 | at (소식 날짜) | `_ai_update.published_at` (가격 카드는 observed_trade_date) | 이름만 다름(→published_at) | |
+| 메모 상세 | 〃 | unread | `_ai_update.read` | 이름만 다름(→!read) | |
+| 메모 상세 | 〃 | source ('한국경제 · 2026. 10. 15. 08:40') | `_ai_update.source` + `.published_at` | 계산 필요(프론트) | 가격 카드 source 는 "KRX"(mock 은 'KIS') |
+| 메모 상세 | 〃 | article_title (뉴스) · report (공시 보고서 이름) | `_ai_update.title` (대표 근거 제목) · `sources[].title` | 이름만 다름(→title) | |
+| 메모 상세 | 〃 | quote (공시 원문 일부) | `_ai_update.sources[].quote` ← DB update_sources.quote | 이름만 다름(→sources[].quote) | |
+| 메모 상세 | 〃 | quote_mark (밑줄 칠 부분) | — | 없음 | quote 안 밑줄 위치 칸 없음. 화면에서 밑줄 없이 보이기 or `card`(details) 키 확인 → 담당자 상의 |
+| 메모 상세 | 〃 | provider ('한국경제 · 네이버 뉴스') | `sources[].source` (매체명만, news_sources.name) | 확인 필요 | '네이버 뉴스' 같은 제공 경로 칸 없음 |
+| 메모 상세 | 〃 | price.close | `_ai_update.price.observed_value` | 이름만 다름(→price.observed_value) | |
+| 메모 상세 | 〃 | price.cond · price.direction | `MemoResponse.price_conditions[id = update.item.id].price` · `.direction` | 계산 필요(프론트) | `_ai_update.item` 에 price_threshold 없음 → 메모의 price_conditions 와 item.id 로 맞춤 |
+| 메모 상세 | 〃 | price.gap ('+6,800원 (+4.5%)') · '조건까지 ±N%' | — (close·cond 로 계산) | 계산 필요(프론트) | fe/ui/screens/memo/EvidenceContent.tsx `toCond` 가 gap 문자열에서 % 를 뽑음 → 숫자로 받게 바꾸는 편이 안전 |
+| 메모 상세 | 〃 | price.tone near·reached | `_ai_update.price.state` (DB 0004 `price_state` near·away·reached) | 확인 필요 | 팀 11.09 결정은 2가지. 백엔드 away 가 아직 오는지 담당자 상의 |
+| 메모 상세 | 〃 | price.closes · from · to (근거 차트) | — (카드에 없음) | 계산 필요(프론트) | `GET /stocks/{code}/candles` 로 그려야 하나 range(1W·1M…) 만 받고 '이 날짜까지'는 못 받음 → 확인 필요. 표 C-9 |
+| 메모 상세 | 〃 | 'MM.DD 종가 기준' (EvidenceContent.tsx `mmdd(f.at)`) | `_ai_update.price.observed_trade_date` | 계산 필요(프론트) | |
+| 메모 상세 | MemoDetail.mock.ts `mockTrackItems` (`AiTrackItem`) | kind price·fact · label | timeline `.tracking_items[]` type·description (be/updates/service.py) / `analysis.items[]` (be/board/service.py `_item_out` id·type·description·price_threshold·status) | 이름만 다름(type→kind, description→label) | type: price_below·price_above→price, topic→fact. **ask(질문)** 도 섞여 옴 → 걸러야 함 |
+| 메모 상세 | 〃 | price · direction 이하·미만·이상 | `analysis.items[].price_threshold` · type price_below·price_above | 이름만 다름(→price_threshold) | 화면 문구 '미만·이하' 중 무엇인지 기준 없음(백엔드는 below·above 뿐) |
+| 메모 상세 | 〃 | quote (메모에서 찾은 문장) | — (`_item_out`·timeline 에 문장 없음) | 없음 | analysis.py 내부 `sentence_index` 는 응답에서 빠짐. 담당자 상의 |
+| 메모 상세 | MemoDetail.mock.ts `mockLastChecked` ('11.18 장 마감 후') | lastChecked | timeline `.tracking_items[].last_checked_at` | 계산 필요(프론트) | 가장 늦은 값 → 문장 |
+| 메모 상세 | MemoDetail.mock.ts `mockDetailStockName` | stockName | be/stocks `MyStockResponse.name` | 이름만 다름(→name) | 내 종목 목록에서 code 로 |
+| 메모 상세 | MemoDetail.mock.ts `mockToday` | 저장 시각 | `MemoResponse.updated_at` | 이름만 다름(→updated_at) | |
+| AI 연결 창 | MemoDetail.mock.ts `mockExtract` | 새 메모 추적 항목 미리보기 | `analysis.items` (POST /stocks/{code}/memos 응답, ai_linked=true 일 때) | 이름만 다름(→analysis.items) | 미리보기만 하는 API 없음 → 흐름 차이(표 B 참고) |
+| AI 연결 창 | MemoDetail.types.ts `AiLinkState` loading·items·empty·error | 상태 | `analysis.status` done·failed·skipped·unchanged·confirmed + `items` 길이 · `out_of_scope` | 계산 필요(프론트) | failed 의 `error`(llm_unavailable 등) 문구 매핑 필요 |
+| AI 연결 창 | — | 확인 질문 | `analysis.confirmations[]` (question · options[].option_id) | 없음(프론트) | 화면에 확인 질문 UI 가 없다. 표 C-10 |
+| AI 끄기 시트 | fe/app/(main)/stocks/[code].native.tsx `AiOffSheet itemCount={2}` | 추적 항목 수 | timeline `.tracking_items` 길이 | 계산 필요(프론트) | 지금 2 로 고정 |
+| 근거 상세 | fe/ui/screens/updates/Updates.mock.ts `feedOf`·`findMemo`·`versionsOf` | 소식 · 메모 · 버전 | timeline (위와 같음) · `GET /board-items/{id}` | 계산 필요(프론트) | Updates.mock 은 묶음 3 에서 다시 봄 |
+| 근거 상세 | Updates.mock.ts `versionsOf` + `item.memo_version` | 소식이 붙을 때의 메모 | timeline entries[kind=update].memo_snapshot (version·title·body·saved_at) | 그대로 | be/updates/service.py `memo_timeline` |
+| 내 종목 | fe/ui/screens/stocks/MyStocks.mock.ts `mockMyStocks` (MyStocks.types.ts `MyStock`) | stock_code · name · market · status | be/stocks/schemas.py `MyStockResponse.code` · `.name` · `.market` · `.status` | 이름만 다름(stock_code→code) | |
+| 내 종목 | 〃 | new_count | `MyStockResponse.unread_updates` | 이름만 다름(→unread_updates) | be/stocks/repository.py `list_user_stocks` 가 AI 켠 메모의 읽지 않은 카드만 셈 |
+| 내 종목 | 〃 | memo_count · ai_count | — | 계산 필요(프론트 또는 백엔드) | 묶음 1 C-4 와 같음 |
+| 내 종목 | 〃 | price · change_pct · as_of | 묶음 3 `GET /stocks/{code}/quote` | 계산 필요(프론트) | 종목 수만큼 호출 |
+| 내 종목 | 〃 | logo · logo_bg · logo_ink | — | 계산 필요(프론트) | 묶음 1 C-6 |
+| 내 종목 | 〃 | ai_ready (시범 종목) | — | 없음 | '시범 종목' 기준 칸 없음. 결정 필요 |
+| 내 종목 | 〃 | 순서 | `MyStockResponse.position` (0021) · 목록이 position 순 | 그대로 | |
+| 내 종목 | MyStocks.mock.ts `mockUniverse` (`StockCandidate`) | 검색 후보 · sector · price | `GET /stocks/search` `StockMasterResponse` (code·name·market) | 이름만 다름(stock_code→code) | sector 없음(C-6), price 는 quote. KOSPI 만 |
+| 내 종목 | MyStocks.mock.ts `mockMyStocksData.popular` | 많이 찾는 종목 | — | 없음 | 묶음 1 C-2 와 같음 |
+| 사이드바(웹) | fe/ui/layout/web/WebShell.mock.ts `mockSideStocks` (`SideStock`) | stock_code · name · status · logo | `GET /stocks` `MyStockResponse` | 이름만 다름(stock_code→code) | logo 는 C-6 |
+| 사이드바(웹) | WebShell.mock.ts `mockPopular` · `mockRecentSearches` | 검색 창 많이 찾는 · 최근 검색 | — | 없음 | 많이 찾는 = C-2, 최근 검색 = 기기 저장(결정 필요) |
+
+#### 표 B 동작
+
+| 화면 | 동작 | 프론트 위치(파일·함수) | 엔드포인트(METHOD 경로·파일) | 판정 | 메모 |
+|---|---|---|---|---|---|
+| 보드 | 보드 불러오기 | fe/app/(main)/stocks/[code].tsx `BoardTab` · [code].native.tsx (mock state) | GET /stocks/{code}/board · be/board/routes.py | 그대로 | `fe/api/board.ts listBoard`·`hooks/queries.ts useBoard` 있음, 화면 미연결 |
+| 보드 | 새 메모 저장 | [code].tsx `WebNewMemoDialog.onSave` · fe/app/(detail)/memo/new.tsx `onSave` | POST /stocks/{code}/memos · `MemoCreate`(title·body·tags·color·ai_linked·pinned) | 그대로 | 앱 new.tsx 는 color 를 안 넘김(기본 yellow) |
+| 보드 | 메모 수정 저장 | fe/app/(detail)/memo/[id].tsx `onSave` · [code].tsx `WebMemoDialog.onSave` | PATCH /board-items/{id} · `BoardItemPatch` | 그대로 | 제목·본문이 바뀌면 다시 분석(응답 analysis). 버전은 DB 트리거가 만듦 |
+| 보드 | 색 바꾸기 | `onChangeColor` (보드 여러 개 · 상세 하나) | PATCH /board-items/{id} `color` | 그대로 | 여러 개면 N번 호출 |
+| 보드 | 고정(테이프) · 풀기 | `onPin(ids)` · 상세 `onTogglePin` | PATCH /board-items/{id} `pinned` | 그대로 | 서버가 순서도 바꿈(고정하면 맨 앞, be/board/service.py `_place`) → 응답 뒤 목록 다시 읽기 |
+| 보드 | 체크리스트 고정 | `onTogglePin` · fe/app/(detail)/checklist/[id].tsx `onTogglePin` | PATCH /board-items/{id} `pinned` | 그대로 | 2026-11-20 체크리스트도 허용 |
+| 보드 | 삭제 | `onDelete(ids)` · 상세 `onDelete` | DELETE /board-items/{id} · be/board/routes.py | 그대로 | 소프트 삭제(memos.deleted_at) → 휴지통. 여러 개면 N번 |
+| 보드 | 삭제 되돌리기 | `onUndoDelete(ids)` | POST /trash/memo-{id}/restore · be/trash/routes.py | 계산 필요(프론트) | 휴지통 id = `memo-{메모 id}` (be/trash/service.py `parse_id`) |
+| 보드 | 복사 | `onCopy` (지금 빈 함수) | — | 없음 | 복사 API 없음. 프론트에서 POST memos 로 같은 내용 새로 만들기 가능(AI 연결 여부 결정 필요) |
+| 보드 | 끌어서 순서 바꾸기(웹) | [code].tsx `onReorder` → `setOrder` | PUT /stocks/{code}/board-order · `BoardOrderPut.ids` | 그대로 | `Api` 에 함수 없음(C-7). 앱은 `onReorder={() => {}}` |
+| 보드 | 카드 하나 옮기기 | — | PATCH /board-items/{id} `position` | 그대로 | 앱 끌기에 쓸 수 있음 |
+| 체크리스트 | 새로 만들기 | checklist/[id].tsx (id='new') `onDone` (지금 안내만) | POST /stocks/{code}/checklists · `ChecklistCreate`(title·items) | 그대로 | |
+| 체크리스트 | 항목 체크 | 보드 `onToggleChecklistItem` · checklist/[id].tsx `onToggleItem` | PATCH /checklists/{id}/items/{item_id} · `ChecklistItemPatch`(text·done) | 그대로 | `fe/api/board.ts setBoardChecklistItem` 있음 |
+| 체크리스트 | 이름 · 항목 추가 · 항목 삭제 | checklist/[id].tsx `onChangeTitle` · `onAddItem` · `onDeleteItem` | PATCH /board-items/{id} `title` · `items`(전체 교체) | 그대로 | 항목 추가·삭제는 items 배열 전체를 보냄. 새 항목은 id 없이 |
+| 참고자료 | 만들기 · 수정 | — (화면 없음, fe/ui 에 reference 0건) | POST /stocks/{code}/references · PATCH /board-items/{id} `links` | 그대로 | 프론트 화면 없음 → 프론트 미사용 |
+| 메모 상세 | 상세 열기 | memo/[id].tsx `findMemo(id)` | GET /board-items/{id} | 그대로 | |
+| 메모 상세 | AI 업데이트 탭(타임라인) | memo/[id].tsx `feedOf` | GET /memos/{id}/timeline · be/updates/routes.py | 그대로 | `fe/api/real.ts getMemoTimeline` 있음 |
+| 메모 상세 | 소식 읽음 | memo/[id].tsx `onSeenUpdates` (4초 뒤 mock) | POST /ai-updates/{id}/read · be/updates/routes.py | 그대로 | 읽지 않은 카드마다 1번(일괄 읽음 API 없음) |
+| 메모 상세 | 수정 이력 | fe/app/(detail)/memo/history.tsx `versionsOf` | GET /memos/{id}/timeline (memo_created·memo_edit) | 계산 필요(프론트) | |
+| 메모 상세 | 원문 열기 | `onOpenSource` (지금 안내만) | — (url 은 카드에 있음: 뉴스 news_articles.url · 공시 `https://dart.fss.or.kr/dsaf001/main.do?rcpNo=`) | 그대로 | 앱 안 브라우저는 `expo-web-browser`(package.json 있음) |
+| 근거 상세 | 근거 열기 | fe/app/(detail)/memo/evidence.tsx | GET /memos/{id}/timeline 에서 소식 id 로 찾기 | 계산 필요(프론트) | 소식 한 건 조회 API 없음 |
+| AI 연결 | 기존 메모 AI 켜기 | memo/link.tsx (mock 1.2초 → 항목 보여 주고 '확인') | PUT /memos/{id}/ai-link `{enabled:true}` · `AiLinkPatch` | 확인 필요 | 흐름 차이: 화면은 '분석 → 항목 보고 확인 → 켜기', 백엔드는 PUT 한 번에 켜기+분석. 화면 '일반 메모로 두기' 를 누르면 PUT false 로 되돌려야 함 → 결정 필요 |
+| AI 연결 | 새 메모 AI 켜고 저장 | memo/new.tsx → memo/link.tsx(id='new') · [code].tsx `startConnect` | POST /stocks/{code}/memos `ai_linked:true` (응답 analysis) | 확인 필요 | 위와 같은 흐름 차이. 지금 link 화면은 id='new' 로 메모 id 없이 열림 → 저장 응답 id 를 넘겨야 함 |
+| AI 연결 | AI 끄기 | [code].native.tsx `AiOffSheet.onConfirm` · memo/[id].tsx `onDisconnectAi` | PUT /memos/{id}/ai-link `{enabled:false}` | 그대로 | 항목은 지우지 않고 paused (be/board/service.py `set_ai_link`) |
+| AI 연결 | 분석 실패 다시 시도 | link.tsx `onRetry` | — | 확인 필요 | 서버 재분석은 '메모를 다시 저장할 때만'(be/board/service.py 머리말). AI 끄고 켜면 `changed_since_analysis` 가 False 라 재분석 안 될 수 있음 → 담당자 상의 |
+| AI 연결 | 확인 질문 답하기 | — (UI 없음) | POST /memos/{id}/confirmations · `ConfirmationAnswer.option_id` · 409(메모 바뀜)·422 | 없음(프론트) | C-10 |
+| 추적 항목 | 주제(topic) 저장 | — | DB `0019 tracking_items.topic` | 확인 필요 | backend/app 에 topic 칸을 쓰는 코드 없음(be/board/tracking.py `create_item` 에 없음). 수시공시 카드 맞추기용이라 프론트 영향 없음. 담당자 상의 |
+| 내 종목 | 목록 | fe/app/(main)/stocks/index*.tsx (`mockMyStocksData`) | GET /stocks · be/stocks/routes.py `list_my_stocks` | 그대로 | `hooks/queries.ts useMyStocks` 있음 |
+| 내 종목 | 추가(보유·관심) | `onAdd(code, hold)` · fe/app/(main)/_layout.tsx `WebAddStockDialog` | POST /stocks `StockCreateRequest` | 그대로 | 삭제했던 종목은 되살림(be/stocks/repository.py `upsert_user_stock`) |
+| 내 종목 | 보유 ↔ 관심 옮기기 | `onMove(codes, hold)` · 사이드바 메뉴 | PATCH /stocks/{code} `StockUpdateRequest.status` | 그대로 | 여러 개면 N번 |
+| 내 종목 | 빼기 | `onRemove(codes)` · 사이드바 '내 종목에서 빼기' | DELETE /stocks/{code} | 그대로 | 소프트 삭제 → 휴지통 `stock-{code}` |
+| 내 종목 | 빼기·옮기기 되돌리기 | `onRestore(snapshot)` | POST /trash/stock-{code}/restore · PATCH /stocks/{code} | 계산 필요(프론트) | |
+| 내 종목 | 태그 | — | PATCH /stocks/{code} `tags` | 그대로 | 백엔드는 빈 목록 말고는 422(`UnsupportedStockTagsError`). 화면도 안 씀 |
+| 사이드바(웹) | 종목 순서 끌기 | fe/app/(main)/_layout.tsx `onReorderStocks` → `setSideStocks` | PUT /stocks/order · `StockOrderRequest.codes` | 그대로 | `Api` 에 함수 없음(C-7) |
+| 내 종목(앱) | 묶음 안 순서 | MyStocks.types.ts `onReorder(codes)` | PUT /stocks/order | 그대로 | 보유·관심 두 묶음이어도 전체 순서 하나로 보냄 |
+| 내 종목 | 추가 뒤 메모 쓰기 | `onWriteMemo` | — | 그대로 | 화면 이동만 |
+
+#### 표 C 새로 만들 것
+
+| 항목 | 종류(엔드포인트·DB칸·표·프론트) | DB 변경(Y/N) | 메모 |
+|---|---|---|---|
+| C-7 프론트 API 함수 추가 | 프론트(`fe/api/types.ts Api`·real.ts·mock): reorderBoard(PUT board-order) · reorderStocks(PUT stocks/order) · confirmMemo(POST confirmations) · listMemoAnswers(GET answers) | N | 백엔드는 있음 |
+| C-8 analysis 받기 | 프론트(`Memo` 응답에 analysis 를 버리지 않게, `normalizeBoardItem`) | N | AI 연결 창·확인 질문이 이 값을 씀 |
+| C-9 근거 차트 기간 | 엔드포인트(candles 에 `to=날짜` 또는 가격 카드에 종가 목록) | N | 담당자 상의. 시연은 range=1M 잘라 쓰기로 대체 가능 |
+| C-10 확인 질문 화면 | 프론트(AI 연결 창에 confirmations 질문·선택지) | N | 백엔드 있음 |
+| C-11 AI 연결 미리보기 흐름 | 프론트 흐름 변경(저장=켜기, '일반 메모로 두기'=끄기) 또는 엔드포인트(분석만 하는 POST /memos/analyze) | N | 결정 필요 |
+| C-12 추적 문장(quote) 응답 | 엔드포인트 응답 칸(analysis.items[].sentence 등) | N | 담당자 상의 (be/board/service.py `_item_out`) |
+| C-13 KOSDAQ 검색 | 백엔드 쿼리(be/stocks/repository.py `search_kospi`·`get_kospi`) | N | 담당자 상의. 시범 범위가 KOSPI 만이면 그대로 |
