@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -140,6 +140,32 @@ class MarketDataService:
             }
             for row in self.repo.latest_news(limit)
         ]
+
+    def home_news(self, limit: int) -> dict[str, Any]:
+        """홈 뉴스 위젯 (UI v2 HomeNewsItem 모양).
+
+        - items: 종목과 연결된 최신 기사. at 은 한국 시간 ISO (화면이 앞 10자리로 날짜를 비교한다)
+        - day: 가장 새 기사의 한국 날짜. 기사가 없으면 null
+        - day_total: 그 날짜(0시~24시 KST)에 나온 종목 연결 기사 수
+        """
+        rows = self.repo.latest_news(limit)
+        if not rows:
+            return {"day": None, "day_total": 0, "items": []}
+        items = [
+            {
+                "id": str(row["id"]),
+                "title": row["title"],
+                "src": row["source"],
+                "at": row["published_at"].astimezone(KST).isoformat(),
+                "url": row["url"],
+                "stock_codes": list(row.get("stock_codes") or []),
+            }
+            for row in rows
+        ]
+        day = rows[0]["published_at"].astimezone(KST).date()
+        start = datetime.combine(day, time.min, tzinfo=KST)
+        total = self.repo.linked_news_count(start, start + timedelta(days=1))
+        return {"day": day.isoformat(), "day_total": total, "items": items}
 
     # ─── 기업 정보 (B)
     def profile(self, code: str) -> dict[str, Any]:

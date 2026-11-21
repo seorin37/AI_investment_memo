@@ -57,7 +57,7 @@
 
 ## 2. 현황표
 
-상태: **구현됨** 51개 (프론트가 부르고 백엔드에 있음) · **mock** 10개 (백엔드 미구현 — frontend/src/api/index.ts MOCK_ONLY 로 USE_MOCK=false 에서도 mock 응답)
+상태: **구현됨** 52개 (프론트가 부르고 백엔드에 있음) · **mock** 10개 (백엔드 미구현 — frontend/src/api/index.ts MOCK_ONLY 로 USE_MOCK=false 에서도 mock 응답)
 
 <!-- api-table:start (담당·비고 칸만 손으로 고치세요. 나머지 칸은 다시 생성하면 덮어씁니다) -->
 | 영역 | 메서드 | 경로 | 프론트 함수 | 상태 | 담당 | 비고 |
@@ -83,6 +83,7 @@
 | 종목 | PATCH | `/stocks/{code}` | updateStock (stocks.ts) | 구현됨 |  |  |
 | 시세·뉴스·기업 | GET | `/market/overview` | getMarketOverview (real.ts) | 구현됨 |  |  |
 | 시세·뉴스·기업 | GET | `/news/headlines` | listNews (real.ts) | 구현됨 |  |  |
+| 시세·뉴스·기업 | GET | `/news/home` | getHomeNews (real.ts) | 구현됨 |  | 11-21 UI v2 홈 뉴스 위젯(웹·앱). 종목 연결 기사만 최신순, at은 KST. day=가장 새 기사의 KST 날짜, day_total=그날 종목 연결 기사 수 |
 | 시세·뉴스·기업 | GET | `/stocks/{code}/candles` | getCandles (real.ts) | 구현됨 |  |  |
 | 시세·뉴스·기업 | GET | `/stocks/{code}/financials` | getFinancials (real.ts) | 구현됨 | 이민성 | 11-21 UI v2 모양: 분기 12개(억원)·건전성 5개·financial·preparing. 금융사 매출·이익률·유동·당좌·이자보상 null, 영업이익은 보냄. 우선주는 본주 재무 |
 | 시세·뉴스·기업 | GET | `/stocks/{code}/profile` | getProfile (real.ts) | 구현됨 |  |  |
@@ -519,7 +520,7 @@ OpenAPI 응답 스키마 `TokenResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/account/routes.py` `get_settings`
 - 프론트: `getSettings(): Promise<Settings>`
-  - 호출: real.ts:76 `getSettings: () => http.get('/settings'),`
+  - 호출: real.ts:77 `getSettings: () => http.get('/settings'),`
 
 **응답** `200`
 
@@ -600,7 +601,7 @@ OpenAPI 응답 스키마 `TokenResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/account/routes.py` `update_settings`
 - 프론트: `updateSettings(patch: DeepPartial<Settings>): Promise<Settings>`
-  - 호출: real.ts:77 `updateSettings: (patch) => http.patch('/settings', patch),`
+  - 호출: real.ts:78 `updateSettings: (patch) => http.patch('/settings', patch),`
 
 **요청 본문** `SettingsPatch` (필수)
 
@@ -1143,6 +1144,57 @@ OpenAPI 응답 스키마 `MyStockResponse`
 
 **에러**: `401` 인증 필요 · 토큰 만료/폐기 (프론트는 /auth/refresh 를 한 번 시도) · `422` 요청 검증 실패 (FastAPI 형식 detail 배열)
 
+<a id="get--news-home"></a>
+#### `GET /news/home`
+
+홈 뉴스 위젯: 최신 기사(웹 9개·앱 5개 사용) + 가장 새 기사 날짜의 기사 수.
+
+- 상태: **구현됨**
+- 인증: 필요 · 구현: `backend/app/marketdata/routes.py` `get_home_news`
+- 프론트: `getHomeNews(limit?: number): Promise<HomeNews>`
+  - 호출: real.ts:58 `getHomeNews: (limit) => http.get('/news/home', { limit }),`
+
+**요청 파라미터**
+
+| 이름 | 위치 | 타입 | 필수 | 설명·제약 |
+|---|---|---|---|---|
+| `limit` | 쿼리 | `integer` |  | ≥ 1, ≤ 50, 기본 `9` |
+
+**응답** `200`
+
+프론트 타입 (mock 기준) `HomeNews`
+
+| 필드 | 타입 | 필수 |
+|---|---|---|
+| `day` | `string \| null` | 예 |
+| `day_total` | `number` | 예 |
+| `items` | `HomeNewsArticle[]` | 예 |
+
+<details><summary>예시</summary>
+
+```json
+{
+  "day": "string",
+  "day_total": 0,
+  "items": [
+    {
+      "id": "string",
+      "title": "string",
+      "src": "string",
+      "at": "2026-11-20T09:00:00+09:00",
+      "url": "string",
+      "stock_codes": [
+        "…"
+      ]
+    }
+  ]
+}
+```
+
+</details>
+
+**에러**: `401` 인증 필요 · 토큰 만료/폐기 (프론트는 /auth/refresh 를 한 번 시도) · `422` 요청 검증 실패 (FastAPI 형식 detail 배열)
+
 <a id="get--stocks-code-candles"></a>
 #### `GET /stocks/{code}/candles`
 
@@ -1194,7 +1246,7 @@ OpenAPI 응답 스키마 `MyStockResponse`
 <a id="get--stocks-code-financials"></a>
 #### `GET /stocks/{code}/financials`
 
-- 상태: **구현됨**
+- 상태: **구현됨** · 담당: 이민성
 - 인증: 필요 · 구현: `backend/app/marketdata/routes.py` `get_financials`
 - 프론트: `getFinancials(code: string): Promise<Financials>`
   - 호출: real.ts:28 `` getFinancials: (code) => http.get(`/stocks/${code}/financials`), ``
@@ -1734,7 +1786,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/board/routes.py` `list_pinned_memos`
 - 프론트: `listPinnedMemos(): Promise<PinnedMemo[]>`
-  - 호출: real.ts:58 `listPinnedMemos: () => http.get('/memos/pinned'),`
+  - 호출: real.ts:59 `listPinnedMemos: () => http.get('/memos/pinned'),`
 
 **응답** `200`
 
@@ -1777,7 +1829,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **mock**
 - 인증: (백엔드 미구현) · 응답은 `frontend/src/api/mock/index.ts`의 같은 함수가 기준
 - 프론트: `concludeMemo(memoId: string, conclusion: string): Promise<JournalEntry>`
-  - 호출: real.ts:70 `` concludeMemo: (memoId, conclusion) => http.post(`/memos/${memoId}/conclude`, { conclusion }), ``
+  - 호출: real.ts:71 `` concludeMemo: (memoId, conclusion) => http.post(`/memos/${memoId}/conclude`, { conclusion }), ``
 
 프론트 타입 (mock 기준) `JournalEntry`
 
@@ -2646,7 +2698,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/updates/routes.py` `get_ai_updates_summary`
 - 프론트: `listMemoUpdateSummary(): Promise<MemoUpdateSummary[]>`
-  - 호출: real.ts:66 `listMemoUpdateSummary: () => http.get('/ai-updates/summary'),`
+  - 호출: real.ts:67 `listMemoUpdateSummary: () => http.get('/ai-updates/summary'),`
 
 **응답** `200`
 
@@ -2895,7 +2947,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/home/routes.py` `list_checklist_items`
 - 프론트: `listHomeChecklist(): Promise<HomeChecklistItem[]>`
-  - 호출: real.ts:59 `listHomeChecklist: () => http.get('/checklist-items'),`
+  - 호출: real.ts:60 `listHomeChecklist: () => http.get('/checklist-items'),`
 
 **응답** `200`
 
@@ -2935,7 +2987,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/home/routes.py` `add_checklist_item`
 - 프론트: `addChecklistItem(stockCode: string, text: string): Promise<HomeChecklistItem>`
-  - 호출: real.ts:62 `addChecklistItem: (stockCode, text) => http.post('/checklist-items', { stock_code: stockCode, text }),`
+  - 호출: real.ts:63 `addChecklistItem: (stockCode, text) => http.post('/checklist-items', { stock_code: stockCode, text }),`
 
 **요청 본문** `ChecklistItemCreate` (필수)
 
@@ -2980,7 +3032,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/home/routes.py` `set_price_condition_tracking`
 - 프론트: `setPriceConditionTracking(memoId: string, conditionId: string, tracking: boolean): Promise<void>`
-  - 호출: real.ts:65 `` http.patch(`/memos/${memoId}/price-conditions/${conditionId}`, { tracking }), ``
+  - 호출: real.ts:66 `` http.patch(`/memos/${memoId}/price-conditions/${conditionId}`, { tracking }), ``
 
 **요청 파라미터**
 
@@ -3005,7 +3057,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/home/routes.py` `list_price_conditions`
 - 프론트: `listPriceConditions(): Promise<PriceConditionRow[]>`
-  - 호출: real.ts:63 `listPriceConditions: () => http.get('/price-conditions'),`
+  - 호출: real.ts:64 `listPriceConditions: () => http.get('/price-conditions'),`
 
 **응답** `200`
 
@@ -3054,7 +3106,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/trash/routes.py` `list_trash`
 - 프론트: `listTrash(): Promise<TrashItem[]>`
-  - 호출: real.ts:73 `listTrash: () => http.get('/trash'),`
+  - 호출: real.ts:74 `listTrash: () => http.get('/trash'),`
 
 **응답** `200`
 
@@ -3092,7 +3144,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/trash/routes.py` `purge_trash`
 - 프론트: `purgeTrash(id: string): Promise<void>`
-  - 호출: real.ts:75 `` purgeTrash: (id) => http.del(`/trash/${id}`), ``
+  - 호출: real.ts:76 `` purgeTrash: (id) => http.del(`/trash/${id}`), ``
 
 **요청 파라미터**
 
@@ -3110,7 +3162,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/trash/routes.py` `restore_trash`
 - 프론트: `restoreTrash(id: string): Promise<void>`
-  - 호출: real.ts:74 `` restoreTrash: (id) => http.post(`/trash/${id}/restore`), ``
+  - 호출: real.ts:75 `` restoreTrash: (id) => http.post(`/trash/${id}/restore`), ``
 
 **요청 파라미터**
 
@@ -3132,7 +3184,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨** · 담당: 이민성
 - 인증: 필요 · 구현: `backend/app/credits/routes.py` `get_my_usage`
 - 프론트: `getUsage(): Promise<CreditUsage>`
-  - 호출: real.ts:80 `getUsage: () => http.get('/me/usage'),`
+  - 호출: real.ts:81 `getUsage: () => http.get('/me/usage'),`
 
 **응답** `200`
 
@@ -3429,7 +3481,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **mock**
 - 인증: (백엔드 미구현) · 응답은 `frontend/src/api/mock/index.ts`의 같은 함수가 기준
 - 프론트: `listCompareMemos(): Promise<CompareMemoCard[]>`
-  - 호출: real.ts:68 `listCompareMemos: () => http.get('/insights/compare-memos'),`
+  - 호출: real.ts:69 `listCompareMemos: () => http.get('/insights/compare-memos'),`
 
 프론트 타입 (mock 기준) `CompareMemoCard[]`
 
@@ -3481,7 +3533,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **mock**
 - 인증: (백엔드 미구현) · 응답은 `frontend/src/api/mock/index.ts`의 같은 함수가 기준
 - 프론트: `listConcludeCandidates(): Promise<ConcludeCandidate[]>`
-  - 호출: real.ts:69 `listConcludeCandidates: () => http.get('/insights/conclude-candidates'),`
+  - 호출: real.ts:70 `listConcludeCandidates: () => http.get('/insights/conclude-candidates'),`
 
 프론트 타입 (mock 기준) `ConcludeCandidate[]`
 
@@ -3521,7 +3573,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **mock**
 - 인증: (백엔드 미구현) · 응답은 `frontend/src/api/mock/index.ts`의 같은 함수가 기준
 - 프론트: `listMemoBacktests(): Promise<MemoBacktest[]>`
-  - 호출: real.ts:67 `listMemoBacktests: () => http.get('/insights/memo-backtest'),`
+  - 호출: real.ts:68 `listMemoBacktests: () => http.get('/insights/memo-backtest'),`
 
 프론트 타입 (mock 기준) `MemoBacktest[]`
 
@@ -3572,7 +3624,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨** · 담당: 이민성
 - 인증: 필요 · 구현: `backend/app/stats/routes.py` `get_ai_stats`
 - 프론트: `getAiStats(): Promise<AiStats>`
-  - 호출: real.ts:79 `getAiStats: () => http.get('/ai/stats'),`
+  - 호출: real.ts:80 `getAiStats: () => http.get('/ai/stats'),`
 
 **응답** `200`
 
@@ -3606,7 +3658,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **mock**
 - 인증: (백엔드 미구현) · 응답은 `frontend/src/api/mock/index.ts`의 같은 함수가 기준
 - 프론트: `deleteAllData(): Promise<void>`
-  - 호출: real.ts:83 `deleteAllData: () => http.del('/data'),`
+  - 호출: real.ts:84 `deleteAllData: () => http.del('/data'),`
 
 <a id="post--data-export"></a>
 #### `POST /data/export`
@@ -3614,7 +3666,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **mock**
 - 인증: (백엔드 미구현) · 응답은 `frontend/src/api/mock/index.ts`의 같은 함수가 기준
 - 프론트: `exportData(format: 'csv' | 'json'): Promise<{ url: string }>`
-  - 호출: real.ts:82 `exportData: (format) => http.post('/data/export', { format }),`
+  - 호출: real.ts:83 `exportData: (format) => http.post('/data/export', { format }),`
 
 프론트 타입 (mock 기준) `{ url: string }`
 
@@ -3638,7 +3690,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨** · 담당: 이민성
 - 인증: 필요 · 구현: `backend/app/stats/routes.py` `get_data_stats`
 - 프론트: `getDataStats(): Promise<DataStats>`
-  - 호출: real.ts:81 `getDataStats: () => http.get('/data/stats'),`
+  - 호출: real.ts:82 `getDataStats: () => http.get('/data/stats'),`
 
 **응답** `200`
 
@@ -3672,7 +3724,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨** · 담당: 이민성
 - 인증: 필요 · 구현: `backend/app/stats/routes.py` `post_feedback`
 - 프론트: `sendFeedback(payload: FeedbackPayload): Promise<void>`
-  - 호출: real.ts:84 `sendFeedback: (payload) => http.post('/feedback', payload),`
+  - 호출: real.ts:85 `sendFeedback: (payload) => http.post('/feedback', payload),`
 
 **요청 본문** `FeedbackPayload` (필수)
 
@@ -3696,7 +3748,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **mock**
 - 인증: (백엔드 미구현) · 응답은 `frontend/src/api/mock/index.ts`의 같은 함수가 기준
 - 프론트: `disconnectMcpApp(appId: string): Promise<Settings>`
-  - 호출: real.ts:78 `` disconnectMcpApp: (appId) => http.del(`/mcp/apps/${appId}`), ``
+  - 호출: real.ts:79 `` disconnectMcpApp: (appId) => http.del(`/mcp/apps/${appId}`), ``
 
 프론트 타입 (mock 기준) `Settings`
 

@@ -287,6 +287,27 @@ export interface CalendarEvent {
 
 export type NewsSource = '매일경제' | '한국경제' | '서울경제' | '연합뉴스';
 
+/** 홈 뉴스 위젯 기사 한 건 (GET /news/home · UI v2 HomeNewsItem 과 같은 모양) */
+export interface HomeNewsArticle {
+  id: string;
+  title: string;
+  /** 언론사 */
+  src: string;
+  /** 한국 시간 ISO (+09:00) */
+  at: ISODate;
+  url: string;
+  /** 연결된 종목 코드 (관련성 높은 순) */
+  stock_codes?: string[];
+}
+
+/** GET /news/home: 최신 기사 + 가장 새 기사 날짜(KST)의 종목 연결 기사 수 */
+export interface HomeNews {
+  /** YYYY-MM-DD (KST). 기사가 없으면 null */
+  day: string | null;
+  day_total: number;
+  items: HomeNewsArticle[];
+}
+
 export interface NewsHeadline {
   id: string;
   title: string;

@@ -252,7 +252,7 @@ function CalendarW({ events, now }: { events: MarketEvent[]; now: string }) {
 function NewsW({ p }: { p: WebHomeProps }) {
   const head = p.news[0];
   const list = p.news.slice(1, 8);
-  const day = p.days[p.days.length - 1] ?? '';
+  const day = p.news_day || (p.days[p.days.length - 1] ?? '');
   return (
     <View style={st.nw}>
       <View style={st.between}>

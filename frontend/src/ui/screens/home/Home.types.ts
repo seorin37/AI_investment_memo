@@ -82,6 +82,8 @@ export interface HomeData {
   news: HomeNewsItem[];
   /** 기준 거래일의 뉴스 수 */
   news_day_total: number;
+  /** 뉴스 기준 날짜 YYYY-MM-DD (실제 API: 가장 새 기사의 한국 날짜). 없으면 지수 마지막 날짜 */
+  news_day?: string;
   /** 지금 (뉴스 'N시간 전' 계산) */
   now: string;
   stocks: HomeStock[];

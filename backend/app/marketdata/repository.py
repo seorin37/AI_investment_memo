@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import text
@@ -75,6 +76,19 @@ class MarketDataRepository:
             """,
             {"limit": limit},
         )
+
+    def linked_news_count(self, start: datetime, end: datetime) -> int:
+        """[start, end) 사이에 나온 기사 중 종목과 연결된 기사 수 (홈 뉴스 '오늘 N건')."""
+        row = self._row(
+            """
+            SELECT count(*) AS n
+            FROM news_articles a
+            WHERE a.published_at >= :start AND a.published_at < :end
+              AND EXISTS (SELECT 1 FROM news_stocks ns WHERE ns.news_id = a.id)
+            """,
+            {"start": start, "end": end},
+        )
+        return int(row["n"]) if row else 0
 
     # ─── 기업 정보 (B)
     def stock(self, code: str) -> dict[str, Any] | None:
