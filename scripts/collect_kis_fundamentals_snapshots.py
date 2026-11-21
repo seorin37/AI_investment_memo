@@ -13,6 +13,10 @@ from pathlib import Path
 from pipelines.common.db import load_env
 from pipelines.daily_refresh import daily_refresh_lock
 from pipelines.market.kis import KisClient
+from pipelines.market.finalize_recovery_state import (
+    IntentionalMissingStateError,
+    intentional_missing_symbols,
+)
 from pipelines.market.kis_fundamentals import (
     RAW_SNAPSHOT_ROOT,
     apply_savers,
@@ -191,6 +195,20 @@ def _run_finalize_auto(args: argparse.Namespace, now: datetime) -> tuple[dict, i
                 }
                 continue
             result["target_count"] = max(result["target_count"], len(symbols))
+            try:
+                intentional_missing = intentional_missing_symbols(
+                    trade_date,
+                    symbols,
+                    state_root=args.state_root,
+                )
+            except IntentionalMissingStateError as exc:
+                result["failed_dates"].append(trade_date.isoformat())
+                result["date_results"][trade_date.isoformat()] = {
+                    "status": "intentional_missing_validation_failed",
+                    "error_type": type(exc).__name__,
+                    "error": str(exc)[:300],
+                }
+                continue
             terminal_inactive = []
             for symbol in symbols:
                 status = statuses.get(symbol)
@@ -204,11 +222,16 @@ def _run_finalize_auto(args: argparse.Namespace, now: datetime) -> tuple[dict, i
                 trade_date,
                 symbols,
             )
+            intentional_set = set(intentional_missing)
+            pending = tuple(
+                symbol for symbol in pending if symbol not in intentional_set
+            )
             if not pending:
                 result["skipped_dates"].append(trade_date.isoformat())
                 result["date_results"][trade_date.isoformat()] = {
                     "status": "already_finalized",
                     "terminal_inactive_symbols": terminal_inactive,
+                    "intentional_missing_symbols": list(intentional_missing),
                 }
                 continue
             try:
@@ -237,6 +260,9 @@ def _run_finalize_auto(args: argparse.Namespace, now: datetime) -> tuple[dict, i
                     fundamentals_saver=fundamentals_saver,
                 )
                 finalized["terminal_inactive_symbols"] = terminal_inactive
+                finalized["intentional_missing_symbols"] = list(
+                    intentional_missing
+                )
                 result["date_results"][trade_date.isoformat()] = finalized
                 result["processed_dates"].append(trade_date.isoformat())
                 if finalized["failed_symbols"]:
