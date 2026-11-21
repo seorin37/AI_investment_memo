@@ -815,3 +815,36 @@ DB 변경 항목을 마이그레이션 하나(0022 후보)로 묶을 수 있는�
 | ② 보드 · 메모 · AI 연결 | C-7(API 함수) · C-8(analysis) · AI 연결 흐름 결정(결정 7)이 **선행**. 체크리스트 1개 규칙(결정 8) |
 | ③ 업데이트 · 기업정보 · 홈 | 백엔드 보강 3개(C-14 분기 재무 · C-15 금융업 여부 · C-16 지수 날짜)를 담당자와 먼저 맞춰야 화면이 mock 과 같아짐. 업데이트 피드는 ② 타임라인 변환을 같이 씀. **11/21 dev 병합 반영: 기업정보 탭은 연결 끝(C-14·C-15 포함). 남은 것은 C-16 지수 날짜와 홈·업데이트 화면** |
 | ④ 투자 기록 · MY · 휴지통 | 투자 기록은 블록 변환(C-32) 선행. 휴지통은 ②·④ 삭제가 다 붙은 뒤. **스튜디오는 ④ 뒤 별도 단계**(백엔드 API 없음) |
+
+## 연결 1단계: 주가·지수·거시 (2026-11-21)
+
+기업정보 탭(팀원 `useCompanyInfo`)을 뺀 화면의 시세·지수·거시 칸. 틀은 기업정보와 같음: 화면마다 hook 하나 + 변환 함수 하나, `USE_MOCK=true` 면 지금처럼 mock(API 를 부르지 않음).
+
+### 백엔드 (be/app/marketdata, 읽기 전용 SQL)
+
+| 엔드포인트 | 무엇 | 메모 |
+|---|---|---|
+| GET /api/v1/quotes?codes=A,B (새) | 여러 종목 시세 한 번에 `{quotes: Quote[], missing: 코드[]}` | 최대 50개, 요청 순서, 중복 제거. 원시 종가(prices_daily)만 |
+| GET /api/v1/stocks/{code}/quote (고침) | `trade_date` 추가 | 한 종목 응답 = /quotes 의 한 줄 |
+| GET /api/v1/market/overview (고침, C-16) | `indices[].trade_date` · `indices[].dates`(series['1Y'] 와 같은 길이) | 원/달러는 관측일 집합이 지수와 다름 → 프론트 `alignTo` 로 지수 날짜 축에 맞춤 |
+| GET /api/v1/market/macro (새) | 지표별 최신값·직전값·관측일·출처·시계열 코드 `{indicators, missing, as_of}` | economic_observations(ECOS 환율·기준금리·국고채 3·10·30년, FRED 미국채 2·10·30년·WTI) + commodity_prices_daily(KRX 금 99.99K) |
+
+### 화면별
+
+| 화면 · 칸 | hook · 변환 | 판정 | 메모 |
+|---|---|---|---|
+| 홈(웹·앱) 시장 지수 3개 · 날짜 축 · 뉴스 기준일 | ui/screens/home/useHomeMarket.ts `useHomeMarket` · `toHomeMarket` | 그대로(연결됨) | 받기 전 빈 배열, 실패하면 위젯 '불러오지 못함' |
+| 앱 지수 자세히 | 〃 | 그대로(연결됨) | |
+| 홈 거시 위젯 | — | 없음 | UI v2 홈에 거시 위젯이 없음(옛 features/home MarketWidgets 는 미사용) |
+| 보드 탭 종목 머리(웹·앱) 가격·등락·작은 선·'MM.DD 종가 기준' | ui/screens/board/useBoardStock.ts `useBoardStock` · `toBoardStock` (useQuote · useStock · useMyStocks · fallbackLogo 재사용) | 그대로(연결됨) | 시세 없으면 `PriceNoteHead`(숫자 대신 미연결 안내). 메모·체크리스트는 아직 mock |
+| 내 종목(웹·앱) 목록 · 추가 후보 가격·등락·기준일 | ui/screens/stocks/useStockPrices.ts `useStockPrices` · `withQuotes` (useQuotes) | 그대로(연결됨) | GET /quotes 한 번. 없는 종목 '—', 하나도 없으면 '시세 데이터가 아직 연결되지 않았어요'. 종목 구성·메모 수는 mock |
+| 웹 사이드바 종목 | — | 해당 없음 | 가격 칸 없음 |
+| 온보딩 · 앱 홈 검색 종목 | — | 해당 없음 | 가격 칸 없음 |
+| 스튜디오 실험실(웹·앱) 변수 4개 '지금 값' | ui/screens/studio/useLabVars.ts `useLabVars` · `toLabVars` (useMacro) | 그대로(연결됨) | 'MM.DD 기준 …' 관측값만. 없으면 '데이터가 아직 연결되지 않았어요' |
+| 메모·근거 '조건까지 ±N%' · 업데이트 가격 소식 | — | 안 됨 | 근거 카드 자체가 업데이트 피드(mock)의 과거 값. 업데이트·타임라인 연결 단계에서 |
+| 스튜디오 오디오 '직전 거래일' · 주간보고서 지수 | — | 안 됨 | 생성기 없음(묶음 4) |
+
+### 담당자 상의
+
+- be/marketdata/service.py `profile`: market_cap 이 없으면 `close × shares` 로 계산함(역산). 원천값만 쓰려면 null 로 (기업정보 담당).
+- 로컬 실행: 루트 .env 에 `AUTH_*` 가 없어 실제 백엔드의 인증 API 가 모두 500 (`AuthConfigurationError`). 실제 모드 웹 로그인 확인에는 인증 설정이 필요.
