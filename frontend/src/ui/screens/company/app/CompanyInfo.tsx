@@ -76,6 +76,7 @@ export function AppCompanyInfo(p: CompanyInfoProps) {
   const pr = p.profile;
   const candles = p.candles[range];
   const all = p.quarters;
+  const healthKeys = HEALTH_KEYS.filter((h) => p.health[h.key] != null);
   const shown = all.slice(-8);
   const last = shown[shown.length - 1];
   const gkey = GTABS[gtab].key;
@@ -206,7 +207,7 @@ export function AppCompanyInfo(p: CompanyInfoProps) {
                     </View>
                   </View>
                   <Text style={st.fsrc}>금융감독원 DART 정기보고서(사업·반기·분기) 기준 · 연결</Text>
-                  {p.financial ? <Text style={st.finfo}>금융업은 재무 구조가 달라 매출·영업이익·유동비율 같은 지표를 공시하지 않아요. 값이 없는 칸은 — 로 보여 드려요</Text> : null}
+                  {p.financial ? <Text style={st.finfo}>금융업은 재무 구조가 달라 매출·이익률·유동비율 같은 지표를 따로 보여 드리지 않아요. 값이 없는 칸은 — 로 보여 드려요</Text> : null}
                 </View>
               )}
             </Section>
@@ -304,10 +305,11 @@ export function AppCompanyInfo(p: CompanyInfoProps) {
                       {p.health_as_of.slice(0, 4)}년 {Number(p.health_as_of.slice(5, 7))}월 기준
                     </Text>
                   </View>
-                  <Radar labels={HEALTH_KEYS.map((h) => h.k)} scores={HEALTH_KEYS.map((h) => healthScore(h.key, p.health[h.key]))} width={cw} visible={seen} />
+                  {/* 값이 있는 축만 (11-21 결정 ②: 금융사는 부채비율·유보율 두 축 = 선 하나) */}
+                  <Radar labels={healthKeys.map((h) => h.k)} scores={healthKeys.map((h) => healthScore(h.key, p.health[h.key]))} width={cw} visible={seen} />
                   <View style={st.hl}>
-                    {HEALTH_KEYS.map((h, i) => (
-                      <View key={h.k} style={[st.hli, i === HEALTH_KEYS.length - 1 && { borderBottomWidth: 0 }]}>
+                    {healthKeys.map((h, i) => (
+                      <View key={h.k} style={[st.hli, i === healthKeys.length - 1 && { borderBottomWidth: 0 }]}>
                         <View style={st.kvL}>
                           <Text style={st.hliT}>{h.k}</Text>
                           <Q onPress={() => setTerm(h.term)} label={h.k} />

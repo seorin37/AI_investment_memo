@@ -3,7 +3,7 @@ import type { StockHeadProps } from '@/ui/shared/StockHead.types';
 
 /**
  * 분기 재무 한 줄 (DART 정기보고서 · 연결). 금액은 억원, 비율은 %.
- * 금융업은 매출·영업이익(·이익률)을 공시하지 않아 null → 화면에 '—'.
+ * 금융업은 매출·이익률이 null → 화면에 '—' (영업이익·순이익은 보여 줌, 11-21 결정 ①).
  * models.Financials 는 연간만 있어서, 분기 화면에 필요한 모양을 여기 둠 (API 연결 단계에서 맞춤).
  */
 export interface CompanyQuarter {
@@ -17,7 +17,6 @@ export interface CompanyQuarter {
   op_margin: number | null;
   net_margin: number | null;
   roe: number | null;
-  roa: number | null;
 }
 
 /** 기업 건전성 (최근 분기 재무상태표). 금융업은 유동·당좌·이자보상이 없어 null */

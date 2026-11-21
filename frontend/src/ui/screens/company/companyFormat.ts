@@ -78,7 +78,7 @@ export function healthScore(key: keyof CompanyHealth, v: number | null): number 
 }
 
 /* ---------- 용어 설명 (원본 앱 TERMS: 풀이와 계산식만 · 좋다·나쁘다 판단 없음) ---------- */
-export type TermKey = 'per' | 'pbr' | 'eps' | 'bps' | 'mc' | 'sh' | 'debt' | 'cur' | 'quick' | 'icr' | 'ret' | 'opm' | 'npm' | 'roe' | 'roa';
+export type TermKey = 'per' | 'pbr' | 'eps' | 'bps' | 'mc' | 'sh' | 'debt' | 'cur' | 'quick' | 'icr' | 'ret' | 'opm' | 'npm' | 'roe';
 export const TERM_TIP = '업종마다 보통 수준이 달라서, 같은 업종끼리 비교하는 게 좋아요. 이 값만으로 좋다·나쁘다를 판단하지 않아요.';
 type TermCtx = { p: StockProfile; price: number; last: CompanyQuarter; health: CompanyHealth };
 export const TERMS: Record<TermKey, [string, string, string, (c: TermCtx) => string]> = {
@@ -96,5 +96,4 @@ export const TERMS: Record<TermKey, [string, string, string, (c: TermCtx) => str
   opm: ['영업이익률', '', '영업이익 ÷ 매출 × 100. 본업으로 매출 100원당 얼마를 남겼는지예요.', ({ last }) => (last.op_margin == null ? '— · 매출을 공시하지 않는 종목이에요' : `${last.op_margin.toFixed(1)}% = 영업이익 ÷ 매출 × 100 (${last.q})`)],
   npm: ['순이익률', '', '순이익 ÷ 매출 × 100. 세금 등을 다 빼고 매출 100원당 얼마를 남겼는지예요.', ({ last }) => (last.net_margin == null ? '— · 매출을 공시하지 않는 종목이에요' : `${last.net_margin.toFixed(1)}% = 순이익 ÷ 매출 × 100 (${last.q})`)],
   roe: ['ROE', '자기자본이익률', '순이익 ÷ 자본 × 100. 주주의 돈(자본)으로 얼마나 이익을 냈는지예요.', ({ last }) => (last.roe == null ? '—' : `${last.roe.toFixed(1)}% = 순이익(연환산) ÷ 평균 자본 × 100 (${last.q})`)],
-  roa: ['ROA', '총자산이익률', '순이익 ÷ 총자산 × 100. 가진 자산 전체로 얼마나 이익을 냈는지예요. 금융사는 자산이 커서 보통 1% 안팎이에요.', ({ last }) => (last.roa == null ? '—' : `${last.roa.toFixed(1)}% = 순이익(연환산) ÷ 평균 총자산 × 100 (${last.q})`)],
 };

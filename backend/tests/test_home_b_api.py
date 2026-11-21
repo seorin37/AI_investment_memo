@@ -82,13 +82,40 @@ class FakeMarketRepo:
                 }
             ],
         }
+        # 기업정보 분기 재무 (UI v2, 2026-11-21): 13분기 중 최근 12개만, 2026-03은 자본잠식
+        self.quarters = {
+            "005930": [
+                {
+                    "period_end": date(2023 + (i + 2) // 4, 3 * ((i + 2) % 4) + 3, 30 if (3 * ((i + 2) % 4) + 3) in (6, 9) else 31),
+                    "fs_div": "consolidated",
+                    "revenue": Decimal(100_000_000_000) * (i + 1), "operating_income": Decimal(12_345_678_901),
+                    "net_income": Decimal(-5_000_000_000) if i == 0 else Decimal(9_000_000_000),
+                    "operating_margin": Decimal("12.34"), "net_margin": Decimal("9.01"), "roe": Decimal("10.14"),
+                    "total_equity": Decimal(-1) if i == 11 else Decimal(500_000_000_000),
+                }
+                for i in range(13)
+            ],
+            "105560": [
+                {
+                    "period_end": date(2026, 9, 30), "fs_div": "consolidated", "revenue": None,
+                    "operating_income": Decimal(2_000_000_000_000), "net_income": Decimal(1_500_000_000_000),
+                    "operating_margin": Decimal("30.0"), "net_margin": Decimal("20.0"), "roe": Decimal("9.5"),
+                    "total_equity": Decimal(60_000_000_000_000),
+                }
+            ],
+        }
         self.metrics = {
             "005930": {
                 "period_end": date(2026, 9, 30), "fs_div": "consolidated",
                 "debt_ratio": Decimal("28.94"), "current_ratio": Decimal("309.83"),
                 "quick_ratio": Decimal("256.01"), "interest_coverage": Decimal("858.68"),
-                "reserve_ratio": Decimal("65323.50"),
-            }
+                "reserve_ratio": Decimal("65323.50"), "interest_coverage_basis": "cf_paid",
+            },
+            "105560": {
+                "period_end": date(2026, 9, 30), "fs_div": "consolidated",
+                "debt_ratio": Decimal("954.0"), "current_ratio": Decimal("1"), "quick_ratio": Decimal("1"),
+                "interest_coverage": Decimal("2"), "reserve_ratio": Decimal("1165.0"), "interest_coverage_basis": "cf_paid",
+            },
         }
         self.series = {
             ("index", "KOSPI"): [{"day": date(2026, 11, 19) - timedelta(days=299 - i), "value": Decimal(5000 + i)} for i in range(300)],
@@ -113,6 +140,16 @@ class FakeMarketRepo:
 
     def latest_metrics(self, code):
         return self.metrics.get(code)
+
+    def financial_profile(self, code):
+        sectors = {"005930": ("general", None), "105560": ("financial", "holding"), "005935": ("general", None)}
+        if code not in self.stocks and code != "005935":
+            return None
+        sector, fin_type = sectors.get(code, ("general", None))
+        return {"code": code, "sector": sector, "fin_type": fin_type, "source_code": "005930" if code == "005935" else code}
+
+    def quarterly_financials(self, code, limit):
+        return self.quarters.get(code, [])[-limit:]
 
     def index_closes(self, code, limit):
         return self.series.get(("index", code), [])[-limit:]
@@ -170,35 +207,45 @@ class ProfileFinancialsOverviewTest(unittest.TestCase):
     def test_profile_unknown_stock_is_404(self):
         self.assertEqual(self.client.get("/api/v1/stocks/999999/profile").status_code, 404)
 
-    def test_financials_annual_margins_from_annual_totals(self):
+    def test_financials_quarters_for_company_info(self):
+        """UI v2 기업정보 (11-21 결정): 최근 12분기, 억원, 달력 분기 라벨, 자본잠식 분기 ROE null, ROA 없음."""
         res = self.client.get("/api/v1/stocks/005930/financials")
         self.assertEqual(res.status_code, 200)
         body = res.json()
+        self.assertEqual((body["financial"], body["preparing"], body["sector"]), (False, False, "general"))
         self.assertEqual(body["basis"], "2026년 09월 기준 · 연결재무제표")
-        self.assertEqual(
-            body["annual"],
-            [
-                {"period": "2024-12", "revenue": 1000, "operating_income": 109, "net_income": 112,
-                 "operating_margin": 10.9, "net_margin": 11.2, "roe": 5.6},
-                {"period": "2025-12", "revenue": 3000, "operating_income": 393, "net_income": 399,
-                 "operating_margin": 13.1, "net_margin": 13.3, "roe": 10.1},
-            ],
-        )
-        self.assertEqual(
-            body["stability"],
-            {"as_of": "2026-09", "debt_ratio": 28.9, "current_ratio": 309.8, "quick_ratio": 256.0,
-             "interest_coverage": 858.7, "reserve_ratio": 65323.5},
-        )
+        qs = body["quarters"]
+        self.assertEqual(len(qs), 12)                                 # 13개 중 최근 12개
+        self.assertEqual((qs[0]["period_end"], qs[-1]["period_end"]), ("2023-12-31", "2026-09-30"))
+        self.assertEqual((qs[-1]["q"], qs[-1]["label"]), ("26.3Q", "2026년 3분기"))
+        self.assertEqual(qs[-1]["revenue"], 13000)                     # 1.3조원 = 13,000억원
+        self.assertEqual((qs[-1]["op"], qs[-1]["net"]), (123, 90))
+        self.assertEqual((qs[-1]["op_margin"], qs[-1]["net_margin"]), (12.3, 9.0))
+        self.assertIsNone(qs[-2]["roe"])                               # 자본총계 0 이하 분기
+        self.assertEqual(qs[-1]["roe"], 10.1)
+        self.assertNotIn("roa", qs[-1])
+        self.assertEqual(body["health"], {"debt": 28.9, "current": 309.8, "quick": 256.0, "interest": 858.7,
+                                          "reserve": 65323.5})
+        self.assertEqual((body["health_as_of"], body["interest_coverage_basis"]), ("2026-09-30", "cf_paid"))
 
-    def test_financials_without_revenue_have_null_margins(self):
+    def test_financials_financial_company_hides_revenue_and_liquidity(self):
         body = self.client.get("/api/v1/stocks/105560/financials").json()
-        self.assertEqual(body["basis"], "2025년 12월 기준 · 연결재무제표")
-        self.assertIsNone(body["annual"][0]["operating_margin"])
-        self.assertIsNone(body["stability"]["debt_ratio"])
+        self.assertTrue(body["financial"])
+        q = body["quarters"][0]
+        self.assertIsNone(q["revenue"])
+        self.assertEqual(q["op"], 20000)                               # 영업이익은 보여 준다 (①)
+        self.assertIsNone(q["op_margin"])
+        self.assertEqual(body["health"], {"debt": 954.0, "current": None, "quick": None, "interest": None,
+                                          "reserve": 1165.0})
+        self.assertIsNone(body["interest_coverage_basis"])
 
-    def test_financials_missing_is_404(self):
+    def test_financials_preferred_uses_common_and_empty_is_preparing(self):
+        body = self.client.get("/api/v1/stocks/005935/financials").json()
+        self.assertEqual((body["code"], body["source_code"], len(body["quarters"])), ("005935", "005930", 12))
         self.repo.stocks["000001"] = {**self.repo.stocks["105560"], "code": "000001"}
-        self.assertEqual(self.client.get("/api/v1/stocks/000001/financials").status_code, 404)
+        empty = self.client.get("/api/v1/stocks/000001/financials")
+        self.assertEqual(empty.status_code, 200)
+        self.assertEqual((empty.json()["preparing"], empty.json()["quarters"]), (True, []))
         self.assertEqual(self.client.get("/api/v1/stocks/999999/financials").status_code, 404)
 
     def test_market_overview_shape(self):
