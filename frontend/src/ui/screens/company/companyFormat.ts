@@ -84,8 +84,8 @@ type TermCtx = { p: StockProfile; price: number; last: CompanyQuarter; health: C
 export const TERMS: Record<TermKey, [string, string, string, (c: TermCtx) => string]> = {
   per: ['PER', '주가수익비율', '주가 ÷ 주당순이익(EPS). 회사가 1년에 버는 이익에 비해 주가가 몇 배인지 보여 줘요.', ({ p, price }) => (p.per == null || p.eps == null ? '—' : `${p.per.toFixed(2)}배 = ${won(price)}원 ÷ ${won(p.eps)}원`)],
   pbr: ['PBR', '주가순자산비율', '주가 ÷ 주당순자산(BPS). 회사가 가진 순자산에 비해 주가가 몇 배인지 보여 줘요.', ({ p, price }) => (p.pbr == null || p.bps == null ? '—' : `${p.pbr.toFixed(2)}배 = ${won(price)}원 ÷ ${won(p.bps)}원`)],
-  eps: ['EPS', '주당순이익', '순이익 ÷ 주식 수. 주식 1주가 1년 동안 번 이익이에요.', ({ p }) => (p.eps == null ? '—' : `${won(p.eps)}원 (최근 4개 분기 순이익 합 ÷ 주식 수)`)],
-  bps: ['BPS', '주당순자산', '순자산(자본총계) ÷ 주식 수. 주식 1주에 해당하는 순자산이에요.', ({ p }) => (p.bps == null ? '—' : `${won(p.bps)}원 (최근 분기 자본총계 ÷ 주식 수)`)],
+  eps: ['EPS', '주당순이익', '순이익 ÷ 주식 수. 주식 1주가 1년 동안 번 이익이에요.', ({ p }) => (p.eps == null ? '—' : `${won(p.eps)}원 (직전 사업연도 기준 · 한국투자증권)`)],
+  bps: ['BPS', '주당순자산', '순자산(자본총계) ÷ 주식 수. 주식 1주에 해당하는 순자산이에요.', ({ p }) => (p.bps == null ? '—' : `${won(p.bps)}원 (직전 사업연도 말 기준 · 한국투자증권)`)],
   mc: ['시가총액', '', '주가 × 상장주식 수. 시장에서 매겨진 회사 전체의 값이에요. KRX 원천값을 그대로 보여 줘요.', ({ p }) => `${capShort(p.market_cap)} (KRX · 전일 기준)`],
   sh: ['상장주수', '상장주식 수', '거래소에 올라 있는 이 회사 주식의 수예요.', ({ p }) => `${(p.shares_outstanding / 1e8).toFixed(2)}억주 (KRX)`],
   debt: ['부채비율', '', '부채 ÷ 자본 × 100. 자기 돈에 비해 빌린 돈이 얼마나 되는지 보여 줘요.', ({ health }) => `${healthVal('debt', health.debt)} = 부채총계 ÷ 자본총계 × 100`],
