@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useUI } from '@/store/ui';
 import type { MemoColor } from '@/types/models';
@@ -6,6 +6,9 @@ import { AppAiLink } from '@/ui/screens/memo/app/AiLink';
 import type { AiLinkState, AiTrackItem } from '@/ui/screens/memo/MemoDetail.types';
 import { mockDetailStockName, mockExtract, mockMemoById, mockTrackItems } from '@/ui/screens/memo/MemoDetail.mock';
 import { useMemoScreen } from '@/ui/screens/memo/useMemoScreen';
+import { api } from '@/api';
+import { useQueryClient } from '@tanstack/react-query';
+import { connectResult } from '@/ui/screens/board/useBoardData';
 
 /**
  * 앱 AI 연결 창 = UI v2 (아래에서 올라옴). mock 단계: 분석 중 1.2초 (새 메모면 1.7초) → 항목 있음 / 항목 없음.
@@ -30,23 +33,33 @@ export default function AiLinkScreen() {
   const items = real ? realItems : isNew ? mockExtract(memo.title, memo.body) : (mockTrackItems[id] ?? []);
   const [state, setState] = useState<AiLinkState>('loading');
   const [failed, setFailed] = useState(__DEV__ && fail === '1');
-  /* 실제 모드: 분석 중 동안 AI 켜기 → 분석 결과 */
+  /* 실제 모드: 분석 중이 되면 AI 켜기 → 분석 결과. 분석(LLM, 몇 초) 중에 '일반 메모로 두기'로 닫았으면 끝난 뒤 다시 끈다 */
   const [asked, setAsked] = useState(0);
-  const [askedFor, setAskedFor] = useState(-1);
-  if (real && state === 'loading' && askedFor !== asked) {
-    setAskedFor(asked);
-    void screen.ops!.aiOn().then((r) => {
-      setRealItems(r.items);
-      setState(r.state);
-    });
-  }
+  const closed = useRef(false);
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (!real || state !== 'loading' || !id) return;
+    void api.setAiLink(id, true).then(
+      (m) => {
+        void qc.invalidateQueries(); // 보드 · 메모 상세의 AI 연결 표시
+        if (closed.current) return void api.setAiLink(id, false).finally(() => qc.invalidateQueries());
+        const r = connectResult(m.analysis);
+        setRealItems(r.items);
+        setState(r.state);
+      },
+      () => setState('error'),
+    );
+  }, [real, state, id, asked, qc]);
   useEffect(() => {
     if (real || state !== 'loading') return;
     const t = setTimeout(() => setState(failed ? 'error' : items.length ? 'items' : 'empty'), from === 'new' ? 1700 : 1200);
     return () => clearTimeout(t);
   }, [real, state, failed, items.length, from]);
   const cancel = useCallback(() => {
-    if (real) void screen.ops!.aiOff();
+    if (real) {
+      closed.current = true;
+      void screen.ops!.aiOff();
+    }
     if (from === 'new') toast('일반 메모로 저장했어요 · AI 연결은 나중에 켤 수 있어요');
     if (from_onboarding === '1') { router.dismissTo({ pathname: '/', params: { ...homeParams, first_ai: '0' } }); return; }
     router.back();
