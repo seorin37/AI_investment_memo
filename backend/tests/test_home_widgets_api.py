@@ -215,6 +215,9 @@ class FakeUpdatesRepo:
                                                                        "news_url": "https://news.example/b",
                                                                        "news_title": "답 근거 기사"}]}
 
+    def recent_closes(self, symbol, until, n=10):
+        return []
+
     def similarities(self, pairs):
         return {}
 
