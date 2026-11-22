@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useCoach } from '@/store/coach';
 import { View, useWindowDimensions } from 'react-native';
 import { Redirect, Stack, useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
+import { env } from '@/config/env';
+import { coachPlace } from '@/lib/coachTarget';
 import { useIntroSeen } from '@/lib/introSeen';
 import { useAuth } from '@/store/auth';
 import { mockPopular, mockRecentSearches, mockSideProfile, mockStudioHead } from '@/ui/layout/web/WebShell.mock';
@@ -73,6 +75,9 @@ export default function MainLayout() {
   const dark = useTheme((s) => s.dark);
   const setDark = useTheme((s) => s.setDark);
   /* 사용법 안내 화면 이동 (원본 웹 coach.tsx: 첫 카드 홈 → ①②③ 종목 보드(메모 창은 보드가 엶) → ④ 홈 + 스튜디오 열 펼침 → 끝나면 홈) */
+  /* ⑥ 사이드바 종목: 순서 끌기 · 우클릭/⋯ 메뉴 · + 종목 추가 (실제 모드면 GET /stocks 와 저장 API, mock 이면 이 셸 안에서만).
+     사용법 안내 ①②③ 대상 종목(내 첫 종목)도 이 순서 */
+  const [sideStocks, setSideStocks] = useSideStocks();
   const coachStep = useCoach((s) => s.step);
   const replayCoach = useCoach((s) => s.replay);
   const coachWas = useRef<number | null>(null);
@@ -85,8 +90,12 @@ export default function MainLayout() {
       if ((prev != null || coachStep === -1) && pathname !== '/') router.navigate('/');
       return;
     }
-    if (coachStep <= 2) {
-      if (!pathname.startsWith('/stocks/000660')) router.navigate({ pathname: '/stocks/[code]', params: { code: '000660' } });
+    /* ①②③ 보드: mock 모드는 000660, 실제 모드는 내 첫 종목(사이드바 순서). 내 종목이 없으면 홈에 머묾 → 가운데 카드 (lib/coachTarget) */
+    const place = coachPlace(coachStep, !env.useMock, sideStocks.map((s) => s.stock_code));
+    if (place.kind === 'board') {
+      if (!pathname.startsWith(`/stocks/${place.code}`)) router.navigate({ pathname: '/stocks/[code]', params: { code: place.code } });
+    } else if (place.kind === 'home') {
+      if (pathname !== '/') router.navigate('/');
     } else {
       router.navigate('/');
       useStudioPlayer.getState().setWebView('home');
@@ -94,8 +103,6 @@ export default function MainLayout() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coachStep]);
-  /* ⑥ 사이드바 종목: 순서 끌기 · 우클릭/⋯ 메뉴 · + 종목 추가 (실제 모드면 GET /stocks 와 저장 API, mock 이면 이 셸 안에서만) */
-  const [sideStocks, setSideStocks] = useSideStocks();
   /* + 종목 추가 창 후보: 실제 모드면 서버 검색 · 많이 찾는 종목 */
   const addSearch = useAddStockSearch();
   /* 투자 실험실 변수 '지금 값': 실제 모드면 GET /market/macro (2026-11-21) */
