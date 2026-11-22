@@ -58,9 +58,13 @@ class UpdatesService:
         sources = self.repository.sources([int(r["id"]) for r in rows])
         pairs = [(int(r["item_id"]), s["news_id"]) for r in rows for s in sources.get(int(r["id"]), []) if s["news_id"]]
         sims = self.repository.similarities(pairs)
-        return [self._ai_update(r, [_source(s) for s in sources.get(int(r["id"]), [])], sims) for r in rows]
+        closes = {int(r["id"]): self.repository.recent_closes(r["symbol"], r["observed_trade_date"])
+                  for r in rows if r["type"] == "price_condition" and r["observed_trade_date"] is not None}
+        return [self._ai_update(r, [_source(s) for s in sources.get(int(r["id"]), [])], sims, closes.get(int(r["id"]), []))
+                for r in rows]
 
-    def _ai_update(self, r: dict[str, Any], srcs: list[dict[str, Any]], sims: dict) -> dict[str, Any]:
+    def _ai_update(self, r: dict[str, Any], srcs: list[dict[str, Any]], sims: dict,
+                   closes: list[tuple[Any, float]] | None = None) -> dict[str, Any]:
         is_price = r["type"] == "price_condition"
         lead = srcs[0] if srcs else None
         value = float(r["observed_value"]) if r["observed_value"] is not None else None
@@ -83,12 +87,17 @@ class UpdatesService:
             "relevance": round(max(news_sims), 4) if news_sims else 1.0,
             # 덧붙인 값
             "created_at": r["created_at"], "reason": r["reason"], "card": details,
+            "memo_color": r["color"] or "yellow",               # 2026-11-22 업데이트 화면 메모 색 (C-21)
             "card_type": r["type"],                             # DB 원래 종류 (answer 등). 계약 type 은 contract_type
             "answer_status": details.get("answer_status") if r["type"] == "answer" else None,
             "item": {"id": str(r["item_id"]), "type": r["item_type"], "description": r["item_description"],
                      "status": r["item_status"], "last_checked_at": r["last_checked_at"]},
             "sources": srcs,
-            "price": {"state": r["price_state"], "observed_value": value, "observed_trade_date": r["observed_trade_date"]}
+            # 2026-11-22 업데이트 화면 가격 카드: 조건가·방향(tracking_items)·최근 10거래일 종가(prices_daily, 원시 종가)
+            "price": {"state": r["price_state"], "observed_value": value, "observed_trade_date": r["observed_trade_date"],
+                      "threshold": float(r["price_threshold"]) if r.get("price_threshold") is not None else None,
+                      "direction": {"price_above": "above", "price_below": "below"}.get(r["item_type"]),
+                      "closes": [c for _, c in closes or []], "closes_from": closes[0][0] if closes else None}
             if is_price else None,
         }
 

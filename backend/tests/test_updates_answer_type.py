@@ -49,6 +49,9 @@ class FakeRepo:
     def sources(self, ids):
         return {i: SOURCES[i] for i in ids if i in SOURCES}
 
+    def recent_closes(self, symbol, until, n=10):
+        return []
+
     def similarities(self, pairs):
         return {}
 

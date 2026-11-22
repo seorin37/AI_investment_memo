@@ -224,6 +224,36 @@ export interface AiUpdate extends MarketUpdate {
   headline: string; // 타임라인 제목: 'HBM4 공급 확대 소식이 나왔어요'
   read: boolean;
   relevance: number; // 0~1
+  // ─ 백엔드가 덧붙이는 값 (be/app/updates/service.py · mock 에는 없을 수 있음)
+  created_at?: ISODate;
+  /** 메모와 연결되는 이유 (카드 문장) */
+  reason?: string;
+  /** DB 원래 종류 (answer = 질문 답) — type 은 계약 3종으로 바뀌어 옴 */
+  card_type?: string;
+  answer_status?: string | null;
+  memo_color?: MemoColor;
+  sources?: UpdateSourceRef[];
+  price?: {
+    state: string | null;
+    observed_value: number | null;
+    observed_trade_date: string | null;
+    threshold: number | null;
+    direction: 'above' | 'below' | null;
+    /** 관측 거래일까지 최근 10거래일 종가 (오래된 → 최근) · 첫 종가의 거래일 */
+    closes: number[];
+    closes_from: string | null;
+  } | null;
+}
+
+/** 카드 근거 한 건 (뉴스 · 공시) */
+export interface UpdateSourceRef {
+  kind: 'news' | 'disclosure';
+  ref: string;
+  title: string;
+  source: string;
+  url: string | null;
+  published_at: string | null;
+  quote: string | null;
 }
 
 export type TimelineEntry =

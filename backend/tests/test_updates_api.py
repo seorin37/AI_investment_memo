@@ -44,6 +44,9 @@ class FakeRepo:
                      "news_url": None, "published_at": None, "news_source": None, "disclosure_title": "현금배당결정",
                      "rcept_dt": date(2026, 10, 29)}]}
 
+    def recent_closes(self, symbol, until, n=10):
+        return [(date(2026, 11, 6), 69000.0), (date(2026, 11, 7), 70500.0), (date(2026, 11, 10), 71000.0)]
+
     def similarities(self, pairs):
         return {(7, 55): 0.71}
 
@@ -66,6 +69,7 @@ class FakeRepo:
 
 
 ROWS = [card(1, "news"), card(2, "price_condition", title="조건가에 도달했어요", price_state="reached", observed_value=71000,
+                               item_type="price_above", price_threshold=70000,
                                observed_trade_date=date(2026, 11, 10), is_read=True),
         card(4, "disclosure", memo_id=5, symbol="105560", stock_name="KB금융")]
 
@@ -81,7 +85,10 @@ class ServiceTest(unittest.TestCase):
         self.assertEqual(news["card"]["coverage"], "10월 28일 이후 기사 기준")
         self.assertEqual(news["item"]["last_checked_at"], T)
         self.assertEqual((price["type"], price["title"], price["source"], price["read"]), ("price", "종가 71,000원", "KRX", True))
-        self.assertEqual(price["price"], {"state": "reached", "observed_value": 71000.0, "observed_trade_date": date(2026, 11, 10)})
+        self.assertEqual(price["price"], {"state": "reached", "observed_value": 71000.0, "observed_trade_date": date(2026, 11, 10),
+                                          "threshold": 70000.0, "direction": "above", "closes": [69000.0, 70500.0, 71000.0],
+                                          "closes_from": date(2026, 11, 6)})
+        self.assertEqual((news["memo_color"], news["price"]), ("green", None))
         self.assertEqual((disc["source"], disc["url"], disc["relevance"]),
                          ("DART", "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=R1", 1.0))
         for key in ("id", "stock_code", "stock_name", "type", "title", "source", "url", "published_at", "memo_id",
