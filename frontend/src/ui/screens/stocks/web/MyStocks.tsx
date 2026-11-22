@@ -213,6 +213,8 @@ export function WebMyStocks(p: WebMyStocksProps) {
         mine={L}
         universe={p.universe}
         popular={p.popular}
+        remote={p.add_remote}
+        onQueryChange={p.onAddQuery}
         onClose={() => setAdd(false)}
         onAdd={(c, h) => {
           p.onAdd(c, h);

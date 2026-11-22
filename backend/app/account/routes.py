@@ -10,8 +10,8 @@ from app.auth.routes import get_current_user
 from app.db import get_db, get_read_db
 
 from .repository import AccountRepository
-from .schemas import HomeLayout, ProfilePatch, SettingsPatch
-from .service import AccountService, UserNotFoundError
+from .schemas import HomeLayout, ProfilePatch, SettingsPatch, TermsAgree
+from .service import AccountService, TermsError, UserNotFoundError
 
 router = APIRouter(prefix="/api/v1", tags=["account"])
 
@@ -86,3 +86,24 @@ def update_me(
         return service.update_me(_user_id(current), payload)
     except UserNotFoundError as exc:
         raise HTTPException(404, detail="사용자를 찾을 수 없습니다.") from exc
+
+
+# ─── 약관 동의 (0022 user_terms_consents · 현재 버전 = defaults.TERMS_VERSION)
+@router.get("/me/terms")
+def get_my_terms(
+    current: dict = Depends(get_current_user),
+    service: AccountService = Depends(get_account_query_service),
+):
+    return service.get_terms(_user_id(current))
+
+
+@router.post("/me/terms")
+def agree_my_terms(
+    payload: TermsAgree,
+    current: dict = Depends(get_current_user),
+    service: AccountService = Depends(get_account_command_service),
+):
+    try:
+        return service.agree_terms(_user_id(current), payload)
+    except TermsError as exc:
+        raise HTTPException(422, detail=str(exc)) from exc

@@ -319,6 +319,8 @@ export function AppMyStocks(p: AppMyStocksProps) {
         mine={L}
         universe={p.universe}
         popular={p.popular}
+        remote={p.add_remote}
+        onQueryChange={p.onAddQuery}
         onClose={() => setAdd(false)}
         onAdd={(c, h) => {
           if (filt !== 'all' && filt !== h) setFilt('all');

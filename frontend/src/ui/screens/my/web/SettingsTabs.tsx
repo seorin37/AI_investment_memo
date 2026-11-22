@@ -22,6 +22,8 @@ export interface WebSettingsExtra {
   compare: [string, (string | true)[]][];
   notes: string[];
   plan_default: string;
+  /** 지금 쓰는 플랜 카드 key (planKey(user.plan)) */
+  current_plan_key: string;
   onStartPlan: (plan_key: string) => void;
   counts: WithdrawProps['counts'];
   onExport: () => void;

@@ -9,6 +9,8 @@ export interface MyProfile {
   intro: string;
   provider: AuthProvider;
   email: string;
+  /** 프로필 사진 (users.avatar_url). 없거나 못 불러오면 이니셜 */
+  photoUrl?: string | null;
 }
 
 /** MY 본 화면에서 여는 하위 화면 (⑨-3b·c 에서 채움) */
@@ -73,6 +75,8 @@ export interface PlansProps {
   compare: [string, (string | true)[]][];
   notes: string[];
   default_key: string;
+  /** 지금 쓰는 플랜 카드 key (planKey(user.plan)) — 이 카드를 고르면 [시작하기] 대신 '지금 쓰는 플랜이에요' */
+  current_key: string;
   onBack: () => void;
   /** 결제·업그레이드 (연결 안 됨 → 안내만) */
   onStart: (plan_key: string) => void;

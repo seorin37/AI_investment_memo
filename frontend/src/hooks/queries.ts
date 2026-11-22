@@ -10,6 +10,7 @@ import type { BoardItem, ChartRange, FeedbackPayload, HomeLayout, Settings, Stoc
 export const qk = {
   stocks: ['stocks'] as const,
   stockSearch: (q: string) => ['stockSearch', q] as const,
+  popularStocks: (limit: number) => ['popularStocks', limit] as const,
   stock: (code: string) => ['stock', code] as const,
   quote: (code: string) => ['quote', code] as const,
   quotes: (codes: string) => ['quotes', codes] as const,
@@ -53,6 +54,10 @@ function useInvalidate() {
 
 // ─── 종목 ────────────────────────────────────────────────────
 export const useMyStocks = () => useQuery({ queryKey: qk.stocks, queryFn: api.listMyStocks });
+
+/** 많이 찾는 종목 (온보딩). 자주 바뀌지 않아 10분 동안은 다시 묻지 않음. enabled=false 면 부르지 않음(mock 화면) */
+export const usePopularStocks = (limit = 12, enabled = true) =>
+  useQuery({ queryKey: qk.popularStocks(limit), queryFn: () => api.getPopularStocks(limit), staleTime: 10 * 60_000, enabled });
 
 export const useStockSearch = (q: string) =>
   useQuery({ queryKey: qk.stockSearch(q), queryFn: () => api.searchStocks(q), enabled: q.trim().length > 0, placeholderData: keepPreviousData });

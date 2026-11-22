@@ -11,6 +11,11 @@ from typing import Any
 
 DEFAULT_HOME_LAYOUT: dict[str, Any] = {"mode": "unset", "widgets": []}
 
+# 약관 동의 (2026-11-22, 0022 user_terms_consents). 현재 약관 버전과 필수 항목은 여기 한 곳에만 둔다.
+# 프론트는 GET /me/terms 의 required 를 그대로 쓴다. 약관을 바꾸면 버전을 바꾸고 → 모든 사용자가 다시 동의한다.
+TERMS_VERSION = "2026-11-22"
+REQUIRED_TERMS: tuple[str, ...] = ("age", "service", "invest")
+
 DEFAULT_MCP_SERVER_URL = "https://mcp.memostock.example/mcp"
 
 DEFAULT_SETTINGS: dict[str, Any] = {

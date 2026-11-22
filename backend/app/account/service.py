@@ -11,13 +11,17 @@ from pydantic import ValidationError
 from app.auth.repository import AuthRepository
 from app.auth.service import _public_user
 
-from .defaults import default_home_layout, default_settings
+from .defaults import REQUIRED_TERMS, TERMS_VERSION, default_home_layout, default_settings
 from .repository import AccountRepository
-from .schemas import HomeLayout, ProfilePatch, SettingsPatch
+from .schemas import HomeLayout, ProfilePatch, SettingsPatch, TermsAgree
 
 
 class UserNotFoundError(LookupError):
     pass
+
+
+class TermsError(ValueError):
+    """약관 동의 요청이 현재 약관과 맞지 않음 (422)."""
 
 
 def _to_hhmm(value: Any) -> str:
@@ -147,6 +151,36 @@ class AccountService:
         data = layout.model_dump()
         self.repo.save_home_layout(user_id, data)
         return data
+
+    # ─── 약관 동의
+    def get_terms(self, user_id: int) -> dict[str, Any]:
+        """{required: 현재 필수 약관, agreed: 철회 안 한 동의(옛 버전 포함), complete: 현재 버전 필수 전부 동의}."""
+        rows = self.repo.list_terms_consents(user_id)
+        agreed = [
+            {"kind": row["kind"], "version": row["version"], "agreed_at": _iso(row["agreed_at"])}
+            for row in rows
+        ]
+        have = {(row["kind"], row["version"]) for row in rows}
+        return {
+            "required": [{"kind": kind, "version": TERMS_VERSION} for kind in REQUIRED_TERMS],
+            "agreed": agreed,
+            "complete": all((kind, TERMS_VERSION) in have for kind in REQUIRED_TERMS),
+        }
+
+    def agree_terms(self, user_id: int, payload: TermsAgree) -> dict[str, Any]:
+        """현재 버전 필수 약관 전부를 한 번에 받는다. 모르는 종류 · 옛 버전 · 빠진 필수 → TermsError."""
+        kinds: list[str] = []
+        for item in payload.items:
+            if item.kind not in REQUIRED_TERMS:
+                raise TermsError(f"알 수 없는 약관입니다: {item.kind}")
+            if item.version != TERMS_VERSION:
+                raise TermsError(f"현재 약관 버전이 아닙니다: {item.kind} {item.version}")
+            kinds.append(item.kind)
+        missing = [kind for kind in REQUIRED_TERMS if kind not in kinds]
+        if missing:
+            raise TermsError(f"필수 약관 동의가 빠졌습니다: {', '.join(missing)}")
+        self.repo.insert_terms_consents(user_id, [(kind, TERMS_VERSION) for kind in dict.fromkeys(kinds)])
+        return self.get_terms(user_id)
 
     # ─── 프로필
     def get_me(self, user_id: int) -> dict[str, Any]:

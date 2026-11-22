@@ -15,6 +15,9 @@ const hybridApi: Api = {
   exchangeMobileAuth: realApi.exchangeMobileAuth,
   me: realApi.me,
   logout: realApi.logout,
+  /* 인증이 실제면 로그인 뒤 판별(약관 동의)도 실제 서버 기준 */
+  getTerms: realApi.getTerms,
+  agreeTerms: realApi.agreeTerms,
   ...(env.useRealStocks ? realStockApi : {}),
   ...(env.useRealBoard ? realBoardApi : {}),
 };

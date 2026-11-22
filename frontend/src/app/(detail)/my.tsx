@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { Redirect, useRouter, type Href } from 'expo-router';
 import { useMyProfile } from '@/ui/screens/my/useMyProfile';
-import { useMyUsage } from '@/ui/screens/my/useMyUsage';
+import { useUsageView } from '@/ui/screens/my/useUsageView';
 import type { MyMenuKey } from '@/ui/screens/my/My.types';
 import { AppMy } from '@/ui/screens/my/app/My';
 import { useTheme } from '@/store/theme';
@@ -14,8 +14,9 @@ const ROUTE: Record<MyMenuKey, Href> = { noti: '/my-noti', usage: '/my-usage', d
 /** 앱 MY = UI v2 (원본 app/my.html). 웹은 사이드바 프로필·설정 창을 쓰므로 홈으로 돌려보낸다. */
 export default function MyScreen() {
   const router = useRouter();
-  const myUsage = useMyUsage();
   const { profile } = useMyProfile();
+  /* AI 사용량: 실제 모드면 GET /me/usage, mock 모드면 My.mock */
+  const usage = useUsageView();
   const dark = useTheme((s) => s.dark);
   const setDark = useTheme((s) => s.setDark);
   const toggleDark = () => setDark(!dark);
@@ -23,8 +24,8 @@ export default function MyScreen() {
   return (
     <AppMy
       profile={profile}
-      usage_pct={myUsage.usage_pct}
-      usage_renew={myUsage.usage_renew}
+      usage_pct={usage.usage_pct}
+      usage_renew={usage.usage_renew}
       version={`memo's v${Constants.expoConfig?.version ?? ''} (베타)`}
       dark={dark}
       onBack={() => router.back()}

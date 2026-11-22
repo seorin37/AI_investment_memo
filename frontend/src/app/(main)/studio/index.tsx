@@ -4,7 +4,7 @@ import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useStudioPlayer } from '@/store/studioPlayer';
 import { useUI } from '@/store/ui';
 import { TopBar } from '@/ui/layout/app/TopBar';
-import { useMyUsage } from '@/ui/screens/my/useMyUsage';
+import { useUsageView } from '@/ui/screens/my/useUsageView';
 import { useMyProfile } from '@/ui/screens/my/useMyProfile';
 import { mockAudioPeriods, mockAudioStocks, mockReport, mockReportStocks, mockStudioCounts, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
 import { AppAudioSheet } from '@/ui/screens/studio/app/AudioSheet';
@@ -22,8 +22,9 @@ const NOT_YET = '아직 연결되지 않았어요 · 데이터는 그대로예�
 
 export default function StudioTab() {
   const router = useRouter();
-  const myUsage = useMyUsage();
-  const { profile: { name: myName } } = useMyProfile();
+  const { profile: { name: myName, photoUrl } } = useMyProfile();
+  /* AI 사용량: 실제 모드면 GET /me/usage, mock 모드면 My.mock */
+  const usage = useUsageView();
   const toast = useUI((s) => s.showToast);
   const { fail, make } = useLocalSearchParams<{ fail?: string; make?: string }>();
   const p = useStudioPlayer();
@@ -43,7 +44,7 @@ export default function StudioTab() {
             preset="studio"
             title="스튜디오"
             actions={[{ icon: 'bell', label: '알림', onPress: () => router.push('/my-inbox') }]}
-            avatar={{ name: myName, onPress: () => router.push('/my') }}
+            avatar={{ name: myName, photoUrl, onPress: () => router.push('/my') }}
           />
         }
         features={mockStudioFeatures}
@@ -54,8 +55,8 @@ export default function StudioTab() {
           if (p.job?.status === 'fail') p.retry();
           router.push('/studio-gen');
         }}
-        usage_pct={myUsage.usage_pct}
-        usage_refill={myUsage.usage_refill}
+        usage_pct={usage.usage_pct}
+        usage_refill={usage.usage_refill}
         {...mockStudioCounts}
         onFeature={(k) => (k === 'audio' ? setSheet(true) : k === 'report' ? setRSheet(true) : router.push(k === 'quiz' ? '/studio-quiz' : '/studio-lab'))}
         onOpenMade={(m) => {

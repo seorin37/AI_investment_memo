@@ -13,7 +13,8 @@ import { Foot, Grp, Lb, MC, OkIcon, Page, Rv } from './parts';
 export function AppPlans(p: PlansProps) {
   const [pick, setPick] = useState(p.default_key);
   const [per, setPer] = useState<'월간' | '연간'>('월간');
-  const free = pick === p.plans[0]?.key;
+  /* 고른 카드가 지금 쓰는 플랜이면 시작하기 대신 안내 (예전: 첫 카드 = 현재 플랜 가정) */
+  const free = pick === p.current_key;
   return (
     <Page
       title="플랜 살펴보기"

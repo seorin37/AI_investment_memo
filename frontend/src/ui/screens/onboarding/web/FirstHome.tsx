@@ -4,9 +4,16 @@ import { Text } from '@/components/ui/AppText';
 import { Sheet } from '@/ui/shared/Sheet';
 import { StockLogo } from '@/ui/shared/StockLogo';
 import { fpx } from '@/ui/theme';
+import { useCoach } from '@/store/coach';
 import type { FirstHomeProps } from '../FirstHome.types';
 
 export function WebFirstHome(p: FirstHomeProps) {
+  /* [둘러보기] = 앱과 같은 사용법 안내 ①부터 (2026-11-22). 안내 창만 닫고 공용 튜토리얼(store/coach · ui/shared/Coach)로.
+     호스트의 onNextGuide(종목 고르기 창)는 여기서 부르지 않음 — 첫 메모 종목 고르기는 카드의 [첫 메모 작성하기](onOpenPicker) 그대로 */
+  const startTour = () => {
+    p.onCloseGuide();
+    useCoach.getState().go(0);
+  };
   return (
     <>
       <View style={st.card}>
@@ -16,7 +23,7 @@ export function WebFirstHome(p: FirstHomeProps) {
         {!p.saved ? <Pressable onPress={p.onSkip} style={st.later}><Text style={st.laterT}>나중에</Text></Pressable> : null}
       </View>
       <Sheet open={p.guide_open} onClose={p.onCloseGuide} width={430} label="첫 홈 안내" scrim="rgba(14,15,20,.52)">
-        <View style={st.guide}><View style={st.guideIcon}><Text style={st.guideIconT}>✦</Text></View><Text style={st.guideTitle}>30초만 둘러볼까요?</Text><Text style={st.guideSub}>홈에서 내 종목 소식을 확인하고,{String.fromCharCode(10)}떠오른 생각을 바로 메모할 수 있어요.</Text><Pressable onPress={p.onNextGuide} style={st.guideCta}><Text style={st.guideCtaT}>둘러보기</Text></Pressable><Pressable onPress={p.onSkip} style={st.guideSkip}><Text style={st.guideSkipT}>건너뛰기</Text></Pressable></View>
+        <View style={st.guide}><View style={st.guideIcon}><Text style={st.guideIconT}>✦</Text></View><Text style={st.guideTitle}>30초만 둘러볼까요?</Text><Text style={st.guideSub}>홈에서 내 종목 소식을 확인하고,{String.fromCharCode(10)}떠오른 생각을 바로 메모할 수 있어요.</Text><Pressable onPress={startTour} style={st.guideCta}><Text style={st.guideCtaT}>둘러보기</Text></Pressable><Pressable onPress={p.onSkip} style={st.guideSkip}><Text style={st.guideSkipT}>건너뛰기</Text></Pressable></View>
       </Sheet>
       <Sheet open={p.picker_open} onClose={p.onClosePicker} width={440} label="첫 메모 종목 선택">
         <View style={st.picker}><View style={st.pickerHead}><Text style={st.pickerTitle}>어느 종목에 메모할까요?</Text><Pressable onPress={p.onClosePicker}><Text style={st.close}>닫기</Text></Pressable></View><ScrollView style={{ maxHeight: 390 }}>{p.stocks.map((s) => <Pressable key={s.stock_code} onPress={() => p.onPickStock(s)} style={({ hovered }: { hovered?: boolean }) => [st.row, hovered && { backgroundColor: '#F7F7F8' }]}><StockLogo logo={s.logo} bg={s.logo_bg} ink={s.logo_ink} size={40} variant="web" /><View style={{ flex: 1 }}><Text style={st.rowB}>{s.name}</Text><Text style={st.rowS}>{s.market} · {s.stock_code}</Text></View><Text style={st.arrow}>›</Text></Pressable>)}</ScrollView></View>
