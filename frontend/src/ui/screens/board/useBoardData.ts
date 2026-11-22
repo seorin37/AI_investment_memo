@@ -86,8 +86,8 @@ export function useBoardData(code: string, openId: string | null) {
     checkItem: (checklistId: string, itemId: string, done: boolean) =>
       real && checkItem.mutate({ checklistId, itemId, done, stockCode: code }),
     remove: (ids: string[]) => real && ids.forEach((id) => del.mutate(id)),
-    /** 되돌리기 = 휴지통 복원 (trash id 'memo:{id}') */
-    undoRemove: (ids: string[]) => real && ids.forEach((id) => restore.mutate(`memo:${id}`)),
+    /** 되돌리기 = 휴지통 복원 (trash id 'memo-{id}', be/app/trash/service.py _ID) */
+    undoRemove: (ids: string[]) => real && ids.forEach((id) => restore.mutate(`memo-${id}`)),
     reorder: (order: string[]) => real && reorder.mutate(order),
     aiOff: (id: string) => real && api.setAiLink(id, false).finally(refresh),
     /** AI 켜기 + 분석 결과 (연결 창) */
