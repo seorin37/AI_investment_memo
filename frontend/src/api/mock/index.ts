@@ -6,6 +6,7 @@ import { env } from '@/config/env';
 import { uid, ymd } from '@/lib/format';
 import { mockLabStocks } from '@/ui/screens/studio/Studio.mock';
 import { labGroups } from '@/ui/screens/studio/labParts';
+import { toServerQuiz } from '@/ui/screens/studio/quizBank';
 import { ApiError } from '../http';
 import type {
   AiUpdate,
@@ -578,6 +579,7 @@ export const mockApi: Api = {
     db.settings.mcp.apps = db.settings.mcp.apps.filter((a) => a.id !== appId);
     return wait(db.settings);
   },
+  getTodayQuiz: async () => wait(toServerQuiz()),
   getAiStats: async () => {
     const linked = memosOf().filter((m) => m.ai_linked);
     return wait({

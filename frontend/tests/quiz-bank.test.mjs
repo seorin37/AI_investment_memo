@@ -28,3 +28,14 @@ test('화면 모양: 날짜 대신 분류 칩, 출처 줄', () => {
   assert.ok(['차트 기초', '거래 기초', '재무 기초', '공시 기초'].includes(q.label));
   assert.ok(q.src.startsWith('출처 · '));
 });
+
+test('서버 문제(GET /quiz/today) ↔ 화면 props 변환이 내장 문제와 같다', async () => {
+  const { toServerQuiz, fromServerQuiz } = await import('../src/ui/screens/studio/quizBank.ts');
+  const now = new Date('2026-11-23T11:00:00+09:00');
+  const base = { label: '', day: '11.06', type: '', q: '', options: [], answer: 0, exp: '', concept: '', src: '', streak: 3, week: [] };
+  const s = toServerQuiz(now);
+  assert.equal(s.total, 30);
+  assert.equal(s.index, quizIndex(now));
+  assert.ok(['four', 'ox'].includes(s.quiz_type));
+  assert.deepEqual(fromServerQuiz(base, s), todayQuiz(base, now));
+});
