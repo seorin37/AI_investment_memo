@@ -24,6 +24,8 @@ export default function MyStocksPage() {
         {...mockMyStocksData}
         {...priced}
         popular={data.popular}
+        add_remote={data.add_remote}
+        onAddQuery={data.onAddQuery}
         onOpenStock={(code) => router.navigate({ pathname: '/stocks/[code]', params: { code } })}
         onOpenCompany={(code) => router.navigate({ pathname: '/stocks/[code]', params: { code, tab: 'info' } })}
         onAdd={(code, hold) => {

@@ -33,6 +33,8 @@ export default function MyStocksTab() {
       {...mockMyStocksData}
       {...priced}
       popular={data.popular}
+      add_remote={data.add_remote}
+      onAddQuery={data.onAddQuery}
       header={({ onSearch }) => (
         <TopBar
           preset="stocks"

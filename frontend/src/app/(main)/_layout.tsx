@@ -8,7 +8,7 @@ import { mockPopular, mockRecentSearches, mockSideProfile, mockStudioHead } from
 import { useSideStocks } from '@/ui/layout/web/useSideStocks';
 import { WebShell } from '@/ui/layout/web/WebShell';
 import type { SideKey, SideSearchHit } from '@/ui/layout/web/WebShell.types';
-import { mockMyStocksData } from '@/ui/screens/stocks/MyStocks.mock';
+import { useAddStockSearch } from '@/ui/screens/stocks/useAddStockSearch';
 import { WebAddStockDialog } from '@/ui/screens/stocks/web/AddStockDialog';
 import { useMyMock } from '@/store/myMock';
 import { useMyProfile } from '@/ui/screens/my/useMyProfile';
@@ -96,6 +96,8 @@ export default function MainLayout() {
   }, [coachStep]);
   /* ⑥ 사이드바 종목: 순서 끌기 · 우클릭/⋯ 메뉴 · + 종목 추가 (실제 모드면 GET /stocks 와 저장 API, mock 이면 이 셸 안에서만) */
   const [sideStocks, setSideStocks] = useSideStocks();
+  /* + 종목 추가 창 후보: 실제 모드면 서버 검색 · 많이 찾는 종목 */
+  const addSearch = useAddStockSearch();
   /* 투자 실험실 변수 '지금 값': 실제 모드면 GET /market/macro (2026-11-21) */
   const labVars = useLabVars();
   const [smenu, setSmenu] = useState<{ code: string; at: { x: number; y: number } } | null>(null);
@@ -352,12 +354,16 @@ export default function MainLayout() {
     />
     <WebAddStockDialog
       open={addOpen}
-      mine={mockMyStocksData.stocks.filter((m) => sideStocks.some((x) => x.stock_code === m.stock_code))}
-      universe={mockMyStocksData.universe}
-      popular={mockMyStocksData.popular}
+      /* 이미 담은 종목(흐리게) = 사이드바 종목 — 창은 종목코드만 봄 */
+      mine={sideStocks.map((s) => ({ ...s, market: 'KOSPI', memo_count: 0, ai_count: 0, new_count: 0, price: null, change_pct: null, ai_ready: true }))}
+      /* 후보: 실제 모드면 서버 검색 · 많이 찾는 종목 (useAddStockSearch), mock 모드면 지금처럼 mock 후보 */
+      universe={addSearch.universe}
+      popular={addSearch.popular}
+      remote={addSearch.remote}
+      onQueryChange={addSearch.onQueryChange}
       onClose={() => setAddOpen(false)}
       onAdd={(code, hold) => {
-        const u = mockMyStocksData.universe.find((x) => x.stock_code === code);
+        const u = addSearch.universe.find((x) => x.stock_code === code);
         if (!u) return;
         setSideStocks((all) => [...all, { stock_code: u.stock_code, name: u.name, status: hold, logo: u.logo, logo_bg: u.logo_bg, logo_ink: u.logo_ink }]);
         say({ msg: `${u.name}${jo(u.name)} ${hold === 'holding' ? '보유' : '관심'} 종목에 추가했어요`, check: true });

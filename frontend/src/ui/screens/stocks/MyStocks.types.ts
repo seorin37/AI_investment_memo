@@ -50,6 +50,9 @@ export interface MyStocksData {
   /** 종목 추가: 검색 대상 · 처음에 보이는 많이 찾는 종목 */
   universe: StockCandidate[];
   popular: string[];
+  /** 추가 창 검색을 서버가 함 (실제 모드): universe 를 창이 다시 거르지 않고, 검색어가 바뀌면 onAddQuery 로 알림 */
+  add_remote?: boolean;
+  onAddQuery?: (q: string) => void;
 }
 
 export interface MyStocksCallbacks {
@@ -84,4 +87,8 @@ export interface AddStockProps {
   popular: string[];
   onClose: () => void;
   onAdd: (code: string, hold: Hold) => void;
+  /** true 면 universe 가 이미 서버 검색 결과 (검색어 있을 때) · 많이 찾는 종목 (없을 때) — 창이 다시 거르지 않음 */
+  remote?: boolean;
+  /** 검색어가 바뀌면 (열 때 비우는 것 포함) */
+  onQueryChange?: (q: string) => void;
 }
