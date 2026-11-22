@@ -1,4 +1,4 @@
-"""투자 기록 → 프론트 JournalEntry {id, title, stock_code, stock_name, blocks, created_at, updated_at}.
+"""투자 기록 → 프론트 JournalEntry {id, title, stock_code, stock_name, blocks, pinned, created_at, updated_at}.
 
 frontend/src/api/mock/index.ts 의 listJournal·createJournal·updateJournal·deleteJournal 과 같은 동작:
 - 목록은 만든 순 최신부터, 삭제는 휴지통으로 (journal_entries.deleted_at, /trash 의 kind='journal').
@@ -40,6 +40,7 @@ def entry(row: dict[str, Any]) -> dict[str, Any]:
         "stock_code": row.get("stock_code"),
         "stock_name": row.get("stock_name") if row.get("stock_code") else None,
         "blocks": _blocks(row),
+        "pinned": bool(row.get("is_pinned")),
         "created_at": _iso(row["created_at"]),
         "updated_at": _iso(row["updated_at"]),
     }
@@ -63,7 +64,8 @@ class JournalService:
     def create(self, user_id: int, payload: JournalCreate) -> dict[str, Any]:
         self._check_stock(payload.stock_code)
         blocks = _dump_blocks(payload.blocks)
-        entry_id = self.repo.create(user_id, title=payload.title.strip(), body=blocks_to_markdown(blocks), blocks=blocks)
+        entry_id = self.repo.create(user_id, title=payload.title.strip(), body=blocks_to_markdown(blocks), blocks=blocks,
+                                    pinned=payload.pinned)
         self.repo.set_stock(entry_id, payload.stock_code)
         return self._get(user_id, entry_id)
 
@@ -78,9 +80,13 @@ class JournalService:
             blocks = _dump_blocks(patch.blocks)
             values["blocks"] = blocks
             values["body"] = blocks_to_markdown(blocks)
+        if "pinned" in fields and patch.pinned is not None:
+            values["is_pinned"] = patch.pinned
         if "stock_code" in fields:                              # null 이면 종목 연결 해제
             self._check_stock(patch.stock_code)
-        if not self.repo.update(user_id, entry_id, values):
+        # 고친 날(updated_at)은 내용·종목이 바뀔 때만. 고정만 바꾸면 목록 순서·날짜 그대로
+        touch = bool(fields - {"pinned"})
+        if not self.repo.update(user_id, entry_id, values, touch=touch):
             raise JournalNotFoundError(entry_id)
         if "stock_code" in fields:
             self.repo.set_stock(entry_id, patch.stock_code)

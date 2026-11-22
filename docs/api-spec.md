@@ -57,7 +57,7 @@
 
 ## 2. 현황표
 
-상태: **구현됨** 52개 (프론트가 부르고 백엔드에 있음) · **mock** 10개 (백엔드 미구현 — frontend/src/api/index.ts MOCK_ONLY 로 USE_MOCK=false 에서도 mock 응답)
+상태: **구현됨** 58개 (프론트가 부르고 백엔드에 있음) · **mock** 10개 (백엔드 미구현 — frontend/src/api/index.ts MOCK_ONLY 로 USE_MOCK=false 에서도 mock 응답)
 
 <!-- api-table:start (담당·비고 칸만 손으로 고치세요. 나머지 칸은 다시 생성하면 덮어씁니다) -->
 | 영역 | 메서드 | 경로 | 프론트 함수 | 상태 | 담당 | 비고 |
@@ -76,14 +76,16 @@
 | 계정·설정 | PATCH | `/settings` | updateSettings (real.ts) | 구현됨 |  |  |
 | 종목 | GET | `/stocks` | listMyStocks (stocks.ts) | 구현됨 |  |  |
 | 종목 | POST | `/stocks` | addStock (stocks.ts) | 구현됨 |  |  |
-| 종목 | PUT | `/stocks/order` |  | 백엔드만 있음 | 이민성 | 사이드바 내 종목 전체 순서 저장 (0021 user_stocks.position). 프론트 미연결: 웹 stocks[].order 대신 호출 필요 |
+| 종목 | PUT | `/stocks/order` | reorderStocks (stocks.ts) | 구현됨 | 이민성 | 사이드바 내 종목 전체 순서 저장 (0021 user_stocks.position). 프론트 미연결: 웹 stocks[].order 대신 호출 필요 |
 | 종목 | GET | `/stocks/search` | searchStocks (stocks.ts) | 구현됨 |  |  |
 | 종목 | DELETE | `/stocks/{code}` | removeStock (stocks.ts) | 구현됨 |  |  |
 | 종목 | GET | `/stocks/{code}` | getStock (stocks.ts) | 구현됨 |  |  |
 | 종목 | PATCH | `/stocks/{code}` | updateStock (stocks.ts) | 구현됨 |  |  |
+| 시세·뉴스·기업 | GET | `/market/macro` | getMacro (real.ts) | 구현됨 |  |  |
 | 시세·뉴스·기업 | GET | `/market/overview` | getMarketOverview (real.ts) | 구현됨 |  |  |
 | 시세·뉴스·기업 | GET | `/news/headlines` | listNews (real.ts) | 구현됨 |  |  |
 | 시세·뉴스·기업 | GET | `/news/home` | getHomeNews (real.ts) | 구현됨 |  | 11-21 UI v2 홈 뉴스 위젯(웹·앱). 종목 연결 기사만 최신순, at은 KST. day=가장 새 기사의 KST 날짜, day_total=그날 종목 연결 기사 수 |
+| 시세·뉴스·기업 | GET | `/quotes` | getQuotes (real.ts) | 구현됨 |  |  |
 | 시세·뉴스·기업 | GET | `/stocks/{code}/candles` | getCandles (real.ts) | 구현됨 |  |  |
 | 시세·뉴스·기업 | GET | `/stocks/{code}/financials` | getFinancials (real.ts) | 구현됨 | 이민성 | 11-21 UI v2 모양: 분기 12개(억원)·건전성 5개·financial·preparing. 금융사 매출·이익률·유동·당좌·이자보상 null, 영업이익은 보냄. 우선주는 본주 재무 |
 | 시세·뉴스·기업 | GET | `/stocks/{code}/profile` | getProfile (real.ts) | 구현됨 |  |  |
@@ -95,10 +97,10 @@
 | 메모 보드 | GET | `/memos/pinned` | listPinnedMemos (real.ts) | 구현됨 |  |  |
 | 메모 보드 | POST | `/memos/{memoId}/conclude` | concludeMemo (real.ts) | mock |  |  |
 | 메모 보드 | PUT | `/memos/{memo_id}/ai-link` | setAiLink (board.ts) | 구현됨 |  |  |
-| 메모 보드 | GET | `/memos/{memo_id}/answers` |  | 백엔드만 있음 | 이민성 | 메모 질문 답 목록: pending·answered·no_answer + 답 본문·출처. 프론트 미연결 |
-| 메모 보드 | POST | `/memos/{memo_id}/confirmations` |  | 백엔드만 있음 |  |  |
+| 메모 보드 | GET | `/memos/{memo_id}/answers` | listMemoAnswers (real.ts) | 구현됨 | 이민성 | 메모 질문 답 목록: pending·answered·no_answer + 답 본문·출처. 프론트 미연결 |
+| 메모 보드 | POST | `/memos/{memo_id}/confirmations` | answerConfirmation (board.ts) | 구현됨 |  |  |
 | 메모 보드 | GET | `/stocks/{code}/board` | listBoard (board.ts) | 구현됨 |  |  |
-| 메모 보드 | PUT | `/stocks/{code}/board-order` |  | 백엔드만 있음 | 이민성 | 보드 카드 전체 순서 저장 (#48). 프론트 미연결: 웹 boards[code]·앱 끌기 화면에서 호출 필요 |
+| 메모 보드 | PUT | `/stocks/{code}/board-order` | reorderBoard (board.ts) | 구현됨 | 이민성 | 보드 카드 전체 순서 저장 (#48). 프론트 미연결: 웹 boards[code]·앱 끌기 화면에서 호출 필요 |
 | 메모 보드 | POST | `/stocks/{code}/checklists` | createChecklist (board.ts) | 구현됨 |  |  |
 | 메모 보드 | POST | `/stocks/{code}/memos` | createMemo (board.ts) | 구현됨 |  |  |
 | 메모 보드 | POST | `/stocks/{code}/references` | createReference (board.ts) | 구현됨 |  |  |
@@ -376,7 +378,7 @@ OpenAPI 응답 스키마 `TokenResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/account/routes.py` `get_home_layout`
 - 프론트: `getHomeLayout(): Promise<HomeLayout>`
-  - 호출: real.ts:52 `getHomeLayout: () => http.get('/home/layout'),`
+  - 호출: real.ts:54 `getHomeLayout: () => http.get('/home/layout'),`
 
 **응답** `200`
 
@@ -412,7 +414,7 @@ OpenAPI 응답 스키마 `TokenResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/account/routes.py` `save_home_layout`
 - 프론트: `saveHomeLayout(layout: HomeLayout): Promise<HomeLayout>`
-  - 호출: real.ts:53 `saveHomeLayout: (layout) => http.put('/home/layout', layout),`
+  - 호출: real.ts:55 `saveHomeLayout: (layout) => http.put('/home/layout', layout),`
 
 **요청 본문** `HomeLayout` (필수)
 
@@ -520,7 +522,7 @@ OpenAPI 응답 스키마 `TokenResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/account/routes.py` `get_settings`
 - 프론트: `getSettings(): Promise<Settings>`
-  - 호출: real.ts:77 `getSettings: () => http.get('/settings'),`
+  - 호출: real.ts:80 `getSettings: () => http.get('/settings'),`
 
 **응답** `200`
 
@@ -601,7 +603,7 @@ OpenAPI 응답 스키마 `TokenResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/account/routes.py` `update_settings`
 - 프론트: `updateSettings(patch: DeepPartial<Settings>): Promise<Settings>`
-  - 호출: real.ts:78 `updateSettings: (patch) => http.patch('/settings', patch),`
+  - 호출: real.ts:81 `updateSettings: (patch) => http.patch('/settings', patch),`
 
 **요청 본문** `SettingsPatch` (필수)
 
@@ -722,7 +724,7 @@ OpenAPI 응답 스키마 `TokenResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/stocks/routes.py` `list_my_stocks`
 - 프론트: `listMyStocks(): Promise<MyStock[]>`
-  - 호출: stocks.ts:36 `return (await http.get<MyStockWire[]>('/stocks')).map(mine);`
+  - 호출: stocks.ts:37 `return (await http.get<MyStockWire[]>('/stocks')).map(mine);`
 
 **응답** `200`
 
@@ -779,7 +781,7 @@ OpenAPI 응답 스키마 `MyStockResponse[]`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/stocks/routes.py` `add_stock`
 - 프론트: `addStock(code: string, status: StockStatus): Promise<MyStock>`
-  - 호출: stocks.ts:45 `return mine(await http.post<MyStockWire>('/stocks', { code, status }));`
+  - 호출: stocks.ts:46 `return mine(await http.post<MyStockWire>('/stocks', { code, status }));`
 
 **요청 본문** `StockCreateRequest` (필수)
 
@@ -840,8 +842,10 @@ OpenAPI 응답 스키마 `MyStockResponse`
 
 사이드바에서 끌어 옮긴 뒤 내 종목 전체 순서를 저장하고, 새 순서의 목록을 돌려준다 (0021).
 
-- 상태: **백엔드만 있음** · 담당: 이민성
+- 상태: **구현됨** · 담당: 이민성
 - 인증: 필요 · 구현: `backend/app/stocks/routes.py` `put_stock_order`
+- 프론트: `reorderStocks(codes: string[]): Promise<MyStock[]>`
+  - 호출: stocks.ts:58 `return (await http.put<MyStockWire[]>('/stocks/order', { codes })).map(mine);`
 
 **요청 본문** `StockOrderRequest` (필수)
 
@@ -864,6 +868,38 @@ OpenAPI 응답 스키마 `MyStockResponse[]`
 | `added_at` | `string(date-time)` | 예 |  |
 | `position` | `integer` |  | 기본 `0` |
 
+프론트 타입 (mock 기준) `MyStock[]`
+
+| 필드 | 타입 | 필수 |
+|---|---|---|
+| `code` | `string` | 예 |
+| `name` | `string` | 예 |
+| `market` | `Market` | 예 |
+| `status` | `StockStatus` | 예 |
+| `tags` | `string[]` | 예 |
+| `unread_updates` | `number` | 예 |
+| `added_at` | `ISODate` | 예 |
+
+<details><summary>예시</summary>
+
+```json
+[
+  {
+    "code": "string",
+    "name": "string",
+    "market": "KOSPI",
+    "status": "holding",
+    "tags": [
+      "string"
+    ],
+    "unread_updates": 0,
+    "added_at": "2026-11-20T09:00:00+09:00"
+  }
+]
+```
+
+</details>
+
 **에러**: `401` 인증 필요 · 토큰 만료/폐기 (프론트는 /auth/refresh 를 한 번 시도) · `403` 권한 없음 · 쿠키 세션의 쓰기 요청에서 CSRF 불일치 · `422` 요청 검증 실패 (FastAPI 형식 detail 배열)
 
 <a id="get--stocks-search"></a>
@@ -872,7 +908,7 @@ OpenAPI 응답 스키마 `MyStockResponse[]`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/stocks/routes.py` `search_stocks`
 - 프론트: `searchStocks(q: string): Promise<StockMaster[]>`
-  - 호출: stocks.ts:39 `return (await http.get<StockMasterWire[]>('/stocks/search', { q })).map(master);`
+  - 호출: stocks.ts:40 `return (await http.get<StockMasterWire[]>('/stocks/search', { q })).map(master);`
 
 **요청 파라미터**
 
@@ -920,7 +956,7 @@ OpenAPI 응답 스키마 `StockMasterResponse[]`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/stocks/routes.py` `delete_stock`
 - 프론트: `removeStock(code: string): Promise<void>`
-  - 호출: stocks.ts:54 `` return http.del(`/stocks/${code}`); ``
+  - 호출: stocks.ts:55 `` return http.del(`/stocks/${code}`); ``
 
 **요청 파라미터**
 
@@ -938,7 +974,7 @@ OpenAPI 응답 스키마 `StockMasterResponse[]`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/stocks/routes.py` `get_stock`
 - 프론트: `getStock(code: string): Promise<StockMaster>`
-  - 호출: stocks.ts:42 `` return master(await http.get<StockMasterWire>(`/stocks/${code}`)); ``
+  - 호출: stocks.ts:43 `` return master(await http.get<StockMasterWire>(`/stocks/${code}`)); ``
 
 **요청 파라미터**
 
@@ -984,7 +1020,7 @@ OpenAPI 응답 스키마 `StockMasterResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/stocks/routes.py` `update_stock`
 - 프론트: `updateStock(code: string, patch: Partial<Pick<MyStock, 'status' | 'tags'>>): Promise<MyStock>`
-  - 호출: stocks.ts:51 `` return mine(await http.patch<MyStockWire>(`/stocks/${code}`, patch)); ``
+  - 호출: stocks.ts:52 `` return mine(await http.patch<MyStockWire>(`/stocks/${code}`, patch)); ``
 
 **요청 파라미터**
 
@@ -1048,13 +1084,63 @@ OpenAPI 응답 스키마 `MyStockResponse`
 
 ### 시세·뉴스·기업
 
+<a id="get--market-macro"></a>
+#### `GET /market/macro`
+
+거시 지표 최신값·직전값·관측일·출처 (ECOS·FRED·KRX 금). 응답 {indicators, missing, as_of}.
+
+- 상태: **구현됨**
+- 인증: 필요 · 구현: `backend/app/marketdata/routes.py` `get_market_macro`
+- 프론트: `getMacro(): Promise<MacroOverview>`
+  - 호출: real.ts:57 `getMacro: () => http.get('/market/macro'),`
+
+**응답** `200`
+
+프론트 타입 (mock 기준) `MacroOverview`
+
+| 필드 | 타입 | 필수 |
+|---|---|---|
+| `indicators` | `MacroIndicator[]` | 예 |
+| `missing` | `string[]` | 예 |
+| `as_of` | `string \| null` | 예 |
+
+<details><summary>예시</summary>
+
+```json
+{
+  "indicators": [
+    {
+      "key": "string",
+      "label": "string",
+      "unit": "string",
+      "value": 0,
+      "prev_value": 0,
+      "change": 0,
+      "change_pct": 0,
+      "observed_date": "string",
+      "prev_date": "string",
+      "source": "string",
+      "series_code": "string"
+    }
+  ],
+  "missing": [
+    "string"
+  ],
+  "as_of": "string"
+}
+```
+
+</details>
+
+**에러**: `401` 인증 필요 · 토큰 만료/폐기 (프론트는 /auth/refresh 를 한 번 시도)
+
 <a id="get--market-overview"></a>
 #### `GET /market/overview`
 
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/marketdata/routes.py` `get_market_overview`
 - 프론트: `getMarketOverview(): Promise<MarketOverview>`
-  - 호출: real.ts:54 `getMarketOverview: () => http.get('/market/overview'),`
+  - 호출: real.ts:56 `getMarketOverview: () => http.get('/market/overview'),`
 
 **응답** `200`
 
@@ -1080,7 +1166,11 @@ OpenAPI 응답 스키마 `MyStockResponse`
       "change_pct": 0,
       "series": {
         "…": "…"
-      }
+      },
+      "trade_date": "string",
+      "dates": [
+        "…"
+      ]
     }
   ],
   "macro": [
@@ -1106,7 +1196,7 @@ OpenAPI 응답 스키마 `MyStockResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/marketdata/routes.py` `list_headlines`
 - 프론트: `listNews(): Promise<NewsHeadline[]>`
-  - 호출: real.ts:57 `listNews: () => http.get('/news/headlines'),`
+  - 호출: real.ts:60 `listNews: () => http.get('/news/headlines'),`
 
 **요청 파라미터**
 
@@ -1152,7 +1242,7 @@ OpenAPI 응답 스키마 `MyStockResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/marketdata/routes.py` `get_home_news`
 - 프론트: `getHomeNews(limit?: number): Promise<HomeNews>`
-  - 호출: real.ts:58 `getHomeNews: (limit) => http.get('/news/home', { limit }),`
+  - 호출: real.ts:61 `getHomeNews: (limit) => http.get('/news/home', { limit }),`
 
 **요청 파라미터**
 
@@ -1195,13 +1285,65 @@ OpenAPI 응답 스키마 `MyStockResponse`
 
 **에러**: `401` 인증 필요 · 토큰 만료/폐기 (프론트는 /auth/refresh 를 한 번 시도) · `422` 요청 검증 실패 (FastAPI 형식 detail 배열)
 
+<a id="get--quotes"></a>
+#### `GET /quotes`
+
+여러 종목 시세 한 번에. 응답 {quotes: Quote[], missing: 코드[]}. 순서는 요청 순서.
+
+- 상태: **구현됨**
+- 인증: 필요 · 구현: `backend/app/marketdata/routes.py` `list_quotes`
+- 프론트: `getQuotes(codes: string[]): Promise<QuotesResponse>`
+  - 호출: real.ts:26 `getQuotes: (codes) => http.get('/quotes', { codes: codes.join(',') }),`
+
+**요청 파라미터**
+
+| 이름 | 위치 | 타입 | 필수 | 설명·제약 |
+|---|---|---|---|---|
+| `codes` | 쿼리 | `string` | 예 | 쉼표로 구분한 종목코드 (최대 50개). 예: 005930,000660 |
+
+**응답** `200`
+
+프론트 타입 (mock 기준) `QuotesResponse`
+
+| 필드 | 타입 | 필수 |
+|---|---|---|
+| `quotes` | `Quote[]` | 예 |
+| `missing` | `string[]` | 예 |
+
+<details><summary>예시</summary>
+
+```json
+{
+  "quotes": [
+    {
+      "code": "string",
+      "price": 0,
+      "change": 0,
+      "change_pct": 0,
+      "as_of": "2026-11-20T09:00:00+09:00",
+      "trade_date": "string",
+      "spark": [
+        "…"
+      ]
+    }
+  ],
+  "missing": [
+    "string"
+  ]
+}
+```
+
+</details>
+
+**에러**: `401` 인증 필요 · 토큰 만료/폐기 (프론트는 /auth/refresh 를 한 번 시도) · `422` 요청 검증 실패 (FastAPI 형식 detail 배열)
+
 <a id="get--stocks-code-candles"></a>
 #### `GET /stocks/{code}/candles`
 
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/marketdata/routes.py` `get_candles`
 - 프론트: `getCandles(code: string, range: ChartRange): Promise<Candle[]>`
-  - 호출: real.ts:26 `` getCandles: (code, range) => http.get(`/stocks/${code}/candles`, { range }), ``
+  - 호출: real.ts:27 `` getCandles: (code, range) => http.get(`/stocks/${code}/candles`, { range }), ``
 
 **요청 파라미터**
 
@@ -1249,7 +1391,7 @@ OpenAPI 응답 스키마 `MyStockResponse`
 - 상태: **구현됨** · 담당: 이민성
 - 인증: 필요 · 구현: `backend/app/marketdata/routes.py` `get_financials`
 - 프론트: `getFinancials(code: string): Promise<Financials>`
-  - 호출: real.ts:28 `` getFinancials: (code) => http.get(`/stocks/${code}/financials`), ``
+  - 호출: real.ts:29 `` getFinancials: (code) => http.get(`/stocks/${code}/financials`), ``
 
 **요청 파라미터**
 
@@ -1321,7 +1463,7 @@ OpenAPI 응답 스키마 `MyStockResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/marketdata/routes.py` `get_profile`
 - 프론트: `getProfile(code: string): Promise<StockProfile>`
-  - 호출: real.ts:27 `` getProfile: (code) => http.get(`/stocks/${code}/profile`), ``
+  - 호출: real.ts:28 `` getProfile: (code) => http.get(`/stocks/${code}/profile`), ``
 
 **요청 파라미터**
 
@@ -1408,6 +1550,7 @@ OpenAPI 응답 스키마 `MyStockResponse`
 | `change` | `number` | 예 |
 | `change_pct` | `number` | 예 |
 | `as_of` | `ISODate` | 예 |
+| `trade_date` | `string` |  |
 | `spark` | `number[]` | 예 |
 
 <details><summary>예시</summary>
@@ -1419,6 +1562,7 @@ OpenAPI 응답 스키마 `MyStockResponse`
   "change": 0,
   "change_pct": 0,
   "as_of": "2026-11-20T09:00:00+09:00",
+  "trade_date": "string",
   "spark": [
     0
   ]
@@ -1437,7 +1581,7 @@ OpenAPI 응답 스키마 `MyStockResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/board/routes.py` `delete_board_item`
 - 프론트: `deleteBoardItem(id: string): Promise<void>`
-  - 호출: board.ts:110 `` deleteBoardItem: (id: string) => http.del<void>(`/board-items/${id}`), ``
+  - 호출: board.ts:111 `` deleteBoardItem: (id: string) => http.del<void>(`/board-items/${id}`), ``
 
 **요청 파라미터**
 
@@ -1455,7 +1599,7 @@ OpenAPI 응답 스키마 `MyStockResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/board/routes.py` `get_board_item`
 - 프론트: `getBoardItem(id: string): Promise<BoardItem>`
-  - 호출: board.ts:96 `` return normalizeBoardItem(await http.get<RawBoardItem>(`/board-items/${id}`)); ``
+  - 호출: board.ts:97 `` return normalizeBoardItem(await http.get<RawBoardItem>(`/board-items/${id}`)); ``
 
 **요청 파라미터**
 
@@ -1554,7 +1698,25 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
       "reached_at": "2026-11-20T09:00:00+09:00"
     }
   ],
-  "unread_updates": 0
+  "unread_updates": 0,
+  "analysis": {
+    "status": "string",
+    "items": [
+      {
+        "id": "…",
+        "type": "…",
+        "description": "…",
+        "price_threshold": "…",
+        "status": "…"
+      }
+    ],
+    "confirmations": [
+      null
+    ],
+    "out_of_scope": false,
+    "error": "string",
+    "next_update_at": "string"
+  }
 }
 ```
 
@@ -1568,7 +1730,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/board/routes.py` `update_board_item`
 - 프론트: `updateBoardItem(id: string, patch: BoardItemPatch): Promise<BoardItem>`
-  - 호출: board.ts:108 `` return normalizeBoardItem(await http.patch<RawBoardItem>(`/board-items/${id}`, patch)); ``
+  - 호출: board.ts:109 `` return normalizeBoardItem(await http.patch<RawBoardItem>(`/board-items/${id}`, patch)); ``
 
 **요청 파라미터**
 
@@ -1688,7 +1850,25 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
       "reached_at": "2026-11-20T09:00:00+09:00"
     }
   ],
-  "unread_updates": 0
+  "unread_updates": 0,
+  "analysis": {
+    "status": "string",
+    "items": [
+      {
+        "id": "…",
+        "type": "…",
+        "description": "…",
+        "price_threshold": "…",
+        "status": "…"
+      }
+    ],
+    "confirmations": [
+      null
+    ],
+    "out_of_scope": false,
+    "error": "string",
+    "next_update_at": "string"
+  }
 }
 ```
 
@@ -1702,7 +1882,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/board/routes.py` `update_checklist_item`
 - 프론트: `setBoardChecklistItem(checklistId: string, itemId: string, done: boolean): Promise<void>`
-  - 호출: board.ts:117 `` await http.patch<RawBoardItem>(`/checklists/${checklistId}/items/${itemId}`, { done }); ``
+  - 호출: board.ts:125 `` await http.patch<RawBoardItem>(`/checklists/${checklistId}/items/${itemId}`, { done }); ``
 
 **요청 파라미터**
 
@@ -1786,7 +1966,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/board/routes.py` `list_pinned_memos`
 - 프론트: `listPinnedMemos(): Promise<PinnedMemo[]>`
-  - 호출: real.ts:59 `listPinnedMemos: () => http.get('/memos/pinned'),`
+  - 호출: real.ts:62 `listPinnedMemos: () => http.get('/memos/pinned'),`
 
 **응답** `200`
 
@@ -1809,6 +1989,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 | `ai_linked_at` | `ISODate \| null` | 예 |
 | `price_conditions` | `PriceCondition[]` | 예 |
 | `unread_updates` | `number` | 예 |
+| `analysis` | `MemoAnalysis \| null` |  |
 | `stock_name` | `string` | 예 |
 
 <details><summary>예시</summary>
@@ -1829,7 +2010,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **mock**
 - 인증: (백엔드 미구현) · 응답은 `frontend/src/api/mock/index.ts`의 같은 함수가 기준
 - 프론트: `concludeMemo(memoId: string, conclusion: string): Promise<JournalEntry>`
-  - 호출: real.ts:71 `` concludeMemo: (memoId, conclusion) => http.post(`/memos/${memoId}/conclude`, { conclusion }), ``
+  - 호출: real.ts:74 `` concludeMemo: (memoId, conclusion) => http.post(`/memos/${memoId}/conclude`, { conclusion }), ``
 
 프론트 타입 (mock 기준) `JournalEntry`
 
@@ -1840,6 +2021,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 | `stock_code` | `string \| null` | 예 |
 | `stock_name` | `string \| null` | 예 |
 | `blocks` | `JournalBlock[]` | 예 |
+| `pinned` | `boolean` | 예 |
 | `created_at` | `ISODate` | 예 |
 | `updated_at` | `ISODate` | 예 |
 
@@ -1852,13 +2034,9 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
   "stock_code": "string",
   "stock_name": "string",
   "blocks": [
-    {
-      "id": "string",
-      "type": "paragraph",
-      "text": "string",
-      "highlight": false
-    }
+    "({ id: string; type: 'paragraph'; text: string; highlight?: boolean } & JournalLineFormat)"
   ],
+  "pinned": false,
   "created_at": "2026-11-20T09:00:00+09:00",
   "updated_at": "2026-11-20T09:00:00+09:00"
 }
@@ -1872,7 +2050,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/board/routes.py` `set_ai_link`
 - 프론트: `setAiLink(memoId: string, enabled: boolean): Promise<Memo>`
-  - 호출: board.ts:113 `` await http.put<RawBoardItem>(`/memos/${memoId}/ai-link`, { enabled }), ``
+  - 호출: board.ts:114 `` await http.put<RawBoardItem>(`/memos/${memoId}/ai-link`, { enabled }), ``
 
 **요청 파라미터**
 
@@ -1965,6 +2143,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 | `ai_linked_at` | `ISODate \| null` | 예 |
 | `price_conditions` | `PriceCondition[]` | 예 |
 | `unread_updates` | `number` | 예 |
+| `analysis` | `MemoAnalysis \| null` |  |
 
 <details><summary>예시</summary>
 
@@ -1995,7 +2174,25 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
       "reached_at": "2026-11-20T09:00:00+09:00"
     }
   ],
-  "unread_updates": 0
+  "unread_updates": 0,
+  "analysis": {
+    "status": "string",
+    "items": [
+      {
+        "id": "…",
+        "type": "…",
+        "description": "…",
+        "price_threshold": "…",
+        "status": "…"
+      }
+    ],
+    "confirmations": [
+      null
+    ],
+    "out_of_scope": false,
+    "error": "string",
+    "next_update_at": "string"
+  }
 }
 ```
 
@@ -2006,8 +2203,10 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 <a id="get--memos-memoid-answers"></a>
 #### `GET /memos/{memo_id}/answers`
 
-- 상태: **백엔드만 있음** · 담당: 이민성
+- 상태: **구현됨** · 담당: 이민성
 - 인증: 필요 · 구현: `backend/app/answers/routes.py` `get_memo_answers`
+- 프론트: `listMemoAnswers(memoId: string): Promise<MemoAnswer[]>`
+  - 호출: real.ts:34 `` listMemoAnswers: (memoId) => http.get(`/memos/${memoId}/answers`), ``
 
 **요청 파라미터**
 
@@ -2017,6 +2216,45 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 
 **응답** `200`
 
+프론트 타입 (mock 기준) `MemoAnswer[]`
+
+| 필드 | 타입 | 필수 |
+|---|---|---|
+| `id` | `string` | 예 |
+| `question` | `string` | 예 |
+| `asked_at` | `ISODate` | 예 |
+| `status` | `'pending' \| 'answered' \| 'no_answer'` | 예 |
+| `answer` | `{ id: string; headline: string; summary: string; text: string; calculations: unknown[]; sources: { kind: 'news' \| 'disclosure'; title: string; source: string; date: string \| null; url: string \| null }[]; answered_at: ISODate; read: boolean; } \| null` | 예 |
+
+<details><summary>예시</summary>
+
+```json
+[
+  {
+    "id": "string",
+    "question": "string",
+    "asked_at": "2026-11-20T09:00:00+09:00",
+    "status": "pending",
+    "answer": {
+      "id": "string",
+      "headline": "string",
+      "summary": "string",
+      "text": "string",
+      "calculations": [
+        "…"
+      ],
+      "sources": [
+        "…"
+      ],
+      "answered_at": "2026-11-20T09:00:00+09:00",
+      "read": false
+    }
+  }
+]
+```
+
+</details>
+
 **에러**: `401` 인증 필요 · 토큰 만료/폐기 (프론트는 /auth/refresh 를 한 번 시도) · `404` 대상 없음 (다른 사용자 것 포함) · `422` 요청 검증 실패 (FastAPI 형식 detail 배열)
 
 <a id="post--memos-memoid-confirmations"></a>
@@ -2024,8 +2262,10 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 
 메모 분석의 확인 질문에서 고른 선택지(option_id)로 가격 항목을 만든다. 메모가 바뀌었으면 409.
 
-- 상태: **백엔드만 있음**
+- 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/board/routes.py` `answer_confirmation`
+- 프론트: `answerConfirmation(memoId: string, optionId: string): Promise<Memo>`
+  - 호출: board.ts:122 `` return normalizeBoardItem(await http.post<RawBoardItem>(`/memos/${memoId}/confirmations`, { option_id: optionId })) as Memo; ``
 
 **요청 파라미터**
 
@@ -2099,6 +2339,80 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 | `links.ref_type` | `"ir" \| "news" \| "report" \| "disclosure" \| "etc"` | 예 |  |
 | `links.source` | `"link" \| "file"` | 예 |  |
 
+프론트 타입 (mock 기준) `Memo`
+
+| 필드 | 타입 | 필수 |
+|---|---|---|
+| `id` | `string` | 예 |
+| `kind` | `'memo'` | 예 |
+| `stock_code` | `string` | 예 |
+| `title` | `string` | 예 |
+| `position` | `number` | 예 |
+| `created_at` | `ISODate` | 예 |
+| `updated_at` | `ISODate` | 예 |
+| `body` | `string` | 예 |
+| `tags` | `string[]` | 예 |
+| `color` | `MemoColor` | 예 |
+| `pinned` | `boolean` | 예 |
+| `ai_linked` | `boolean` | 예 |
+| `ai_linked_at` | `ISODate \| null` | 예 |
+| `price_conditions` | `PriceCondition[]` | 예 |
+| `unread_updates` | `number` | 예 |
+| `analysis` | `MemoAnalysis \| null` |  |
+
+<details><summary>예시</summary>
+
+```json
+{
+  "id": "string",
+  "kind": "memo",
+  "stock_code": "string",
+  "title": "string",
+  "position": 0,
+  "created_at": "2026-11-20T09:00:00+09:00",
+  "updated_at": "2026-11-20T09:00:00+09:00",
+  "body": "string",
+  "tags": [
+    "string"
+  ],
+  "color": "yellow",
+  "pinned": false,
+  "ai_linked": false,
+  "ai_linked_at": "2026-11-20T09:00:00+09:00",
+  "price_conditions": [
+    {
+      "id": "string",
+      "direction": "below",
+      "price": 0,
+      "tracking": false,
+      "status": "waiting",
+      "reached_at": "2026-11-20T09:00:00+09:00"
+    }
+  ],
+  "unread_updates": 0,
+  "analysis": {
+    "status": "string",
+    "items": [
+      {
+        "id": "…",
+        "type": "…",
+        "description": "…",
+        "price_threshold": "…",
+        "status": "…"
+      }
+    ],
+    "confirmations": [
+      null
+    ],
+    "out_of_scope": false,
+    "error": "string",
+    "next_update_at": "string"
+  }
+}
+```
+
+</details>
+
 **에러**: `401` 인증 필요 · 토큰 만료/폐기 (프론트는 /auth/refresh 를 한 번 시도) · `403` 권한 없음 · 쿠키 세션의 쓰기 요청에서 CSRF 불일치 · `404` 대상 없음 (다른 사용자 것 포함) · `409` 지금 상태와 충돌 · `422` 요청 검증 실패 (FastAPI 형식 detail 배열)
 
 <a id="get--stocks-code-board"></a>
@@ -2107,7 +2421,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/board/routes.py` `list_board`
 - 프론트: `listBoard(code: string): Promise<BoardItem[]>`
-  - 호출: board.ts:92 `` const rows = await http.get<RawBoardItem[]>(`/stocks/${code}/board`); ``
+  - 호출: board.ts:93 `` const rows = await http.get<RawBoardItem[]>(`/stocks/${code}/board`); ``
 
 **요청 파라미터**
 
@@ -2207,7 +2521,19 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse[]
         "reached_at": "…"
       }
     ],
-    "unread_updates": 0
+    "unread_updates": 0,
+    "analysis": {
+      "status": "string",
+      "items": [
+        "…"
+      ],
+      "confirmations": [
+        "…"
+      ],
+      "out_of_scope": false,
+      "error": "string",
+      "next_update_at": "string"
+    }
   }
 ]
 ```
@@ -2221,8 +2547,10 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse[]
 
 끌어서 옮긴 뒤 보드 카드 전체 순서를 저장하고, 새 순서의 보드를 돌려준다.
 
-- 상태: **백엔드만 있음** · 담당: 이민성
+- 상태: **구현됨** · 담당: 이민성
 - 인증: 필요 · 구현: `backend/app/board/routes.py` `put_board_order`
+- 프론트: `reorderBoard(code: string, ids: string[]): Promise<BoardItem[]>`
+  - 호출: board.ts:118 `` const rows = await http.put<RawBoardItem[]>(`/stocks/${code}/board-order`, { ids: ids.map(Number) }); ``
 
 **요청 파라미터**
 
@@ -2296,6 +2624,57 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse[]
 | `links.ref_type` | `"ir" \| "news" \| "report" \| "disclosure" \| "etc"` | 예 |  |
 | `links.source` | `"link" \| "file"` | 예 |  |
 
+프론트 타입 (mock 기준) `BoardItem[]`
+
+<details><summary>예시</summary>
+
+```json
+[
+  {
+    "id": "string",
+    "kind": "memo",
+    "stock_code": "string",
+    "title": "string",
+    "position": 0,
+    "created_at": "2026-11-20T09:00:00+09:00",
+    "updated_at": "2026-11-20T09:00:00+09:00",
+    "body": "string",
+    "tags": [
+      "string"
+    ],
+    "color": "yellow",
+    "pinned": false,
+    "ai_linked": false,
+    "ai_linked_at": "2026-11-20T09:00:00+09:00",
+    "price_conditions": [
+      {
+        "id": "…",
+        "direction": "…",
+        "price": "…",
+        "tracking": "…",
+        "status": "…",
+        "reached_at": "…"
+      }
+    ],
+    "unread_updates": 0,
+    "analysis": {
+      "status": "string",
+      "items": [
+        "…"
+      ],
+      "confirmations": [
+        "…"
+      ],
+      "out_of_scope": false,
+      "error": "string",
+      "next_update_at": "string"
+    }
+  }
+]
+```
+
+</details>
+
 **에러**: `401` 인증 필요 · 토큰 만료/폐기 (프론트는 /auth/refresh 를 한 번 시도) · `403` 권한 없음 · 쿠키 세션의 쓰기 요청에서 CSRF 불일치 · `404` 대상 없음 (다른 사용자 것 포함) · `409` 지금 상태와 충돌 · `422` 요청 검증 실패 (FastAPI 형식 detail 배열)
 
 <a id="post--stocks-code-checklists"></a>
@@ -2304,7 +2683,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse[]
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/board/routes.py` `create_checklist`
 - 프론트: `createChecklist(code: string, input: ChecklistInput): Promise<Checklist>`
-  - 호출: board.ts:102 `` return normalizeBoardItem(await http.post<RawBoardItem>(`/stocks/${code}/checklists`, input)) as Checklist; ``
+  - 호출: board.ts:103 `` return normalizeBoardItem(await http.post<RawBoardItem>(`/stocks/${code}/checklists`, input)) as Checklist; ``
 
 **요청 파라미터**
 
@@ -2428,7 +2807,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/board/routes.py` `create_memo`
 - 프론트: `createMemo(code: string, input: MemoInput): Promise<Memo>`
-  - 호출: board.ts:99 `` return normalizeBoardItem(await http.post<RawBoardItem>(`/stocks/${code}/memos`, input)) as Memo; ``
+  - 호출: board.ts:100 `` return normalizeBoardItem(await http.post<RawBoardItem>(`/stocks/${code}/memos`, input)) as Memo; ``
 
 **요청 파라미터**
 
@@ -2526,6 +2905,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 | `ai_linked_at` | `ISODate \| null` | 예 |
 | `price_conditions` | `PriceCondition[]` | 예 |
 | `unread_updates` | `number` | 예 |
+| `analysis` | `MemoAnalysis \| null` |  |
 
 <details><summary>예시</summary>
 
@@ -2556,7 +2936,25 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
       "reached_at": "2026-11-20T09:00:00+09:00"
     }
   ],
-  "unread_updates": 0
+  "unread_updates": 0,
+  "analysis": {
+    "status": "string",
+    "items": [
+      {
+        "id": "…",
+        "type": "…",
+        "description": "…",
+        "price_threshold": "…",
+        "status": "…"
+      }
+    ],
+    "confirmations": [
+      null
+    ],
+    "out_of_scope": false,
+    "error": "string",
+    "next_update_at": "string"
+  }
 }
 ```
 
@@ -2570,7 +2968,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/board/routes.py` `create_reference`
 - 프론트: `createReference(code: string, input: ReferenceInput): Promise<ReferenceBoard>`
-  - 호출: board.ts:105 `` return normalizeBoardItem(await http.post<RawBoardItem>(`/stocks/${code}/references`, input)) as ReferenceBoard; ``
+  - 호출: board.ts:106 `` return normalizeBoardItem(await http.post<RawBoardItem>(`/stocks/${code}/references`, input)) as ReferenceBoard; ``
 
 **요청 파라미터**
 
@@ -2698,7 +3096,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/updates/routes.py` `get_ai_updates_summary`
 - 프론트: `listMemoUpdateSummary(): Promise<MemoUpdateSummary[]>`
-  - 호출: real.ts:67 `listMemoUpdateSummary: () => http.get('/ai-updates/summary'),`
+  - 호출: real.ts:70 `listMemoUpdateSummary: () => http.get('/ai-updates/summary'),`
 
 **응답** `200`
 
@@ -2741,7 +3139,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/updates/routes.py` `mark_ai_update_read`
 - 프론트: `markAiUpdateRead(id: string): Promise<void>`
-  - 호출: real.ts:34 `` markAiUpdateRead: (id) => http.post(`/ai-updates/${id}/read`), ``
+  - 호출: real.ts:36 `` markAiUpdateRead: (id) => http.post(`/ai-updates/${id}/read`), ``
 
 **요청 파라미터**
 
@@ -2759,7 +3157,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/updates/routes.py` `get_memo_timeline`
 - 프론트: `getMemoTimeline(memoId: string): Promise<MemoTimeline>`
-  - 호출: real.ts:32 `` getMemoTimeline: (memoId) => http.get(`/memos/${memoId}/timeline`), ``
+  - 호출: real.ts:33 `` getMemoTimeline: (memoId) => http.get(`/memos/${memoId}/timeline`), ``
 
 **요청 파라미터**
 
@@ -2801,7 +3199,14 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
         "summary": "…",
         "headline": "…",
         "read": "…",
-        "relevance": "…"
+        "relevance": "…",
+        "created_at": "…",
+        "reason": "…",
+        "card_type": "…",
+        "answer_status": "…",
+        "memo_color": "…",
+        "sources": "…",
+        "price": "…"
       },
       "memo_snapshot": {
         "version": "…",
@@ -2827,7 +3232,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/updates/routes.py` `list_stock_ai_updates`
 - 프론트: `listStockAiUpdates(code: string): Promise<AiUpdate[]>`
-  - 호출: real.ts:33 `` listStockAiUpdates: (code) => http.get(`/stocks/${code}/ai-updates`), ``
+  - 호출: real.ts:35 `` listStockAiUpdates: (code) => http.get(`/stocks/${code}/ai-updates`), ``
 
 **요청 파라미터**
 
@@ -2857,6 +3262,13 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 | `headline` | `string` | 예 |
 | `read` | `boolean` | 예 |
 | `relevance` | `number` | 예 |
+| `created_at` | `ISODate` |  |
+| `reason` | `string` |  |
+| `card_type` | `string` |  |
+| `answer_status` | `string \| null` |  |
+| `memo_color` | `MemoColor` |  |
+| `sources` | `UpdateSourceRef[]` |  |
+| `price` | `{ state: string \| null; observed_value: number \| null; observed_trade_date: string \| null; threshold: number \| null; direction: 'above' \| 'below' \| null; closes: number[]; closes_from: string \| null; } \| null` |  |
 
 <details><summary>예시</summary>
 
@@ -2877,7 +3289,34 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
     "summary": "string",
     "headline": "string",
     "read": false,
-    "relevance": 0
+    "relevance": 0,
+    "created_at": "2026-11-20T09:00:00+09:00",
+    "reason": "string",
+    "card_type": "string",
+    "answer_status": "string",
+    "memo_color": "yellow",
+    "sources": [
+      {
+        "kind": "…",
+        "ref": "…",
+        "title": "…",
+        "source": "…",
+        "url": "…",
+        "published_at": "…",
+        "quote": "…"
+      }
+    ],
+    "price": {
+      "state": "string",
+      "observed_value": 0,
+      "observed_trade_date": "string",
+      "threshold": 0,
+      "direction": "above",
+      "closes": [
+        "…"
+      ],
+      "closes_from": "string"
+    }
   }
 ]
 ```
@@ -2894,7 +3333,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/updates/routes.py` `list_market_updates`
 - 프론트: `listUpdates(params?: { stock_code?: string; limit?: number }): Promise<MarketUpdate[]>`
-  - 호출: real.ts:43 `listUpdates: (params) => http.get('/updates', params),`
+  - 호출: real.ts:45 `listUpdates: (params) => http.get('/updates', params),`
 
 **요청 파라미터**
 
@@ -2947,7 +3386,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/home/routes.py` `list_checklist_items`
 - 프론트: `listHomeChecklist(): Promise<HomeChecklistItem[]>`
-  - 호출: real.ts:60 `listHomeChecklist: () => http.get('/checklist-items'),`
+  - 호출: real.ts:63 `listHomeChecklist: () => http.get('/checklist-items'),`
 
 **응답** `200`
 
@@ -2987,7 +3426,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/home/routes.py` `add_checklist_item`
 - 프론트: `addChecklistItem(stockCode: string, text: string): Promise<HomeChecklistItem>`
-  - 호출: real.ts:63 `addChecklistItem: (stockCode, text) => http.post('/checklist-items', { stock_code: stockCode, text }),`
+  - 호출: real.ts:66 `addChecklistItem: (stockCode, text) => http.post('/checklist-items', { stock_code: stockCode, text }),`
 
 **요청 본문** `ChecklistItemCreate` (필수)
 
@@ -3032,7 +3471,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/home/routes.py` `set_price_condition_tracking`
 - 프론트: `setPriceConditionTracking(memoId: string, conditionId: string, tracking: boolean): Promise<void>`
-  - 호출: real.ts:66 `` http.patch(`/memos/${memoId}/price-conditions/${conditionId}`, { tracking }), ``
+  - 호출: real.ts:69 `` http.patch(`/memos/${memoId}/price-conditions/${conditionId}`, { tracking }), ``
 
 **요청 파라미터**
 
@@ -3057,7 +3496,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/home/routes.py` `list_price_conditions`
 - 프론트: `listPriceConditions(): Promise<PriceConditionRow[]>`
-  - 호출: real.ts:64 `listPriceConditions: () => http.get('/price-conditions'),`
+  - 호출: real.ts:67 `listPriceConditions: () => http.get('/price-conditions'),`
 
 **응답** `200`
 
@@ -3106,7 +3545,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/trash/routes.py` `list_trash`
 - 프론트: `listTrash(): Promise<TrashItem[]>`
-  - 호출: real.ts:74 `listTrash: () => http.get('/trash'),`
+  - 호출: real.ts:77 `listTrash: () => http.get('/trash'),`
 
 **응답** `200`
 
@@ -3144,7 +3583,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/trash/routes.py` `purge_trash`
 - 프론트: `purgeTrash(id: string): Promise<void>`
-  - 호출: real.ts:76 `` purgeTrash: (id) => http.del(`/trash/${id}`), ``
+  - 호출: real.ts:79 `` purgeTrash: (id) => http.del(`/trash/${id}`), ``
 
 **요청 파라미터**
 
@@ -3162,7 +3601,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/trash/routes.py` `restore_trash`
 - 프론트: `restoreTrash(id: string): Promise<void>`
-  - 호출: real.ts:75 `` restoreTrash: (id) => http.post(`/trash/${id}/restore`), ``
+  - 호출: real.ts:78 `` restoreTrash: (id) => http.post(`/trash/${id}/restore`), ``
 
 **요청 파라미터**
 
@@ -3184,7 +3623,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨** · 담당: 이민성
 - 인증: 필요 · 구현: `backend/app/credits/routes.py` `get_my_usage`
 - 프론트: `getUsage(): Promise<CreditUsage>`
-  - 호출: real.ts:81 `getUsage: () => http.get('/me/usage'),`
+  - 호출: real.ts:84 `getUsage: () => http.get('/me/usage'),`
 
 **응답** `200`
 
@@ -3226,7 +3665,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/journal/routes.py` `list_journal`
 - 프론트: `listJournal(): Promise<JournalEntry[]>`
-  - 호출: real.ts:46 `listJournal: () => http.get('/journal'),`
+  - 호출: real.ts:48 `listJournal: () => http.get('/journal'),`
 
 **응답** `200`
 
@@ -3239,6 +3678,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 | `stock_code` | `string \| null` | 예 |
 | `stock_name` | `string \| null` | 예 |
 | `blocks` | `JournalBlock[]` | 예 |
+| `pinned` | `boolean` | 예 |
 | `created_at` | `ISODate` | 예 |
 | `updated_at` | `ISODate` | 예 |
 
@@ -3252,13 +3692,9 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
     "stock_code": "string",
     "stock_name": "string",
     "blocks": [
-      {
-        "id": "…",
-        "type": "…",
-        "text": "…",
-        "highlight": "…"
-      }
+      "({ id: string; type: 'paragraph'; text: string; highlight?: boolean } & JournalLineFormat)"
     ],
+    "pinned": false,
     "created_at": "2026-11-20T09:00:00+09:00",
     "updated_at": "2026-11-20T09:00:00+09:00"
   }
@@ -3275,7 +3711,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/journal/routes.py` `create_journal`
 - 프론트: `createJournal(input: JournalInput): Promise<JournalEntry>`
-  - 호출: real.ts:47 `createJournal: (input) => http.post('/journal', input),`
+  - 호출: real.ts:49 `createJournal: (input) => http.post('/journal', input),`
 
 **요청 본문** `JournalCreate` (필수)
 
@@ -3284,6 +3720,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 | `title` | `string` |  | 최대 길이 500, 기본 `""` |
 | `stock_code` | `string \| null` |  | 형식 `^[0-9A-Z]{6}$` |
 | `blocks` | `TextBlock \| ChecklistBlock \| TableBlock \| AttachmentBlock[]` |  | 최대 개수 500 |
+| `pinned` | `boolean` |  | 기본 `false` |
 
 **응답** `201`
 
@@ -3296,6 +3733,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 | `stock_code` | `string \| null` | 예 |
 | `stock_name` | `string \| null` | 예 |
 | `blocks` | `JournalBlock[]` | 예 |
+| `pinned` | `boolean` | 예 |
 | `created_at` | `ISODate` | 예 |
 | `updated_at` | `ISODate` | 예 |
 
@@ -3308,13 +3746,9 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
   "stock_code": "string",
   "stock_name": "string",
   "blocks": [
-    {
-      "id": "string",
-      "type": "paragraph",
-      "text": "string",
-      "highlight": false
-    }
+    "({ id: string; type: 'paragraph'; text: string; highlight?: boolean } & JournalLineFormat)"
   ],
+  "pinned": false,
   "created_at": "2026-11-20T09:00:00+09:00",
   "updated_at": "2026-11-20T09:00:00+09:00"
 }
@@ -3332,7 +3766,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/journal/routes.py` `delete_journal`
 - 프론트: `deleteJournal(id: string): Promise<void>`
-  - 호출: real.ts:49 `` deleteJournal: (id) => http.del(`/journal/${id}`), ``
+  - 호출: real.ts:51 `` deleteJournal: (id) => http.del(`/journal/${id}`), ``
 
 **요청 파라미터**
 
@@ -3350,7 +3784,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨**
 - 인증: 필요 · 구현: `backend/app/journal/routes.py` `update_journal`
 - 프론트: `updateJournal(id: string, patch: Partial<JournalInput>): Promise<JournalEntry>`
-  - 호출: real.ts:48 `` updateJournal: (id, patch) => http.patch(`/journal/${id}`, patch), ``
+  - 호출: real.ts:50 `` updateJournal: (id, patch) => http.patch(`/journal/${id}`, patch), ``
 
 **요청 파라미터**
 
@@ -3365,6 +3799,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 | `title` | `string \| null` |  | 최대 길이 500 |
 | `stock_code` | `string \| null` |  | 형식 `^[0-9A-Z]{6}$` |
 | `blocks` | `TextBlock \| ChecklistBlock \| TableBlock \| AttachmentBlock[] \| null` |  | 최대 개수 500 |
+| `pinned` | `boolean \| null` |  |  |
 
 **응답** `200`
 
@@ -3377,6 +3812,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 | `stock_code` | `string \| null` | 예 |
 | `stock_name` | `string \| null` | 예 |
 | `blocks` | `JournalBlock[]` | 예 |
+| `pinned` | `boolean` | 예 |
 | `created_at` | `ISODate` | 예 |
 | `updated_at` | `ISODate` | 예 |
 
@@ -3389,13 +3825,9 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
   "stock_code": "string",
   "stock_name": "string",
   "blocks": [
-    {
-      "id": "string",
-      "type": "paragraph",
-      "text": "string",
-      "highlight": false
-    }
+    "({ id: string; type: 'paragraph'; text: string; highlight?: boolean } & JournalLineFormat)"
   ],
+  "pinned": false,
   "created_at": "2026-11-20T09:00:00+09:00",
   "updated_at": "2026-11-20T09:00:00+09:00"
 }
@@ -3413,7 +3845,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **mock**
 - 인증: (백엔드 미구현) · 응답은 `frontend/src/api/mock/index.ts`의 같은 함수가 기준
 - 프론트: `listCalendar(month: string): Promise<CalendarEvent[]>`
-  - 호출: real.ts:55 `listCalendar: (month) => http.get('/calendar', { month }),`
+  - 호출: real.ts:58 `listCalendar: (month) => http.get('/calendar', { month }),`
 
 프론트 타입 (mock 기준) `CalendarEvent[]`
 
@@ -3447,7 +3879,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **mock**
 - 인증: (백엔드 미구현) · 응답은 `frontend/src/api/mock/index.ts`의 같은 함수가 기준
 - 프론트: `createCalendarEvent(input: { date: string; title: string }): Promise<CalendarEvent>`
-  - 호출: real.ts:56 `createCalendarEvent: (input) => http.post('/calendar', input),`
+  - 호출: real.ts:59 `createCalendarEvent: (input) => http.post('/calendar', input),`
 
 프론트 타입 (mock 기준) `CalendarEvent`
 
@@ -3481,7 +3913,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **mock**
 - 인증: (백엔드 미구현) · 응답은 `frontend/src/api/mock/index.ts`의 같은 함수가 기준
 - 프론트: `listCompareMemos(): Promise<CompareMemoCard[]>`
-  - 호출: real.ts:69 `listCompareMemos: () => http.get('/insights/compare-memos'),`
+  - 호출: real.ts:72 `listCompareMemos: () => http.get('/insights/compare-memos'),`
 
 프론트 타입 (mock 기준) `CompareMemoCard[]`
 
@@ -3533,7 +3965,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **mock**
 - 인증: (백엔드 미구현) · 응답은 `frontend/src/api/mock/index.ts`의 같은 함수가 기준
 - 프론트: `listConcludeCandidates(): Promise<ConcludeCandidate[]>`
-  - 호출: real.ts:70 `listConcludeCandidates: () => http.get('/insights/conclude-candidates'),`
+  - 호출: real.ts:73 `listConcludeCandidates: () => http.get('/insights/conclude-candidates'),`
 
 프론트 타입 (mock 기준) `ConcludeCandidate[]`
 
@@ -3573,7 +4005,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **mock**
 - 인증: (백엔드 미구현) · 응답은 `frontend/src/api/mock/index.ts`의 같은 함수가 기준
 - 프론트: `listMemoBacktests(): Promise<MemoBacktest[]>`
-  - 호출: real.ts:68 `listMemoBacktests: () => http.get('/insights/memo-backtest'),`
+  - 호출: real.ts:71 `listMemoBacktests: () => http.get('/insights/memo-backtest'),`
 
 프론트 타입 (mock 기준) `MemoBacktest[]`
 
@@ -3624,7 +4056,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨** · 담당: 이민성
 - 인증: 필요 · 구현: `backend/app/stats/routes.py` `get_ai_stats`
 - 프론트: `getAiStats(): Promise<AiStats>`
-  - 호출: real.ts:80 `getAiStats: () => http.get('/ai/stats'),`
+  - 호출: real.ts:83 `getAiStats: () => http.get('/ai/stats'),`
 
 **응답** `200`
 
@@ -3658,7 +4090,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **mock**
 - 인증: (백엔드 미구현) · 응답은 `frontend/src/api/mock/index.ts`의 같은 함수가 기준
 - 프론트: `deleteAllData(): Promise<void>`
-  - 호출: real.ts:84 `deleteAllData: () => http.del('/data'),`
+  - 호출: real.ts:87 `deleteAllData: () => http.del('/data'),`
 
 <a id="post--data-export"></a>
 #### `POST /data/export`
@@ -3666,7 +4098,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **mock**
 - 인증: (백엔드 미구현) · 응답은 `frontend/src/api/mock/index.ts`의 같은 함수가 기준
 - 프론트: `exportData(format: 'csv' | 'json'): Promise<{ url: string }>`
-  - 호출: real.ts:83 `exportData: (format) => http.post('/data/export', { format }),`
+  - 호출: real.ts:86 `exportData: (format) => http.post('/data/export', { format }),`
 
 프론트 타입 (mock 기준) `{ url: string }`
 
@@ -3690,7 +4122,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨** · 담당: 이민성
 - 인증: 필요 · 구현: `backend/app/stats/routes.py` `get_data_stats`
 - 프론트: `getDataStats(): Promise<DataStats>`
-  - 호출: real.ts:82 `getDataStats: () => http.get('/data/stats'),`
+  - 호출: real.ts:85 `getDataStats: () => http.get('/data/stats'),`
 
 **응답** `200`
 
@@ -3724,7 +4156,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **구현됨** · 담당: 이민성
 - 인증: 필요 · 구현: `backend/app/stats/routes.py` `post_feedback`
 - 프론트: `sendFeedback(payload: FeedbackPayload): Promise<void>`
-  - 호출: real.ts:85 `sendFeedback: (payload) => http.post('/feedback', payload),`
+  - 호출: real.ts:88 `sendFeedback: (payload) => http.post('/feedback', payload),`
 
 **요청 본문** `FeedbackPayload` (필수)
 
@@ -3748,7 +4180,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **mock**
 - 인증: (백엔드 미구현) · 응답은 `frontend/src/api/mock/index.ts`의 같은 함수가 기준
 - 프론트: `disconnectMcpApp(appId: string): Promise<Settings>`
-  - 호출: real.ts:79 `` disconnectMcpApp: (appId) => http.del(`/mcp/apps/${appId}`), ``
+  - 호출: real.ts:82 `` disconnectMcpApp: (appId) => http.del(`/mcp/apps/${appId}`), ``
 
 프론트 타입 (mock 기준) `Settings`
 
@@ -3827,7 +4259,7 @@ OpenAPI 응답 스키마 `MemoResponse | ChecklistResponse | ReferenceResponse`
 - 상태: **mock**
 - 인증: (백엔드 미구현) · 응답은 `frontend/src/api/mock/index.ts`의 같은 함수가 기준
 - 프론트: `uploadFile(file: UploadFile): Promise<{ url: string; name: string }>`
-  - 호출: real.ts:39 `return http.upload('/files', form);`
+  - 호출: real.ts:41 `return http.upload('/files', form);`
 
 프론트 타입 (mock 기준) `{ url: string; name: string }`
 

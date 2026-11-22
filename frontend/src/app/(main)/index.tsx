@@ -2,9 +2,9 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { useCoach } from '@/store/coach';
 import { Linking } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from 'expo-router';
-import type { Checklist } from '@/types/models';
 import { mockCustomBoard, mockHomeData, mockHomeSchedule } from '@/ui/screens/home/Home.mock';
-import type { CustomItem, HomeWidget } from '@/ui/screens/home/Home.types';
+import type { CustomItem } from '@/ui/screens/home/Home.types';
+import { useHomeData } from '@/ui/screens/home/useHomeData';
 import { useHomeMarket } from '@/ui/screens/home/useHomeMarket';
 import { WebHome } from '@/ui/screens/home/web/Home';
 import { useHomeNewsProps } from '@/ui/screens/home/useHomeNews';
@@ -18,12 +18,11 @@ import { WebFirstHome } from '@/ui/screens/onboarding/web/FirstHome';
 export default function HomeScreen() {
   const router = useRouter();
   const { mode, fail, onboarding, home_mode, selected } = useLocalSearchParams<{ mode?: string; fail?: string; onboarding?: string; home_mode?: string; selected?: string }>();
-  const [widgets, setWidgets] = useState<HomeWidget[]>(mockHomeData.widgets);
   const [board, setBoard] = useState<CustomItem[]>(mockCustomBoard);
-  const [checklists, setChecklists] = useState<Record<string, Checklist>>(mockHomeData.checklists);
   const [retried, setRetried] = useState(false);
-  /* 뉴스 위젯만 실제 API (GET /news/home). 나머지 홈 데이터는 아직 mock */
+  /* 뉴스 GET /news/home · 내 데이터(이름 · 종목 수 · 업데이트 · 체크리스트 · 켜 둔 위젯) useHomeData (2026-11-22). 일정 달력은 아직 mock */
   const news = useHomeNewsProps();
+  const home = useHomeData();
   const [firstActive, setFirstActive] = useState(!!onboarding);
   const [guideOpen, setGuideOpen] = useState(onboarding === 'welcome');
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -45,7 +44,6 @@ export default function HomeScreen() {
   const marketOk = !(__DEV__ && fail === '1') || retried;
   /* 시장 지수: 실제 모드면 GET /market/overview, mock 모드면 Home.mock (2026-11-21) */
   const hm = useHomeMarket();
-  const patchCl = (code: string, f: (c: Checklist) => Checklist) => setChecklists((all) => (all[code] ? { ...all, [code]: f(all[code]) } : all));
   const firstStart = firstActive ? (
     <WebFirstHome
       stocks={firstStocks}
@@ -63,10 +61,9 @@ export default function HomeScreen() {
   return (
     <WebHome
       {...mockHomeData}
+      {...home.data}
       mode={(home_mode ?? mode) === 'custom' ? 'custom' : 'template'}
       firstStart={firstStart}
-      widgets={widgets}
-      checklists={checklists}
       {...news}
       market={marketOk ? hm.market : null}
       days={hm.days}
@@ -74,14 +71,14 @@ export default function HomeScreen() {
       board={board}
       onChangeBoard={setBoard}
       onGoStart={() => router.navigate('/onboarding/pick')}
-      onChangeWidgets={setWidgets}
+      onChangeWidgets={home.onChangeWidgets}
       onOpenUpdates={() => router.navigate('/updates')}
       onOpenStockUpdates={(code) => router.navigate({ pathname: '/updates/[code]', params: { code } })}
       onOpenStock={(code) => router.navigate({ pathname: '/stocks/[code]', params: { code } })}
       onOpenNews={(n) => Linking.openURL(n.url)}
       onRetryMarket={() => { setRetried(true); hm.retry(); }}
-      onToggleCheck={(code, id) => patchCl(code, (c) => ({ ...c, items: c.items.map((i) => (i.id === id ? { ...i, done: !i.done } : i)) }))}
-      onAddCheck={(code, text) => patchCl(code, (c) => ({ ...c, items: [...c.items, { id: `n${c.items.length + 1}`, text, done: false }] }))}
+      onToggleCheck={home.onToggleCheck}
+      onAddCheck={home.onAddCheck}
       onNudge={() => {}}
     />
   );

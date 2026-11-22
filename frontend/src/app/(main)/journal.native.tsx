@@ -10,7 +10,7 @@ const NOT_YET = '아직 연결되지 않았어요 · 데이터는 그대로예�
 
 /**
  * 앱 투자 기록 탭 = UI v2 (ui/screens/journal/app · ⑦). 웹은 journal.tsx.
- * 기록은 store/journal (mock · 앱을 켜 둔 동안) — 기록 화면(/journal/[id])과 같이 씀.
+ * 기록은 store/journal (실제 모드는 서버 · mock 모드는 앱을 켜 둔 동안) — 기록 화면(/journal/[id])과 같이 씀.
  */
 export default function JournalTab() {
   const router = useRouter();
@@ -30,6 +30,11 @@ export default function JournalTab() {
     router.push({ pathname: '/journal/[id]', params: { id } });
   };
   const reset = j.reset;
+  const load = j.load;
+  /* 실제 모드: 서버 목록 받기 (같은 계정으로 이미 받았으면 그대로) */
+  useEffect(() => {
+    void load();
+  }, [load]);
   useEffect(() => {
     if (__DEV__ && sp.empty === '1') reset(true);
   }, [sp.empty, reset]);
