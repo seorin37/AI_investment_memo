@@ -165,3 +165,37 @@ def test_api_rejects_low_credit_hold_only_and_unknown_stock(monkeypatch):
     assert api.post("/api/v1/studio/lab", json={"stock_code": "005930", "dirs": ["유지"] * 4}).status_code == 422
     assert api.post("/api/v1/studio/lab", json={"stock_code": "000000", "dirs": DIRS}).status_code == 404
     assert spent == []
+
+
+class _Resp:
+    def __init__(self, status, body):
+        self.status_code, self._body = status, body
+        self.content = b"x"
+
+    def json(self):
+        return self._body
+
+
+def test_openai_call_drops_temperature_when_model_rejects_it(monkeypatch):
+    """2026-11-22: 팀 .env 모델(gpt-6.1-sol)은 temperature 0.2 를 400 으로 거부 → 빼고 다시, 다음부터는 처음부터 뺌"""
+    from app.studio_lab import llm
+
+    sent = []
+    ok = {"choices": [{"message": {"content": "{\"groups\": []}"}}], "usage": {"prompt_tokens": 1, "completion_tokens": 2}}
+
+    def post(url, headers, json, timeout):
+        sent.append(dict(json))
+        if "temperature" in json:
+            return _Resp(400, {"error": {"param": "temperature", "message": "Unsupported value: 'temperature'"}})
+        return _Resp(200, ok)
+
+    monkeypatch.setattr(llm.requests, "post", post)
+    monkeypatch.setattr(llm, "_NO_TEMPERATURE", set())
+    monkeypatch.setenv("LLM_API_KEY", "test")
+    monkeypatch.setenv("LLM_MODEL", "sol-like")
+    monkeypatch.delenv("LAB_MODEL", raising=False)
+    assert llm.openai_call([{"role": "user", "content": "x"}])["groups"] == []
+    assert ["temperature" in b for b in sent] == [True, False]
+    llm.openai_call([{"role": "user", "content": "x"}])
+    assert ["temperature" in b for b in sent] == [True, False, False]          # 기억해서 바로 뺌
+    assert {b["model"] for b in sent} == {"sol-like"}
