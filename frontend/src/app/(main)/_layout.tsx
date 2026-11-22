@@ -19,6 +19,7 @@ import { WebFeedback } from '@/ui/screens/my/web/Feedback';
 import { WebInbox } from '@/ui/screens/my/web/Inbox';
 import { WebSettings, type SettingsTab } from '@/ui/screens/my/web/Settings';
 import { useMyUsage } from '@/ui/screens/my/useMyUsage';
+import { todayQuiz } from '@/ui/screens/studio/quizBank';
 import { useTrashData } from '@/ui/screens/my/useTrashData';
 import { WebTrash } from '@/ui/screens/my/web/Trash';
 import { chapterAt, fmt, useStudioPlayer } from '@/store/studioPlayer';
@@ -225,7 +226,7 @@ export default function MainLayout() {
           <View style={{ flex: 1 }}>
             {sp.webView === 'gen' && sp.job ? <WebGen job={sp.job} steps={sp.job.kind === 'report' ? mockReport.web_steps : mockAudioGen.steps} />
               : sp.webView === 'fail' ? <WebFail kind={sp.job?.kind ?? 'audio'} onHome={() => { sp.dropFailed(); sp.setWebView('home'); }} onRetry={() => { sp.retry(); sp.setWebView('gen'); }} />
-              : sp.webView === 'quiz' ? <WebQuiz q={mockQuiz} done={sp.quizPick} onBack={() => sp.setWebView('home')} onSubmit={sp.submitQuiz} />
+              : sp.webView === 'quiz' ? <WebQuiz q={todayQuiz(mockQuiz)} done={sp.quizPick} onBack={() => sp.setWebView('home')} onSubmit={sp.submitQuiz} />
               : sp.webView === 'lab' ? (
                 <WebLab
                   vars={labVars}

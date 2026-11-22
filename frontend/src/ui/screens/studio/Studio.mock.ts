@@ -8,7 +8,7 @@ export const mockStudioFeatures: StudioFeatureItem[] = [
   { key: 'audio', title: 'AI 오디오', desc: '바쁠 땐 내 종목 소식을 라디오로' },
   { key: 'report', title: 'AI 주간보고서', desc: '공시 읽기 힘드셨죠? 한 주를 한 장으로' },
   { key: 'lab', title: 'AI 투자 실험실', desc: '금리·환율이 바뀌면 내 종목은?' },
-  { key: 'quiz', title: '오늘의 퀴즈', desc: '어제 증시에서 일어난 일 1문제 · 무료' },
+  { key: 'quiz', title: '오늘의 퀴즈', desc: '하루 한 문제 주식 상식 · 무료' },
 ];
 
 export const mockMade: MadeItem[] = [

@@ -45,7 +45,7 @@ export function WebQuiz({ q, done, onBack, onSubmit }: { q: typeof mockQuiz; don
   return (
     <ScrollView contentContainerStyle={st.box} showsVerticalScrollIndicator={false}>
       <Back onPress={onBack} />
-      <FeatHead f="quiz" title="오늘의 퀴즈" chips={<><Chip t={`${q.day} 증시`} /><Chip t={q.type} dark /></>} />
+      <FeatHead f="quiz" title="오늘의 퀴즈" chips={<><Chip t={q.day ? `${q.day} 증시` : q.label} /><Chip t={q.type} dark /></>} />
       <Text style={st.q}>{q.q}</Text>
       <View style={{ gap: 8 }}>
         {q.options.map((o, i) => {
