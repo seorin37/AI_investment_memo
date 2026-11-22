@@ -10,6 +10,7 @@ import { TopBar } from '@/ui/layout/app/TopBar';
 import { AppHome } from '@/ui/screens/home/app/Home';
 import { mockHomeData, mockHomeSearch } from '@/ui/screens/home/Home.mock';
 import { useHomeNewsProps } from '@/ui/screens/home/useHomeNews';
+import { useMyProfile } from '@/ui/screens/my/useMyProfile';
 import type { HomeWidget } from '@/ui/screens/home/Home.types';
 import { useHomeMarket } from '@/ui/screens/home/useHomeMarket';
 import { mockExtract } from '@/ui/screens/memo/MemoDetail.mock';
@@ -34,6 +35,8 @@ export default function HomeTab() {
   const [retried, setRetried] = useState(false);
   /* 뉴스 위젯만 실제 API (GET /news/home). 나머지 홈 데이터는 아직 mock */
   const news = useHomeNewsProps();
+  /* 인사 카드 · 첫 홈 · 프로필 동그라미 이름: 로그인한 사용자 (mock 모드만 예시) */
+  const { profile: { name: myName } } = useMyProfile();
   const [firstActive, setFirstActive] = useState(!!onboarding);
   const [pickerOpen, setPickerOpen] = useState(false);
   /* 저장한 첫 메모 (memo/new · memo/link 가 홈으로 돌아오며 넘김 — 이번 흐름의 임시 값) */
@@ -65,7 +68,7 @@ export default function HomeTab() {
   };
   const firstStart = firstActive ? (
     <AppFirstHome
-      user_name={mockHomeData.user_name}
+      user_name={myName}
       stocks={firstStocks}
       memo={firstMemo}
       picker_open={pickerOpen}
@@ -80,6 +83,7 @@ export default function HomeTab() {
     <AppHome
       {...mockHomeData}
       {...news}
+      user_name={myName}
       firstStart={firstStart}
       widgets={widgets}
       checklists={checklists}
@@ -94,7 +98,7 @@ export default function HomeTab() {
             { icon: 'search', label: '검색', onPress: onSearch },
             { icon: 'bell', label: '알림', onPress: () => router.push('/my-inbox') },
           ]}
-          avatar={{ name: mockHomeData.user_name, onPress: () => router.push('/my') }}
+          avatar={{ name: myName, onPress: () => router.push('/my') }}
         />
       )}
       onEditingChange={setTabBarHidden}

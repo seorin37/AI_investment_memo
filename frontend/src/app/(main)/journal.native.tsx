@@ -3,6 +3,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useJournal } from '@/store/journal';
 import { useUI } from '@/store/ui';
 import { TopBar } from '@/ui/layout/app/TopBar';
+import { useMyProfile } from '@/ui/screens/my/useMyProfile';
 import { AppJournal } from '@/ui/screens/journal/app/Journal';
 
 const NOT_YET = '아직 연결되지 않았어요 · 데이터는 그대로예요';
@@ -13,6 +14,7 @@ const NOT_YET = '아직 연결되지 않았어요 · 데이터는 그대로예�
  */
 export default function JournalTab() {
   const router = useRouter();
+  const { profile: { name: myName } } = useMyProfile();
   const sp = useLocalSearchParams<{ empty?: string }>();
   const setTabBarHidden = useUI((s) => s.setTabBarHidden);
   const j = useJournal();
@@ -44,7 +46,7 @@ export default function JournalTab() {
             { icon: 'moreHPurple', label: '더 보기', size: 34, iconSize: 18, color: '#16171A', onPress: () => setViewSig((n) => n + 1) },
             { icon: 'bell', label: '알림', onPress: () => toast(NOT_YET) },
           ]}
-          avatar={{ name: '김나라', onPress: () => router.push('/my') }}
+          avatar={{ name: myName, onPress: () => router.push('/my') }}
         />
       }
       viewSheetSignal={viewSig}

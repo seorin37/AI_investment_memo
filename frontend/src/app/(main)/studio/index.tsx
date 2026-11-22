@@ -4,7 +4,8 @@ import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useStudioPlayer } from '@/store/studioPlayer';
 import { useUI } from '@/store/ui';
 import { TopBar } from '@/ui/layout/app/TopBar';
-import { mockMyProfile, mockMyUsage } from '@/ui/screens/my/My.mock';
+import { mockMyUsage } from '@/ui/screens/my/My.mock';
+import { useMyProfile } from '@/ui/screens/my/useMyProfile';
 import { mockAudioPeriods, mockAudioStocks, mockReport, mockReportStocks, mockStudioCounts, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
 import { AppAudioSheet } from '@/ui/screens/studio/app/AudioSheet';
 import { AppReportSheet } from '@/ui/screens/studio/app/ReportSheet';
@@ -21,6 +22,7 @@ const NOT_YET = '아직 연결되지 않았어요 · 데이터는 그대로예�
 
 export default function StudioTab() {
   const router = useRouter();
+  const { profile: { name: myName } } = useMyProfile();
   const toast = useUI((s) => s.showToast);
   const { fail, make } = useLocalSearchParams<{ fail?: string; make?: string }>();
   const p = useStudioPlayer();
@@ -40,7 +42,7 @@ export default function StudioTab() {
             preset="studio"
             title="스튜디오"
             actions={[{ icon: 'bell', label: '알림', onPress: () => router.push('/my-inbox') }]}
-            avatar={{ name: mockMyProfile.name, onPress: () => router.push('/my') }}
+            avatar={{ name: myName, onPress: () => router.push('/my') }}
           />
         }
         features={mockStudioFeatures}
