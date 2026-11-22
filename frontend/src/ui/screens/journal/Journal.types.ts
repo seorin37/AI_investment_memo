@@ -1,3 +1,5 @@
+import type { JournalBlock as ApiJournalBlock } from '@/types/models';
+
 /** 기록 한 줄의 글 모양 (원본 앱 #ned .b[data-s] · 웹 h1/h2/h3/p) */
 export type JBlockStyle = 'title' | 'head' | 'sub' | 'body';
 
@@ -37,6 +39,10 @@ export interface JournalEntry {
   blocks: JBlock[];
   /** 웹 편집기에서 쓴 본문 (글자 일부 서식 포함 HTML). 앱에서 고치면 지우고 blocks 로 다시 그림 */
   html?: string;
+  /** 서버 고친 시각 (ISO). 목록 순서 · 날짜 글자 계산 (journalApi.fromServer). mock 기록은 없음 */
+  updated_at?: string;
+  /** 화면에 줄이 없는 서버 블록(표·첨부) — 저장할 때 그대로 다시 보냄 */
+  extra?: ApiJournalBlock[];
 }
 
 export interface JournalProps {

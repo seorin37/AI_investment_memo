@@ -49,20 +49,22 @@ class FakeJournalRepo:
     def stock_exists(self, symbol):
         return symbol in STOCKS
 
-    def create(self, user_id, *, title, body, blocks):
+    def create(self, user_id, *, title, body, blocks, pinned=False):
         now = self._tick()
         entry_id, self.next_id = self.next_id, self.next_id + 1
         self.rows[entry_id] = {"id": entry_id, "user_id": user_id, "title": title, "body": body, "blocks": blocks,
+                               "is_pinned": pinned,
                                "created_at": now, "updated_at": now, "deleted_at": None, "source_memo_id": None,
                                "kind": None, "status": "draft", "folder_id": None, "parent_id": None}
         return entry_id
 
-    def update(self, user_id, entry_id, values):
+    def update(self, user_id, entry_id, values, *, touch=True):
         r = self.rows.get(entry_id)
         if not r or r["user_id"] != user_id or r["deleted_at"] is not None:
             return False
         r.update(values)
-        r["updated_at"] = self._tick()
+        if touch:
+            r["updated_at"] = self._tick()
         return True
 
     def set_stock(self, entry_id, symbol):
@@ -157,7 +159,8 @@ class JournalApiTest(unittest.TestCase):
 
     def test_create_matches_mock_shape_and_stores_markdown(self):
         e = self._create()
-        self.assertEqual(set(e), {"id", "title", "stock_code", "stock_name", "blocks", "created_at", "updated_at"})
+        self.assertEqual(set(e), {"id", "title", "stock_code", "stock_name", "blocks", "pinned", "created_at", "updated_at"})
+        self.assertIs(e["pinned"], False)
         self.assertEqual((e["title"], e["stock_code"], e["stock_name"]), ("10/13 투자 복기", "000660", "SK하이닉스"))
         self.assertEqual(e["blocks"], [{k: v for k, v in b.items()} for b in BLOCKS])     # 원본 그대로 (id·강조 포함)
         row = self.repo.rows[int(e["id"])]
@@ -186,6 +189,39 @@ class JournalApiTest(unittest.TestCase):
         res = self.client.patch(f"/api/v1/journal/{e['id']}", json={"stock_code": None})   # null = 종목 연결 해제
         self.assertEqual((res.json()["stock_code"], res.json()["stock_name"]), (None, None))
         self.assertGreater(res.json()["updated_at"], e["updated_at"])
+
+    def test_line_formats_are_kept_and_go_to_markdown(self):
+        """화면 서식(작은 제목 · 목록 · 굵게/기울임/밑줄/취소선)이 저장되고 그대로 돌아온다."""
+        blocks = [
+            {"id": "a", "type": "heading", "text": "작은 제목", "level": 2},
+            {"id": "b", "type": "paragraph", "text": "하나", "list_style": "dot", "bold": True},
+            {"id": "c", "type": "paragraph", "text": "둘", "list_style": "dot"},
+            {"id": "d", "type": "paragraph", "text": "인용", "list_style": "quote", "italic": True},
+            {"id": "e", "type": "checklist", "text": "할 일", "checked": False, "strike": True, "underline": True},
+        ]
+        e = self._create(blocks=blocks, stock_code=None)
+        self.assertEqual(e["blocks"], blocks)
+        self.assertEqual(self.repo.rows[int(e["id"])]["body"],
+                         "### 작은 제목\n\n- **하나**\n- 둘\n\n> *인용*\n\n- [ ] ~~할 일~~")
+        bad = [{"id": "x", "type": "paragraph", "text": "t", "list_style": "star"}]
+        self.assertEqual(self.client.post("/api/v1/journal", json={"blocks": bad}).status_code, 422)
+        bad = [{"id": "x", "type": "heading", "text": "t", "level": 3}]
+        self.assertEqual(self.client.post("/api/v1/journal", json={"blocks": bad}).status_code, 422)
+        bad = [{"id": "x", "type": "paragraph", "text": "t", "color": "red"}]           # 모르는 칸은 여전히 거절
+        self.assertEqual(self.client.post("/api/v1/journal", json={"blocks": bad}).status_code, 422)
+
+    def test_pin_keeps_edited_date(self):
+        e = self._create(stock_code=None)
+        res = self.client.patch(f"/api/v1/journal/{e['id']}", json={"pinned": True})
+        self.assertEqual(res.status_code, 200)
+        self.assertIs(res.json()["pinned"], True)
+        self.assertEqual(res.json()["updated_at"], e["updated_at"])                       # 고정은 고친 날을 안 바꿈
+        self.assertIs(self.client.get("/api/v1/journal").json()[0]["pinned"], True)
+        res = self.client.patch(f"/api/v1/journal/{e['id']}", json={"title": "고침"})
+        self.assertIs(res.json()["pinned"], True)                                         # 다른 칸을 고쳐도 고정 유지
+        self.assertGreater(res.json()["updated_at"], e["updated_at"])
+        created = self._create(stock_code=None, pinned=True)
+        self.assertIs(created["pinned"], True)
 
     def test_validation(self):
         self.assertEqual(self.client.post("/api/v1/journal", json={"title": "x", "stock_code": "999999"}).status_code, 422)

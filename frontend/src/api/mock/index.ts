@@ -352,7 +352,7 @@ export const mockApi: Api = {
   listJournal: async () => wait([...db.journal].sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at))),
   createJournal: async (input) => {
     const now = new Date().toISOString();
-    const entry: JournalEntry = { id: uid('j'), ...input, stock_name: input.stock_code ? stockName(input.stock_code) : null, created_at: now, updated_at: now };
+    const entry: JournalEntry = { id: uid('j'), ...input, pinned: input.pinned ?? false, stock_name: input.stock_code ? stockName(input.stock_code) : null, created_at: now, updated_at: now };
     db.journal.unshift(entry);
     return wait(entry);
   },
