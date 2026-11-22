@@ -54,6 +54,54 @@ class StockRepository:
         ).mappings().first()
         return dict(row) if row else None
 
+    # ─── 많이 찾는 종목 (GET /stocks/popular, 2026-11-22)
+    def popular_by_users(self, *, min_users: int, limit: int) -> list[dict[str, Any]]:
+        """담은 사람이 min_users 명 이상인 KOSPI 종목, 많은 순. 인원 수는 정렬에만 쓰고 돌려주지 않는다."""
+        rows = self.db.execute(
+            text(
+                """
+                SELECT btrim(s.symbol) AS code, s.name, s.market::text AS market
+                FROM user_stocks us
+                JOIN stocks s ON s.symbol = us.symbol
+                JOIN users u ON u.id = us.user_id AND u.deleted_at IS NULL
+                WHERE us.deleted_at IS NULL
+                  AND s.market = 'KOSPI'
+                GROUP BY s.symbol, s.name, s.market
+                HAVING count(DISTINCT us.user_id) >= :min_users
+                ORDER BY count(DISTINCT us.user_id) DESC, s.symbol
+                LIMIT :limit
+                """
+            ),
+            {"min_users": min_users, "limit": limit},
+        ).mappings().all()
+        return [dict(row) for row in rows]
+
+    def top_market_cap(self, *, limit: int, exclude: list[str]) -> list[dict[str, Any]]:
+        """시총 큰 KOSPI 종목. 기준일 = KOSPI 종목에 market_cap 이 있는 가장 최근 거래일. exclude 코드는 뺀다."""
+        rows = self.db.execute(
+            text(
+                """
+                WITH latest AS (
+                  SELECT max(p.trade_date) AS d
+                  FROM prices_daily p
+                  JOIN stocks s ON s.symbol = p.symbol
+                  WHERE s.market = 'KOSPI' AND p.market_cap IS NOT NULL
+                )
+                SELECT btrim(s.symbol) AS code, s.name, s.market::text AS market
+                FROM prices_daily p
+                JOIN latest ON p.trade_date = latest.d
+                JOIN stocks s ON s.symbol = p.symbol
+                WHERE s.market = 'KOSPI'
+                  AND p.market_cap IS NOT NULL
+                  AND NOT (btrim(s.symbol) = ANY(:exclude))
+                ORDER BY p.market_cap DESC, s.symbol
+                LIMIT :limit
+                """
+            ),
+            {"limit": limit, "exclude": list(exclude)},
+        ).mappings().all()
+        return [dict(row) for row in rows]
+
     def list_user_stocks(self, user_id: int) -> list[dict[str, Any]]:
         rows = self.db.execute(
             text(

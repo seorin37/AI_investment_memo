@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from .repository import StockRepository
 
+# 많이 찾는 종목 (온보딩 종목 고르기). 사람이 적을 때 몇 명이 담았는지 드러나지 않게 3명 이상만 인정
+POPULAR_MIN_USERS = 3
+POPULAR_DEFAULT = 12
+POPULAR_MAX = 30
+
 
 class StockNotFoundError(LookupError):
     pass
@@ -30,6 +35,25 @@ class StockService:
         if not cleaned:
             return []
         return self.repository.search_kospi(cleaned, limit=8)
+
+    def popular(self, limit: int = POPULAR_DEFAULT) -> list[dict]:
+        """많이 찾는 종목: 담은 사람 POPULAR_MIN_USERS 명 이상 → 모자라면 최신 시총 순으로 채움. [{code, name, market}]만."""
+        limit = max(1, min(int(limit), POPULAR_MAX))
+        out: list[dict] = []
+        seen: set[str] = set()
+
+        def put(rows: list[dict]) -> None:
+            for row in rows:
+                code = str(row["code"]).strip()
+                if code in seen or len(out) >= limit:
+                    continue
+                seen.add(code)
+                out.append({"code": code, "name": row["name"], "market": row["market"]})
+
+        put(self.repository.popular_by_users(min_users=POPULAR_MIN_USERS, limit=limit))
+        if len(out) < limit:
+            put(self.repository.top_market_cap(limit=limit - len(out), exclude=sorted(seen)))
+        return out
 
     def get_master(self, code: str) -> dict:
         stock = self.repository.get_kospi(code)
