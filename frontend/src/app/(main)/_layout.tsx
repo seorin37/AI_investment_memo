@@ -17,6 +17,7 @@ import { mockCreditDefault, mockCreditPacks, mockPayMethods, mockDataSources, mo
 import { WebFeedback } from '@/ui/screens/my/web/Feedback';
 import { WebInbox } from '@/ui/screens/my/web/Inbox';
 import { WebSettings, type SettingsTab } from '@/ui/screens/my/web/Settings';
+import { useTrashData } from '@/ui/screens/my/useTrashData';
 import { WebTrash } from '@/ui/screens/my/web/Trash';
 import { chapterAt, fmt, useStudioPlayer } from '@/store/studioPlayer';
 import { mockAudioEpisode, mockAudioGen, mockAudioPeriods, mockAudioStocks, mockLabDisclaimer, mockLabNote, mockLabStocks, mockLabVars, mockLastClose, mockQuiz, mockReport, mockReportStocks, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
@@ -108,9 +109,6 @@ export default function MainLayout() {
   const [trashOpen, setTrashOpen] = useState(false);
   const [fbOpen, setFbOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
-  const trash = useMyMock((s) => s.trash);
-  const restore = useMyMock((s) => s.restore);
-  const undoRestore = useMyMock((s) => s.undoRestore);
   const unread = useMyMock((s) => s.unread);
   const readNotif = useMyMock((s) => s.read);
   const readAll = useMyMock((s) => s.readAll);
@@ -142,6 +140,8 @@ export default function MainLayout() {
     const c = w.charCodeAt(w.length - 1);
     return c >= 0xac00 && c <= 0xd7a3 && (c - 0xac00) % 28 ? '을' : '를';
   };
+  /* 휴지통: 실제 모드면 GET /trash · 복원 · 영구 삭제 (2026-11-22), mock 이면 store/myMock */
+  const trashData = useTrashData(() => say({ msg: '아직 연결되지 않았어요 · 데이터는 그대로예요' }));
   if (status !== 'signedIn') {
     if (status === 'loading' || introSeen === null) return null;
     return <Redirect href={introSeen ? '/login' : '/intro'} />;
@@ -403,15 +403,15 @@ export default function MainLayout() {
     />
     <WebTrash
       open={trashOpen}
-      items={trash}
+      items={trashData.items}
       onClose={() => setTrashOpen(false)}
       onBack={() => setTrashOpen(false)}
       onRestore={(t) => {
-        const it = restore(t.id);
+        const it = trashData.restore(t);
         if (it) say({ msg: it.kind === '메모' ? '메모를 복원했어요 · 원래 종목 보드에 돌아갔어요' : it.kind === '종목' ? '종목을 복원했어요 · 메모도 함께 돌아왔어요' : '복원했어요', check: true });
       }}
-      onUndo={undoRestore}
-      onPurge={() => say({ msg: '아직 연결되지 않았어요 · 데이터는 그대로예요' })}
+      onUndo={trashData.undo}
+      onPurge={trashData.purge}
     />
     <WebAudioPopup
       open={studioPop === 'audio'}
