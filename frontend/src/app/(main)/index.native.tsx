@@ -5,13 +5,12 @@ import * as WebBrowser from 'expo-web-browser';
 import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { useMockNotice } from '@/components/layout/MobileScreen';
 import { useUI } from '@/store/ui';
-import type { Checklist } from '@/types/models';
 import { TopBar } from '@/ui/layout/app/TopBar';
 import { AppHome } from '@/ui/screens/home/app/Home';
 import { mockHomeData, mockHomeSearch } from '@/ui/screens/home/Home.mock';
 import { useHomeNewsProps } from '@/ui/screens/home/useHomeNews';
 import { useMyProfile } from '@/ui/screens/my/useMyProfile';
-import type { HomeWidget } from '@/ui/screens/home/Home.types';
+import { useHomeData } from '@/ui/screens/home/useHomeData';
 import { useHomeMarket } from '@/ui/screens/home/useHomeMarket';
 import { mockExtract } from '@/ui/screens/memo/MemoDetail.mock';
 import type { FirstMemoSummary } from '@/ui/screens/onboarding/FirstHome.types';
@@ -30,11 +29,10 @@ export default function HomeTab() {
   const setTabBarHidden = useUI((s) => s.setTabBarHidden);
   const { fail, onboarding, selected, first_code, first_title, first_body, first_ai } = useLocalSearchParams<{ fail?: string; onboarding?: string; selected?: string; first_code?: string; first_title?: string; first_body?: string; first_ai?: string }>();
   const toast = useUI((s) => s.showToast);
-  const [widgets, setWidgets] = useState<HomeWidget[]>(mockHomeData.widgets);
-  const [checklists, setChecklists] = useState<Record<string, Checklist>>(mockHomeData.checklists);
   const [retried, setRetried] = useState(false);
-  /* 뉴스 위젯만 실제 API (GET /news/home). 나머지 홈 데이터는 아직 mock */
+  /* 뉴스 GET /news/home · 내 데이터(종목 수 · 업데이트 · 체크리스트 · 켜 둔 위젯) useHomeData (2026-11-22) */
   const news = useHomeNewsProps();
+  const home = useHomeData();
   /* 인사 카드 · 첫 홈 · 프로필 동그라미 이름: 로그인한 사용자 (mock 모드만 예시) */
   const { profile: { name: myName } } = useMyProfile();
   const [firstActive, setFirstActive] = useState(!!onboarding);
@@ -61,7 +59,6 @@ export default function HomeTab() {
     const t = setTimeout(startCoach, 700);
     return () => clearTimeout(t);
   }, [onboarding, pickerOpen, startCoach]));
-  const patchCl = (code: string, f: (c: Checklist) => Checklist) => setChecklists((all) => (all[code] ? { ...all, [code]: f(all[code]) } : all));
   const openNew = (code: string) => {
     setPickerOpen(false);
     router.navigate({ pathname: '/memo/new', params: { code, from_onboarding: '1', onboarding_selected: selected ?? '' } } as Href);
@@ -82,11 +79,10 @@ export default function HomeTab() {
   return (
     <AppHome
       {...mockHomeData}
+      {...home.data}
       {...news}
       user_name={myName}
       firstStart={firstStart}
-      widgets={widgets}
-      checklists={checklists}
       market={marketOk ? hm.market : null}
       days={hm.days}
       search={mockHomeSearch}
@@ -102,15 +98,15 @@ export default function HomeTab() {
         />
       )}
       onEditingChange={setTabBarHidden}
-      onChangeWidgets={setWidgets}
+      onChangeWidgets={home.onChangeWidgets}
       onOpenUpdates={() => router.navigate('/updates')}
       onOpenStockUpdates={(code) => router.navigate({ pathname: '/updates/[code]', params: { code } })}
       onOpenStock={(code) => router.navigate({ pathname: '/stocks/[code]', params: { code } })}
       onOpenMarket={(key) => router.push({ pathname: '/market/[key]', params: { key } })}
       onOpenNews={(n) => openArticle(n.url)}
       onRetryMarket={() => { setRetried(true); hm.retry(); }}
-      onToggleCheck={(code, id) => patchCl(code, (c) => ({ ...c, items: c.items.map((i) => (i.id === id ? { ...i, done: !i.done } : i)) }))}
-      onAddCheck={(code, text) => patchCl(code, (c) => ({ ...c, items: [...c.items, { id: `n${Date.now()}`, text, done: false }] }))}
+      onToggleCheck={home.onToggleCheck}
+      onAddCheck={home.onAddCheck}
       onNudge={() => notice('주간보고서')}
     />
   );
