@@ -11,6 +11,7 @@ import { TopBar } from '@/ui/layout/app/TopBar';
 import { AiOffSheet } from '@/ui/shared/AiOffSheet';
 import { AppMemoBoard } from '@/ui/screens/board/app/MemoBoard';
 import { useBoardData } from '@/ui/screens/board/useBoardData';
+import { useMemoTimeline } from '@/hooks/queries';
 import { useBoardStock } from '@/ui/screens/board/useBoardStock';
 import { env } from '@/config/env';
 import { mockBoardChecklist, mockBoardMemos, mockBoardStock, mockEmptyStock } from '@/ui/screens/board/MemoBoard.mock';
@@ -46,6 +47,10 @@ export default function StockDetail() {
   }
   const removed = useRef<Memo[]>([]);
   const [offFor, setOffFor] = useState<Memo | null>(null);
+  /* AI 끄기 확인 창의 '추적 항목 N개': 실제 모드면 그 메모의 추적 항목 수 (질문 제외), mock 은 예시 2개 */
+  const offTimeline = useMemoTimeline(offFor?.id ?? '', real && !!offFor);
+  const offItems = (offTimeline.data as { tracking_items?: { type: string }[] } | undefined)?.tracking_items;
+  const offCount = real ? (offItems ?? []).filter((i) => i.type !== 'ask').length : 2;
   /* 다른 화면으로 가면 고르기 때문에 숨긴 탭바를 다시 보이게 */
   useFocusEffect(useCallback(() => () => setTabBarHidden(false), [setTabBarHidden]));
   const onSelectionChange = useCallback((n: number) => setTabBarHidden(n > 0), [setTabBarHidden]);
@@ -109,7 +114,7 @@ export default function StockDetail() {
       open={!!offFor}
       stockName={stock.name}
       title={offFor?.title ?? ''}
-      itemCount={2}
+      itemCount={offCount}
       onClose={() => setOffFor(null)}
       onConfirm={() => {
         const id = offFor?.id;

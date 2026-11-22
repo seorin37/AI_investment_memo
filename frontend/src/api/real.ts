@@ -86,6 +86,7 @@ export const realApi: Api = {
   disconnectMcpApp: (appId) => http.del(`/mcp/apps/${appId}`),
   getAiStats: () => http.get('/ai/stats'),
   getUsage: () => http.get('/me/usage'),
+  getTodayQuiz: () => http.get('/quiz/today'),
   getDataStats: () => http.get('/data/stats'),
   exportData: (format) => http.post('/data/export', { format }),
   deleteAllData: () => http.del('/data'),

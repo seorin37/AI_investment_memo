@@ -603,6 +603,22 @@ export interface CreditUsage {
   paused: boolean; // 남은 크레딧 0 → AI 업데이트 멈춤
 }
 
+/** 오늘의 퀴즈 (GET /quiz/today, backend/app/quiz, 문제 표 quiz_questions 0023) */
+export interface TodayQuiz {
+  slug: string;
+  category: 'chart' | 'trading' | 'financials' | 'disclosure';
+  quiz_type: 'four' | 'ox';
+  label: string;
+  question: string;
+  options: string[];
+  answer_index: number;
+  explanation: string;
+  concept: string;
+  source: string;
+  index: number;
+  total: number;
+}
+
 export interface DataStats {
   memos: number;
   journals: number;

@@ -11,6 +11,7 @@ import type {
   CompareMemoCard,
   ConcludeCandidate,
   CreditUsage,
+  TodayQuiz,
   DataStats,
   FeedbackPayload,
   Financials,
@@ -188,6 +189,8 @@ export interface Api {
   getAiStats(): Promise<AiStats>;
   /** 이번 기간 AI 크레딧 사용량. 이번 달 기본량을 아직 안 받았으면 서버가 이 호출에서 지급한다 */
   getUsage(): Promise<CreditUsage>;
+  /** 오늘의 퀴즈 1문제 (한국 시간 오전 10시마다 다음 문제). 문제가 없으면 404 */
+  getTodayQuiz(): Promise<TodayQuiz>;
   getDataStats(): Promise<DataStats>;
   exportData(format: 'csv' | 'json'): Promise<{ url: string }>;
   deleteAllData(): Promise<void>;

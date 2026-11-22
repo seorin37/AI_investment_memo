@@ -40,6 +40,7 @@ export const qk = {
   trash: ['trash'] as const,
   settings: ['settings'] as const,
   aiStats: ['aiStats'] as const,
+  todayQuiz: ['todayQuiz'] as const,
   usage: ['usage'] as const,
   dataStats: ['dataStats'] as const,
 };
@@ -385,6 +386,9 @@ export function useDisconnectMcpApp() {
 }
 
 export const useAiStats = () => useQuery({ queryKey: qk.aiStats, queryFn: api.getAiStats });
+/** 오늘의 퀴즈 — 하루 한 문제라 10분 동안은 다시 묻지 않음. 404(문제 없음)는 재시도하지 않음 */
+export const useTodayQuiz = (enabled = true) =>
+  useQuery({ queryKey: qk.todayQuiz, queryFn: api.getTodayQuiz, staleTime: 10 * 60_000, retry: false, enabled });
 export const useUsage = () => useQuery({ queryKey: qk.usage, queryFn: api.getUsage });
 export const useDataStats = () => useQuery({ queryKey: qk.dataStats, queryFn: api.getDataStats });
 

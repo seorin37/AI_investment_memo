@@ -1,9 +1,11 @@
+import type { TodayQuiz } from '@/types/models';
 import type { mockQuiz } from './Studio.mock';
 
 /**
  * 오늘의 퀴즈 문제 은행 (2026-11-22) — 상규 님 시연용 주식 상식 30문제(data/seed/quiz/quiz_questions_demo.jsonl, demo_order 순).
- * 아직 퀴즈 API·표가 없어서(0023 은 쓰는 곳이 생길 때 추가) 화면이 이 목록을 직접 쓴다. 날짜와 상관없는 상식이라 '어제 증시' 문구 없음.
- * 바꿀 때는 jsonl 을 고치고 이 파일을 다시 만든다 (scripts/build_quiz_seed.py 와 같은 원본).
+ * 실제 모드는 DB(quiz_questions, 0023)의 문제를 GET /quiz/today 로 읽고(useTodayQuiz), 이 목록은 mock 모드와
+ * 서버에 문제가 없거나 못 읽을 때 대신 쓴다. 날짜와 상관없는 상식이라 '어제 증시' 문구 없음.
+ * 바꿀 때는 jsonl 을 고치고 이 파일과 시드 SQL 을 다시 만든다 (scripts/build_quiz_seed.py 와 같은 원본).
  */
 export interface QuizItem {
   slug: string;
@@ -65,4 +67,25 @@ export function quizIndex(now: Date = new Date()): number {
 export function todayQuiz(base: typeof mockQuiz, now: Date = new Date()): typeof mockQuiz {
   const it = QUIZ_BANK[quizIndex(now)];
   return { ...base, label: it.label, day: '', type: it.type, q: it.q, options: it.options, answer: it.answer, exp: it.exp, concept: it.concept, src: `출처 · ${it.src}` };
+}
+
+const CATEGORY: Record<string, TodayQuiz['category']> = { '차트 기초': 'chart', '거래 기초': 'trading', '재무 기초': 'financials', '공시 기초': 'disclosure' };
+
+/** mock API 응답: 내장 문제를 서버 GET /quiz/today 모양으로 */
+export function toServerQuiz(now: Date = new Date()): TodayQuiz {
+  const index = quizIndex(now);
+  const it = QUIZ_BANK[index];
+  return {
+    slug: it.slug, category: CATEGORY[it.label] ?? 'trading', quiz_type: it.type === 'OX' ? 'ox' : 'four', label: it.label,
+    question: it.q, options: it.options, answer_index: it.answer, explanation: it.exp, concept: it.concept, source: it.src,
+    index, total: QUIZ_BANK.length,
+  };
+}
+
+/** 서버 문제 → 화면 props 모양 (todayQuiz 와 같은 칸) */
+export function fromServerQuiz(base: typeof mockQuiz, s: TodayQuiz): typeof mockQuiz {
+  return {
+    ...base, label: s.label, day: '', type: s.quiz_type === 'ox' ? 'OX' : '4지선다', q: s.question, options: s.options,
+    answer: s.answer_index, exp: s.explanation, concept: s.concept, src: `출처 · ${s.source}`,
+  };
 }
