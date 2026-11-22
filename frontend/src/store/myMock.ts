@@ -21,9 +21,12 @@ interface MyMockState {
   undoRestore: (item: TrashItem) => void;
   read: (id: string) => void;
   readAll: () => void;
+  /** 로그아웃 · 계정 전환: 처음 만들어졌을 때 상태로 (mock 모드면 mock 초기값이 다시 보임) */
+  reset: () => void;
 }
 
 export const useMyMock = create<MyMockState>((set, get) => ({
+  reset: () => set(useMyMock.getInitialState(), true),
   profile: mockMyProfile,
   dark: false,
   noti: { ai: true, studio: true },

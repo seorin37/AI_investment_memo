@@ -16,10 +16,13 @@ interface CoachState {
   replay(): void;
   go(step: number): void;
   end(finished: boolean): void;
+  /** 로그아웃 · 계정 전환: 처음 만들어졌을 때 상태로 (다음 사용자는 안내를 처음부터) */
+  reset(): void;
 }
 
 let seq = 0;
 export const useCoach = create<CoachState>((set, get) => ({
+  reset: () => set(useCoach.getInitialState(), true),
   step: null,
   seen: false,
   done: null,

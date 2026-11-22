@@ -71,6 +71,8 @@ interface StudioPlayerState {
   nextSpeed(steps: number[]): void;
   setMini(v: boolean): void;
   closeMini(): void;
+  /** 로그아웃 · 계정 전환: 만드는 중 · 재생 타이머를 먼저 멈추고 처음 만들어졌을 때 상태로 */
+  reset(): void;
 }
 
 const DUR = mockAudioEpisode.dur;
@@ -185,6 +187,12 @@ export const useStudioPlayer = create<StudioPlayerState>((set, get) => {
     nextSpeed: (steps) => set((s) => ({ speed: steps[(steps.indexOf(s.speed) + 1) % steps.length] })),
     setMini: (v) => set({ mini: v }),
     closeMini: () => { set({ mini: false, playing: false }); runPlay(false); },
+    reset: () => {
+      genT.forEach(clearTimeout);
+      genT = [];
+      runPlay(false);
+      set(useStudioPlayer.getInitialState(), true);
+    },
   };
 });
 
