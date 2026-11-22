@@ -3,11 +3,12 @@ import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native'
 import Svg, { Line } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
 import { splitMemo } from '@/lib/memoText';
-import type { MemoColor } from '@/types/models';
+import type { ChecklistItem, MemoColor } from '@/types/models';
 import { MemoEditor } from '@/ui/shared/MemoEditor';
 import { Sheet } from '@/ui/shared/Sheet';
 import { fpx } from '@/ui/theme';
 import type { NewMemoProps } from '../MemoDetail.types';
+import { ChecklistTab, type ChecklistDraft } from './ChecklistTab';
 import { AI_OFF, Actions, AiFooter, CloseBtn, INK, Swatches, Tabs2, panel } from './parts';
 import { usePaper } from '@/ui/shared/Dark';
 
@@ -15,13 +16,25 @@ import { usePaper } from '@/ui/shared/Dark';
  * 웹 새 메모 창 (원본 board.tsx NewDialog 6.1: 680 가운데 창)
  * 머리 96: '종목 · 나의 보드' 13/20 · '새 메모' 20/29 700 · × / [메모 | 체크리스트] / 종이 277 (비면 예시 글: 제목 22/31 · 본문 17 줄 1.6 · 점선 아래 안내 13)
  * 메모 색상 · AI 연결 칸 · [취소] [메모 저장]. 비어 있으면 저장 안 함.
+ * [체크리스트] 탭 (6.2, 2026-11-22): 종목당 체크리스트 하나 — 있으면 그걸 고치고, 없으면 새로 (ChecklistTab).
+ *   onSaveChecklist 가 없으면 예전처럼 onSwitchToChecklist 만 부른다.
  */
-export function WebNewMemoDialog({ open, stockName, initialText, onCancel, onSave, onSwitchToChecklist }: NewMemoProps & { open: boolean }) {
+export function WebNewMemoDialog({ open, stockName, initialText, onCancel, onSave, onSwitchToChecklist, tab0 = 0, checklist, onSaveChecklist, onEmptyChecklist }: NewMemoProps & {
+  open: boolean;
+  /** 처음 열 탭 (0 메모 · 1 체크리스트) */
+  tab0?: 0 | 1;
+  /** 이 종목의 지금 체크리스트 (없으면 새로 만들기) */
+  checklist?: { title: string; items: ChecklistItem[] } | null;
+  onSaveChecklist?: (d: ChecklistDraft) => void;
+  /** 항목을 모두 지우고 저장 (있던 체크리스트면 휴지통으로) */
+  onEmptyChecklist?: () => void;
+}) {
   const paper = usePaper();
   const { height: H } = useWindowDimensions();
   const [text, setText] = useState(initialText ?? '');
   const [color, setColor] = useState<MemoColor>('yellow');
   const [ai, setAi] = useState(false);
+  const [tab, setTab] = useState<0 | 1>(onSaveChecklist ? tab0 : 0);
   const ed = useRef<{ focus: () => void; blur: () => void }>(null);
   const empty = !text.trim();
   const save = () => {
@@ -29,16 +42,20 @@ export function WebNewMemoDialog({ open, stockName, initialText, onCancel, onSav
     onSave({ ...splitMemo(text), color, ai });
   };
   return (
-    <Sheet open={open} onClose={onCancel} width={680} label="새 메모">
+    <Sheet open={open} onClose={onCancel} width={680} label={tab ? '체크리스트' : '새 메모'}>
       <View style={[panel.box, { maxHeight: H - 32 }]}>
         <View style={st.head}>
           <View style={st.headL}>
             <Text style={st.sub}>{stockName} · 나의 보드</Text>
-            <Text style={st.title}>새 메모</Text>
+            <Text style={st.title}>{tab ? (checklist ? '체크리스트' : '새 체크리스트') : '새 메모'}</Text>
           </View>
           <CloseBtn onPress={onCancel} />
         </View>
-        <Tabs2 a="메모" b="체크리스트" v={0} set={(i) => i === 1 && onSwitchToChecklist?.()} />
+        <Tabs2 a="메모" b="체크리스트" v={tab} set={(i) => (onSaveChecklist ? setTab(i) : i === 1 && onSwitchToChecklist?.())} />
+        {tab === 1 && onSaveChecklist ? (
+          <ChecklistTab initial={checklist ?? null} onCancel={onCancel} onSave={onSaveChecklist} onEmpty={() => (onEmptyChecklist ?? onCancel)()} />
+        ) : (
+        <>
         <View style={st.area}>
           <View style={[st.paper, { backgroundColor: paper[color].bg }]}>
             {empty ? (
@@ -61,6 +78,8 @@ export function WebNewMemoDialog({ open, stockName, initialText, onCancel, onSav
         </View>
         <AiFooter on={ai} set={setAi} sub={ai ? '이 메모에서 1개 항목을 지켜봐요.' : AI_OFF} />
         <Actions note="연결하지 않아도 메모는 그대로 남아요" ok="메모 저장" onCancel={onCancel} onOk={save} />
+        </>
+        )}
       </View>
     </Sheet>
   );
