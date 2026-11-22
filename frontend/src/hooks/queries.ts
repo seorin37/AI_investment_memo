@@ -20,6 +20,7 @@ export const qk = {
   board: (code: string) => ['board', code] as const,
   boardItem: (id: string) => ['boardItem', id] as const,
   timeline: (memoId: string) => ['timeline', memoId] as const,
+  answers: (memoId: string) => ['answers', memoId] as const,
   stockAiUpdates: (code: string) => ['stockAiUpdates', code] as const,
   updates: (code?: string) => ['updates', code ?? 'all'] as const,
   journal: ['journal'] as const,
@@ -198,6 +199,51 @@ export function useSetBoardChecklistItem() {
     onSuccess: (_data, value) => inv(qk.board(value.stockCode)),
   });
 }
+
+/** 사이드바 내 종목 순서 저장 (PUT /stocks/order). 화면 순서를 먼저 바꾸고, 실패하면 되돌린다 */
+export function useReorderStocks() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (codes: string[]) => api.reorderStocks(codes),
+    onMutate: async (codes) => {
+      await qc.cancelQueries({ queryKey: qk.stocks });
+      const prev = qc.getQueryData<Awaited<ReturnType<typeof api.listMyStocks>>>(qk.stocks);
+      if (prev) qc.setQueryData(qk.stocks, [...prev].sort((a, b) => codes.indexOf(a.code) - codes.indexOf(b.code)));
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => ctx?.prev && qc.setQueryData(qk.stocks, ctx.prev),
+    onSuccess: (rows) => qc.setQueryData(qk.stocks, rows),
+  });
+}
+
+/** 보드 카드 순서 저장 (PUT /stocks/{code}/board-order). 화면 순서를 먼저 바꾸고, 실패하면 되돌린다 */
+export function useReorderBoard(code: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => api.reorderBoard(code, ids),
+    onMutate: async (ids) => {
+      await qc.cancelQueries({ queryKey: qk.board(code) });
+      const prev = qc.getQueryData<BoardItem[]>(qk.board(code));
+      if (prev) qc.setQueryData(qk.board(code), ids.map((id) => prev.find((b) => b.id === id)).filter(Boolean).map((b, i) => ({ ...(b as BoardItem), position: i })));
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => ctx?.prev && qc.setQueryData(qk.board(code), ctx.prev),
+    onSuccess: (rows) => qc.setQueryData(qk.board(code), rows),
+  });
+}
+
+/** AI 확인 질문 답 (POST /memos/{id}/confirmations) */
+export function useAnswerConfirmation(code: string) {
+  const inv = useInvalidate();
+  return useMutation({
+    mutationFn: (v: { memoId: string; optionId: string }) => api.answerConfirmation(v.memoId, v.optionId),
+    onSuccess: (_d, v) => inv(qk.board(code), qk.boardItem(v.memoId), qk.timeline(v.memoId), qk.answers(v.memoId)),
+  });
+}
+
+/** 메모 질문과 답 (GET /memos/{id}/answers) */
+export const useMemoAnswers = (memoId: string, enabled = true) =>
+  useQuery({ queryKey: qk.answers(memoId), queryFn: () => api.listMemoAnswers(memoId), enabled: enabled && memoId.length > 0 });
 
 export function useMarkAiUpdateRead(code?: string) {
   const inv = useInvalidate();

@@ -163,6 +163,19 @@ export interface Memo extends BoardItemBase {
   ai_linked_at: ISODate | null;
   price_conditions: PriceCondition[]; // 백엔드가 본문에서 코드로 파싱 (LLM 미사용)
   unread_updates: number;
+  /** 저장·AI 연결 응답에만: 메모 분석 결과 (be/app/board/service.py, 목록 응답에는 null) */
+  analysis?: MemoAnalysis | null;
+}
+
+/** 메모 분석 결과 — 추적 항목 · 확인 질문 (C-8) */
+export interface MemoAnalysis {
+  /** confirmed · unchanged · skipped(AI 끔) · failed */
+  status: string;
+  items: { id: string; type: string; description: string; price_threshold: number | null; status: string }[];
+  confirmations: unknown[];
+  out_of_scope?: boolean;
+  error?: string | null;
+  next_update_at?: string | null;
 }
 
 export interface ChecklistItem {
@@ -224,6 +237,36 @@ export interface AiUpdate extends MarketUpdate {
   headline: string; // 타임라인 제목: 'HBM4 공급 확대 소식이 나왔어요'
   read: boolean;
   relevance: number; // 0~1
+  // ─ 백엔드가 덧붙이는 값 (be/app/updates/service.py · mock 에는 없을 수 있음)
+  created_at?: ISODate;
+  /** 메모와 연결되는 이유 (카드 문장) */
+  reason?: string;
+  /** DB 원래 종류 (answer = 질문 답) — type 은 계약 3종으로 바뀌어 옴 */
+  card_type?: string;
+  answer_status?: string | null;
+  memo_color?: MemoColor;
+  sources?: UpdateSourceRef[];
+  price?: {
+    state: string | null;
+    observed_value: number | null;
+    observed_trade_date: string | null;
+    threshold: number | null;
+    direction: 'above' | 'below' | null;
+    /** 관측 거래일까지 최근 10거래일 종가 (오래된 → 최근) · 첫 종가의 거래일 */
+    closes: number[];
+    closes_from: string | null;
+  } | null;
+}
+
+/** 카드 근거 한 건 (뉴스 · 공시) */
+export interface UpdateSourceRef {
+  kind: 'news' | 'disclosure';
+  ref: string;
+  title: string;
+  source: string;
+  url: string | null;
+  published_at: string | null;
+  quote: string | null;
 }
 
 export type TimelineEntry =
@@ -236,6 +279,25 @@ export interface MemoTimeline {
   memo_id: string;
   entries: TimelineEntry[];
   price_condition_count: number;
+}
+
+/** 메모 질문 하나와 그 답 (GET /memos/{id}/answers, be/app/answers/routes.py) */
+export interface MemoAnswer {
+  id: string;
+  question: string;
+  asked_at: ISODate;
+  /** pending = 다음 매일 실행에서 답함 · answered · no_answer = 자료에서 확인되지 않음 */
+  status: 'pending' | 'answered' | 'no_answer';
+  answer: {
+    id: string;
+    headline: string;
+    summary: string;
+    text: string;
+    calculations: unknown[];
+    sources: { kind: 'news' | 'disclosure'; title: string; source: string; date: string | null; url: string | null }[];
+    answered_at: ISODate;
+    read: boolean;
+  } | null;
 }
 
 // ─── 투자 기록 ───────────────────────────────────────────────

@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Linking } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMockNotice } from '@/components/layout/MobileScreen';
 import { TopBar } from '@/ui/layout/app/TopBar';
 import { useMyProfile } from '@/ui/screens/my/useMyProfile';
 import { AppUpdates } from '@/ui/screens/updates/app/Updates';
-import { mockUpdateItems, mockUpdatesNow, mockUpdateStocks } from '@/ui/screens/updates/Updates.mock';
+import { useUpdatesData } from '@/ui/screens/updates/useUpdatesData';
 
 /** 앱 종목별 업데이트 (홈 업데이트 위젯에서 들어옴) = 업데이트 탭과 같은 화면, 그 종목 칩이 골라진 채로. 뒤로 = 홈 */
 export default function StockUpdatesScreen() {
@@ -13,12 +13,12 @@ export default function StockUpdatesScreen() {
   const router = useRouter();
   const { profile: { name: myName } } = useMyProfile();
   const notice = useMockNotice();
-  const [items, setItems] = useState(mockUpdateItems);
+  const { stocks, items, now, onMarkRead } = useUpdatesData();
   return (
     <AppUpdates
-      stocks={mockUpdateStocks}
+      stocks={stocks}
       items={items}
-      now={mockUpdatesNow}
+      now={now}
       code={code}
       header={({ title, line, onSearch, onReadAll, readAllOff }) => (
         <TopBar
@@ -36,7 +36,7 @@ export default function StockUpdatesScreen() {
       onOpenEvidence={(u) => router.push({ pathname: '/memo/evidence', params: { id: u.memo_id, fid: u.id } })}
       onOpenBoard={(c) => router.navigate({ pathname: '/stocks/[code]', params: { code: c } })}
       onOpenSource={(u) => u.url && Linking.openURL(u.url)}
-      onMarkRead={(ids, read) => setItems((all) => all.map((u) => (ids.includes(u.id) ? { ...u, unread: !read } : u)))}
+      onMarkRead={onMarkRead}
       onNudge={() => notice('AI 오디오')}
     />
   );

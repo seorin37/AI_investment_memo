@@ -24,6 +24,7 @@ import type {
   Memo,
   MemoBacktest,
   MemoColor,
+  MemoAnswer,
   MemoTimeline,
   MemoUpdateSummary,
   MyStock,
@@ -102,6 +103,8 @@ export interface Api {
   addStock(code: string, status: StockStatus): Promise<MyStock>;
   updateStock(code: string, patch: Partial<Pick<MyStock, 'status' | 'tags'>>): Promise<MyStock>;
   removeStock(code: string): Promise<void>;
+  /** 사이드바 내 종목 전체 순서 저장 (PUT /stocks/order) → 새 순서의 목록 */
+  reorderStocks(codes: string[]): Promise<MyStock[]>;
   getQuote(code: string): Promise<Quote>;
   /** 여러 종목 시세 한 번에 (보드·내 종목 목록) */
   getQuotes(codes: string[]): Promise<QuotesResponse>;
@@ -120,6 +123,12 @@ export interface Api {
   setAiLink(memoId: string, enabled: boolean): Promise<Memo>;
   setBoardChecklistItem(checklistId: string, itemId: string, done: boolean): Promise<void>;
   getMemoTimeline(memoId: string): Promise<MemoTimeline>;
+  /** 보드 카드 전체 순서 저장 (PUT /stocks/{code}/board-order) → 새 순서의 보드 */
+  reorderBoard(code: string, ids: string[]): Promise<BoardItem[]>;
+  /** AI 확인 질문에 답하기 (POST /memos/{id}/confirmations) → 바뀐 메모 */
+  answerConfirmation(memoId: string, optionId: string): Promise<Memo>;
+  /** 메모 질문과 답 (GET /memos/{id}/answers) */
+  listMemoAnswers(memoId: string): Promise<MemoAnswer[]>;
   listStockAiUpdates(code: string): Promise<AiUpdate[]>;
   markAiUpdateRead(id: string): Promise<void>;
   uploadFile(file: UploadFile): Promise<{ url: string; name: string }>;

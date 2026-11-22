@@ -77,11 +77,19 @@ test('uses all FastAPI memo-board CRUD paths and normalizes wire values', async 
   ]);
 });
 
-test('does not silently claim unsupported ordering was saved', async () => {
-  const fake = client();
+test('saves the whole board order and answers a confirmation', async () => {
+  // 2026-11-20 순서 저장(0019 memos.position · PUT board-order)이 생겨 '순서 저장 안 함' 막기는 없어짐
+  const fake = client({
+    'PUT /stocks/005930/board-order': [{ ...checklist, position: 0 }, { ...memo, position: 1 }],
+    'POST /memos/1/confirmations': { ...memo, analysis: { status: 'confirmed', items: [], confirmations: [] } },
+  });
   const api = createRealBoardApi(fake.http);
-  await assert.rejects(() => api.updateBoardItem('1', { position: 2 }), /순서 변경 저장/);
-  assert.equal(fake.calls.length, 0);
+  const board = await api.reorderBoard('005930', ['2', '1']);
+  assert.deepEqual(board.map((b) => [b.id, b.position]), [['2', 0], ['1', 1]]);
+  assert.deepEqual(fake.calls[0].body, { ids: [2, 1] });
+  const answered = await api.answerConfirmation('1', 'option-token-123');
+  assert.equal(answered.analysis.status, 'confirmed');
+  assert.deepEqual(fake.calls[1].body, { option_id: 'option-token-123' });
 });
 
 test('propagates authentication and network failures', async () => {
