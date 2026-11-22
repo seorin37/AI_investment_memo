@@ -105,6 +105,8 @@ export interface Api {
   // 종목
   listMyStocks(): Promise<MyStock[]>;
   searchStocks(q: string): Promise<StockMaster[]>;
+  /** 많이 찾는 종목 (GET /stocks/popular · 온보딩). 담은 사람 3명 이상 → 모자라면 시총 순. 기본 12 · 최대 30 */
+  getPopularStocks(limit?: number): Promise<StockMaster[]>;
   getStock(code: string): Promise<StockMaster>;
   addStock(code: string, status: StockStatus): Promise<MyStock>;
   updateStock(code: string, patch: Partial<Pick<MyStock, 'status' | 'tags'>>): Promise<MyStock>;

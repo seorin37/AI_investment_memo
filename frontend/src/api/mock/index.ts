@@ -27,6 +27,7 @@ import type { Api, DeepPartial, PinnedMemo } from '../types';
 import * as seed from './seed';
 import { mockFinancials } from './financials';
 import { HOME_NEWS, HOME_NEWS_DAY_TOTAL } from '@/ui/screens/home/homeData.mock';
+import { mockAppPopularStocks } from '@/ui/screens/onboarding/Onboarding.mock';
 
 const clone = <T>(v: T): T => (v === undefined ? v : JSON.parse(JSON.stringify(v)));
 const wait = <T>(v: T, ms = env.mockLatency): Promise<T> => new Promise((r) => setTimeout(() => r(clone(v)), ms));
@@ -181,6 +182,9 @@ export const mockApi: Api = {
     recountUnread();
     return wait(db.stocks);
   },
+  /* 지금 앱 온보딩 mock 목록 그대로 (화면과 같은 종목 · 순서) */
+  getPopularStocks: async (limit = 12) =>
+    wait(mockAppPopularStocks.slice(0, limit).map((s) => ({ code: s.stock_code, name: s.name, market: s.market }))),
   searchStocks: async (q) => {
     const k = q.trim().toLowerCase();
     if (!k) return wait([]);

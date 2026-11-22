@@ -99,6 +99,7 @@ app.add_middleware(
 |---|---|---|---|
 | GET | `/stocks` | 내 종목(보유/관심) + 안 읽은 AI 업데이트 수 | `MyStock[]` |
 | GET | `/stocks/search?q=삼성` | 종목 마스터 검색 (KRX 상장사) | `StockMaster[]` (최대 8개) |
+| GET | `/stocks/popular?limit=12` | 많이 찾는 종목 (온보딩). 담은 사람 3명 이상 종목을 많은 순 → 모자라면 최신 시총 순으로 채움. KOSPI 만. 인원 수 · 시총은 응답에 없음 | `StockMaster[]` (기본 12 · 최대 30) |
 | POST | `/stocks` | `{code, status: "holding"\|"watching"}` 이미 있으면 구분만 변경 | `MyStock` |
 | PATCH | `/stocks/{code}` | `{status?, tags?}` | `MyStock` |
 | DELETE | `/stocks/{code}` | 휴지통으로 이동 | 204 |

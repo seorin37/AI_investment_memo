@@ -19,6 +19,7 @@ export const realApi: Api = {
   me: () => http.get('/auth/me'),
   updateMe: (patch) => http.patch('/me', patch),
   logout: (refreshToken) => http.post('/auth/logout', refreshToken ? { refresh_token: refreshToken } : undefined),
+  getPopularStocks: (limit) => http.get('/stocks/popular', { limit }),
   getTerms: () => http.get('/me/terms'),
   agreeTerms: (items) => http.post('/me/terms', { items }),
 
