@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { Redirect, useRouter, type Href } from 'expo-router';
 import { useMyProfile } from '@/ui/screens/my/useMyProfile';
-import { mockMyUsage } from '@/ui/screens/my/My.mock';
+import { useUsageView } from '@/ui/screens/my/useUsageView';
 import type { MyMenuKey } from '@/ui/screens/my/My.types';
 import { AppMy } from '@/ui/screens/my/app/My';
 import { useTheme } from '@/store/theme';
@@ -15,6 +15,8 @@ const ROUTE: Record<MyMenuKey, Href> = { noti: '/my-noti', usage: '/my-usage', d
 export default function MyScreen() {
   const router = useRouter();
   const { profile } = useMyProfile();
+  /* AI 사용량: 실제 모드면 GET /me/usage, mock 모드면 My.mock */
+  const usage = useUsageView();
   const dark = useTheme((s) => s.dark);
   const setDark = useTheme((s) => s.setDark);
   const toggleDark = () => setDark(!dark);
@@ -22,8 +24,8 @@ export default function MyScreen() {
   return (
     <AppMy
       profile={profile}
-      usage_pct={mockMyUsage.usage_pct}
-      usage_renew={mockMyUsage.usage_renew}
+      usage_pct={usage.usage_pct}
+      usage_renew={usage.usage_renew}
       version={`memo's v${Constants.expoConfig?.version ?? ''} (베타)`}
       dark={dark}
       onBack={() => router.back()}

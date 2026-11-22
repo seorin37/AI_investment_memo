@@ -12,10 +12,11 @@ import { mockMyStocksData } from '@/ui/screens/stocks/MyStocks.mock';
 import { WebAddStockDialog } from '@/ui/screens/stocks/web/AddStockDialog';
 import { useMyMock } from '@/store/myMock';
 import { useMyProfile } from '@/ui/screens/my/useMyProfile';
-import { planKey, planName, withCurrentPlan } from '@/ui/screens/my/planLabel';
+import { planKey, withCurrentPlan } from '@/ui/screens/my/planLabel';
+import { useUsageView } from '@/ui/screens/my/useUsageView';
 import Constants from 'expo-constants';
 import { legalDocument } from '@/ui/screens/auth/Auth.mock';
-import { mockCreditDefault, mockCreditPacks, mockPayMethods, mockDataSources, mockInbox, mockMyUsage, mockOss, mockPlanCompare, mockPlanDefault, mockPlanNotes, mockPlans, mockReportKinds, mockTracked, mockWithdrawCounts } from '@/ui/screens/my/My.mock';
+import { mockCreditDefault, mockCreditPacks, mockPayMethods, mockDataSources, mockInbox, mockOss, mockPlanCompare, mockPlanDefault, mockPlanNotes, mockPlans, mockReportKinds, mockTracked, mockWithdrawCounts } from '@/ui/screens/my/My.mock';
 import { WebFeedback } from '@/ui/screens/my/web/Feedback';
 import { WebInbox } from '@/ui/screens/my/web/Inbox';
 import { WebSettings, type SettingsTab } from '@/ui/screens/my/web/Settings';
@@ -107,6 +108,8 @@ export default function MainLayout() {
   const signOut = useAuth((s) => s.signOut);
   /* 내 프로필: 로그인한 사용자 (저장은 PATCH /me). mock 모드만 예시 프로필 */
   const { profile: myProfile, save: saveMyProfile, plan: myPlan } = useMyProfile();
+  /* AI 사용량: 실제 모드면 GET /me/usage (2026-11-22), mock 모드면 My.mock */
+  const usage = useUsageView();
   const myNoti = useMyMock((s) => s.noti);
   const setMyNoti = useMyMock((s) => s.setNoti);
   /* ⑨-3c 휴지통 · 피드백 · 알림함 (mock: 복원·읽음은 화면 상태만, 영구 삭제·보내기는 연결 안 됨) */
@@ -119,7 +122,7 @@ export default function MainLayout() {
   const uiToast = useUI((s) => s.toast);
   /* ⑧-8a 스튜디오: 사용량 창 · PLUS 창(다 쓴 뒤 만들기) · 충전 창. 결제·만들기는 연결 안 됨 */
   const [studioPop, setStudioPop] = useState<'usage' | 'credit' | 'charge' | 'audio' | 'report' | null>(null);
-  const usageSpent = mockMyUsage.usage_pct >= 100;
+  const usageSpent = usage.paused || usage.usage_pct >= 100;
   const studioFeat = (k: StudioKind) => {
     if (k !== 'quiz' && usageSpent) return setStudioPop('credit');
     if (k === 'audio') return setStudioPop('audio');
@@ -211,7 +214,7 @@ export default function MainLayout() {
         onToggle: () => setStudioOpen((o) => !o),
         /* AI 사용량은 설정 창(My.mock)과 같은 값 */
         ...mockStudioHead,
-        usagePct: mockMyUsage.usage_pct,
+        usagePct: usage.usage_pct,
         onUsage: () => setStudioPop('usage'),
         /* 접힌 열: 만드는 중인 기능에 '·' 점 (원본 studio.tsx 177 — 퀴즈 제외) */
         badges: sp.job?.status === 'run' ? { [sp.job.kind]: '·' } : undefined,
@@ -280,7 +283,7 @@ export default function MainLayout() {
                   made={sp.made}
                   bottomPad={sp.mini && spItem ? 60 : 0}
                   spent={usageSpent}
-                  refill={mockMyUsage.usage_refill}
+                  refill={usage.usage_refill}
                   onFeature={studioFeat}
                   onOpenMade={(m) => {
                     if (m.kind === 'report') { sp.openReport(m.id); return sp.setWebView('report'); }
@@ -386,8 +389,8 @@ export default function MainLayout() {
         setMyNoti(n);
         say({ msg: on ? '알림을 켰어요 · 알림함에 다시 보여요' : '알림을 껐어요 · 알림함에서도 안 보여요', check: true });
       }}
-      /* 플랜 이름 · 현재 플랜: 로그인 사용자 plan (사용량 % · 갱신일은 아직 mock) */
-      usage={{ ...mockMyUsage, plan_name: planName(myPlan) }}
+      /* 사용량 % · 갱신일: GET /me/usage · 플랜 이름 · 현재 플랜: 로그인 사용자 plan */
+      usage={usage}
       tracked={mockTracked}
       onOpenMemo={(code) => { setSettings(null); openStock(code); }}
       plans={withCurrentPlan(mockPlans, planKey(myPlan))}
@@ -446,7 +449,7 @@ export default function MainLayout() {
         sp.startReport({ sub: `${codes.length}종목${market ? ' · 국내 증시 흐름 포함' : ''} · ${mockReport.gen_range}`, codes, market }, __DEV__ && studio_fail === '1');
       }}
     />
-    <WebUsageSheet open={studioPop === 'usage'} pct={mockMyUsage.usage_pct} refill={mockMyUsage.usage_refill} onClose={() => setStudioPop(null)} onBuyCredit={() => setStudioPop('charge')} onChangePlan={() => setSettings('사용량')} />
+    <WebUsageSheet open={studioPop === 'usage'} pct={usage.usage_pct} refill={usage.usage_refill} onClose={() => setStudioPop(null)} onBuyCredit={() => setStudioPop('charge')} onChangePlan={() => setSettings('사용량')} />
     <WebCreditPopup open={studioPop === 'credit'} onClose={() => setStudioPop(null)} onPlan={() => { setStudioPop(null); setSettings('사용량'); }} onCharge={() => setStudioPop('charge')} />
     <WebChargePopup open={studioPop === 'charge'} packs={mockCreditPacks} default_credits={mockCreditDefault} methods={mockPayMethods} onClose={() => setStudioPop(null)} onPay={() => say({ msg: '결제는 아직 연결되지 않았어요' })} />
     <WebFeedback open={fbOpen} kinds={mockReportKinds} onClose={() => setFbOpen(false)} onSend={() => say({ msg: '아직 연결되지 않았어요' })} />
