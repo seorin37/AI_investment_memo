@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { addSelectedStocks, withSelectedStocks } from '../src/ui/screens/onboarding/pickSave.ts';
+import { addSelectedStocks, inScreenOrder, withSelectedStocks } from '../src/ui/screens/onboarding/pickSave.ts';
 
 /* 온보딩 종목 고르기: 고른 종목 담기 결과 · 화면 목록 */
 
@@ -42,6 +42,20 @@ test('아무것도 안 골랐으면 담지 않음', async () => {
   const r = await addSelectedStocks({}, async () => { called = true; });
   assert.deepEqual(r, { failed: {}, added: [] });
   assert.equal(called, false);
+});
+
+test('담는 순서 = 화면 순서 (누른 순서가 아님) → 사이드바 position 도 화면 순서', async () => {
+  const tapped = { '035420': 'watching', '005930': 'holding', '000660': 'watching' };   // 누른 순서
+  const screen = ['005930', '000660', '035420'];                                        // 화면 순서
+  const calls = [];
+  await addSelectedStocks(tapped, async (code) => { calls.push(code); }, screen);
+  assert.deepEqual(calls, ['005930', '000660', '035420']);
+});
+
+test('inScreenOrder: 화면에 없는 코드는 뒤에, 고른 순서대로', () => {
+  const got = inScreenOrder({ X1: 'watching', '005930': 'holding', X2: 'watching' }, ['005930']);
+  assert.deepEqual(got.map(([c]) => c), ['005930', 'X1', 'X2']);
+  assert.deepEqual(inScreenOrder({ a: 'watching', b: 'holding' }, []).map(([c]) => c), ['a', 'b']);
 });
 
 const card = (code, name) => ({ stock_code: code, name, market: 'KOSPI', category: '', logo: name[0], logo_bg: '#000' });

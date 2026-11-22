@@ -69,7 +69,9 @@ export default function PickScreen() {
     setSaving(true);
     setError(null);
     const asked = selected;
-    void addSelectedStocks(asked, (code, s) => addStock.mutateAsync({ code, status: s })).then(({ failed, added: ok }) => {
+    /* 화면 순서대로 담음 → 서버가 맨 뒤에 붙이므로 사이드바 순서도 화면 순서 */
+    const order = stocks.map((s) => s.stock_code);
+    void addSelectedStocks(asked, (code, s) => addStock.mutateAsync({ code, status: s }), order).then(({ failed, added: ok }) => {
       setSaving(false);
       setAdded((all) => ({ ...all, ...Object.fromEntries(ok.map((code) => [code, asked[code]])) }));
       if (Object.keys(failed).length === 0) {
@@ -110,15 +112,21 @@ export default function PickScreen() {
       if (Object.keys(next).length === 0) setHoldingOpen(false);
       return next;
     }),
-    onOpenHolding: () => setHoldingOpen(true),
+    /* 담는 중에는 보유·관심 확인 · 뒤로 · 건너뛰기를 받지 않음 (중간에 흐름이 바뀌지 않게) */
+    onOpenHolding: () => {
+      if (!saving) setHoldingOpen(true);
+    },
     onCloseHolding: () => setHoldingOpen(false),
     onBack: () => {
+      if (saving) return;
       /* 약관 → 종목 고르기는 replace라 돌아갈 화면이 없을 수 있다 → 약관으로 */
       if (step !== 'pick') setStep('pick');
       else if (router.canGoBack()) router.back();
       else router.replace('/terms');
     },
-    onSkip: () => setStep('setup'),
+    onSkip: () => {
+      if (!saving) setStep('setup');
+    },
     onContinue: saveAndContinue,
     onChooseHome: (mode: HomeMode) => {
       setHomeMode(mode);

@@ -9,17 +9,27 @@ function alreadyAdded(err: unknown): boolean {
   return !!err && typeof err === 'object' && 'status' in err && (err as { status: unknown }).status === 409;
 }
 
+/** 담는 순서 = 화면 순서 (order 에 없는 코드는 뒤에, 고른 순서대로). 서버가 맨 뒤에 붙이므로 사이드바 순서도 이 순서 */
+export function inScreenOrder(selected: OnboardingSelection, order: readonly string[]): [string, StockStatus][] {
+  const at = new Map(order.map((code, i) => [code, i]));
+  return Object.entries(selected)
+    .map((entry, i) => ({ entry, key: at.get(entry[0]) ?? order.length + i }))
+    .sort((a, b) => a.key - b.key)
+    .map((x) => x.entry);
+}
+
 /**
- * 고른 종목을 차례대로 담는다 (POST /stocks · 한 번에 하나). 실패한 종목만 돌려준다 (선택 상태 그대로).
+ * 고른 종목을 화면 순서대로 하나씩 담는다 (POST /stocks). 실패한 종목만 돌려준다 (선택 상태 그대로).
  * 전부 성공 → failed 비어 있음.
  */
 export async function addSelectedStocks(
   selected: OnboardingSelection,
   add: (code: string, status: StockStatus) => Promise<unknown>,
+  order: readonly string[] = [],
 ): Promise<{ failed: OnboardingSelection; added: string[] }> {
   const failed: OnboardingSelection = {};
   const added: string[] = [];
-  for (const [code, status] of Object.entries(selected)) {
+  for (const [code, status] of inScreenOrder(selected, order)) {
     try {
       await add(code, status);
       added.push(code);
