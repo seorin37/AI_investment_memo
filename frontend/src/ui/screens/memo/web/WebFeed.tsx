@@ -10,6 +10,7 @@ import type { AiTrackItem, MemoFeedItem } from '../MemoDetail.types';
 import { buildTimeline } from '../memoTimeline';
 import { INK } from './parts';
 import { usePaper } from '@/ui/shared/Dark';
+import { useCoachRef } from '@/ui/shared/Coach';
 import { useNudge } from '@/store/nudge';
 
 type Hover = { pressed: boolean; hovered?: boolean };
@@ -28,6 +29,7 @@ const md = (iso: string) => {
  */
 export function WebFeed({ memo, versions, feed, trackItems, onOpenSource, onOpenEvidence, onNudge }: { memo: Memo; versions: MemoVersion[]; feed: MemoFeedItem[]; trackItems: AiTrackItem[]; onOpenSource?: (f: MemoFeedItem) => void; onOpenEvidence?: (f: MemoFeedItem) => void; onNudge?: () => void }) {
   const paper = usePaper();
+  const feedRef = useCoachRef('feed');
   const [open, setOpen] = useState<Set<string>>(new Set());
   /* 넛지 닫은 상태는 한 곳(store/nudge)에 — 다시 들어와도 안 뜸 · 사용법 안내 중엔 숨김 */
   const nudgeS = useNudge('memo');
@@ -46,7 +48,8 @@ export function WebFeed({ memo, versions, feed, trackItems, onOpenSource, onOpen
       return t;
     });
   return (
-    <View style={st.wrap}>
+    /* 사용법 안내 ③ 대상 '내 생각 아래 소식이 쌓여요' (앱 MemoFeed 'feed' 와 같은 자리: 처음 생각 → 소식 목록) */
+    <View ref={feedRef} collapsable={false} style={st.wrap}>
       {memo.ai_linked ? (
         <View style={st.thread}>
           <View style={[st.sq, { backgroundColor: paper[memo.color].bg }]} />

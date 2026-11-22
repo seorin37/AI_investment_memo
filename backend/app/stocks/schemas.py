@@ -21,6 +21,8 @@ class MyStockResponse(StockMasterResponse):
     status: StockStatus
     tags: list[str] = Field(default_factory=list)
     unread_updates: int = 0
+    memo_count: int = 0        # 휴지통 제외 일반 메모 수 (2026-11-22)
+    ai_count: int = 0          # AI 연결 메모 수 — GET /ai/stats linked_memos 와 같은 조건을 이 종목만
     added_at: datetime
     position: int = 0          # 사이드바 자리 (0021, 0부터). 목록 응답에서만 정확하다
 

@@ -59,7 +59,8 @@ export function WebTerms(p: TermsProps) {
               </View>
               <Pressable onPress={() => p.onOpenDocument('privacy')} style={st.privacy}><Text style={st.privacyText}>개인정보 처리방침 확인하기</Text><ChevronGlyph color="#575B63" /></Pressable>
               <Text style={st.draft}>이 화면의 약관 문구는 초안이에요 · 출시 전 법 검토 필요</Text>
-              <Pressable disabled={!ready} onPress={p.onContinue} style={[st.cta, ready && st.ctaOn]}><Text style={st.ctaText}>동의하고 시작하기</Text></Pressable>
+              {p.error ? <Text accessibilityRole="alert" style={st.noticeText}>{p.error}</Text> : null}
+              <Pressable disabled={!ready || !!p.saving} onPress={p.onContinue} style={[st.cta, ready && !p.saving && st.ctaOn]}><Text style={st.ctaText}>동의하고 시작하기</Text></Pressable>
             </ScrollView>
           </>
         )}
@@ -102,6 +103,8 @@ const st = StyleSheet.create({
   privacy: { alignSelf: 'center', marginTop: 24, flexDirection: 'row', alignItems: 'center', gap: 2 },
   privacyText: { ...fpx(14, 21), color: '#575B63', fontWeight: '500' },
   draft: { ...fpx(13, 20), marginTop: 4, color: '#A4A8B3', textAlign: 'center' },
+  /* 저장 실패 한 줄 = 웹 로그인 noticeText 와 같은 글자 (가운데 · 위 14) */
+  noticeText: { ...fpx(14, 21), marginTop: 14, color: '#C0392B', fontWeight: '700', textAlign: 'center' },
   cta: { minHeight: 56, marginTop: 14, borderRadius: 16, backgroundColor: '#D0D3D9', alignItems: 'center', justifyContent: 'center' },
   ctaOn: { backgroundColor: '#111111' },
   ctaText: { ...fpx(17, 26), color: '#FFFFFF', fontWeight: '700' },

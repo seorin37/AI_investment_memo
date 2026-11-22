@@ -3,6 +3,7 @@ import { BackHandler, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, V
 import { useCoach } from '@/store/coach';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/AppText';
+import { Badge } from '@/components/ui/primitives';
 import { joinMemo, splitMemo } from '@/lib/memoText';
 import { BackChevron, DotsH } from '@/ui/icons/MemoGlyphs';
 import { FadeIn } from '@/ui/motion/Reveal';
@@ -166,6 +167,7 @@ export function AppMemoDetail(p: MemoDetailProps) {
         <Text style={st.dhT} numberOfLines={1}>
           {p.backLabel ?? '메모 보드'}
         </Text>
+        {p.badge ? <Badge label={p.badge} /> : null}
         {editing ? (
           <Pressable onPress={finishEdit} accessibilityRole="button" style={st.done}>
             <Text style={st.doneT}>완료</Text>

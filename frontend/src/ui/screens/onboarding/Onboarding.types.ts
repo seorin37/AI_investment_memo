@@ -31,4 +31,8 @@ export interface OnboardingFlowProps {
   onContinue: () => void;
   onChooseHome: (mode: HomeMode) => void;
   onFinish: () => void;
+  /** 고른 종목 담는 중 — 계속 버튼은 '고른 종목 없음'과 같은 비활성 모양 (두 번 누름 방지) */
+  saving?: boolean;
+  /** 담기 실패 문구 — 있을 때만 버튼 위 한 줄 */
+  error?: string | null;
 }

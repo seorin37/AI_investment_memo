@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { useUI } from '@/store/ui';
 import { mockAudioEpisode, mockAudioGen, mockLabStocks, mockLabVars, mockMade, mockReport, type LabDir } from '@/ui/screens/studio/Studio.mock';
 import type { MadeItem } from '@/ui/screens/studio/Studio.types';
+import { registerUserReset } from '@/lib/sessionReset';
 
 /**
  * 스튜디오 만들기 · 재생 mock 상태 (앱·웹 같이 씀, 메모리에만).
@@ -71,6 +72,8 @@ interface StudioPlayerState {
   nextSpeed(steps: number[]): void;
   setMini(v: boolean): void;
   closeMini(): void;
+  /** 로그아웃 · 계정 전환: 만드는 중 · 재생 타이머를 먼저 멈추고 처음 만들어졌을 때 상태로 */
+  reset(): void;
 }
 
 const DUR = mockAudioEpisode.dur;
@@ -185,8 +188,17 @@ export const useStudioPlayer = create<StudioPlayerState>((set, get) => {
     nextSpeed: (steps) => set((s) => ({ speed: steps[(steps.indexOf(s.speed) + 1) % steps.length] })),
     setMini: (v) => set({ mini: v }),
     closeMini: () => { set({ mini: false, playing: false }); runPlay(false); },
+    reset: () => {
+      genT.forEach(clearTimeout);
+      genT = [];
+      runPlay(false);
+      set(useStudioPlayer.getInitialState(), true);
+    },
   };
 });
+
+/* 로그아웃 · 계정 전환 때 처음 상태로 (lib/sessionReset · store/auth.ts 가 실행) */
+registerUserReset('studioPlayer', () => useStudioPlayer.getState().reset());
 
 export const fmt = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 /** 지금 챕터 · 대본 줄 */

@@ -78,6 +78,8 @@ export interface MemoDetailProps {
   aiSpent?: boolean;
   /** 보드 이름 (앱 뒤로 버튼 옆 글자 · 알림에서 열면 '알림') */
   backLabel?: string;
+  /** 머리에 붙는 칩 (사용법 안내 예시 화면의 '예시' — 실제 데이터로 보이지 않게) */
+  badge?: string;
 
   onBack: () => void;
   /** 편집 완료 (첫 줄 = 제목 · splitMemo) — 글이 바뀐 경우에만 */

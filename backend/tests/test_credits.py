@@ -14,8 +14,9 @@ from app.credits import ledger
 SEOUL = ledger.SEOUL
 EMAIL = "credits-test@example.test"
 SYMBOL = "C00001"
-NOV = datetime(2026, 11, 20, 12, 0, tzinfo=SEOUL)
-DEC = datetime(2026, 12, 2, 9, 0, tzinfo=SEOUL)
+NOV = datetime(2026, 11, 20, 12, 0, tzinfo=SEOUL)     # 첫 사용 → 시작점 11/20, 주기 11/20~12/19
+MID = datetime(2026, 12, 2, 9, 0, tzinfo=SEOUL)       # 같은 주기 중간
+DEC = datetime(2026, 12, 20, 9, 0, tzinfo=SEOUL)      # 다음 주기 (12/20 0시 시작)
 
 
 def _url():
@@ -51,10 +52,11 @@ def db():
 def test_monthly_grant_once_and_usage(db):
     c, uid = db
     assert ledger.ensure_monthly(c, uid, NOV) == 30                 # free 기본량 (configs/credits.yaml)
-    assert ledger.ensure_monthly(c, uid, NOV) == 0                  # 같은 달 두 번 X
+    assert ledger.ensure_monthly(c, uid, NOV) == 0                  # 같은 주기 두 번 X
+    assert ledger.ensure_monthly(c, uid, MID) == 0                  # 중간 접속도 다시 시작 X
     u = ledger.usage(c, uid, NOV)
     assert (u.balance, u.used, u.usage_percent, u.paused) == (30, 0, 0, False)
-    assert u.to_dict()["renew_label"] == "11.30 갱신"
+    assert u.to_dict()["renew_label"] == "12.19 갱신"                # 시작점 11/20 기준 (달력 월 아님)
 
 
 def test_spend_monthly_first_then_purchase_and_never_negative(db):
@@ -74,7 +76,8 @@ def test_month_change_expires_monthly_keeps_purchase(db):
     ledger.ensure_monthly(c, uid, NOV)
     ledger.grant_purchase(c, uid, 10, "pay-2", NOV)
     ledger.spend(c, uid, 4, "card", "tracking_update", 3, NOV)
-    u = ledger.usage(c, uid, DEC)                                    # 12월: 11월 기본량 26 만료, 새 기본량 30, 산 크레딧 10 이월
+    assert ledger.usage(c, uid, MID).balance == 36                   # 같은 주기 중간: 그대로
+    u = ledger.usage(c, uid, DEC)                                    # 다음 주기: 앞 기본량 26 만료, 새 기본량 30, 산 크레딧 10 이월
     assert u.balance == 40 and u.used == 0
     assert c.execute(text("SELECT -sum(delta) FROM credit_ledger WHERE user_id = :u AND reason = 'expire'"), {"u": uid}).scalar() == 26
     assert ledger.grant_purchase(c, uid, 10, "pay-2", DEC) is None   # 같은 결제번호 두 번 X

@@ -70,7 +70,7 @@ export function TopBar({ preset, title, onBack, actions = [], avatar, showLine =
         ))}
         {avatar ? (
           <Pressable onPress={avatar.onPress} accessibilityRole="button" accessibilityLabel="MY" hitSlop={6} style={{ marginLeft: actions.length ? s.avatarGap : 0 }}>
-            <Avatar name={avatar.name} size={32} variant="app" />
+            <Avatar name={avatar.name} photoUrl={avatar.photoUrl} size={32} variant="app" />
           </Pressable>
         ) : null}
       </View>

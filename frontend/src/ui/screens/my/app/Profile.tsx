@@ -3,6 +3,7 @@ import { BackHandler, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, V
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text, TextInput } from '@/components/ui/AppText';
 import type { AuthProvider } from '@/types/models';
+import { Avatar } from '@/ui/shared/Avatar';
 import type { ProfileProps } from '../My.types';
 import { ConfirmSheet, Grp, Head, Item, Lb, MC, Rv } from './parts';
 
@@ -39,7 +40,7 @@ export function AppProfile(p: ProfileProps) {
         <ScrollView contentContainerStyle={[st.w, { paddingBottom: 28 + insets.bottom }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <Rv i={0}>
             <Grp style={st.top}>
-              <View style={st.avbig}><Text style={st.avbigT}>{(name.trim() || p.profile.name).slice(0, 1)}</Text></View>
+              <Avatar name={name.trim() || p.profile.name} photoUrl={p.profile.photoUrl} size={84} variant="app" boxStyle={st.avbig} textStyle={st.avbigT} />
               <View style={st.pbtn}>
                 <Pressable onPress={p.onPhoto} style={({ pressed }) => [st.pb, pressed && { backgroundColor: '#F7F7F9' }]} accessibilityRole="button"><Text style={st.pbT}>사진 변경</Text></Pressable>
                 <Pressable onPress={p.onPhotoDelete} style={({ pressed }) => [st.pb, pressed && { backgroundColor: '#F7F7F9' }]} accessibilityRole="button"><Text style={st.pbT}>삭제</Text></Pressable>

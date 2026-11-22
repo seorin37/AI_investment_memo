@@ -23,12 +23,15 @@ const TAB_OF: Record<string, AppTab> = { index: 'home', updates: 'updates', stoc
 
 export default function MainTabsLayout() {
   const status = useAuth((s) => s.status);
+  /* 로그인한 채 다른 사용자로 바뀌면(A → B) 커짐 → 탭을 다시 마운트해 열린 화면을 새 사용자 값으로 (store/auth sessionKey) */
+  const sessionKey = useAuth((s) => s.sessionKey);
   /* 메모 고르기 중 탭바 숨김 (옛 보드가 store/ui 로 알려 줌) */
   const hidden = useUI((s) => s.tabBarHidden);
   if (status !== 'signedIn') return <Redirect href="/intro" />;
   return (
     <View style={{ flex: 1 }}>
       <Tabs
+        key={sessionKey}
         backBehavior="firstRoute"
         screenOptions={{ headerShown: false, animation: 'fade' }}
         tabBar={({ state, navigateToTab }) => (

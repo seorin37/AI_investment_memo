@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { Text, TextInput } from '@/components/ui/AppText';
@@ -22,7 +22,7 @@ const cho = (t: string) =>
  * 검색칸(포커스면 1.5 검정 테두리) · 처음엔 아직 담지 않은 종목 8개 · 분야 칩 · 이미 있는 종목은 흐리게 · 어떻게 담을까요? · [관심 종목으로 추가]
  * 내 종목 화면 · 사이드바 + 에서 같이 씀. Enter = 추가.
  */
-export function WebAddStockDialog({ open, mine, universe, onClose, onAdd }: AddStockProps) {
+export function WebAddStockDialog({ open, mine, universe, onClose, onAdd, remote, onQueryChange }: AddStockProps) {
   const [q, setQ] = useState('');
   const [pick, setPick] = useState<string | null>(null);
   const [hold, setHold] = useState<Hold>('watching');
@@ -37,7 +37,11 @@ export function WebAddStockDialog({ open, mine, universe, onClose, onAdd }: AddS
     }
   }
   const t = q.trim();
-  const list = t ? universe.filter((s) => s.name.includes(t) || cho(s.name).includes(t) || s.stock_code.includes(t) || s.sector.includes(t)) : universe.filter((s) => !mine.some((m) => m.stock_code === s.stock_code)).slice(0, 8);
+  /* 실제 모드: 검색어를 호스트로 (GET /stocks/search) — 렌더 중이 아니라 effect 에서 */
+  useEffect(() => {
+    onQueryChange?.(t);
+  }, [t, onQueryChange]);
+  const list = t && remote ? universe : t ? universe.filter((s) => s.name.includes(t) || cho(s.name).includes(t) || s.stock_code.includes(t) || s.sector.includes(t)) : universe.filter((s) => !mine.some((m) => m.stock_code === s.stock_code)).slice(0, 8);
   const had = (c: string) => mine.find((m) => m.stock_code === c);
   const sel = list.find((s) => s.stock_code === pick && !had(s.stock_code));
   const ok = () => {
@@ -95,9 +99,12 @@ export function WebAddStockDialog({ open, mine, universe, onClose, onAdd }: AddS
                 <View style={st.flexMin}>
                   <View style={st.nmRow}>
                     <Text style={st.nm}>{s.name}</Text>
-                    <View style={st.sector}>
-                      <Text style={st.sectorT}>{s.sector}</Text>
-                    </View>
+                    {/* 분야가 없으면(실제 종목 마스터에 분야 칸 없음) 칩을 숨김 */}
+                    {s.sector ? (
+                      <View style={st.sector}>
+                        <Text style={st.sectorT}>{s.sector}</Text>
+                      </View>
+                    ) : null}
                   </View>
                   <Text style={st.meta}>
                     {s.stock_code} · {s.market}
