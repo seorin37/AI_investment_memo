@@ -28,15 +28,21 @@ const USER_STATE_RESETS: readonly (() => void)[] = [
 /** 마지막으로 화면에 올린 사용자 id 추적 (lib/sessionReset — tests/session-reset.test.mjs) */
 const session = createSessionTracker({ queryClient, resets: USER_STATE_RESETS });
 
-/** 새 사용자를 set 하기 전에: 다른 사용자(또는 세션 끝)면 먼저 비우고, 마지막 id 를 바꾼다 */
-function switchUser(next: User | null) {
+/**
+ * 새 사용자를 set 하기 전에: 다른 사용자(또는 세션 끝)면 먼저 비우고, 마지막 id 를 바꾼다.
+ * 돌려주는 sessionKey 를 같은 set 에 넣는다 — 로그인한 채 A → B 로 바뀔 때만 커짐 ((main) 레이아웃이 key 로 써서 열린 화면을 다시 그림)
+ */
+function switchUser(next: User | null): { sessionKey: number } {
   session.switchUser(next?.id ?? null);
+  return { sessionKey: session.epoch() };
 }
 
 interface AuthState {
   status: 'loading' | 'signedOut' | 'signedIn';
   token: string | null;
   user: User | null;
+  /** 로그인한 채 다른 사용자로 바뀐 횟수 (lib/sessionReset epoch). 메인 화면 트리 key */
+  sessionKey: number;
   bootstrap(): Promise<void>;
   acceptSession(session: AuthToken): Promise<void>;
   completeWebLogin(): Promise<void>;
@@ -54,6 +60,7 @@ export const useAuth = create<AuthState>()((set, get) => ({
   status: 'loading',
   token: null,
   user: null,
+  sessionKey: 0,
 
   async bootstrap() {
     if (env.useMockAuth) {
@@ -61,8 +68,7 @@ export const useAuth = create<AuthState>()((set, get) => ({
       if (!mock) return set({ status: 'signedOut' });
       httpAuth.setToken(mock);
       const user = await api.me();
-      switchUser(user);
-      return set({ status: 'signedIn', token: mock, user });
+      return set({ ...switchUser(user), status: 'signedIn', token: mock, user });
     }
     if (await get().refresh()) return;
     set({ status: 'signedOut', token: null, user: null });
@@ -74,14 +80,12 @@ export const useAuth = create<AuthState>()((set, get) => ({
     if (Platform.OS !== 'web' && session.refresh_token) {
       await storage.set(REFRESH_TOKEN_KEY, session.refresh_token);
     }
-    switchUser(session.user);
-    set({ status: 'signedIn', token: session.access_token, user: session.user });
+    set({ ...switchUser(session.user), status: 'signedIn', token: session.access_token, user: session.user });
   },
 
   async completeWebLogin() {
     const user = await api.me();
-    switchUser(user);
-    set({ status: 'signedIn', token: null, user });
+    set({ ...switchUser(user), status: 'signedIn', token: null, user });
   },
 
   async mockSignIn() {
@@ -89,8 +93,7 @@ export const useAuth = create<AuthState>()((set, get) => ({
     httpAuth.setToken(token);
     await storage.set(MOCK_TOKEN_KEY, token);
     const user = await api.me();
-    switchUser(user);
-    set({ status: 'signedIn', token, user });
+    set({ ...switchUser(user), status: 'signedIn', token, user });
   },
 
   async refresh() {
@@ -101,8 +104,7 @@ export const useAuth = create<AuthState>()((set, get) => ({
       const session = await api.refreshAuth(refreshToken ?? undefined);
       if (Platform.OS === 'web') {
         httpAuth.setToken(null);
-        switchUser(session.user);
-        set({ status: 'signedIn', token: null, user: session.user });
+        set({ ...switchUser(session.user), status: 'signedIn', token: null, user: session.user });
       } else {
         await get().acceptSession(session);
       }
@@ -111,8 +113,7 @@ export const useAuth = create<AuthState>()((set, get) => ({
       httpAuth.setToken(null);
       if (Platform.OS !== 'web') await storage.remove(REFRESH_TOKEN_KEY);
       /* 세션이 끝남 = 로그아웃과 같음 (전에 누가 있었으면 비움) */
-      switchUser(null);
-      set({ status: 'signedOut', token: null, user: null });
+      set({ ...switchUser(null), status: 'signedOut', token: null, user: null });
       return false;
     }
   },

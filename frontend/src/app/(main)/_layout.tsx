@@ -59,6 +59,8 @@ function sideKeyOf(path: string): SideKey {
  */
 export default function MainLayout() {
   const status = useAuth((s) => s.status);
+  /* 로그인한 채 다른 사용자로 바뀌면(A → B) 커짐 → 아래 Stack 을 다시 마운트해 열린 화면을 새 사용자 값으로 (store/auth sessionKey) */
+  const sessionKey = useAuth((s) => s.sessionKey);
   /* 로그인 전: 서비스 설명을 본 적 없으면 /intro (원본 웹처럼 처음 한 번만), 봤으면 /login */
   const introSeen = useIntroSeen(status === 'signedOut');
   const router = useRouter();
@@ -308,7 +310,7 @@ export default function MainLayout() {
         ),
       }}
     >
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: webColor.page }, animation: 'none' }} />
+      <Stack key={sessionKey} screenOptions={{ headerShown: false, contentStyle: { backgroundColor: webColor.page }, animation: 'none' }} />
     </WebShell>
     <ContextMenu
       at={smenu?.at ?? null}

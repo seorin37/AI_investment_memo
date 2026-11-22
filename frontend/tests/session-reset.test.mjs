@@ -81,6 +81,22 @@ test('캐시 비우기가 throw 해도 reset 은 전부 부름', () => {
   assert.equal(errors.length, 1);
 });
 
+test('epoch(화면 다시 그리기 key): 로그인한 채 A → B 일 때만 커짐', () => {
+  const { qc, resets } = fakes();
+  const s = createSessionTracker({ queryClient: qc, resets });
+  s.switchUser('A'); // 처음 로그인 — 로그인 화면 흐름을 흔들지 않게 그대로
+  assert.equal(s.epoch(), 0);
+  s.switchUser('A'); // 같은 사용자 refresh
+  assert.equal(s.epoch(), 0);
+  s.switchUser('B'); // 로그인한 채 다른 사용자
+  assert.equal(s.epoch(), 1);
+  s.signOut(); // 로그아웃 — 화면은 로그인으로 가므로 세지 않음
+  s.switchUser('C'); // 로그아웃 뒤 로그인
+  assert.equal(s.epoch(), 1);
+  s.switchUser(null); // 세션 끝
+  assert.equal(s.epoch(), 1);
+});
+
 test('shouldReset: 처음(null)은 비우지 않고, 다른 사용자 · 세션 끝은 비움', () => {
   assert.equal(shouldReset(null, 'A'), false);
   assert.equal(shouldReset(null, null), false);
