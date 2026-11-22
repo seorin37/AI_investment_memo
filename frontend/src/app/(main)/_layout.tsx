@@ -97,7 +97,6 @@ export default function MainLayout() {
   const labVars = useLabVars();
   const labStocks = useLabStocks();
   const runLab = useRunLab();
-  const labStock = labStocks.find((s) => s.stock_code === sp.labCode) ?? labStocks[0];
   const [smenu, setSmenu] = useState<{ code: string; at: { x: number; y: number } } | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [ask, setAsk] = useState<string | null>(null);
@@ -129,6 +128,7 @@ export default function MainLayout() {
   };
   /* ⑧-8b 오디오: 만들기 · 재생 mock 상태 (store/studioPlayer). 개발 빌드(__DEV__)에서만 ?studio_fail=1 이면 다음 만들기가 실패 (확인용 · 배포 빌드는 무시) */
   const sp = useStudioPlayer();
+  const labStock = labStocks.find((s) => s.stock_code === sp.labCode) ?? labStocks[0];
   const spItem = sp.made.find((m) => m.id === sp.cur);
   /* ⑧-8c 주간보고서: 스튜디오 열 요약 · 가운데 /report 자세히 */
   const repItem = sp.made.find((m) => m.id === sp.curReport && m.kind === 'report');
