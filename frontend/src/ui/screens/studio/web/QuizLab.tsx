@@ -45,7 +45,7 @@ export function WebQuiz({ q, done, onBack, onSubmit }: { q: typeof mockQuiz; don
   return (
     <ScrollView contentContainerStyle={st.box} showsVerticalScrollIndicator={false}>
       <Back onPress={onBack} />
-      <FeatHead f="quiz" title="오늘의 퀴즈" chips={<><Chip t={`${q.day} 증시`} /><Chip t={q.type} dark /></>} />
+      <FeatHead f="quiz" title="오늘의 퀴즈" chips={<><Chip t={q.day ? `${q.day} 증시` : q.label} /><Chip t={q.type} dark /></>} />
       <Text style={st.q}>{q.q}</Text>
       <View style={{ gap: 8 }}>
         {q.options.map((o, i) => {
@@ -92,9 +92,10 @@ export function WebQuiz({ q, done, onBack, onSubmit }: { q: typeof mockQuiz; don
 /** 웹 투자 실험실 = 원본 studio.tsx Lab (범위 안내 · 종목 고르기 · 조건 카드 · 가정 요약 · [초기화][실험 실행]) */
 export function WebLab({ vars, stocks, code, dirs, note, onBack, onPick, onDir, onReset, onRun }: {
   vars: typeof mockLabVars; stocks: typeof mockLabStocks; code: string; dirs: LabDir[]; note: string;
-  onBack: () => void; onPick: (code: string) => void; onDir: (i: number, d: LabDir) => void; onReset: () => void; onRun: () => void;
+  onBack: () => void; onPick: (code: string) => void; onDir: (i: number, d: LabDir) => void; onReset: () => void; onRun: () => void | Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
   const cur = stocks.find((s) => s.stock_code === code) ?? stocks[0];
   const picked = vars.map((v, i) => ({ v, i })).filter(({ i }) => dirs[i] !== '유지');
   return (
@@ -144,7 +145,7 @@ export function WebLab({ vars, stocks, code, dirs, note, onBack, onPick, onDir, 
       </View>
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <GBtn onPress={onReset}>초기화</GBtn>
-        <GBtn flex dark disabled={!picked.length} onPress={onRun}>실험 실행</GBtn>
+        <GBtn flex dark disabled={!picked.length || busy} onPress={() => { setBusy(true); void Promise.resolve(onRun()).finally(() => setBusy(false)); }}>{busy ? '실험 중…' : '실험 실행'}</GBtn>
       </View>
     </ScrollView>
   );

@@ -16,8 +16,16 @@ export function labGroups(code: string, dirs: LabDir[]): LabGroup[] {
     .map((i) => ({ i, d: dirs[i], leaves: mockLabLeaves(i, s.fx_strong).map((l) => ({ ...l, no: NUM[n++] })) }));
 }
 
-export const labTitle = (code: string, dirs: LabDir[]) => {
+/** 저장된 LLM 결과가 있으면 그 결과에 번호만 붙이고, 없으면 예시 경로 */
+export function labResultGroups(lab: { code: string; dirs: LabDir[]; groups?: { i: number; d: LabDir; leaves: LabLeaf[] }[] }): LabGroup[] {
+  if (!lab.groups) return labGroups(lab.code, lab.dirs);
+  let n = 0;
+  return lab.groups.map((g) => ({ ...g, leaves: g.leaves.map((l) => ({ ...l, no: NUM[n++] })) }));
+}
+
+export const labTitle = (code: string, dirs: LabDir[], name?: string) => {
   const s = mockLabStocks.find((x) => x.stock_code === code) ?? mockLabStocks[0];
   const picked = mockLabVars.filter((_, i) => dirs[i] !== '유지').map((v, k) => `${v.name.replace(/\(.*\)/, '')} ${dirs[mockLabVars.indexOf(v)]}`);
-  return { title: `${s.name} · ${picked.join('·')} 실험`, sub: `투자 실험실 · ${s.name}`, k: picked.length };
+  const stockName = name ?? s.name;
+  return { title: `${stockName} · ${picked.join('·')} 실험`, sub: `투자 실험실 · ${stockName}`, k: picked.length };
 };

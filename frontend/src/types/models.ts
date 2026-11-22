@@ -616,3 +616,27 @@ export interface FeedbackPayload {
   categories?: string[];
   message: string;
 }
+
+/** POST /studio/lab — 투자 실험실 결과 (화면의 영향 경로 지도·항목별 설명) */
+export type LabDirection = '상승' | '유지' | '하락';
+export interface LabRunLeaf {
+  t: string;
+  ev: boolean;
+  why: string;
+  base: string;
+  note?: string;
+  check?: string;
+  check_why?: string;
+}
+export interface LabRunGroup {
+  i: number;
+  d: LabDirection;
+  leaves: LabRunLeaf[];
+}
+export interface LabRunResult {
+  stock_code: string;
+  name: string;
+  groups: LabRunGroup[];
+  source: 'llm' | 'rules';
+  credits_used: number;
+}

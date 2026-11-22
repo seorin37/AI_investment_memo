@@ -1,3 +1,4 @@
+import type { LabRunGroup } from '@/types/models';
 import type { CreditPack } from '../my/My.mock';
 
 export type StudioKind = 'audio' | 'report' | 'lab' | 'quiz';
@@ -28,7 +29,7 @@ export interface MadeItem {
   codes?: string[];
   market?: boolean;
   /** 투자 실험실: 종목 · 조건 4칸 (상승/유지/하락) */
-  lab?: { code: string; dirs: ('상승' | '유지' | '하락')[] };
+  lab?: { code: string; dirs: ('상승' | '유지' | '하락')[]; name?: string; groups?: LabRunGroup[] };
 }
 
 export interface StudioHomeProps {

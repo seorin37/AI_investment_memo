@@ -58,6 +58,7 @@ export const realApi: Api = {
   saveHomeLayout: (layout) => http.put('/home/layout', layout),
   getMarketOverview: () => http.get('/market/overview'),
   getMacro: () => http.get('/market/macro'),
+  runLab: (input) => http.post('/studio/lab', input, { timeoutMs: 70_000 }),
   listCalendar: (month) => http.get('/calendar', { month }),
   createCalendarEvent: (input) => http.post('/calendar', input),
   listNews: () => http.get('/news/headlines'),
