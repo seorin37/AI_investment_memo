@@ -75,6 +75,7 @@ export interface JournalInput {
   title: string;
   stock_code: string | null;
   blocks: JournalBlock[];
+  pinned?: boolean;
 }
 
 export interface UploadFile {

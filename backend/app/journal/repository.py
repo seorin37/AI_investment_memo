@@ -14,7 +14,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 _SELECT = """
-SELECT e.id, e.title, e.body, e.blocks, e.created_at, e.updated_at,
+SELECT e.id, e.title, e.body, e.blocks, e.is_pinned, e.created_at, e.updated_at,
        st.symbol AS stock_code, s.name AS stock_name
 FROM journal_entries e
 LEFT JOIN LATERAL (
@@ -47,21 +47,26 @@ class JournalRepository:
     def stock_exists(self, symbol: str) -> bool:
         return self.db.execute(text("SELECT 1 FROM stocks WHERE symbol = :s"), {"s": symbol}).first() is not None
 
-    def create(self, user_id: int, *, title: str, body: str, blocks: list[dict[str, Any]]) -> int:
+    def create(self, user_id: int, *, title: str, body: str, blocks: list[dict[str, Any]], pinned: bool = False) -> int:
         return int(self.db.execute(
             text(
                 """
-                INSERT INTO journal_entries (user_id, title, body, blocks)
-                VALUES (:user_id, :title, :body, CAST(:blocks AS jsonb))
+                INSERT INTO journal_entries (user_id, title, body, blocks, is_pinned)
+                VALUES (:user_id, :title, :body, CAST(:blocks AS jsonb), :pinned)
                 RETURNING id
                 """
             ),
-            {"user_id": user_id, "title": title, "body": body, "blocks": json.dumps(blocks, ensure_ascii=False)},
+            {"user_id": user_id, "title": title, "body": body,
+             "blocks": json.dumps(blocks, ensure_ascii=False), "pinned": pinned},
         ).scalar_one())
 
-    def update(self, user_id: int, entry_id: int, values: dict[str, Any]) -> bool:
-        """values: title·body·blocks 중 바꿀 것. 비어 있어도 updated_at 은 새로 찍는다 (종목만 바뀐 경우)."""
-        sets, params = ["updated_at = now()"], {"id": entry_id, "user_id": user_id}
+    def update(self, user_id: int, entry_id: int, values: dict[str, Any], *, touch: bool = True) -> bool:
+        """values: title·body·blocks·is_pinned 중 바꿀 것.
+        touch=True 면 비어 있어도 updated_at 을 새로 찍는다 (종목만 바뀐 경우). 고정만 바꿀 때는 touch=False."""
+        sets, params = (["updated_at = now()"] if touch else ["id = id"]), {"id": entry_id, "user_id": user_id}
+        if "is_pinned" in values:
+            sets.append("is_pinned = :is_pinned")
+            params["is_pinned"] = bool(values["is_pinned"])
         if "title" in values:
             sets.append("title = :title")
             params["title"] = values["title"]

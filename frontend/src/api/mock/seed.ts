@@ -379,7 +379,7 @@ export function seededTimeline(memoId: string): TimelineEntry[] | null {
 export const journal: JournalEntry[] = [
   {
     id: 'j1', title: '10/13 투자 복기', stock_code: '000660', stock_name: 'SK하이닉스',
-    created_at: '2026-10-13T18:20:00+09:00', updated_at: '2026-10-13T18:20:00+09:00',
+    created_at: '2026-10-13T18:20:00+09:00', updated_at: '2026-10-13T18:20:00+09:00', pinned: false,
     blocks: [
       { id: 'b1', type: 'paragraph', text: '오늘 반도체 업종이 강세를 보였다. SK하이닉스는 HBM4 공급 확대 기대감에 상승했고, 삼성전자는 장 초반 약세 뒤 회복했다.' },
       { id: 'b2', type: 'paragraph', text: '잘한 점: 급등 구간에서 추격 매수를 하지 않았다.' },
@@ -391,17 +391,17 @@ export const journal: JournalEntry[] = [
   },
   {
     id: 'j2', title: '10/08 실적 발표 전 점검', stock_code: '000660', stock_name: 'SK하이닉스',
-    created_at: '2026-10-08T21:00:00+09:00', updated_at: '2026-10-08T21:00:00+09:00',
+    created_at: '2026-10-08T21:00:00+09:00', updated_at: '2026-10-08T21:00:00+09:00', pinned: false,
     blocks: [{ id: 'b1', type: 'paragraph', text: '발표일 확인하고 체크리스트 정리.' }],
   },
   {
     id: 'j3', title: '10/01 매수 전략 메모', stock_code: '005930', stock_name: '삼성전자',
-    created_at: '2026-10-01T20:00:00+09:00', updated_at: '2026-10-01T20:00:00+09:00',
+    created_at: '2026-10-01T20:00:00+09:00', updated_at: '2026-10-01T20:00:00+09:00', pinned: false,
     blocks: [{ id: 'b1', type: 'paragraph', text: '급하게 따라 사지 않기.' }],
   },
   {
     id: 'j4', title: '09/25 손절 기준 정리', stock_code: '000660', stock_name: 'SK하이닉스',
-    created_at: '2026-09-25T22:00:00+09:00', updated_at: '2026-09-25T22:00:00+09:00',
+    created_at: '2026-09-25T22:00:00+09:00', updated_at: '2026-09-25T22:00:00+09:00', pinned: false,
     blocks: [{ id: 'b1', type: 'paragraph', text: '지지선 근처에서 분할 매수 고민.' }],
   },
 ];

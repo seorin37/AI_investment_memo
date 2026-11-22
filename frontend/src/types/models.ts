@@ -301,10 +301,20 @@ export interface MemoAnswer {
 }
 
 // ─── 투자 기록 ───────────────────────────────────────────────
+/** 줄 전체 서식 (투자 기록 화면 JBlock 의 l · b · i · u · x). 모두 선택 */
+export interface JournalLineFormat {
+  list_style?: 'dot' | 'dash' | 'num' | 'quote';
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strike?: boolean;
+}
+
 export type JournalBlock =
-  | { id: string; type: 'paragraph'; text: string; highlight?: boolean }
-  | { id: string; type: 'heading'; text: string; highlight?: boolean }
-  | { id: string; type: 'checklist'; text: string; checked: boolean }
+  | ({ id: string; type: 'paragraph'; text: string; highlight?: boolean } & JournalLineFormat)
+  /** level 2 = 작은 제목 (없거나 1 = 제목) */
+  | ({ id: string; type: 'heading'; text: string; highlight?: boolean; level?: 1 | 2 } & JournalLineFormat)
+  | ({ id: string; type: 'checklist'; text: string; checked: boolean } & JournalLineFormat)
   | { id: string; type: 'table'; rows: string[][] }
   | { id: string; type: 'attachment'; name: string; url: string };
 
@@ -314,6 +324,8 @@ export interface JournalEntry {
   stock_code: string | null;
   stock_name: string | null;
   blocks: JournalBlock[];
+  /** 고정 (journal_entries.is_pinned). 고정만 바꾸면 updated_at 은 그대로 */
+  pinned: boolean;
   created_at: ISODate;
   updated_at: ISODate;
 }
