@@ -58,6 +58,10 @@ export interface MyStock extends StockMaster {
   status: StockStatus;
   tags: string[];
   unread_updates: number;
+  /** 휴지통 제외 일반 메모 수 (GET /stocks · 2026-11-22). 서버는 늘 줌 — 옛 응답 · mock 대비 선택 칸 */
+  memo_count?: number;
+  /** AI 연결 메모 수 (GET /ai/stats linked_memos 와 같은 조건을 이 종목만) */
+  ai_count?: number;
   added_at: ISODate;
 }
 

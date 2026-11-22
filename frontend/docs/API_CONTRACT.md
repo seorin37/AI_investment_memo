@@ -110,7 +110,11 @@ app.add_middleware(
 
 ```json
 // MyStock
-{ "code": "000660", "name": "SK하이닉스", "market": "KOSPI", "status": "holding", "tags": [], "unread_updates": 3, "added_at": "2026-09-20T10:00:00+09:00" }
+{ "code": "000660", "name": "SK하이닉스", "market": "KOSPI", "status": "holding", "tags": [], "unread_updates": 3,
+  "memo_count": 5, "ai_count": 3, "position": 0, "added_at": "2026-09-20T10:00:00+09:00" }
+// memo_count: 휴지통 제외 일반 메모 수 (체크리스트 · 참고자료 제외)
+// ai_count:   AI 연결 메모 수 — GET /ai/stats 의 linked_memos 와 같은 조건(휴지통 제외 · ai_linked)을 이 종목만.
+//             내 종목 목록의 ai_count 합은 linked_memos 와 같다 (목록에서 뺀 종목에 남은 AI 메모가 없을 때)
 // Quote
 { "code": "000660", "price": 180500, "change": 4200, "change_pct": 2.38, "as_of": "2026-10-21T15:30:00+09:00", "spark": [171200, 172900, ...] }
 // Financials.annual[i]

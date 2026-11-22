@@ -95,6 +95,10 @@ const stockName = (code: string) =>
 function recountUnread() {
   for (const s of db.stocks) {
     s.unread_updates = db.aiUpdates.filter((u) => u.stock_code === s.code && !u.read).length;
+    /* 서버 GET /stocks 와 같은 뜻: 일반 메모 수 · AI 연결 메모 수 (mock 보드에는 휴지통 항목이 없음) */
+    const memos = db.board.filter((b): b is Memo => b.kind === 'memo' && b.stock_code === s.code);
+    s.memo_count = memos.length;
+    s.ai_count = memos.filter((m) => m.ai_linked).length;
   }
   for (const it of db.board) {
     if (it.kind === 'memo') it.unread_updates = db.aiUpdates.filter((u) => u.memo_id === it.id && !u.read).length;
