@@ -167,7 +167,7 @@ export default function MainLayout() {
         current: sideKeyOf(pathname),
         stocks: sideStocks,
         /* 설정에서 바꾼 이름·소개를 사이드바 프로필에도 (mock 상태) */
-        profile: { ...mockSideProfile, name: myProfile.name, job: myProfile.intro },
+        profile: { ...mockSideProfile, name: myProfile.name, job: myProfile.intro, photoUrl: myProfile.photoUrl ?? null },
         unreadNotifs: unreadShown,
         dark,
         recentSearches: mockRecentSearches,

@@ -58,7 +58,7 @@ export function WebSettings(p: WebSettingsProps) {
       <View style={[st.frame, { height: Math.min(780, height - 32) }]}>
         <View style={st.nav}>
           <View style={st.me}>
-            <Avatar name={p.profile.name} size={36} variant="web" />
+            <Avatar name={p.profile.name} photoUrl={p.profile.photoUrl} size={36} variant="web" />
             <View style={st.meText}>
               <Text style={st.meName} numberOfLines={1}>{p.profile.name}</Text>
               <Text style={st.meSub}>설정</Text>
@@ -149,7 +149,7 @@ function ProfileTab(p: WebSettingsProps & { onAskLogout: () => void; onAskWithdr
   return (
     <>
       <View style={st.photoRow}>
-        <Avatar name={p.profile.name} size={72} fontSize={26} variant="web" />
+        <Avatar name={p.profile.name} photoUrl={p.profile.photoUrl} size={72} fontSize={26} variant="web" />
         <View style={st.photoCol}>
           <Text style={st.t15}>프로필 사진</Text>
           <View style={st.photoBtns}>

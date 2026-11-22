@@ -9,6 +9,8 @@ export interface MyProfile {
   intro: string;
   provider: AuthProvider;
   email: string;
+  /** 프로필 사진 (users.avatar_url). 없거나 못 불러오면 이니셜 */
+  photoUrl?: string | null;
 }
 
 /** MY 본 화면에서 여는 하위 화면 (⑨-3b·c 에서 채움) */
