@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { MyProfile, NotiSettings } from '@/ui/screens/my/My.types';
 import { mockInboxUnread, mockMyProfile, mockTrash, type TrashItem } from '@/ui/screens/my/My.mock';
+import { registerUserReset } from '@/lib/sessionReset';
 
 /**
  * MY · 설정 mock 상태 (⑨-3a·b·c). 메모리에만 있음 — 앱을 다시 켜면 처음 값.
@@ -44,3 +45,6 @@ export const useMyMock = create<MyMockState>((set, get) => ({
   read: (id) => set((s) => ({ unread: s.unread.filter((x) => x !== id) })),
   readAll: () => set({ unread: [] }),
 }));
+
+/* 로그아웃 · 계정 전환 때 처음 상태로 (lib/sessionReset · store/auth.ts 가 실행) */
+registerUserReset('myMock', () => useMyMock.getState().reset());

@@ -3,30 +3,22 @@ import { create } from 'zustand';
 import { api, httpAuth } from '@/api';
 import { env } from '@/config/env';
 import { queryClient } from '@/lib/queryClient';
-import { createSessionTracker } from '@/lib/sessionReset';
+import { createSessionTracker, registeredUserResets } from '@/lib/sessionReset';
 import { storage } from '@/lib/storage';
 import type { AuthToken, User } from '@/types/models';
-import { useCoach } from './coach';
-import { useJournal } from './journal';
-import { useMyMock } from './myMock';
-import { useNudgeStore } from './nudge';
-import { useStudioPlayer } from './studioPlayer';
 
 const REFRESH_TOKEN_KEY = 'memos.refresh_token';
 const MOCK_TOKEN_KEY = 'memos.mock_token';
 
-/* 로그아웃 · 계정 전환 때 처음 상태로 되돌릴 사용자별 store. 새 store가 사용자별 데이터를 들면 여기에 reset 을 넣는다
-   (기기 설정 useTheme · useUI 와 기기 저장 memos.introSeen 은 사용자와 무관해서 넣지 않음) */
-const USER_STATE_RESETS: readonly (() => void)[] = [
-  () => useMyMock.getState().reset(),
-  () => useStudioPlayer.getState().reset(),
-  () => useCoach.getState().reset(),
-  () => useNudgeStore.getState().reset(),
-  () => useJournal.getState().reset(false),
-];
-
-/** 마지막으로 화면에 올린 사용자 id 추적 (lib/sessionReset — tests/session-reset.test.mjs) */
-const session = createSessionTracker({ queryClient, resets: USER_STATE_RESETS });
+/*
+ * 로그아웃 · 계정 전환 때 처음 상태로 되돌릴 사용자별 store 는 각 store 파일에서 registerUserReset 으로 등록한다
+ * (useMyMock · useStudioPlayer · useCoach · useNudgeStore). 여기서는 store 를 import 하지 않는다 —
+ * store/journal.ts 처럼 auth 를 import 하는 store 가 있어도 순환이 생기지 않게.
+ * useJournal 은 등록하지 않음: 실제 모드에서 계정 바뀜 · 로그아웃을 스스로 처리 (store/journal.ts 의 useAuth.subscribe).
+ * 기기 설정 useTheme · useUI 와 기기 저장 memos.introSeen 은 사용자와 무관해서 넣지 않음.
+ */
+/** 마지막으로 화면에 올린 사용자 id 추적 (lib/sessionReset — tests/session-reset.test.mjs). 비울 때마다 등록된 목록을 읽음 */
+const session = createSessionTracker({ queryClient, resets: registeredUserResets });
 
 /**
  * 새 사용자를 set 하기 전에: 다른 사용자(또는 세션 끝)면 먼저 비우고, 마지막 id 를 바꾼다.

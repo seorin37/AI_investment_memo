@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { registerUserReset } from '@/lib/sessionReset';
 
 /**
  * 사용법 안내 4단계 (원본 앱 x/app.js 85~220줄 · 웹 coach.tsx · Lucian #197)
@@ -34,3 +35,6 @@ export const useCoach = create<CoachState>((set, get) => ({
   go: (step) => set({ step }),
   end: (finished) => set({ step: null, seen: true, done: { key: ++seq, finished } }),
 }));
+
+/* 로그아웃 · 계정 전환 때 처음 상태로 (lib/sessionReset · store/auth.ts 가 실행) */
+registerUserReset('coach', () => useCoach.getState().reset());

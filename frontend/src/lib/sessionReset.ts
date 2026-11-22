@@ -1,6 +1,9 @@
 /**
  * 로그아웃 · 계정 전환 때 사용자별 상태 비우기 (2026-11-22). 순수 모듈 — tests/session-reset.test.mjs
- * (react-native · SecureStore · '@/' 별칭을 쓰지 않는다: node 테스트에서 바로 불러오려고)
+ * (아무것도 import 하지 않는다: store 들이 여기를 import 해도 순환이 생기지 않고, node 테스트에서 바로 불러온다)
+ *
+ * 사용자별 store 는 자기 파일에서 registerUserReset(이름, reset) 으로 등록한다.
+ * store/auth.ts 는 store 를 import 하지 않고, 등록된 것만 실행한다 (store → auth 를 import 하는 store 가 있어도 순환 없음).
  */
 
 /** react-query QueryClient 중 여기서 쓰는 부분 */
@@ -8,10 +11,41 @@ export interface ClearableCache {
   clear(): void;
 }
 
+type Reset = () => void;
+
 export interface ResetDeps {
   queryClient: ClearableCache;
-  /** store 마다 '처음 만들어졌을 때 상태'로 되돌리는 함수 */
-  resets: readonly (() => void)[];
+  /** store 마다 '처음 만들어졌을 때 상태'로 되돌리는 함수. 함수로 주면 비울 때마다 그때 목록을 읽는다 (등록 방식) */
+  resets: readonly Reset[] | (() => readonly Reset[]);
+}
+
+/** 이름 → reset. 같은 이름으로 다시 등록하면 바꿔 끼운다 (개발 중 다시 불러오기 · 중복 등록에도 한 번만 실행) */
+export function createResetRegistry() {
+  const resets = new Map<string, Reset>();
+  return {
+    register(name: string, reset: Reset) {
+      resets.set(name, reset);
+    },
+    list(): Reset[] {
+      return [...resets.values()];
+    },
+    names(): string[] {
+      return [...resets.keys()];
+    },
+  };
+}
+
+/** 앱 전체 등록부 (store/auth.ts 가 읽음) */
+const userResets = createResetRegistry();
+
+/** 사용자별 store 를 새로 만들면 그 파일에서 이것으로 등록한다 — 로그아웃 · 계정 전환 때 처음 상태로 */
+export function registerUserReset(name: string, reset: Reset): void {
+  userResets.register(name, reset);
+}
+
+/** 지금 등록된 reset 들 */
+export function registeredUserResets(): Reset[] {
+  return userResets.list();
 }
 
 /**
@@ -25,7 +59,7 @@ export function resetUserState({ queryClient, resets }: ResetDeps): unknown[] {
   } catch (e) {
     errors.push(e);
   }
-  for (const reset of resets) {
+  for (const reset of typeof resets === 'function' ? resets() : resets) {
     try {
       reset();
     } catch (e) {

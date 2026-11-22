@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createSessionTracker, resetUserState, shouldReset } from '../src/lib/sessionReset.ts';
+import { createResetRegistry, createSessionTracker, registerUserReset, registeredUserResets, resetUserState, shouldReset } from '../src/lib/sessionReset.ts';
 
 /* 로그아웃 · 계정 전환 때 사용자별 캐시 · store 비우기 (store/auth.ts 가 쓰는 lib/sessionReset) */
 
@@ -103,4 +103,55 @@ test('shouldReset: 처음(null)은 비우지 않고, 다른 사용자 · 세션 
   assert.equal(shouldReset('A', 'A'), false);
   assert.equal(shouldReset('A', 'B'), true);
   assert.equal(shouldReset('A', null), true);
+});
+
+/* ─── 등록 방식 (store 가 자기 파일에서 registerUserReset · auth 는 store 를 import 하지 않음) */
+
+test('등록부: 등록한 reset 이 비울 때 실행됨', () => {
+  const reg = createResetRegistry();
+  const calls = [];
+  reg.register('a', () => calls.push('a'));
+  reg.register('b', () => calls.push('b'));
+  resetUserState({ queryClient: { clear() {} }, resets: reg.list });
+  assert.deepEqual(calls, ['a', 'b']);
+});
+
+test('등록부: 같은 이름으로 두 번 등록하면 한 번만 (나중 것으로 바뀜)', () => {
+  const reg = createResetRegistry();
+  const calls = [];
+  reg.register('journal', () => calls.push('old'));
+  reg.register('journal', () => calls.push('new'));
+  assert.deepEqual(reg.names(), ['journal']);
+  resetUserState({ queryClient: { clear() {} }, resets: reg.list });
+  assert.deepEqual(calls, ['new']);
+});
+
+test('등록부: 하나가 throw 해도 나머지와 캐시 비우기는 계속', () => {
+  const reg = createResetRegistry();
+  const calls = [];
+  const qc = { clears: 0, clear() { this.clears += 1; } };
+  reg.register('a', () => calls.push('a'));
+  reg.register('boom', () => { throw new Error('boom'); });
+  reg.register('c', () => calls.push('c'));
+  const errors = resetUserState({ queryClient: qc, resets: reg.list });
+  assert.equal(qc.clears, 1);
+  assert.deepEqual(calls, ['a', 'c']);
+  assert.equal(errors.length, 1);
+});
+
+test('추적기 + 등록부: 추적기를 만든 뒤에 등록한 store 도 로그아웃 때 비움 (비울 때마다 목록을 읽음)', () => {
+  const reg = createResetRegistry();
+  const calls = [];
+  const s = createSessionTracker({ queryClient: { clear() {} }, resets: reg.list });
+  s.switchUser('A');
+  reg.register('late', () => calls.push('late'));   // 화면이 store 를 처음 불러올 때 등록되는 것과 같음
+  s.signOut();
+  assert.deepEqual(calls, ['late']);
+});
+
+test('앱 등록부(registerUserReset): 등록하면 registeredUserResets 에 들어감', () => {
+  let hit = 0;
+  registerUserReset('test-only-session-reset', () => { hit += 1; });
+  for (const r of registeredUserResets()) r();
+  assert.equal(hit, 1);
 });
