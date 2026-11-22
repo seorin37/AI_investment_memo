@@ -314,6 +314,8 @@ def _public_user(user: dict[str, Any]) -> dict[str, Any]:
         "avatar_url": user.get("avatar_url"),
         "email": user.get("email"),
         "providers": user.get("providers", []),
+        # users.plan (plan_type: free·plus·pro) 그대로. 행에 없으면 무료
+        "plan": str(user.get("plan") or "free"),
     }
 
 

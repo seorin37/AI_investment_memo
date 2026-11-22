@@ -37,7 +37,8 @@ export function AppTerms(p: TermsProps) {
   }
   return (
     <View style={[st.screen, { paddingTop: insets.top }]}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[st.content, { paddingBottom: 146 + insets.bottom }]}>
+      {/* 아래 고정 영역 높이만큼 여백. 저장 실패 줄이 보일 때만 그 높이(ERROR_H)를 더해 마지막 약관이 가려지지 않게 */}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[st.content, { paddingBottom: 146 + insets.bottom + (p.error ? ERROR_H : 0) }]}>
         <View style={st.top}>
           <Pressable onPress={p.onBack} style={st.back} accessibilityLabel="뒤로"><BackGlyph /></Pressable>
           <View style={st.progress}><View style={[st.progressDot, st.progressOn]} /><View style={st.progressDot} /><View style={st.progressDot} /></View>
@@ -65,7 +66,8 @@ export function AppTerms(p: TermsProps) {
       </ScrollView>
       <View style={[st.bottom, { paddingBottom: Math.max(insets.bottom, 30) }]}>
         <Pressable onPress={() => p.onOpenDocument('privacy')} style={st.privacy}><Text style={st.privacyText}>개인정보 처리방침 확인하기</Text><ChevronGlyph color={appColor.deepPurple} /></Pressable>
-        <Pressable disabled={!ready} onPress={p.onContinue} style={[st.cta, ready && st.ctaOn]}>
+        {p.error ? <View accessibilityRole="alert" style={st.errorToast}><Text style={st.errorText}>{p.error}</Text></View> : null}
+        <Pressable disabled={!ready || !!p.saving} onPress={p.onContinue} style={[st.cta, ready && !p.saving && st.ctaOn]}>
           <Text style={st.ctaText}>동의하고 시작하기</Text>
         </Pressable>
       </View>
@@ -82,6 +84,9 @@ export function AppTerms(p: TermsProps) {
     </View>
   );
 }
+
+/** 저장 실패 줄이 아래 고정 영역에 더하는 높이: 위 14 + 상자(글자 13 · 위아래 10) 약 40 + 아래 8 + 간격 2 */
+const ERROR_H = 64;
 
 const st = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#FFFFFF' },
@@ -114,6 +119,9 @@ const st = StyleSheet.create({
   privacy: { alignSelf: 'center', minHeight: 44, paddingVertical: 12, paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center', gap: 2 },
   privacyText: { fontSize: 13.5, lineHeight: 20, color: appColor.deepPurple, fontWeight: '600' },
   cta: { minHeight: 56, borderRadius: 16, backgroundColor: '#D5D8DD', paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
+  /* 저장 실패 한 줄 = 앱 로그인 errorToast · errorText 와 같은 모양 (버튼과 8 띄움) */
+  errorToast: { alignSelf: 'center', marginTop: 14, marginBottom: 8, borderRadius: 12, backgroundColor: '#303139', paddingHorizontal: 16, paddingVertical: 10 },
+  errorText: { ...ft(13), color: '#FFFFFF', fontWeight: '600' },
   ctaOn: { backgroundColor: appColor.accent },
   ctaText: { fontSize: 16.5, lineHeight: 24, color: '#FFFFFF', fontWeight: '800' },
   docHeader: { height: 58, paddingHorizontal: 22, flexDirection: 'row', alignItems: 'center', gap: 2 },

@@ -207,8 +207,15 @@ class AccountApiTest(unittest.TestCase):
                 "providers": [
                     {"provider": "kakao", "email": "u7@example.com", "connected": True, "current": False}
                 ],
+                "plan": "free",
             },
         )
+
+    def test_me_returns_plan_as_stored(self):
+        for plan in ("free", "plus", "pro"):
+            with self.subTest(plan=plan):
+                self.repo.profiles[7]["plan"] = plan
+                self.assertEqual(self.client.get("/api/v1/me").json()["plan"], plan)
 
     def test_me_patch_updates_name_and_bio(self):
         res = self.client.patch("/api/v1/me", json={"name": "  새 이름 ", "bio": "대학생"})

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { Text, TextInput } from '@/components/ui/AppText';
@@ -18,13 +18,17 @@ const CHK = (
  * 앱 종목 추가 시트 (원본 stock.html 07 시트 · 11.11 사용자 선택)
  * 검색칸(46 · 포커스면 보라 테두리) · 많이 찾는 종목 · 검색 결과 · 이미 있는 종목은 흐리게 · 어떻게 담을까요? 보유/관심 · [관심 종목으로 추가]
  */
-export function AddStockSheet({ open, mine, universe, popular, onClose, onAdd }: { open: boolean; mine: MyStock[]; universe: StockCandidate[]; popular: string[]; onClose: () => void; onAdd: (code: string, hold: Hold) => void }) {
+export function AddStockSheet({ open, mine, universe, popular, onClose, onAdd, remote, onQueryChange }: { open: boolean; mine: MyStock[]; universe: StockCandidate[]; popular: string[]; onClose: () => void; onAdd: (code: string, hold: Hold) => void; remote?: boolean; onQueryChange?: (q: string) => void }) {
   const [q, setQ] = useState('');
   const [pick, setPick] = useState<string | null>(null);
   const [hold, setHold] = useState<Hold>('watching');
   const [focus, setFocus] = useState(false);
   const t = q.trim();
-  const list = t ? universe.filter((s) => s.name.toLowerCase().includes(t.toLowerCase()) || s.stock_code.includes(t)).slice(0, 6) : popular.map((c) => universe.find((s) => s.stock_code === c)).filter((s): s is StockCandidate => !!s);
+  /* 실제 모드: 검색어를 호스트로 (GET /stocks/search) — 렌더 중이 아니라 effect 에서 */
+  useEffect(() => {
+    onQueryChange?.(t);
+  }, [t, onQueryChange]);
+  const list = t && remote ? universe.slice(0, 6) : t ? universe.filter((s) => s.name.toLowerCase().includes(t.toLowerCase()) || s.stock_code.includes(t)).slice(0, 6) : popular.map((c) => universe.find((s) => s.stock_code === c)).filter((s): s is StockCandidate => !!s);
   const close = () => {
     setQ('');
     setPick(null);

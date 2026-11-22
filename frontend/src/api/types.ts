@@ -18,6 +18,8 @@ import type {
   HomeLayout,
   JournalBlock,
   JournalEntry,
+  LabDirection,
+  LabRunResult,
   MacroOverview,
   MarketOverview,
   MarketUpdate,
@@ -39,6 +41,8 @@ import type {
   StockMaster,
   StockProfile,
   StockStatus,
+  TermsItem,
+  TermsStatus,
   TrashItem,
   User,
 } from '@/types/models';
@@ -96,10 +100,16 @@ export interface Api {
   me(): Promise<User>;
   updateMe(patch: Partial<Pick<User, 'name' | 'bio'>>): Promise<User>;
   logout(refreshToken?: string): Promise<void>;
+  /** 약관 동의 상태 (GET /me/terms) — 로그인 뒤 신규 판별 · 약관 화면 */
+  getTerms(): Promise<TermsStatus>;
+  /** 약관 동의 저장 (POST /me/terms). items 는 getTerms().required 그대로 */
+  agreeTerms(items: TermsItem[]): Promise<TermsStatus>;
 
   // 종목
   listMyStocks(): Promise<MyStock[]>;
   searchStocks(q: string): Promise<StockMaster[]>;
+  /** 많이 찾는 종목 (GET /stocks/popular · 온보딩). 담은 사람 3명 이상 → 모자라면 시총 순. 기본 12 · 최대 30 */
+  getPopularStocks(limit?: number): Promise<StockMaster[]>;
   getStock(code: string): Promise<StockMaster>;
   addStock(code: string, status: StockStatus): Promise<MyStock>;
   updateStock(code: string, patch: Partial<Pick<MyStock, 'status' | 'tags'>>): Promise<MyStock>;
@@ -149,6 +159,8 @@ export interface Api {
   getMarketOverview(): Promise<MarketOverview>;
   /** 거시 지표 (ECOS·FRED·KRX 금) */
   getMacro(): Promise<MacroOverview>;
+  /** 투자 실험실 실행 (LLM) */
+  runLab(input: { stock_code: string; dirs: LabDirection[] }): Promise<LabRunResult>;
   listCalendar(month: string): Promise<CalendarEvent[]>;
   createCalendarEvent(input: { date: string; title: string }): Promise<CalendarEvent>;
   listNews(): Promise<NewsHeadline[]>;

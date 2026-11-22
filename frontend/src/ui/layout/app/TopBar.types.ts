@@ -28,7 +28,7 @@ export interface TopBarProps {
   /** 오른쪽 아이콘 버튼들 (원본 순서대로) */
   actions?: TopBarAction[];
   /** 맨 오른쪽 아바타 (탭 화면) */
-  avatar?: { name: string; onPress?: () => void };
+  avatar?: { name: string; photoUrl?: string | null; onPress?: () => void };
   /** 아래 선 (큰 제목이 접힐 때 등) */
   showLine?: boolean;
 }

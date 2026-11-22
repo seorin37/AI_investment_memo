@@ -1,7 +1,10 @@
 """크레딧 묶음·장부 (2026-11-20, 0019 credit_grants · credit_ledger · plan_limits.monthly_credits).
 
 규칙 (configs/credits.yaml)
-- 기간은 달력 기준 한 달(한국 시간 1일 0시 시작). 그 달 기본량(monthly)은 처음 필요할 때 지급하고, 다음 달 1일에 만료된다.
+- 기간은 사용자 시작점 기준 한 달 고정 주기 (2026-11-22 결정 6). 시작점 = 첫 월 기본량 지급일(무료는 첫 사용일),
+  짧은 달은 말일 (1/31 → 2/28 → 3/31). 경계는 한국 시간 그날 0시. 중간 접속 · 오래 안 들어와도 주기를 다시 시작하지 않는다.
+  그 주기 기본량(monthly)은 처음 필요할 때 지급하고, 다음 주기 시작에 만료된다. 같은 주기는 한 번만 (uq_credit_grants_monthly).
+  유료 결제일 시작점은 결제가 연결되면 anchor_date 에서 쓴다 (지금은 저장된 결제일이 없음).
 - 산 크레딧(purchase)은 다음 달로 넘어간다 (유효기간 purchase_valid_days, 0이면 만료 없음).
 - 쓸 때는 만료가 빠른 묶음부터 꺼낸다 → 이번 달 기본량을 먼저 쓰고 산 크레딧은 나중에 쓴다. 묶음마다 장부 한 줄.
 - 잔액보다 많이 쓰려 하면 잔액까지만 차감한다 (음수 잔액 없음). 차감한 양을 돌려준다.
@@ -11,6 +14,7 @@
 
 from __future__ import annotations
 
+import calendar
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from functools import lru_cache
@@ -32,12 +36,42 @@ def cost(reason: str) -> int:
     return int((rules().get("costs") or {}).get(reason, 0))
 
 
-def period(now: datetime | None = None) -> tuple[date, datetime, datetime]:
-    """(기간 시작일, 시작 시각, 다음 기간 시작 시각) — 한국 시간 달력 달."""
-    now = (now or datetime.now(SEOUL)).astimezone(SEOUL)
-    start = now.date().replace(day=1)
-    nxt = (start.replace(day=28) + timedelta(days=4)).replace(day=1)
-    return start, datetime.combine(start, datetime.min.time(), SEOUL), datetime.combine(nxt, datetime.min.time(), SEOUL)
+def _midnight(d: date) -> datetime:
+    return datetime.combine(d, datetime.min.time(), SEOUL)
+
+
+def add_months(anchor: date, months: int) -> date:
+    """시작점에서 months 달 뒤 같은 날 — 그 달에 그날이 없으면 말일 (1/31 → 2/28 → 3/31: 늘 시작점에서 바로 계산해 밀리지 않음)."""
+    y, m = divmod(anchor.month - 1 + months, 12)
+    y, m = anchor.year + y, m + 1
+    return date(y, m, min(anchor.day, calendar.monthrange(y, m)[1]))
+
+
+def cycle(anchor: date, today: date) -> tuple[date, date]:
+    """시작점 기준 한 달 고정 주기 중 today 가 든 주기의 (시작일, 다음 시작일). 시작점 전 날짜면 첫 주기."""
+    if today < anchor:
+        return anchor, add_months(anchor, 1)
+    k = (today.year - anchor.year) * 12 + (today.month - anchor.month)
+    if add_months(anchor, k) > today:
+        k -= 1
+    return add_months(anchor, k), add_months(anchor, k + 1)
+
+
+def anchor_date(db, user_id: int, today: date) -> date:
+    """주기 시작점 (2026-11-22 결정 6) = 이 사용자의 첫 월 기본량 지급일(credit_grants.period_start 중 가장 이른 날).
+    아직 없으면 오늘 = 첫 사용일. 새 칸 없이 credit_grants 로 정한다.
+    - 유료 플랜의 결제일 시작점: 결제가 연결되지 않아 저장된 결제일이 없다 → 지금은 무료와 같은 규칙 (결제 연결 때 여기서 결제일을 쓴다)
+    - 0019 달력 월로 이미 받은 사용자는 첫 지급일이 1일이라 지금처럼 매달 1일 주기가 이어진다"""
+    first = db.execute(text("""SELECT min(period_start) FROM credit_grants WHERE user_id = :u AND source = 'monthly'"""),
+                       {"u": user_id}).scalar()
+    return first or today
+
+
+def user_period(db, user_id: int, now: datetime | None = None) -> tuple[date, datetime, datetime]:
+    """(주기 시작일, 시작 시각, 다음 주기 시작 시각) — 사용자 시작점 기준 한 달 고정 주기. 경계는 한국 시간 그날 0시."""
+    today = (now or datetime.now(SEOUL)).astimezone(SEOUL).date()
+    start, nxt = cycle(anchor_date(db, user_id, today), today)
+    return start, _midnight(start), _midnight(nxt)
 
 
 def monthly_amount(db, user_id: int) -> int:
@@ -52,8 +86,8 @@ def monthly_amount(db, user_id: int) -> int:
 
 
 def ensure_monthly(db, user_id: int, now: datetime | None = None) -> int:
-    """이번 달 기본량을 아직 안 줬으면 준다. 새로 준 양 (이미 있으면 0)."""
-    start, _, nxt = period(now)
+    """이번 주기 기본량을 아직 안 줬으면 준다. 새로 준 양 (이미 있으면 0). 같은 주기는 uq_credit_grants_monthly 로 한 번만."""
+    start, _, nxt = user_period(db, user_id, now)
     amount = monthly_amount(db, user_id)
     if amount <= 0:
         return 0
@@ -154,7 +188,7 @@ def usage(db, user_id: int, now: datetime | None = None) -> Usage:
     """화면의 'AI 사용량 %' = 이번 기간에 쓴 양 ÷ (쓴 양 + 지금 남은 양). 남은 게 0이면 AI 업데이트 멈춤."""
     now = now or datetime.now(SEOUL)
     refresh(db, user_id, now)
-    start, start_at, nxt = period(now)
+    start, start_at, nxt = user_period(db, user_id, now)
     used = int(-(db.execute(text("""SELECT COALESCE(sum(delta), 0) FROM credit_ledger
         WHERE user_id = :u AND delta < 0 AND reason NOT IN ('expire', 'refund', 'adjust') AND created_at >= :s"""),
                             {"u": user_id, "s": start_at}).scalar() or 0))

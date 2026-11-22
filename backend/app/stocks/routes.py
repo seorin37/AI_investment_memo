@@ -17,6 +17,8 @@ from .schemas import (
     StockUpdateRequest,
 )
 from .service import (
+    POPULAR_DEFAULT,
+    POPULAR_MAX,
     InvalidStockOrderError,
     StockNotFoundError,
     StockService,
@@ -87,6 +89,16 @@ def add_stock(
         return service.add(_user_id(current), payload.code, payload.status)
     except StockNotFoundError as exc:
         raise _stock_not_found() from exc
+
+
+@router.get("/popular", response_model=list[StockMasterResponse])
+def popular_stocks(
+    limit: int = Query(default=POPULAR_DEFAULT, ge=1, le=POPULAR_MAX),
+    _current: dict = Depends(get_current_user),
+    service: StockService = Depends(get_query_service),
+):
+    """많이 찾는 종목 (온보딩). /{code} 보다 먼저 선언해야 종목코드로 잡히지 않는다."""
+    return service.popular(limit)
 
 
 @router.get("/{code}", response_model=StockMasterResponse)

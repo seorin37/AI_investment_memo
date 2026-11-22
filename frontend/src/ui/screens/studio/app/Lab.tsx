@@ -14,7 +14,7 @@ import { Keep } from '@/ui/shared/Dark';
 /**
  * 앱 투자 실험실 = 원본 studio.html #pgLab (17)
  * 설명 · 범위 안내 · 실험할 종목 줄(→ 시트) · 조건 카드 4(지금 값 · 상승/유지/하락 세그) · 선택한 실험 조건 · [초기화][실험 실행]
- * 실행은 크레딧 차감 없이 결과로 (mock)
+ * 실행은 POST /studio/lab (LLM)이 끝나면 결과로
  */
 type Vars = typeof mockLabVars;
 type Stocks = typeof mockLabStocks;
@@ -22,7 +22,7 @@ const C = { ink: '#16171A', ink2: '#575B63', ink3: '#9A9EA7' };
 
 export function AppLab({ vars, stocks, code, dirs, note, onBack, onPick, onDir, onReset, onRun }: {
   vars: Vars; dirs: LabDir[]; stocks: Stocks; code: string; note: string;
-  onBack: () => void; onPick: (code: string) => void; onDir: (i: number, d: LabDir) => void; onReset: () => void; onRun: () => void;
+  onBack: () => void; onPick: (code: string) => void; onDir: (i: number, d: LabDir) => void; onReset: () => void; onRun: () => void | Promise<void>;
 }) {
   const insets = useSafeAreaInsets();
   const [sheet, setSheet] = useState(false);
@@ -54,7 +54,7 @@ export function AppLab({ vars, stocks, code, dirs, note, onBack, onPick, onDir, 
       <View style={[st.lfoot, { paddingBottom: 10 + insets.bottom }]}>
         <PressScale onPress={onReset} accessibilityRole="button" style={[st.cta, st.gray]}><Text style={[st.ctaT, { color: C.ink }]}>초기화</Text></PressScale>
         <View style={{ flex: 1 }}>
-          <PressScale disabled={!picked.length || busy} onPress={() => { setBusy(true); setTimeout(() => { setBusy(false); onRun(); }, 1400); }} accessibilityRole="button" style={[st.cta, !picked.length && { backgroundColor: '#C9CDD4' }]}>
+          <PressScale disabled={!picked.length || busy} onPress={() => { setBusy(true); void Promise.resolve(onRun()).finally(() => setBusy(false)); }} accessibilityRole="button" style={[st.cta, !picked.length && { backgroundColor: '#C9CDD4' }]}>
             {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={st.ctaT}>실험 실행</Text>}
           </PressScale>
         </View>

@@ -19,6 +19,9 @@ export const realApi: Api = {
   me: () => http.get('/auth/me'),
   updateMe: (patch) => http.patch('/me', patch),
   logout: (refreshToken) => http.post('/auth/logout', refreshToken ? { refresh_token: refreshToken } : undefined),
+  getPopularStocks: (limit) => http.get('/stocks/popular', { limit }),
+  getTerms: () => http.get('/me/terms'),
+  agreeTerms: (items) => http.post('/me/terms', { items }),
 
   // 종목
   ...realStockApi,
@@ -55,6 +58,7 @@ export const realApi: Api = {
   saveHomeLayout: (layout) => http.put('/home/layout', layout),
   getMarketOverview: () => http.get('/market/overview'),
   getMacro: () => http.get('/market/macro'),
+  runLab: (input) => http.post('/studio/lab', input, { timeoutMs: 70_000 }),
   listCalendar: (month) => http.get('/calendar', { month }),
   createCalendarEvent: (input) => http.post('/calendar', input),
   listNews: () => http.get('/news/headlines'),
