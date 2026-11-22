@@ -4,7 +4,7 @@ import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useStudioPlayer } from '@/store/studioPlayer';
 import { useUI } from '@/store/ui';
 import { TopBar } from '@/ui/layout/app/TopBar';
-import { mockMyUsage } from '@/ui/screens/my/My.mock';
+import { useMyUsage } from '@/ui/screens/my/useMyUsage';
 import { useMyProfile } from '@/ui/screens/my/useMyProfile';
 import { mockAudioPeriods, mockAudioStocks, mockReport, mockReportStocks, mockStudioCounts, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
 import { AppAudioSheet } from '@/ui/screens/studio/app/AudioSheet';
@@ -22,6 +22,7 @@ const NOT_YET = '아직 연결되지 않았어요 · 데이터는 그대로예�
 
 export default function StudioTab() {
   const router = useRouter();
+  const myUsage = useMyUsage();
   const { profile: { name: myName } } = useMyProfile();
   const toast = useUI((s) => s.showToast);
   const { fail, make } = useLocalSearchParams<{ fail?: string; make?: string }>();
@@ -53,8 +54,8 @@ export default function StudioTab() {
           if (p.job?.status === 'fail') p.retry();
           router.push('/studio-gen');
         }}
-        usage_pct={mockMyUsage.usage_pct}
-        usage_refill={mockMyUsage.usage_refill}
+        usage_pct={myUsage.usage_pct}
+        usage_refill={myUsage.usage_refill}
         {...mockStudioCounts}
         onFeature={(k) => (k === 'audio' ? setSheet(true) : k === 'report' ? setRSheet(true) : router.push(k === 'quiz' ? '/studio-quiz' : '/studio-lab'))}
         onOpenMade={(m) => {
