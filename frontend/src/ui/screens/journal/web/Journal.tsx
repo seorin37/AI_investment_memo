@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, View, type TextStyle } from 'react-native';
-import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { Dots } from '@/ui/icons/BoardGlyphs';
 import { FixedFrame } from '@/ui/layout/web/FixedFrame';
@@ -21,7 +21,6 @@ type Snack = { key: number; msg: string; undo?: () => void; check?: boolean };
 type Menu = { items: MenuItem[]; at: { x: number; y: number } };
 const data = (o: Record<string, string>) => ({ dataSet: o }) as object;
 let seq = 0;
-const NOT_YET = '아직 연결되지 않았어요 · 데이터는 그대로예요';
 
 export interface WebJournalProps extends Omit<JournalProps, 'onNew'> {
   /** 새 기록을 맨 위에 만들고 id 를 돌려줌 (원본 addJournal) */
@@ -234,7 +233,6 @@ export function WebJournal(p: WebJournalProps) {
                 key={curJ.id}
                 j={curJ}
                 fresh={fresh === curJ.id}
-                say={say}
                 onUpdate={p.onUpdate}
                 onMenu={(e, openFind) => {
                   const { r } = at(e);
@@ -282,10 +280,10 @@ export function WebJournal(p: WebJournalProps) {
 
 /**
  * 오른쪽 기록 편집기 (원본 journal.tsx 오른쪽 칸: 날짜 14/21 · 제목 칸 30/40 · 본문 contentEditable 17/26 · 할 일(체크리스트, 위 고정 제목 없음)
- * · 떠 있는 도구 막대 [체크리스트] [사진] [Aa] (아래 20 가운데) · 서식 창 (아래 76) · ⋯ 메뉴 · 기록 안에서 찾기)
- * 쓰는 대로 바로 저장 (원본 updateJournal). 사진은 연결 전이라 안내만.
+ * · 떠 있는 도구 막대 [체크리스트] [Aa] (사진 버튼은 업로드 API 가 없어 뺌, 2026-11-22) (아래 20 가운데) · 서식 창 (아래 76) · ⋯ 메뉴 · 기록 안에서 찾기)
+ * 쓰는 대로 바로 저장 (원본 updateJournal).
  */
-function WebNote({ j, fresh, say, onUpdate, onMenu }: { j: JournalEntry; fresh: boolean; say: (m: string) => void; onUpdate: (id: string, p: Partial<JournalEntry>) => void; onMenu: (e: { nativeEvent: unknown }, openFind: () => void) => void }) {
+function WebNote({ j, fresh, onUpdate, onMenu }: { j: JournalEntry; fresh: boolean; onUpdate: (id: string, p: Partial<JournalEntry>) => void; onMenu: (e: { nativeEvent: unknown }, openFind: () => void) => void }) {
   const ed = useEdRef();
   const [fmt, setFmt] = useState(false);
   const [find, setFind] = useState<string | null>(null);
@@ -355,7 +353,7 @@ function WebNote({ j, fresh, say, onUpdate, onMenu }: { j: JournalEntry; fresh: 
         </ScrollView>
       </FadeIn>
       {fmt ? <FormatPanel edRef={ed} onClose={() => setFmt(false)} onChanged={() => {}} /> : null}
-      {/* 떠 있는 도구 막대 (원본: 체크리스트 · 사진 · Aa — 52×40 · 라운드 24 · 그림자) */}
+      {/* 떠 있는 도구 막대 (원본: 체크리스트 · 사진 · Aa — 52×40 · 라운드 24 · 그림자). 사진은 뺌 */}
       <View style={st.tbWrap} pointerEvents="box-none">
         <View style={st.tb}>
           <Pressable
@@ -371,13 +369,6 @@ function WebNote({ j, fresh, say, onUpdate, onMenu }: { j: JournalEntry; fresh: 
               <Path d="M11.9167 10.9993L13.25 12.3327L15.6667 9.91602" />
               <Path d="M13.5833 22.0007C14.5959 22.0007 15.4167 21.1798 15.4167 20.1673C15.4167 19.1548 14.5959 18.334 13.5833 18.334C12.5708 18.334 11.75 19.1548 11.75 20.1673C11.75 21.1798 12.5708 22.0007 13.5833 22.0007Z" />
               <Path d="M18.1667 11H25.6667M18.1667 20.1667H25.6667" />
-            </Svg>
-          </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="사진" onPress={() => say(NOT_YET)} style={({ hovered }: Hover) => [st.tbB, hovered && { backgroundColor: '#F3F4F6' }]}>
-            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#1C1C1C" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-              <Rect x={3.5} y={5} width={17} height={14} rx={3} />
-              <Circle cx={9} cy={10} r={1.8} />
-              <Path d="M20.5 15.5l-4.5-4.5-8.5 8" />
             </Svg>
           </Pressable>
           <View {...data({ fmtBtn: '' })}>
