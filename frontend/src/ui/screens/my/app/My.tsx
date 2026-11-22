@@ -3,6 +3,7 @@ import { BackHandler, Pressable, ScrollView, StyleSheet, View } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, G, Path } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
+import { Avatar } from '@/ui/shared/Avatar';
 import { SkySwitch } from '@/ui/shared/SkySwitch';
 import type { AppMyProps } from '../My.types';
 import { Chev, Grp, Head, Item, Lb, MC, Rv, UsageBar } from './parts';
@@ -30,7 +31,7 @@ export function AppMy(p: AppMyProps) {
       <ScrollView contentContainerStyle={[st.w, { paddingBottom: 28 + insets.bottom }]} showsVerticalScrollIndicator={false}>
         <Rv i={0}>
           <Pressable onPress={p.onProfile} style={({ pressed }) => [st.prof, pressed && { backgroundColor: '#F7F7F9' }]} accessibilityRole="button" accessibilityLabel={`${p.profile.name} 내 프로필`}>
-            <View style={st.avb}><Text style={st.avbT}>{p.profile.name.trim().slice(0, 1)}</Text></View>
+            <Avatar name={p.profile.name} photoUrl={p.profile.photoUrl} size={50} variant="app" boxStyle={st.avb} textStyle={st.avbT} />
             <View style={st.flex}>
               <Text style={st.profB} numberOfLines={1}>{p.profile.name}</Text>
               <Text style={st.profS} numberOfLines={1}>{p.profile.intro} · {PROVIDER[p.profile.provider] ?? ''}로 로그인 중</Text>

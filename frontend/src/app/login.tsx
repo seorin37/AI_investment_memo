@@ -28,7 +28,7 @@ export default function LoginScreen() {
   const [busy, setBusy] = useState<AuthProvider | null>(() => demo === 'loading' ? 'kakao' : null);
   const [error, setError] = useState<LoginErrorKind>(() => demo === 'offline' ? 'network' : demo === 'error' ? 'login' : null);
   const [recent, setRecent] = useState<AuthProvider | null>(params.recent ?? null);
-  /* 버튼으로 로그인한 뒤 갈 곳: 신규 판별(lib/afterLogin) 결과. 판별 중이면 'deciding' */
+  /* 버튼으로 로그인한 뒤 갈 곳: 약관 동의 판별(lib/afterLogin · GET /me/terms) 결과. 판별 중이면 'deciding' */
   const [next, setNext] = useState<AfterLoginRoute | 'deciding' | null>(null);
 
   if (status === 'signedIn') {
@@ -45,14 +45,14 @@ export default function LoginScreen() {
       if (env.useMockAuth) {
         setNext('deciding');
         await mockSignIn();
-        setNext(await routeAfterLogin(api.listMyStocks));
+        setNext(await routeAfterLogin(api.getTerms));
         return;
       }
       const session = await startSocialLogin(provider);
       if (session) {
         setNext('deciding');
         await acceptSession(session);
-        setNext(await routeAfterLogin(api.listMyStocks));
+        setNext(await routeAfterLogin(api.getTerms));
       }
     } catch (cause) {
       setNext(null);

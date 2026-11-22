@@ -16,6 +16,24 @@ export interface User {
   avatar_url: string | null;
   email: string | null;
   providers: { provider: AuthProvider; email: string | null; connected: boolean; current: boolean }[];
+  /** 요금제 (users.plan). 없으면 무료로 본다 (mock 사용자 등) */
+  plan?: 'free' | 'plus' | 'pro';
+}
+
+/** 약관 하나 (kind: age·service·invest …, version: 서버가 정한 현재 버전 — 프론트에 두지 않는다) */
+export interface TermsItem {
+  kind: string;
+  version: string;
+}
+
+/** GET · POST /me/terms 응답 (backend/app/account · 0022 user_terms_consents) */
+export interface TermsStatus {
+  /** 지금 동의해야 하는 필수 약관 (서버 값 그대로 POST 에 보낸다) */
+  required: TermsItem[];
+  /** 철회하지 않은 동의 (옛 버전 포함) */
+  agreed: (TermsItem & { agreed_at: ISODate })[];
+  /** 현재 버전 필수 약관을 모두 동의했는지 */
+  complete: boolean;
 }
 
 export interface AuthToken {
@@ -40,6 +58,10 @@ export interface MyStock extends StockMaster {
   status: StockStatus;
   tags: string[];
   unread_updates: number;
+  /** 휴지통 제외 일반 메모 수 (GET /stocks · 2026-11-22). 서버는 늘 줌 — 옛 응답 · mock 대비 선택 칸 */
+  memo_count?: number;
+  /** AI 연결 메모 수 (GET /ai/stats linked_memos 와 같은 조건을 이 종목만) */
+  ai_count?: number;
   added_at: ISODate;
 }
 

@@ -7,7 +7,7 @@ import { BackGlyph } from '@/ui/screens/auth/AuthGlyphs';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { Sheet } from '@/ui/shared/Sheet';
 import { StockLogo } from '@/ui/shared/StockLogo';
-import { appColor } from '@/ui/theme';
+import { appColor, ft } from '@/ui/theme';
 import type { OnboardingFlowProps, OnboardingStock, StockStatus } from '../Onboarding.types';
 
 /**
@@ -81,7 +81,8 @@ function Pick(p: OnboardingFlowProps & { top: number; bottom: number }) {
             <Text style={st.tr2}>보유·관심 정하기 ›</Text>
           </Pressable>
         ) : null}
-        <Pressable disabled={!n} onPress={p.onContinue} style={({ pressed }) => [st.cta, !n && st.ctaDis, pressed && !!n && { transform: [{ scale: 0.97 }] }]} accessibilityRole="button">
+        {p.error ? <View accessibilityRole="alert" style={st.errorToast}><Text style={st.errorText}>{p.error}</Text></View> : null}
+        <Pressable disabled={!n || !!p.saving} onPress={p.onContinue} style={({ pressed }) => [st.cta, (!n || p.saving) && st.ctaDis, pressed && !!n && !p.saving && { transform: [{ scale: 0.97 }] }]} accessibilityRole="button">
           <Text style={st.ctaT}>{n ? `${n}개 종목으로 계속` : '종목을 골라 주세요'}</Text>
         </Pressable>
       </View>
@@ -274,6 +275,9 @@ const st = StyleSheet.create({
   tr2: { marginLeft: 'auto', fontSize: 13, lineHeight: 19, fontWeight: '700', color: C.a2 },
   cta: { minHeight: 56, borderRadius: 16, backgroundColor: C.a, alignItems: 'center', justifyContent: 'center', paddingVertical: 14 },
   ctaDis: { backgroundColor: '#D5D8DD' },
+  /* 담기 실패 한 줄 = 약관 화면(앱 로그인 errorToast · errorText)과 같은 모양, 버튼과 8 띄움 */
+  errorToast: { alignSelf: 'center', marginBottom: 8, borderRadius: 12, backgroundColor: '#303139', paddingHorizontal: 16, paddingVertical: 10 },
+  errorText: { ...ft(13), color: '#FFFFFF', fontWeight: '600' },
   ctaT: { fontSize: 16.5, lineHeight: 24, fontWeight: '800', color: '#FFFFFF' },
   ss: { paddingHorizontal: 20, paddingBottom: 16 },
   ssH: { fontSize: 17, lineHeight: 25, fontWeight: '700', color: C.ink, marginBottom: 4 },

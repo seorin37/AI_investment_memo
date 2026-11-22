@@ -9,7 +9,7 @@ from uuid import uuid4
 from app.auth.config import AuthSettings
 from app.auth.providers import ProviderProfile
 from app.auth.security import pkce_challenge, token_hash
-from app.auth.service import AuthError, AuthService
+from app.auth.service import AuthError, AuthService, _public_user
 
 
 class FakeDb:
@@ -168,6 +168,24 @@ class AuthServiceTest(unittest.IsolatedAsyncioTestCase):
         self.repo.user["deleted_at"] = datetime.now(timezone.utc)
         with self.assertRaises(AuthError):
             self.service.issue_session(self.repo.user, user_agent=None)
+
+    def test_session_and_access_user_carry_plan(self):
+        # 로그인 응답(tokens.user)과 /auth/me(authenticate_access)가 같은 plan 을 준다
+        self.repo.user["plan"] = "plus"
+        tokens = self.service.issue_session(self.repo.user, user_agent=None)
+        self.assertEqual(tokens.user["plan"], "plus")
+        user, _sid = self.service.authenticate_access(tokens.access_token)
+        self.assertEqual(user["plan"], "plus")
+
+
+class PublicUserPlanTest(unittest.TestCase):
+    def test_plan_passes_through_and_defaults_to_free(self):
+        base = {"id": 7, "display_name": "사용자"}
+        for plan in ("free", "plus", "pro"):
+            with self.subTest(plan=plan):
+                self.assertEqual(_public_user({**base, "plan": plan})["plan"], plan)
+        self.assertEqual(_public_user(base)["plan"], "free")
+        self.assertEqual(_public_user({**base, "plan": None})["plan"], "free")
 
 
 if __name__ == "__main__":

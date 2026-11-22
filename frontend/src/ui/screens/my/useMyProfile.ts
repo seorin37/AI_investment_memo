@@ -35,5 +35,8 @@ export function useMyProfile() {
     }
   }
 
-  return { profile, save, saving };
+  /* 요금제: 로그인 사용자의 plan (mock 사용자는 없음 → 화면에서 무료로 봄, ui/screens/my/planLabel) */
+  const plan = user?.plan;
+
+  return { profile, save, saving, plan };
 }

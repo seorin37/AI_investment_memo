@@ -19,7 +19,7 @@ export default function AuthCallback() {
   const [signInError, setSignInError] = useState<string | null>(null);
   const failed = error ?? (callbackStatus !== 'success' ? '로그인 결과를 확인할 수 없어요.' : signInError);
 
-  /* 로그인 뒤 갈 곳: 신규 판별 (lib/afterLogin — 신규면 /terms, 아니면 /, 조회 실패면 /) */
+  /* 로그인 뒤 갈 곳: 약관 동의 판별 (lib/afterLogin — 필수 약관 미동의면 /terms, 동의했으면 /, 조회 실패면 /) */
   const [next, setNext] = useState<AfterLoginRoute | null>(null);
 
   useEffect(() => {
@@ -29,7 +29,7 @@ export default function AuthCallback() {
   useEffect(() => {
     if (status !== 'signedIn') return;
     let alive = true;
-    void routeAfterLogin(api.listMyStocks).then((r) => alive && setNext(r));
+    void routeAfterLogin(api.getTerms).then((r) => alive && setNext(r));
     return () => {
       alive = false;
     };

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { useCoach } from './coach';
+import { registerUserReset } from '@/lib/sessionReset';
 
 /** 스튜디오 넛지 종류 (원본 웹 store NudgeId) */
 export type NudgeId = 'memo' | 'updates' | 'info' | 'lab' | 'home';
@@ -11,12 +12,18 @@ export type NudgeId = 'memo' | 'updates' | 'info' | 'lab' | 'home';
 interface NudgeState {
   off: Partial<Record<NudgeId, boolean>>;
   hide(id: NudgeId): void;
+  /** 로그아웃 · 계정 전환: 처음 만들어졌을 때 상태로 */
+  reset(): void;
 }
 
 export const useNudgeStore = create<NudgeState>((set) => ({
+  reset: () => set(useNudgeStore.getInitialState(), true),
   off: {},
   hide: (id) => set((s) => ({ off: { ...s.off, [id]: true } })),
 }));
+
+/* 로그아웃 · 계정 전환 때 처음 상태로 (lib/sessionReset · store/auth.ts 가 실행) */
+registerUserReset('nudge', () => useNudgeStore.getState().reset());
 
 /** 이 넛지를 지금 보여도 되는지 — 닫았거나 사용법 안내 중이면 숨김 (원본: !nudgeOff[id] && !coach) */
 export function useNudge(id: NudgeId) {

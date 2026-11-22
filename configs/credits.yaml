@@ -8,6 +8,7 @@ costs:                 # 결과물 하나당 차감량. 만들어졌을 때만 �
   audio: 5             # AI 오디오
   lab: 3               # 투자 실험실
 monthly:               # 요금제별 한 달 기본량. plan_limits.monthly_credits가 0보다 크면 그 값을 쓴다 (DB 값이 우선)
-  free: 30
-  pro: 300
+  free: 30             # 가안(미정) — 요금제 확정 때 변경
+  plus: 100            # 가안(미정) — 요금제 확정 때 변경
+  pro: 300             # 가안(미정) — 요금제 확정 때 변경
 purchase_valid_days: 365   # 산 크레딧 유효기간 (일). 0이면 만료 없음

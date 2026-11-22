@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { registerUserReset } from '@/lib/sessionReset';
 
 /**
  * 사용법 안내 4단계 (원본 앱 x/app.js 85~220줄 · 웹 coach.tsx · Lucian #197)
@@ -16,10 +17,13 @@ interface CoachState {
   replay(): void;
   go(step: number): void;
   end(finished: boolean): void;
+  /** 로그아웃 · 계정 전환: 처음 만들어졌을 때 상태로 (다음 사용자는 안내를 처음부터) */
+  reset(): void;
 }
 
 let seq = 0;
 export const useCoach = create<CoachState>((set, get) => ({
+  reset: () => set(useCoach.getInitialState(), true),
   step: null,
   seen: false,
   done: null,
@@ -31,3 +35,6 @@ export const useCoach = create<CoachState>((set, get) => ({
   go: (step) => set({ step }),
   end: (finished) => set({ step: null, seen: true, done: { key: ++seq, finished } }),
 }));
+
+/* 로그아웃 · 계정 전환 때 처음 상태로 (lib/sessionReset · store/auth.ts 가 실행) */
+registerUserReset('coach', () => useCoach.getState().reset());

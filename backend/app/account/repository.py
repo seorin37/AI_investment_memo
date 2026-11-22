@@ -133,6 +133,37 @@ class AccountRepository:
             {"user_id": user_id, "layout": json.dumps(layout, ensure_ascii=False)},
         )
 
+    # ─── 약관 동의 (0022 user_terms_consents)
+    def list_terms_consents(self, user_id: int) -> list[dict[str, Any]]:
+        """철회하지 않은 동의 (옛 버전 포함)."""
+        rows = self.db.execute(
+            text(
+                """
+                SELECT kind, version, agreed_at
+                FROM user_terms_consents
+                WHERE user_id = :user_id AND withdrawn_at IS NULL
+                ORDER BY agreed_at, kind, version
+                """
+            ),
+            {"user_id": user_id},
+        ).mappings().all()
+        return [dict(row) for row in rows]
+
+    def insert_terms_consents(self, user_id: int, items: list[tuple[str, str]]) -> None:
+        """같은 사용자·종류·버전은 한 행 (UNIQUE) — 다시 보내도 그대로."""
+        if not items:
+            return
+        self.db.execute(
+            text(
+                """
+                INSERT INTO user_terms_consents (user_id, kind, version, is_required)
+                VALUES (:user_id, :kind, :version, true)
+                ON CONFLICT (user_id, kind, version) DO NOTHING
+                """
+            ),
+            [{"user_id": user_id, "kind": kind, "version": version} for kind, version in items],
+        )
+
     # ─── 프로필
     def update_profile(
         self, user_id: int, *, display_name: str | None, bio: str | None
