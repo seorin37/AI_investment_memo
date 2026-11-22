@@ -4,9 +4,10 @@ import { View, useWindowDimensions } from 'react-native';
 import { Redirect, Stack, useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
 import { useIntroSeen } from '@/lib/introSeen';
 import { useAuth } from '@/store/auth';
-import { mockPopular, mockRecentSearches, mockSideProfile, mockSideStocks, mockStudioHead } from '@/ui/layout/web/WebShell.mock';
+import { mockPopular, mockRecentSearches, mockSideProfile, mockStudioHead } from '@/ui/layout/web/WebShell.mock';
+import { useSideStocks } from '@/ui/layout/web/useSideStocks';
 import { WebShell } from '@/ui/layout/web/WebShell';
-import type { SideKey, SideSearchHit, SideStock } from '@/ui/layout/web/WebShell.types';
+import type { SideKey, SideSearchHit } from '@/ui/layout/web/WebShell.types';
 import { mockMyStocksData } from '@/ui/screens/stocks/MyStocks.mock';
 import { WebAddStockDialog } from '@/ui/screens/stocks/web/AddStockDialog';
 import { useMyMock } from '@/store/myMock';
@@ -87,8 +88,8 @@ export default function MainLayout() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coachStep]);
-  /* ⑥ 사이드바 종목: 순서 끌기 · 우클릭/⋯ 메뉴 · + 종목 추가 (mock: 이 셸 안에서만) */
-  const [sideStocks, setSideStocks] = useState<SideStock[]>(mockSideStocks);
+  /* ⑥ 사이드바 종목: 순서 끌기 · 우클릭/⋯ 메뉴 · + 종목 추가 (실제 모드면 GET /stocks 와 저장 API, mock 이면 이 셸 안에서만) */
+  const [sideStocks, setSideStocks] = useSideStocks();
   /* 투자 실험실 변수 '지금 값': 실제 모드면 GET /market/macro (2026-11-21) */
   const labVars = useLabVars();
   const [smenu, setSmenu] = useState<{ code: string; at: { x: number; y: number } } | null>(null);
@@ -152,7 +153,7 @@ export default function MainLayout() {
   };
   const openStock = (code: string) => router.navigate({ pathname: '/stocks/[code]', params: { code } });
   const search = (q: string): SideSearchHit[] =>
-    mockSideStocks.filter((s) => s.name.includes(q) || s.stock_code.includes(q)).map((s) => ({ key: `s${s.stock_code}`, title: s.name, sub: s.stock_code }));
+    sideStocks.filter((s) => s.name.includes(q) || s.stock_code.includes(q)).map((s) => ({ key: `s${s.stock_code}`, title: s.name, sub: s.stock_code }));
 
   const cur = smenu ? sideStocks.find((x) => x.stock_code === smenu.code) : undefined;
   return (
@@ -172,11 +173,11 @@ export default function MainLayout() {
         onSearch: search,
         onPickSearch: (h) => openStock(h.key.slice(1)),
         onPickRecent: (name) => {
-          const s = mockSideStocks.find((x) => x.name === name);
+          const s = sideStocks.find((x) => x.name === name);
           if (s) openStock(s.stock_code);
         },
         onPickPopular: (code) => {
-          if (mockSideStocks.some((s) => s.stock_code === code)) openStock(code);
+          if (sideStocks.some((s) => s.stock_code === code)) openStock(code);
         },
         onNavigate: (to) => router.navigate(to === 'home' ? '/' : to === 'mine' ? '/stocks' : `/${to}`),
         onOpenStock: openStock,

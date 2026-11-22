@@ -47,6 +47,7 @@ export function normalizeBoardItem(row: RawBoardItem): BoardItem {
       ai_linked_at: row.ai_linked_at == null ? null : text(row.ai_linked_at),
       price_conditions: Array.isArray(row.price_conditions) ? (row.price_conditions as Memo['price_conditions']) : [],
       unread_updates: number(row.unread_updates),
+      analysis: (row.analysis as Memo['analysis']) ?? null,
     };
   }
   if (row.kind === 'checklist') {
@@ -112,6 +113,13 @@ export function createRealBoardApi(http: BoardHttp) {
       return normalizeBoardItem(
         await http.put<RawBoardItem>(`/memos/${memoId}/ai-link`, { enabled }),
       ) as Memo;
+    },
+    async reorderBoard(code: string, ids: string[]): Promise<BoardItem[]> {
+      const rows = await http.put<RawBoardItem[]>(`/stocks/${code}/board-order`, { ids: ids.map(Number) });
+      return rows.map(normalizeBoardItem);
+    },
+    async answerConfirmation(memoId: string, optionId: string): Promise<Memo> {
+      return normalizeBoardItem(await http.post<RawBoardItem>(`/memos/${memoId}/confirmations`, { option_id: optionId })) as Memo;
     },
     async setBoardChecklistItem(checklistId: string, itemId: string, done: boolean): Promise<void> {
       await http.patch<RawBoardItem>(`/checklists/${checklistId}/items/${itemId}`, { done });

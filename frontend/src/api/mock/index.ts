@@ -214,7 +214,26 @@ export const mockApi: Api = {
   },
   getFinancials: async (code) => wait(mockFinancials(code)),
 
+  reorderStocks: async (codes) => {
+    const rank = (c: string) => (codes.includes(c) ? codes.indexOf(c) : codes.length + db.stocks.findIndex((s) => s.code === c));
+    db.stocks.sort((a, b) => rank(a.code) - rank(b.code));
+    return wait(db.stocks);
+  },
+
   // ─── 메모 보드
+  reorderBoard: async (code, ids) => {
+    db.board.filter((b) => b.stock_code === code).forEach((b) => {
+      const i = ids.indexOf(b.id);
+      if (i >= 0) b.position = i;
+    });
+    return wait(db.board.filter((b) => b.stock_code === code).sort((a, b) => a.position - b.position));
+  },
+  answerConfirmation: async (memoId) => {
+    const m = memosOf().find((x) => x.id === memoId);
+    if (!m) throw new Error('메모를 찾을 수 없어요');
+    return wait(m);
+  },
+  listMemoAnswers: async () => wait([]),
   listBoard: async (code) => {
     recountUnread();
     return wait(db.board.filter((b) => b.stock_code === code).sort((a, b) => a.position - b.position));
