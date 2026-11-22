@@ -18,6 +18,8 @@ import type {
   HomeLayout,
   JournalBlock,
   JournalEntry,
+  LabDirection,
+  LabRunResult,
   MacroOverview,
   MarketOverview,
   MarketUpdate,
@@ -149,6 +151,8 @@ export interface Api {
   getMarketOverview(): Promise<MarketOverview>;
   /** 거시 지표 (ECOS·FRED·KRX 금) */
   getMacro(): Promise<MacroOverview>;
+  /** 투자 실험실 실행 (LLM) */
+  runLab(input: { stock_code: string; dirs: LabDirection[] }): Promise<LabRunResult>;
   listCalendar(month: string): Promise<CalendarEvent[]>;
   createCalendarEvent(input: { date: string; title: string }): Promise<CalendarEvent>;
   listNews(): Promise<NewsHeadline[]>;

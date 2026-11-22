@@ -116,7 +116,7 @@ function safeJson(text: string): unknown {
 
 export const http = {
   get: <T>(path: string, query?: Query) => request<T>('GET', path, { query }),
-  post: <T>(path: string, body?: unknown) => request<T>('POST', path, { body }),
+  post: <T>(path: string, body?: unknown, opts?: { timeoutMs?: number }) => request<T>('POST', path, { body, ...opts }),
   put: <T>(path: string, body?: unknown) => request<T>('PUT', path, { body }),
   patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, { body }),
   del: <T = void>(path: string) => request<T>('DELETE', path),

@@ -21,11 +21,12 @@ import { WebSettings, type SettingsTab } from '@/ui/screens/my/web/Settings';
 import { useTrashData } from '@/ui/screens/my/useTrashData';
 import { WebTrash } from '@/ui/screens/my/web/Trash';
 import { chapterAt, fmt, useStudioPlayer } from '@/store/studioPlayer';
-import { mockAudioEpisode, mockAudioGen, mockAudioPeriods, mockAudioStocks, mockLabDisclaimer, mockLabNote, mockLabStocks, mockLabVars, mockLastClose, mockQuiz, mockReport, mockReportStocks, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
+import { mockAudioEpisode, mockAudioGen, mockAudioPeriods, mockAudioStocks, mockLabDisclaimer, mockLabNote, mockLabVars, mockLastClose, mockQuiz, mockReport, mockReportStocks, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
 import { WebFail, WebGen, WebMini, WebPlayer } from '@/ui/screens/studio/web/Audio';
 import { WebReportPopup, WebReportSum } from '@/ui/screens/studio/web/Report';
 import { WebLab, WebLabResult, WebQuiz } from '@/ui/screens/studio/web/QuizLab';
-import { labGroups, labTitle } from '@/ui/screens/studio/labParts';
+import { labResultGroups } from '@/ui/screens/studio/labParts';
+import { labStockFor, useLabStocks, useRunLab } from '@/ui/screens/studio/useLabRun';
 import { useLabVars } from '@/ui/screens/studio/useLabVars';
 import { WebAudioPopup } from '@/ui/screens/studio/web/AudioPopup';
 import type { StudioKind } from '@/ui/screens/studio/Studio.types';
@@ -94,6 +95,9 @@ export default function MainLayout() {
   const [sideStocks, setSideStocks] = useSideStocks();
   /* 투자 실험실 변수 '지금 값': 실제 모드면 GET /market/macro (2026-11-21) */
   const labVars = useLabVars();
+  const labStocks = useLabStocks();
+  const runLab = useRunLab();
+  const labStock = labStocks.find((s) => s.stock_code === sp.labCode) ?? labStocks[0];
   const [smenu, setSmenu] = useState<{ code: string; at: { x: number; y: number } } | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [ask, setAsk] = useState<string | null>(null);
@@ -222,26 +226,24 @@ export default function MainLayout() {
               : sp.webView === 'lab' ? (
                 <WebLab
                   vars={labVars}
-                  stocks={mockLabStocks}
-                  code={sp.labCode}
+                  stocks={labStocks}
+                  code={labStock.stock_code}
                   dirs={sp.labDirs}
                   note={mockLabNote}
                   onBack={() => sp.setWebView('home')}
                   onPick={(c) => sp.setLab({ code: c })}
                   onDir={(i, d) => sp.setLab({ dirs: sp.labDirs.map((x, j) => (j === i ? d : x)) })}
                   onReset={() => sp.setLab({ dirs: mockLabVars.map(() => '유지') })}
-                  onRun={() => {
-                    const t = labTitle(sp.labCode, sp.labDirs);
-                    sp.addLab({ id: `m${Date.now()}`, kind: 'lab', title: t.title, sub: t.sub, meta: t.sub, left: '30일 뒤 삭제', lab: { code: sp.labCode, dirs: sp.labDirs } });
-                    sp.setWebView('labResult');
+                  onRun={async () => {
+                    if (await runLab(labStock, sp.labDirs)) sp.setWebView('labResult');
                   }}
                 />
               )
               : sp.webView === 'labResult' && labItem?.lab ? (
                 <WebLabResult
-                  stock={mockLabStocks.find((s) => s.stock_code === labItem.lab?.code) ?? mockLabStocks[0]}
+                  stock={labStockFor(labStocks, labItem.lab)}
                   vars={labVars}
-                  groups={labGroups(labItem.lab.code, labItem.lab.dirs)}
+                  groups={labResultGroups(labItem.lab)}
                   disclaimer={mockLabDisclaimer}
                   onBack={() => sp.setWebView('home')}
                   onMemo={() => openStock(labItem.lab?.code ?? '')}

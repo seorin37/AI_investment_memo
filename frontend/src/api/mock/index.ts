@@ -4,6 +4,8 @@
  */
 import { env } from '@/config/env';
 import { uid, ymd } from '@/lib/format';
+import { mockLabStocks } from '@/ui/screens/studio/Studio.mock';
+import { labGroups } from '@/ui/screens/studio/labParts';
 import type {
   AiUpdate,
   BoardItem,
@@ -380,6 +382,14 @@ export const mockApi: Api = {
   },
   getMarketOverview: async () => wait(seed.marketOverview),
   getMacro: async () => wait(seed.macroOverview),
+  runLab: async ({ stock_code, dirs }) =>
+    wait({
+      stock_code,
+      name: mockLabStocks.find((s) => s.stock_code === stock_code)?.name ?? stock_code,
+      groups: labGroups(stock_code, dirs),
+      source: 'rules' as const,
+      credits_used: 0,
+    }, 1400),
   listCalendar: async (month) => wait(db.calendar.filter((e) => e.date.startsWith(month))),
   createCalendarEvent: async (input) => {
     const e = { id: uid('e'), date: input.date, title: input.title, category: 'mine' as const, stock_code: null };
