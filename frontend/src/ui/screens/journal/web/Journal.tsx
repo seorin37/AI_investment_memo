@@ -281,7 +281,7 @@ export function WebJournal(p: WebJournalProps) {
 }
 
 /**
- * 오른쪽 기록 편집기 (원본 journal.tsx 오른쪽 칸: 날짜 14/21 · 제목 칸 30/40 · 본문 contentEditable 17/26 · '다음 액션' 할 일
+ * 오른쪽 기록 편집기 (원본 journal.tsx 오른쪽 칸: 날짜 14/21 · 제목 칸 30/40 · 본문 contentEditable 17/26 · 할 일(체크리스트, 위 고정 제목 없음)
  * · 떠 있는 도구 막대 [체크리스트] [사진] [Aa] (아래 20 가운데) · 서식 창 (아래 76) · ⋯ 메뉴 · 기록 안에서 찾기)
  * 쓰는 대로 바로 저장 (원본 updateJournal). 사진은 연결 전이라 안내만.
  */
@@ -296,7 +296,6 @@ function WebNote({ j, fresh, say, onUpdate, onMenu }: { j: JournalEntry; fresh: 
   const hits = useFindHits(ed, find, j.html ?? j.blocks);
   const put = (b: JBlock[], t: JBlock[], ti = title, html?: string) => onUpdate(j.id, { blocks: [{ ...(j.blocks[0] ?? { s: 'title' }), text: ti }, ...b, ...t], ...(html !== undefined ? { html } : null) });
   const setTodo = (t: JBlock[]) => put(body, t);
-  const headBefore = body[body.length - 1]?.s === 'head';
   return (
     <View style={st.ed}>
       <Pressable accessibilityRole="button" accessibilityLabel="이 기록 메뉴" onPress={(e) => onMenu(e, () => setFind(''))} style={({ hovered }: Hover) => [st.curMenu, hovered && { backgroundColor: '#F3F4F6' }]}>
@@ -324,13 +323,8 @@ function WebNote({ j, fresh, say, onUpdate, onMenu }: { j: JournalEntry; fresh: 
           <BodyEditor edRef={ed} docKey={j.id} html={j.html ?? (body.length ? blocksToHtml(body) : '')} onInput={(html, b) => put(b, todo, title, html)} onFocusEnd={focusEnd} />
           {todo.length ? (
             <>
-              {!headBefore ? (
-                <>
-                  <View style={{ height: 18 }} />
-                  <Text style={st.edHead}>다음 액션</Text>
-                  <View style={{ height: 6 }} />
-                </>
-              ) : null}
+              {/* 할 일 위 고정 제목('다음 액션')은 뺌 (2026-11-22) — 지울 수 없는 글처럼 보여서. 필요하면 사용자가 본문에 제목을 씀 */}
+              <View style={{ height: 12 }} />
               {todo.map((td, i) => (
                 <View key={i} style={st.todo}>
                   <Pressable onPress={() => setTodo(todo.map((x, n) => (n === i ? { ...x, check: !x.check } : x)))} accessibilityRole="checkbox" accessibilityState={{ checked: !!td.check }} accessibilityLabel={td.text || '할 일'} style={({ hovered }: Hover) => [st.tdBox, td.check ? st.tdOn : hovered && { borderColor: '#9A9EA7' }]}>
@@ -498,7 +492,6 @@ const st = StyleSheet.create({
   edTitle: { ...fpx(30, 40), fontWeight: '700', color: '#16171A' },
   body: { ...fpx(17, 26), color: '#16171A' },
   para: { marginBottom: 10 },
-  edHead: { ...fpx(20, 29), fontWeight: '700', color: '#16171A', marginTop: 8 },
   edSub: { ...fpx(17.5, 26), fontWeight: '700', color: '#16171A' },
   todo: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 3 },
   tdIn: { flex: 1, minWidth: 0, padding: 0 },
