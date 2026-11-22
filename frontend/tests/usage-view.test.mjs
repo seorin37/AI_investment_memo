@@ -1,28 +1,34 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { toUsageView, USAGE_UNKNOWN } from '../src/ui/screens/my/usageView.ts';
+import { kstMonthDay, toUsageView, USAGE_UNKNOWN } from '../src/ui/screens/my/usageView.ts';
 
-/* GET /me/usage → 화면 사용량 (renews_at = 다음 주기 시작, 한국 시간 0시) */
+/* GET /me/usage → 화면 사용량 (renews_at = 다음 주기 시작, 한국 시간 0시). 화면 문구는 모두 '갱신되는 날' */
 
-test('갱신일 = 다음 주기 시작 하루 전 (MM.DD), 채워지는 날 = 다음 주기 시작 (M월 D일)', () => {
+test("갱신일 'MM.DD' 와 채워지는 날 'M월 D일' 이 같은 날 (renews_at 의 한국 날짜)", () => {
   const v = toUsageView({ usage_percent: 62, renews_at: '2026-12-20T00:00:00+09:00', paused: false });
-  assert.deepEqual(v, { usage_pct: 62, usage_renew: '12.19', usage_refill: '12월 20일', paused: false });
+  assert.deepEqual(v, { usage_pct: 62, usage_renew: '12.20', usage_refill: '12월 20일', paused: false });
 });
 
-test('달 · 해 넘김: 1/1 시작이면 12.31, 3/1 시작이면 2월 말일', () => {
-  assert.equal(toUsageView({ usage_percent: 0, renews_at: '2027-01-01T00:00:00+09:00', paused: false }).usage_renew, '12.31');
-  assert.equal(toUsageView({ usage_percent: 0, renews_at: '2026-03-01T00:00:00+09:00', paused: false }).usage_renew, '02.28');
-  assert.equal(toUsageView({ usage_percent: 0, renews_at: '2028-03-01T00:00:00+09:00', paused: false }).usage_renew, '02.29');
+test('Z(UTC)로 와도 한국 날짜로: 12/19 15:00Z = 12/20 0시 KST', () => {
+  assert.deepEqual(kstMonthDay('2026-12-19T15:00:00Z'), [12, 20]);
+  const v = toUsageView({ usage_percent: 0, renews_at: '2026-12-19T15:00:00Z', paused: false });
+  assert.equal(v.usage_renew, '12.20');
+  assert.equal(v.usage_refill, '12월 20일');
 });
 
-test('기기 시간대와 무관 (서버 날짜 부분 그대로)', () => {
-  // UTC 로 바꾸면 전날 15시지만 화면은 한국 날짜
-  assert.equal(toUsageView({ usage_percent: 10, renews_at: '2026-12-01T00:00:00+09:00', paused: false }).usage_refill, '12월 1일');
+test('Z 경계: 14:59Z 는 아직 한국 전날 23:59', () => {
+  assert.deepEqual(kstMonthDay('2026-12-19T14:59:00Z'), [12, 19]);
+});
+
+test('해 넘김 · 1월 1일 · 날짜만 있는 값', () => {
+  assert.equal(toUsageView({ usage_percent: 0, renews_at: '2027-01-01T00:00:00+09:00', paused: false }).usage_renew, '01.01');
+  assert.equal(toUsageView({ usage_percent: 0, renews_at: '2026-12-31T15:00:00Z', paused: false }).usage_refill, '1월 1일');
+  assert.deepEqual(kstMonthDay('2026-03-01'), [3, 1]);
 });
 
 test('다 쓴 상태 · 범위 밖 값', () => {
-  assert.deepEqual(toUsageView({ usage_percent: 100, renews_at: '2026-12-20T00:00:00+09:00', paused: true }).paused, true);
+  assert.equal(toUsageView({ usage_percent: 100, renews_at: '2026-12-20T00:00:00+09:00', paused: true }).paused, true);
   assert.equal(toUsageView({ usage_percent: 140, renews_at: '2026-12-20T00:00:00+09:00', paused: true }).usage_pct, 100);
   assert.equal(toUsageView({ usage_percent: Number.NaN, renews_at: '2026-12-20', paused: false }).usage_pct, 0);
 });
