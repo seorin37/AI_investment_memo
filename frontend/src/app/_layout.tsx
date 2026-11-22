@@ -9,6 +9,7 @@ import { queryClient } from '@/lib/queryClient';
 import { useAuth } from '@/store/auth';
 import { colors } from '@/theme/tokens';
 import { CoachOverlay } from '@/ui/shared/Coach';
+import { CoachExample } from '@/ui/shared/CoachExample';
 import { DarkLayer, useDark } from '@/ui/shared/Dark';
 import { useDarkDom } from '@/ui/shared/darkMode';
 
@@ -48,6 +49,8 @@ export default function RootLayout() {
       <StatusBar style={dark ? 'light' : 'dark'} />
       <DarkLayer>
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.page }, animation: Platform.OS === 'web' ? 'none' : 'default' }} />
+        {/* 사용법 안내 메모 단계 예시 화면 (실제 모드에서 열 실제 AI 메모가 없을 때) — 안내보다 먼저 그려 안내가 위에 옴 */}
+        <CoachExample />
         {/* 사용법 안내 (화면 위 모든 곳을 덮음) */}
         <CoachOverlay />
       </DarkLayer>

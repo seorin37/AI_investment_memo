@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Text } from '@/components/ui/AppText';
+import { Badge } from '@/components/ui/primitives';
 import { joinMemo, splitMemo } from '@/lib/memoText';
 import type { MemoColor } from '@/types/models';
 import { Dots } from '@/ui/icons/BoardGlyphs';
@@ -76,7 +77,14 @@ export function WebMemoDialog(p: MemoDetailProps & { open: boolean }) {
             <Text style={st.sub}>
               {p.stockName} · {dotDate(m.created_at)} 작성
             </Text>
-            <Text style={st.title}>내 메모</Text>
+            {p.badge ? (
+              <View style={st.titleRow}>
+                <Text style={st.title}>내 메모</Text>
+                <Badge label={p.badge} />
+              </View>
+            ) : (
+              <Text style={st.title}>내 메모</Text>
+            )}
           </View>
           <Pressable
             /* 창이 transform 을 가진 상자 안이라 메뉴 좌표도 창 기준: ⋯ 오른쪽 끝(680-24-32-12+4=616) - 220 · 아래 52 + 6 (원본 r.right - 220 · r.bottom + 6) */
@@ -170,6 +178,7 @@ const st = StyleSheet.create({
   headL: { flex: 1, minWidth: 0, gap: 13 },
   sub: { ...fpx(13, 20), fontWeight: '500', color: '#747D8D' },
   title: { ...fpx(26, 35), fontWeight: '700', color: INK },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   dots: { width: 32, height: 32, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: -4 },
   memoArea: { height: 348, paddingTop: 8, paddingHorizontal: 24, paddingBottom: 16, gap: 13 },
   paper: { height: 277, borderRadius: 16, padding: 20 },
