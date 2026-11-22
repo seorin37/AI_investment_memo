@@ -73,6 +73,8 @@ export interface PlansProps {
   compare: [string, (string | true)[]][];
   notes: string[];
   default_key: string;
+  /** 지금 쓰는 플랜 카드 key (planKey(user.plan)) — 이 카드를 고르면 [시작하기] 대신 '지금 쓰는 플랜이에요' */
+  current_key: string;
   onBack: () => void;
   /** 결제·업그레이드 (연결 안 됨 → 안내만) */
   onStart: (plan_key: string) => void;

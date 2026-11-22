@@ -12,6 +12,7 @@ import { mockMyStocksData } from '@/ui/screens/stocks/MyStocks.mock';
 import { WebAddStockDialog } from '@/ui/screens/stocks/web/AddStockDialog';
 import { useMyMock } from '@/store/myMock';
 import { useMyProfile } from '@/ui/screens/my/useMyProfile';
+import { planKey, planName, withCurrentPlan } from '@/ui/screens/my/planLabel';
 import Constants from 'expo-constants';
 import { legalDocument } from '@/ui/screens/auth/Auth.mock';
 import { mockCreditDefault, mockCreditPacks, mockPayMethods, mockDataSources, mockInbox, mockMyUsage, mockOss, mockPlanCompare, mockPlanDefault, mockPlanNotes, mockPlans, mockReportKinds, mockTracked, mockWithdrawCounts } from '@/ui/screens/my/My.mock';
@@ -103,7 +104,7 @@ export default function MainLayout() {
   const [logoutAsk, setLogoutAsk] = useState(false);
   const signOut = useAuth((s) => s.signOut);
   /* 내 프로필: 로그인한 사용자 (저장은 PATCH /me). mock 모드만 예시 프로필 */
-  const { profile: myProfile, save: saveMyProfile } = useMyProfile();
+  const { profile: myProfile, save: saveMyProfile, plan: myPlan } = useMyProfile();
   const myNoti = useMyMock((s) => s.noti);
   const setMyNoti = useMyMock((s) => s.setNoti);
   /* ⑨-3c 휴지통 · 피드백 · 알림함 (mock: 복원·읽음은 화면 상태만, 영구 삭제·보내기는 연결 안 됨) */
@@ -383,13 +384,15 @@ export default function MainLayout() {
         setMyNoti(n);
         say({ msg: on ? '알림을 켰어요 · 알림함에 다시 보여요' : '알림을 껐어요 · 알림함에서도 안 보여요', check: true });
       }}
-      usage={mockMyUsage}
+      /* 플랜 이름 · 현재 플랜: 로그인 사용자 plan (사용량 % · 갱신일은 아직 mock) */
+      usage={{ ...mockMyUsage, plan_name: planName(myPlan) }}
       tracked={mockTracked}
       onOpenMemo={(code) => { setSettings(null); openStock(code); }}
-      plans={mockPlans}
+      plans={withCurrentPlan(mockPlans, planKey(myPlan))}
       compare={mockPlanCompare}
       notes={mockPlanNotes}
       plan_default={mockPlanDefault}
+      current_plan_key={planKey(myPlan)}
       onStartPlan={() => say({ msg: '결제는 아직 연결되지 않았어요' })}
       onExport={() => say({ msg: '내보내기는 아직 연결되지 않았어요' })}
       onWipe={() => say({ msg: '아직 연결되지 않았어요 · 데이터는 그대로예요' })}

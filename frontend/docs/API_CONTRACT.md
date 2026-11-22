@@ -73,8 +73,11 @@ app.add_middleware(
 // AuthToken
 { "access_token": "eyJ...", "refresh_token": "Android 응답에만 포함", "expires_in": 900, "token_type": "bearer",
   "user": { "id": "u_1", "name": "김나라", "bio": "대학생", "avatar_url": null, "email": "nara@kakao.example",
-            "providers": [{ "provider": "kakao", "email": "nara@kakao.example", "connected": true, "current": true }] } }
+            "providers": [{ "provider": "kakao", "email": "nara@kakao.example", "connected": true, "current": true }],
+            "plan": "free" } }
 ```
+
+`User.plan`: `free` · `plus` · `pro` (users.plan 그대로, 없으면 `free`). `GET /auth/me` · `GET/PATCH /me` · 로그인 응답의 `user` 모두 같은 모양.
 
 ## 2. 종목 (사이드바 · 종목 추가 · 헤더 · 기업정보)
 

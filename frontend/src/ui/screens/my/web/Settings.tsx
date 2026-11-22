@@ -104,7 +104,7 @@ export function WebSettings(p: WebSettingsProps) {
             {p.tab === '데이터' ? <DataTab counts={p.counts} onExport={p.onExport} onAskWipe={() => setDanger('wipe')} /> : null}
             {p.tab === '정보' ? <InfoTab version={p.version} sources={p.sources} onDoc={setDoc} onFeedback={p.onFeedback} onReplayGuide={p.onReplayGuide} /> : null}
           </ScrollView>
-          {plan ? <PlanBar pick={pick} free={pick === p.plans[0]?.key} onStart={() => p.onStartPlan(pick)} /> : null}
+          {plan ? <PlanBar pick={pick} free={pick === p.current_plan_key} onStart={() => p.onStartPlan(pick)} /> : null}
         </View>
       </View>
       <Withdraw open={wd} counts={p.counts} why={why} setWhy={setWhy} onClose={() => setWd(false)} onGo={() => { setWd(false); setDanger('withdraw'); }} />

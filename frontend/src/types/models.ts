@@ -16,6 +16,8 @@ export interface User {
   avatar_url: string | null;
   email: string | null;
   providers: { provider: AuthProvider; email: string | null; connected: boolean; current: boolean }[];
+  /** 요금제 (users.plan). 없으면 무료로 본다 (mock 사용자 등) */
+  plan?: 'free' | 'plus' | 'pro';
 }
 
 export interface AuthToken {
