@@ -61,6 +61,11 @@ class PopularServiceTest(unittest.TestCase):
         self.assertEqual(self.repo.calls[0], ("users", 3, 5))
         self.assertEqual(self.repo.calls[1], ("cap", 3, ("000660", "035420")))
 
+    def test_ties_keep_code_order(self):
+        # 같은 인원이면 종목코드 순 (SQL ORDER BY … , s.symbol 과 같은 규칙)
+        got = self.service({"035420": 4, "000660": 4, "005930": 4}).popular(3)
+        self.assertEqual([r["code"] for r in got], ["000660", "005930", "035420"])
+
     def test_no_duplicates_between_users_and_market_cap(self):
         got = self.service({"005930": 9, "000660": 4}).popular(4)
         codes = [r["code"] for r in got]
@@ -143,7 +148,7 @@ class PopularSqlTest(unittest.TestCase):
         self.assertIn("u.deleted_at IS NULL", sql)
         self.assertIn("s.market = 'KOSPI'", sql)
         self.assertIn("HAVING count(DISTINCT us.user_id) >= :min_users", sql)
-        self.assertIn("ORDER BY count(DISTINCT us.user_id) DESC", sql)
+        self.assertIn("ORDER BY count(DISTINCT us.user_id) DESC, s.symbol", sql)   # 동점이면 종목코드 순
         self.assertNotIn("count(DISTINCT us.user_id) AS", sql)                    # 인원 수를 돌려주지 않음
         self.assertEqual(params, {"min_users": 3, "limit": 12})
 
@@ -154,7 +159,7 @@ class PopularSqlTest(unittest.TestCase):
         self.assertIn("SELECT max(p.trade_date) AS d FROM prices_daily p", sql)
         self.assertIn("WHERE s.market = 'KOSPI' AND p.market_cap IS NOT NULL )", sql)
         self.assertIn("NOT (btrim(s.symbol) = ANY(:exclude))", sql)
-        self.assertIn("ORDER BY p.market_cap DESC", sql)
+        self.assertIn("ORDER BY p.market_cap DESC, s.symbol", sql)                # 동점이면 종목코드 순
         self.assertNotIn("p.market_cap AS", sql)                                  # 시총 숫자를 돌려주지 않음
         self.assertEqual(params, {"limit": 5, "exclude": ["000660"]})
 
