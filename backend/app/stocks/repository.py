@@ -8,6 +8,24 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 
+# 종목별 메모 수 · AI 연결 수 (2026-11-22). 사용자 메모를 종목별로 한 번에 묶어 붙인다 (종목마다 따로 조회하지 않음)
+# - memo_count: 휴지통 제외(deleted_at IS NULL) + 일반 메모(kind = 'note'). 체크리스트 · 참고자료는 세지 않음
+# - ai_count: GET /ai/stats 의 linked_memos 와 같은 조건(deleted_at IS NULL AND ai_linked)을 종목별로.
+#   ck_memos_ai_only_note 로 ai_linked 는 note 에만 있어 memo_count 범위 안에 든다
+MEMO_COUNTS_COLUMNS = """,
+                       COALESCE(mc.memo_count, 0)::integer AS memo_count,
+                       COALESCE(mc.ai_count, 0)::integer AS ai_count"""
+MEMO_COUNTS_JOIN = """
+                LEFT JOIN (
+                  SELECT symbol,
+                         count(*) FILTER (WHERE kind = 'note') AS memo_count,
+                         count(*) FILTER (WHERE ai_linked) AS ai_count
+                  FROM memos
+                  WHERE user_id = :user_id AND deleted_at IS NULL
+                  GROUP BY symbol
+                ) mc ON mc.symbol = us.symbol"""
+
+
 class StockRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -105,7 +123,7 @@ class StockRepository:
     def list_user_stocks(self, user_id: int) -> list[dict[str, Any]]:
         rows = self.db.execute(
             text(
-                """
+                f"""
                 SELECT btrim(s.symbol) AS code,
                        s.name,
                        s.market::text AS market,
@@ -123,9 +141,9 @@ class StockRepository:
                              us.last_checked_at,
                              CAST('-infinity' AS timestamptz)
                            )
-                       ), 0)::integer AS unread_updates
+                       ), 0)::integer AS unread_updates{MEMO_COUNTS_COLUMNS}
                 FROM user_stocks us
-                JOIN stocks s ON s.symbol = us.symbol
+                JOIN stocks s ON s.symbol = us.symbol{MEMO_COUNTS_JOIN}
                 WHERE us.user_id = :user_id
                   AND us.deleted_at IS NULL
                 ORDER BY us.position NULLS LAST, us.created_at, s.symbol
@@ -169,7 +187,7 @@ class StockRepository:
     def get_user_stock(self, user_id: int, code: str) -> dict[str, Any] | None:
         row = self.db.execute(
             text(
-                """
+                f"""
                 SELECT btrim(s.symbol) AS code,
                        s.name,
                        s.market::text AS market,
@@ -187,9 +205,9 @@ class StockRepository:
                              us.last_checked_at,
                              CAST('-infinity' AS timestamptz)
                            )
-                       ), 0)::integer AS unread_updates
+                       ), 0)::integer AS unread_updates{MEMO_COUNTS_COLUMNS}
                 FROM user_stocks us
-                JOIN stocks s ON s.symbol = us.symbol
+                JOIN stocks s ON s.symbol = us.symbol{MEMO_COUNTS_JOIN}
                 WHERE us.user_id = :user_id
                   AND us.symbol = :code
                   AND us.deleted_at IS NULL
