@@ -3,6 +3,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useMockNotice } from '@/components/layout/MobileScreen';
 import { useUI } from '@/store/ui';
 import { TopBar } from '@/ui/layout/app/TopBar';
+import { useMyProfile } from '@/ui/screens/my/useMyProfile';
 import { AppMyStocks } from '@/ui/screens/stocks/app/MyStocks';
 import { mockMyStocksData } from '@/ui/screens/stocks/MyStocks.mock';
 import type { MyStock } from '@/ui/screens/stocks/MyStocks.types';
@@ -14,6 +15,7 @@ import { useStockPrices } from '@/ui/screens/stocks/useStockPrices';
  */
 export default function MyStocksTab() {
   const router = useRouter();
+  const { profile: { name: myName } } = useMyProfile();
   const notice = useMockNotice();
   const setTabBarHidden = useUI((s) => s.setTabBarHidden);
   const [stocks, setStocks] = useState<MyStock[]>(mockMyStocksData.stocks);
@@ -33,7 +35,7 @@ export default function MyStocksTab() {
             { icon: 'search', label: '종목 찾기', onPress: onSearch },
             { icon: 'bell', label: '알림', onPress: () => notice('알림') },
           ]}
-          avatar={{ name: '김나라', onPress: () => router.push('/my') }}
+          avatar={{ name: myName, onPress: () => router.push('/my') }}
         />
       )}
       onSelectionChange={onSelectionChange}

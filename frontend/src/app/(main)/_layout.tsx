@@ -10,6 +10,7 @@ import type { SideKey, SideSearchHit, SideStock } from '@/ui/layout/web/WebShell
 import { mockMyStocksData } from '@/ui/screens/stocks/MyStocks.mock';
 import { WebAddStockDialog } from '@/ui/screens/stocks/web/AddStockDialog';
 import { useMyMock } from '@/store/myMock';
+import { useMyProfile } from '@/ui/screens/my/useMyProfile';
 import Constants from 'expo-constants';
 import { legalDocument } from '@/ui/screens/auth/Auth.mock';
 import { mockCreditDefault, mockCreditPacks, mockPayMethods, mockDataSources, mockInbox, mockMyUsage, mockOss, mockPlanCompare, mockPlanDefault, mockPlanNotes, mockPlans, mockReportKinds, mockTracked, mockWithdrawCounts } from '@/ui/screens/my/My.mock';
@@ -99,8 +100,8 @@ export default function MainLayout() {
   const [settings, setSettings] = useState<SettingsTab | null>(null);
   const [logoutAsk, setLogoutAsk] = useState(false);
   const signOut = useAuth((s) => s.signOut);
-  const myProfile = useMyMock((s) => s.profile);
-  const setMyProfile = useMyMock((s) => s.setProfile);
+  /* 내 프로필: 로그인한 사용자 (저장은 PATCH /me). mock 모드만 예시 프로필 */
+  const { profile: myProfile, save: saveMyProfile } = useMyProfile();
   const myNoti = useMyMock((s) => s.noti);
   const setMyNoti = useMyMock((s) => s.setNoti);
   /* ⑨-3c 휴지통 · 피드백 · 알림함 (mock: 복원·읽음은 화면 상태만, 영구 삭제·보내기는 연결 안 됨) */
@@ -365,8 +366,10 @@ export default function MainLayout() {
       onChangeProfile={({ name, intro }) => {
         if (!name) return say({ msg: '이름은 비워 둘 수 없어요' });
         if (name !== myProfile.name || intro !== myProfile.intro) {
-          setMyProfile({ name, intro });
-          say({ msg: '프로필을 저장했어요', check: true });
+          saveMyProfile({ name, intro }).then(
+            () => say({ msg: '프로필을 저장했어요', check: true }),
+            (e: unknown) => say({ msg: e instanceof Error && e.message ? e.message : '프로필을 저장하지 못했어요' }),
+          );
         }
       }}
       onPhoto={() => say({ msg: '아직 연결되지 않았어요 · 데이터는 그대로예요' })}

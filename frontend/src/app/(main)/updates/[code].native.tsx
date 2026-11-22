@@ -3,6 +3,7 @@ import { Linking } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMockNotice } from '@/components/layout/MobileScreen';
 import { TopBar } from '@/ui/layout/app/TopBar';
+import { useMyProfile } from '@/ui/screens/my/useMyProfile';
 import { AppUpdates } from '@/ui/screens/updates/app/Updates';
 import { mockUpdateItems, mockUpdatesNow, mockUpdateStocks } from '@/ui/screens/updates/Updates.mock';
 
@@ -10,6 +11,7 @@ import { mockUpdateItems, mockUpdatesNow, mockUpdateStocks } from '@/ui/screens/
 export default function StockUpdatesScreen() {
   const { code } = useLocalSearchParams<{ code: string }>();
   const router = useRouter();
+  const { profile: { name: myName } } = useMyProfile();
   const notice = useMockNotice();
   const [items, setItems] = useState(mockUpdateItems);
   return (
@@ -28,7 +30,7 @@ export default function StockUpdatesScreen() {
             { icon: 'search', label: '검색', onPress: onSearch },
             { icon: 'bell', label: '알림', onPress: () => notice('알림') },
           ]}
-          avatar={{ name: '김나라', onPress: () => router.push('/my') }}
+          avatar={{ name: myName, onPress: () => router.push('/my') }}
         />
       )}
       onOpenEvidence={(u) => router.push({ pathname: '/memo/evidence', params: { id: u.memo_id, fid: u.id } })}

@@ -2,7 +2,7 @@ import React from 'react';
 import { Platform } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
 import { useAuth } from '@/store/auth';
-import { useMyMock } from '@/store/myMock';
+import { useMyProfile } from '@/ui/screens/my/useMyProfile';
 import { useUI } from '@/store/ui';
 import { AppProfile } from '@/ui/screens/my/app/Profile';
 
@@ -14,8 +14,8 @@ import { AppProfile } from '@/ui/screens/my/app/Profile';
 export default function MyProfileScreen() {
   const router = useRouter();
   const toast = useUI((s) => s.showToast);
-  const profile = useMyMock((s) => s.profile);
-  const setProfile = useMyMock((s) => s.setProfile);
+  /* 로그인한 사용자 프로필 (저장은 PATCH /me). mock 모드만 예시 프로필 */
+  const { profile, save } = useMyProfile();
   const signOut = useAuth((s) => s.signOut);
   if (Platform.OS === 'web') return <Redirect href="/" />;
   return (
@@ -28,8 +28,10 @@ export default function MyProfileScreen() {
           return;
         }
         if (name !== profile.name || intro !== profile.intro) {
-          setProfile({ name, intro });
-          toast('프로필을 저장했어요');
+          save({ name, intro }).then(
+            () => toast('프로필을 저장했어요'),
+            (e: unknown) => toast(e instanceof Error && e.message ? e.message : '프로필을 저장하지 못했어요'),
+          );
         }
       }}
       onPhoto={() => toast('아직 연결되지 않았어요 · 데이터는 그대로예요')}
