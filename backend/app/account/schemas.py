@@ -112,6 +112,19 @@ class SettingsPatch(_Patch):
     mcp: McpPatch | None = None
 
 
+class TermsItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: str = Field(min_length=1, max_length=32)
+    version: str = Field(min_length=1, max_length=32)
+
+
+class TermsAgree(BaseModel):
+    """POST /me/terms — 동의할 약관 (GET /me/terms 의 required 를 그대로 보낸다)."""
+
+    model_config = ConfigDict(extra="forbid")
+    items: list[TermsItem] = Field(min_length=1, max_length=20)
+
+
 class ProfilePatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str | None = Field(default=None, max_length=40)
