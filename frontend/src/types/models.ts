@@ -20,6 +20,22 @@ export interface User {
   plan?: 'free' | 'plus' | 'pro';
 }
 
+/** 약관 하나 (kind: age·service·invest …, version: 서버가 정한 현재 버전 — 프론트에 두지 않는다) */
+export interface TermsItem {
+  kind: string;
+  version: string;
+}
+
+/** GET · POST /me/terms 응답 (backend/app/account · 0022 user_terms_consents) */
+export interface TermsStatus {
+  /** 지금 동의해야 하는 필수 약관 (서버 값 그대로 POST 에 보낸다) */
+  required: TermsItem[];
+  /** 철회하지 않은 동의 (옛 버전 포함) */
+  agreed: (TermsItem & { agreed_at: ISODate })[];
+  /** 현재 버전 필수 약관을 모두 동의했는지 */
+  complete: boolean;
+}
+
 export interface AuthToken {
   access_token: string | null;
   refresh_token?: string | null;

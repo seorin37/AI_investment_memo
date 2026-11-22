@@ -68,6 +68,8 @@ app.add_middleware(
 | POST | `/auth/logout` | 웹: 쿠키 / Android: `{refresh_token}` | 204 |
 | GET | `/auth/me` | – | `User` |
 | PATCH | `/me` | `{name?, bio?}` | `User` |
+| GET | `/me/terms` | – | `TermsStatus` |
+| POST | `/me/terms` | `{items: [{kind, version}]}` | `TermsStatus` (422: 모르는 종류 · 현재 버전 아님 · 필수 빠짐) |
 
 ```json
 // AuthToken
@@ -78,6 +80,18 @@ app.add_middleware(
 ```
 
 `User.plan`: `free` · `plus` · `pro` (users.plan 그대로, 없으면 `free`). `GET /auth/me` · `GET/PATCH /me` · 로그인 응답의 `user` 모두 같은 모양.
+
+```json
+// TermsStatus (GET /me/terms · POST /me/terms 응답) — 0022 user_terms_consents
+{ "required": [{ "kind": "age", "version": "2026-11-22" }, { "kind": "service", "version": "2026-11-22" }, { "kind": "invest", "version": "2026-11-22" }],
+  "agreed":   [{ "kind": "age", "version": "2026-11-22", "agreed_at": "2026-11-22T05:10:00+00:00" }, …],
+  "complete": true }
+```
+
+- 현재 버전 · 필수 종류는 서버 한 곳(`backend/app/account/defaults.py` `TERMS_VERSION` · `REQUIRED_TERMS`). 프론트는 `required` 를 그대로 POST 한다 (버전을 들고 있지 않음).
+- `agreed` 는 철회하지 않은 동의 (옛 버전 포함). `complete` 는 현재 버전 필수 약관을 모두 동의했을 때만 true.
+- POST 는 같은 사용자·종류·버전이 이미 있으면 그대로 (두 번 보내도 한 행). 철회 API 는 아직 없다.
+- 로그인 뒤 갈 곳: `complete` 가 false 면 `/terms`, true 면 `/` (frontend `lib/afterLogin.ts`).
 
 ## 2. 종목 (사이드바 · 종목 추가 · 헤더 · 기업정보)
 

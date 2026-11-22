@@ -4,6 +4,7 @@
  */
 import { env } from '@/config/env';
 import { uid, ymd } from '@/lib/format';
+import { ApiError } from '../http';
 import type {
   AiUpdate,
   BoardItem,
@@ -17,6 +18,8 @@ import type {
   ReferenceBoard,
   Settings,
   StockProfile,
+  TermsItem,
+  TermsStatus,
   TimelineEntry,
   TrashItem,
 } from '@/types/models';
@@ -27,6 +30,9 @@ import { HOME_NEWS, HOME_NEWS_DAY_TOTAL } from '@/ui/screens/home/homeData.mock'
 
 const clone = <T>(v: T): T => (v === undefined ? v : JSON.parse(JSON.stringify(v)));
 const wait = <T>(v: T, ms = env.mockLatency): Promise<T> => new Promise((r) => setTimeout(() => r(clone(v)), ms));
+
+const MOCK_TERMS_VERSION = 'mock-v1';
+const MOCK_TERMS_REQUIRED = ['age', 'service', 'invest'];
 
 // 가변 DB
 const db = {
@@ -44,7 +50,22 @@ const db = {
   layout: { mode: 'unset', widgets: [] } as HomeLayout,
   trashPayload: new Map<string, { kind: TrashItem['kind']; data: unknown }>(),
   candles: new Map<string, Candle[]>(),
+  /* 약관 동의: mock 사용자는 이미 동의한 상태로 시작 (지금 mock 흐름 = 홈 바로 감 그대로) */
+  terms: MOCK_TERMS_SEED(),
 };
+
+/* mock 약관 — 서버 흉내만. 버전 값은 mock 전용 (실제 버전은 backend/app/account/defaults.py 한 곳) */
+function MOCK_TERMS_SEED(): (TermsItem & { agreed_at: string })[] {
+  return MOCK_TERMS_REQUIRED.map((kind) => ({ kind, version: MOCK_TERMS_VERSION, agreed_at: '2026-11-01T09:00:00+09:00' }));
+}
+
+function termsStatus(): TermsStatus {
+  return {
+    required: MOCK_TERMS_REQUIRED.map((kind) => ({ kind, version: MOCK_TERMS_VERSION })),
+    agreed: db.terms,
+    complete: MOCK_TERMS_REQUIRED.every((k) => db.terms.some((t) => t.kind === k && t.version === MOCK_TERMS_VERSION)),
+  };
+}
 
 function candlesOf(code: string) {
   if (!db.candles.has(code)) db.candles.set(code, seed.genCandles(code));
@@ -141,6 +162,19 @@ export const mockApi: Api = {
     return wait(db.user);
   },
   logout: async () => wait(undefined),
+  getTerms: async () => wait(termsStatus()),
+  agreeTerms: async (items) => {
+    /* 서버(backend/app/account agree_terms)와 같은 검사: 모르는 종류 · 다른 버전 · 필수 빠짐 → 422 */
+    const required = new Set(MOCK_TERMS_REQUIRED);
+    const bad = items.find((i) => !required.has(i.kind) || i.version !== MOCK_TERMS_VERSION);
+    const missing = MOCK_TERMS_REQUIRED.filter((k) => !items.some((i) => i.kind === k));
+    if (bad || missing.length) throw new ApiError(422, bad ? `현재 약관이 아닙니다: ${bad.kind}` : `필수 약관 동의가 빠졌습니다: ${missing.join(', ')}`);
+    const now = new Date().toISOString();
+    for (const k of MOCK_TERMS_REQUIRED) {
+      if (!db.terms.some((t) => t.kind === k && t.version === MOCK_TERMS_VERSION)) db.terms.push({ kind: k, version: MOCK_TERMS_VERSION, agreed_at: now });
+    }
+    return wait(termsStatus());
+  },
 
   // ─── 종목
   listMyStocks: async () => {

@@ -19,6 +19,8 @@ export const realApi: Api = {
   me: () => http.get('/auth/me'),
   updateMe: (patch) => http.patch('/me', patch),
   logout: (refreshToken) => http.post('/auth/logout', refreshToken ? { refresh_token: refreshToken } : undefined),
+  getTerms: () => http.get('/me/terms'),
+  agreeTerms: (items) => http.post('/me/terms', { items }),
 
   // 종목
   ...realStockApi,

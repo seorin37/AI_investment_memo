@@ -39,6 +39,8 @@ import type {
   StockMaster,
   StockProfile,
   StockStatus,
+  TermsItem,
+  TermsStatus,
   TrashItem,
   User,
 } from '@/types/models';
@@ -95,6 +97,10 @@ export interface Api {
   me(): Promise<User>;
   updateMe(patch: Partial<Pick<User, 'name' | 'bio'>>): Promise<User>;
   logout(refreshToken?: string): Promise<void>;
+  /** 약관 동의 상태 (GET /me/terms) — 로그인 뒤 신규 판별 · 약관 화면 */
+  getTerms(): Promise<TermsStatus>;
+  /** 약관 동의 저장 (POST /me/terms). items 는 getTerms().required 그대로 */
+  agreeTerms(items: TermsItem[]): Promise<TermsStatus>;
 
   // 종목
   listMyStocks(): Promise<MyStock[]>;
