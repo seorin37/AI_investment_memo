@@ -55,6 +55,10 @@ export interface TermsProps {
   onCancelLeave: () => void;
   onConfirmLeave: () => void;
   onContinue: () => void;
+  /** 동의 저장 중 — 버튼은 '체크 덜 됨'과 같은 비활성 모양 (두 번 누름 방지) */
+  saving?: boolean;
+  /** 저장 실패 문구 — 있을 때만 버튼 위 한 줄 */
+  error?: string | null;
 }
 
 export function requiredComplete(items: TermItem[], checked: Record<TermKey, boolean>): boolean {
