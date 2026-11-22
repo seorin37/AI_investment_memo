@@ -102,15 +102,24 @@ function BoardTab({ code, memoParam, ev, firstFlow, stockName, onboardingSelecte
     }, 700);
     return () => clearTimeout(t);
   }, [real, connect, cState, items.length, failOnce]);
+  /* 지금 열려 있는 연결 창의 메모 id — 분석(LLM, 몇 초)이 끝났을 때 사용자가 창을 이미 닫았는지 본다 */
+  const connectFor = useRef<string | null>(null);
+  /* 실제 모드: AI 켜기 → 분석 결과를 창에. 그사이 '일반 메모로 두기'로 닫았으면 다시 끈다 */
+  const analyze = (id: string) => {
+    connectFor.current = id;
+    setCItems([]);
+    setCState('loading');
+    void bd.ops.aiOn(id).then((r) => {
+      if (connectFor.current !== id) return void bd.ops.aiOff(id);
+      setCItems(r.items);
+      setCState(r.state);
+    });
+  };
   const startConnect = (c: Connect) => {
     setCState('loading');
     setConnect(c);
     /* 실제 모드: 연결 창이 열릴 때 AI 켜기 → 분석 결과 (결정 7 임시안) */
-    if (real && c.id)
-      void bd.ops.aiOn(c.id).then((r) => {
-        setCItems(r.items);
-        setCState(r.state);
-      });
+    if (real && c.id) analyze(c.id);
   };
   const remove = (ids: string[]) => {
     bd.ops.remove(ids);
@@ -229,16 +238,24 @@ function BoardTab({ code, memoParam, ev, firstFlow, stockName, onboardingSelecte
       onCancel={() => setNewOpen(false)}
       onSave={({ title, body, color, ai }) => {
         if (real) {
-          /* 실제 모드: 서버에 저장한 뒤 그 id 로. AI 를 켰으면 저장 응답의 분석을 연결 창에 */
+          /* 실제 모드: 일반 메모로 먼저 저장(빠름) → AI 를 켰으면 연결 창을 바로 '분석 중'으로 띄우고 그 메모로 분석 */
           setNewOpen(false);
-          void bd.ops.create({ title, body, color, ai }).then((r) => {
-            if (!r) return;
+          if (ai) {
+            connectFor.current = null;
+            setCItems([]);
+            setCState('loading');
+            setConnect({ id: null, title, body, color, fromNew: true });
+          }
+          void bd.ops.create({ title, body, color, ai: false }).then((r) => {
+            if (!r) {
+              if (ai) setCState('error');
+              return;
+            }
             setMemos((all) => [...all, r.memo]);
             setOrder((o) => [...o, r.memo.id]);
             if (ai) {
-              setConnect({ id: r.memo.id, title, body, color, fromNew: true });
-              setCItems(r.connect.items);
-              setCState(r.connect.state);
+              setConnect((c) => (c && !c.id ? { ...c, id: r.memo.id } : c));
+              analyze(r.memo.id);
             } else if (firstFlow) router.replace({ pathname: '/', params: { onboarding: 'first_saved', selected: onboardingSelected ?? '', home_mode: onboardingHomeMode ?? 'template' } });
           });
           return;
@@ -261,6 +278,7 @@ function BoardTab({ code, memoParam, ev, firstFlow, stockName, onboardingSelecte
       onCancel={() => {
         /* 실제 모드: 연결 창을 열 때 켰으므로 '일반 메모로 두기' = 끄기 */
         if (real && connect?.id) bd.ops.aiOff(connect.id);
+        connectFor.current = null;
         setConnect(null);
         /* 첫 메모 흐름: 메모는 일반 메모로 저장됐으니 첫 홈으로 (고른 종목·홈 구성 유지) */
         if (firstFlow) router.replace({ pathname: '/', params: { onboarding: 'first_saved', selected: onboardingSelected ?? '', home_mode: onboardingHomeMode ?? 'template' } });
@@ -279,7 +297,19 @@ function BoardTab({ code, memoParam, ev, firstFlow, stockName, onboardingSelecte
           setDlg(true);
         }
       }}
-      onRetry={() => (real && connect ? startConnect(connect) : setCState('loading'))}
+      onRetry={() => {
+        if (!real || !connect) return setCState('loading');
+        if (connect.id) return startConnect(connect);
+        /* 새 메모 저장 자체가 실패했던 경우: 다시 저장 → 분석 */
+        setCState('loading');
+        void bd.ops.create({ title: connect.title, body: connect.body, color: connect.color, ai: false }).then((r) => {
+          if (!r) return setCState('error');
+          setMemos((all) => [...all, r.memo]);
+          setOrder((o) => [...o, r.memo.id]);
+          setConnect((c) => (c ? { ...c, id: r.memo.id } : c));
+          analyze(r.memo.id);
+        });
+      }}
     />
     </>
   );

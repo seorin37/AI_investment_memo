@@ -3,6 +3,7 @@ import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { TickSmall } from '@/ui/icons/MemoGlyphs';
 import { FadeIn } from '@/ui/motion/Reveal';
+import { Skeleton } from '@/ui/motion/Skeleton';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { Sheet } from '@/ui/shared/Sheet';
 import { fpx } from '@/ui/theme';
@@ -63,10 +64,7 @@ export function WebConnectDialog({ open, memo, state, items, onConfirm, onCancel
           ) : null}
         </View>
         {state === 'loading' ? (
-          <View style={st.find}>
-            <PulseDot />
-            <Text style={st.findT}>메모에서 계속 확인할 항목을 찾고 있어요</Text>
-          </View>
+          <Finding />
         ) : state === 'items' ? (
           <FadeIn style={st.items}>
             {items.map((it, i) => (
@@ -112,17 +110,39 @@ export function WebConnectDialog({ open, memo, state, items, onConfirm, onCancel
 /* 항목 둘째 줄: 가격 조건은 판정 기준 · 조건 · 확인 시점, 공시·뉴스는 메모 속 문장 */
 const detail = (x: AiTrackItem) => (x.kind === 'price' ? `전일 종가 · ${won(x.price)}원 ${x.direction} · 매 거래일 장 마감 후` : `메모 속 문장 · "${x.quote}"`);
 
-/** 원본 animate-pulse 점 (8 · #15171A) */
-function PulseDot() {
+/**
+ * 분석 중 (2026-11-22): 앱 AI 연결 창처럼 도는 원 + 항목 자리 회색 막대. 실제 분석(LLM)은 몇 초 걸려서
+ * 4초가 지나면 문구를 바꿔 아직 진행 중인 것을 알린다.
+ */
+function Finding() {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setSlow(true), 4000);
+    return () => clearTimeout(t);
+  }, []);
+  return (
+    <View style={st.items}>
+      <View style={st.scan}>
+        <Spinner />
+        <Text style={st.findT}>{slow ? '메모를 꼼꼼히 읽고 있어요 · 조금만 기다려 주세요' : '메모에서 계속 확인할 항목을 찾고 있어요'}</Text>
+      </View>
+      <Skeleton radius={14} style={st.sk} />
+      <Skeleton radius={14} style={st.sk} />
+    </View>
+  );
+}
+
+/** 도는 원 (앱 AiLink Spinner 와 같은 모양, 웹 잉크색) */
+function Spinner() {
   const k = useMotionK();
-  const [v] = useState(() => new Animated.Value(1));
+  const [v] = useState(() => new Animated.Value(0));
   useEffect(() => {
     if (k < 1) return;
-    const a = Animated.loop(Animated.sequence([Animated.timing(v, { toValue: 0.5, duration: 1000, easing: Easing.bezier(0.4, 0, 0.6, 1), useNativeDriver: NATIVE }), Animated.timing(v, { toValue: 1, duration: 1000, easing: Easing.bezier(0.4, 0, 0.6, 1), useNativeDriver: NATIVE })]));
+    const a = Animated.loop(Animated.timing(v, { toValue: 1, duration: 800, easing: Easing.linear, useNativeDriver: NATIVE }));
     a.start();
     return () => a.stop();
   }, [v, k]);
-  return <Animated.View style={[st.pdot, { opacity: v }]} />;
+  return <Animated.View style={[st.spin, { transform: [{ rotate: v.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }] }]} />;
 }
 
 const st = StyleSheet.create({
@@ -141,9 +161,10 @@ const st = StyleSheet.create({
   memo: { borderRadius: 16, paddingHorizontal: 20, paddingVertical: 16 },
   memoT: { ...fpx(17, 26), fontWeight: '700', color: '#16161C' },
   memoB: { ...fpx(14, 21), color: '#2E2E38' },
-  find: { height: 132, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   findT: { ...fpx(15, 23), fontWeight: '500', color: '#747D8D' },
-  pdot: { width: 8, height: 8, borderRadius: 4, backgroundColor: INK },
+  scan: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
+  spin: { width: 18, height: 18, borderRadius: 9, borderWidth: 2.5, borderColor: '#E2E4E8', borderTopColor: INK },
+  sk: { height: 64 },
   items: { gap: 8 },
   item: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#F7F7F7', borderWidth: 1.5, borderColor: '#111111' },
   check: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#111111', alignItems: 'center', justifyContent: 'center' },
