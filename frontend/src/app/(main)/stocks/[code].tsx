@@ -164,7 +164,9 @@ function BoardTab({ code, memoParam, ev, firstFlow, stockName, onboardingSelecte
         bd.ops.undoRemove(ids);
         const back = removed.current.filter((m) => ids.includes(m.id));
         removed.current = removed.current.filter((m) => !ids.includes(m.id));
-        setMemos((all) => [...all, ...back]);
+        setMemos((all) => [...all.filter((m) => !ids.includes(m.id)), ...back]);
+        /* 실제 모드는 삭제 뒤 서버 보드를 다시 받아 순서에서 빠져 있음 → 되살린 메모를 순서 끝에 */
+        setOrder((o) => [...o, ...ids.filter((id) => !o.includes(id))]);
       }}
       onCopy={() => {}}
       onChangeColor={(ids, color) => {

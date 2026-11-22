@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api';
 import { env } from '@/config/env';
@@ -76,6 +77,8 @@ export function useBoardData(code: string, openId: string | null) {
   const reorder = useReorderBoard(code);
   const checkItem = useSetBoardChecklistItem();
   const refresh = () => qc.invalidateQueries({ queryKey: qk.board(code) });
+  /** 진행 중인 삭제 — 되돌리기는 삭제가 서버에서 끝난 뒤 복원해야 한다 (먼저 보내면 휴지통에 없어 404) */
+  const deleting = useRef<Record<string, Promise<unknown>>>({});
 
   const data = real && board.data ? boardFrom(board.data) : null;
   const detail = real && timeline.data ? detailFrom(timeline.data) : null;
@@ -85,9 +88,17 @@ export function useBoardData(code: string, openId: string | null) {
     pin: (ids: string[], pinned: boolean) => real && ids.forEach((id) => update.mutate({ id, patch: { pinned } })),
     checkItem: (checklistId: string, itemId: string, done: boolean) =>
       real && checkItem.mutate({ checklistId, itemId, done, stockCode: code }),
-    remove: (ids: string[]) => real && ids.forEach((id) => del.mutate(id)),
+    remove: (ids: string[]) =>
+      real && ids.forEach((id) => (deleting.current[id] = del.mutateAsync(id).catch(() => undefined))),
     /** 되돌리기 = 휴지통 복원 (trash id 'memo-{id}', be/app/trash/service.py _ID) */
-    undoRemove: (ids: string[]) => real && ids.forEach((id) => restore.mutate(`memo-${id}`)),
+    undoRemove: (ids: string[]) =>
+      real &&
+      ids.forEach((id) =>
+        void (deleting.current[id] ?? Promise.resolve()).then(() => {
+          delete deleting.current[id];
+          restore.mutate(`memo-${id}`);
+        }),
+      ),
     reorder: (order: string[]) => real && reorder.mutate(order),
     aiOff: (id: string) => real && api.setAiLink(id, false).finally(refresh),
     /** AI 켜기 + 분석 결과 (연결 창) */
