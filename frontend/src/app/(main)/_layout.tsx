@@ -4,7 +4,7 @@ import { View, useWindowDimensions } from 'react-native';
 import { Redirect, Stack, useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
 import { useIntroSeen } from '@/lib/introSeen';
 import { useAuth } from '@/store/auth';
-import { mockPopular, mockRecentSearches, mockSideProfile, mockStudioHead } from '@/ui/layout/web/WebShell.mock';
+import { mockPopular, mockRecentSearches, mockSideProfile } from '@/ui/layout/web/WebShell.mock';
 import { useSideStocks } from '@/ui/layout/web/useSideStocks';
 import { WebShell } from '@/ui/layout/web/WebShell';
 import type { SideKey, SideSearchHit } from '@/ui/layout/web/WebShell.types';
@@ -12,6 +12,7 @@ import { mockMyStocksData } from '@/ui/screens/stocks/MyStocks.mock';
 import { WebAddStockDialog } from '@/ui/screens/stocks/web/AddStockDialog';
 import { useMyMock } from '@/store/myMock';
 import { useMyProfile } from '@/ui/screens/my/useMyProfile';
+import { useStudioHead } from '@/ui/screens/studio/useStudioHead';
 import Constants from 'expo-constants';
 import { legalDocument } from '@/ui/screens/auth/Auth.mock';
 import { mockCreditDefault, mockCreditPacks, mockPayMethods, mockDataSources, mockInbox, mockMyUsage, mockOss, mockPlanCompare, mockPlanDefault, mockPlanNotes, mockPlans, mockReportKinds, mockTracked, mockWithdrawCounts } from '@/ui/screens/my/My.mock';
@@ -116,7 +117,9 @@ export default function MainLayout() {
   const uiToast = useUI((s) => s.toast);
   /* ⑧-8a 스튜디오: 사용량 창 · PLUS 창(다 쓴 뒤 만들기) · 충전 창. 결제·만들기는 연결 안 됨 */
   const [studioPop, setStudioPop] = useState<'usage' | 'credit' | 'charge' | 'audio' | 'report' | null>(null);
-  const usageSpent = mockMyUsage.usage_pct >= 100;
+  /* 스튜디오 숫자: 실제 API (GET /me/usage · /stocks · /ai/stats). mock 모드는 예시 */
+  const studioHead = useStudioHead();
+  const usageSpent = studioHead.spent;
   const studioFeat = (k: StudioKind) => {
     if (k !== 'quiz' && usageSpent) return setStudioPop('credit');
     if (k === 'audio') return setStudioPop('audio');
@@ -206,9 +209,9 @@ export default function MainLayout() {
       studio={{
         open: studioOpen,
         onToggle: () => setStudioOpen((o) => !o),
-        /* AI 사용량은 설정 창(My.mock)과 같은 값 */
-        ...mockStudioHead,
-        usagePct: mockMyUsage.usage_pct,
+        stockCount: studioHead.stock_count,
+        aiMemoCount: studioHead.ai_memo_count,
+        usagePct: studioHead.usage_pct,
         onUsage: () => setStudioPop('usage'),
         /* 접힌 열: 만드는 중인 기능에 '·' 점 (원본 studio.tsx 177 — 퀴즈 제외) */
         badges: sp.job?.status === 'run' ? { [sp.job.kind]: '·' } : undefined,
@@ -277,7 +280,7 @@ export default function MainLayout() {
                   made={sp.made}
                   bottomPad={sp.mini && spItem ? 60 : 0}
                   spent={usageSpent}
-                  refill={mockMyUsage.usage_refill}
+                  refill={studioHead.usage_refill}
                   onFeature={studioFeat}
                   onOpenMade={(m) => {
                     if (m.kind === 'report') { sp.openReport(m.id); return sp.setWebView('report'); }
@@ -441,7 +444,7 @@ export default function MainLayout() {
         sp.startReport({ sub: `${codes.length}종목${market ? ' · 국내 증시 흐름 포함' : ''} · ${mockReport.gen_range}`, codes, market }, __DEV__ && studio_fail === '1');
       }}
     />
-    <WebUsageSheet open={studioPop === 'usage'} pct={mockMyUsage.usage_pct} refill={mockMyUsage.usage_refill} onClose={() => setStudioPop(null)} onBuyCredit={() => setStudioPop('charge')} onChangePlan={() => setSettings('사용량')} />
+    <WebUsageSheet open={studioPop === 'usage'} pct={studioHead.usage_pct} refill={studioHead.usage_refill} onClose={() => setStudioPop(null)} onBuyCredit={() => setStudioPop('charge')} onChangePlan={() => setSettings('사용량')} />
     <WebCreditPopup open={studioPop === 'credit'} onClose={() => setStudioPop(null)} onPlan={() => { setStudioPop(null); setSettings('사용량'); }} onCharge={() => setStudioPop('charge')} />
     <WebChargePopup open={studioPop === 'charge'} packs={mockCreditPacks} default_credits={mockCreditDefault} methods={mockPayMethods} onClose={() => setStudioPop(null)} onPay={() => say({ msg: '결제는 아직 연결되지 않았어요' })} />
     <WebFeedback open={fbOpen} kinds={mockReportKinds} onClose={() => setFbOpen(false)} onSend={() => say({ msg: '아직 연결되지 않았어요' })} />
