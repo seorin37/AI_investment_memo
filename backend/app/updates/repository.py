@@ -11,7 +11,7 @@ CARD_SQL = """
 SELECT tu.id, tu.type::text AS type, tu.title, tu.summary, tu.reason, tu.details, tu.is_read, tu.created_at,
        tu.price_state, tu.observed_value, tu.observed_trade_date,
        ti.id AS item_id, ti.type::text AS item_type, ti.description AS item_description, ti.status::text AS item_status,
-       ti.last_checked_at,
+       ti.last_checked_at, ti.price_threshold,
        m.id AS memo_id, m.title AS memo_title, m.color, btrim(m.symbol) AS symbol, s.name AS stock_name,
        mr.revision_no AS memo_version, mr.title AS snapshot_title, mr.content AS snapshot_body, mr.created_at AS snapshot_at
 FROM tracking_updates tu
@@ -79,6 +79,12 @@ class UpdatesRepository:
         rows = self.db.execute(text(MATCH_SQL), {"items": sorted({i for i, _ in pairs}),
                                                  "news": sorted({n for _, n in pairs})}).all()
         return {(int(i), int(n)): float(s) for i, n, s in rows}
+
+    def recent_closes(self, symbol: str, until: Any, n: int = 10) -> list[tuple[Any, float]]:
+        """가격 카드 작은 차트: until(관측 거래일)까지 최근 n거래일 (거래일, 종가), 오래된 → 최근."""
+        rows = self.db.execute(text("""SELECT trade_date, close FROM prices_daily WHERE symbol = :symbol AND trade_date <= :until
+            AND close IS NOT NULL ORDER BY trade_date DESC LIMIT :n"""), {"symbol": symbol, "until": until, "n": n}).all()
+        return [(r[0], float(r[1])) for r in reversed(rows)]
 
     def memo(self, user_id: int, memo_id: int) -> dict[str, Any] | None:
         row = self.db.execute(text("""SELECT id, title, ai_linked, ai_linked_at, btrim(symbol) AS symbol FROM memos

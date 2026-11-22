@@ -31,6 +31,7 @@ export const realApi: Api = {
   // 메모 보드
   ...realBoardApi,
   getMemoTimeline: (memoId) => http.get(`/memos/${memoId}/timeline`),
+  listMemoAnswers: (memoId) => http.get(`/memos/${memoId}/answers`),
   listStockAiUpdates: (code) => http.get(`/stocks/${code}/ai-updates`),
   markAiUpdateRead: (id) => http.post(`/ai-updates/${id}/read`),
   async uploadFile(file) {

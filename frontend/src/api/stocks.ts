@@ -6,6 +6,7 @@ export interface StockHttpClient {
   get<T>(path: string, query?: Query): Promise<T>;
   post<T>(path: string, body?: unknown): Promise<T>;
   patch<T>(path: string, body?: unknown): Promise<T>;
+  put<T>(path: string, body?: unknown): Promise<T>;
   del<T = void>(path: string): Promise<T>;
 }
 
@@ -52,6 +53,9 @@ export function createRealStockApi(http: StockHttpClient) {
     },
     removeStock(code: string): Promise<void> {
       return http.del(`/stocks/${code}`);
+    },
+    async reorderStocks(codes: string[]): Promise<MyStock[]> {
+      return (await http.put<MyStockWire[]>('/stocks/order', { codes })).map(mine);
     },
   };
 }
