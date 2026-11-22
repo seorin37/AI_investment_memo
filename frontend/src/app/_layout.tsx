@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { Platform } from 'react-native';
 import { SplashScreen, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ApiError } from '@/api';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { setMotionEnabled } from '@/components/motion/motion';
+import { queryClient } from '@/lib/queryClient';
 import { useAuth } from '@/store/auth';
 import { colors } from '@/theme/tokens';
 import { CoachOverlay } from '@/ui/shared/Coach';
@@ -17,19 +17,6 @@ void SplashScreen.preventAutoHideAsync();
 setMotionEnabled(true);
 
 export default function RootLayout() {
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            staleTime: 30_000,
-            retry: (count, err) => !(err instanceof ApiError && [401, 403, 404].includes(err.status)) && count < 2,
-            refetchOnWindowFocus: Platform.OS === 'web',
-          },
-        },
-      }),
-  );
-
   const [fontsLoaded, fontError] = useFonts({
     'Pretendard-Regular': require('../../assets/fonts/Pretendard-Regular.otf'),
     'Pretendard-Medium': require('../../assets/fonts/Pretendard-Medium.otf'),
