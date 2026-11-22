@@ -10,12 +10,15 @@ import { mockCompanyByCode } from '@/ui/screens/company/CompanyInfo.mock';
 import { TopBar } from '@/ui/layout/app/TopBar';
 import { AiOffSheet } from '@/ui/shared/AiOffSheet';
 import { AppMemoBoard } from '@/ui/screens/board/app/MemoBoard';
+import { useBoardData } from '@/ui/screens/board/useBoardData';
 import { useBoardStock } from '@/ui/screens/board/useBoardStock';
+import { env } from '@/config/env';
 import { mockBoardChecklist, mockBoardMemos, mockBoardStock, mockEmptyStock } from '@/ui/screens/board/MemoBoard.mock';
 
 /**
  * 앱 종목 상세: 메모 보드 = UI v2 (ui/screens/board/app) · 기업정보 = UI v2 (ui/screens/company/app · ⑤).
- * mock 단계: 000660 은 예시 메모, 105560(KB금융) 은 빈 보드. 변화는 이 화면 안에서만.
+ * mock 모드: 000660 은 예시 메모, 105560(KB금융) 은 빈 보드. 변화는 이 화면 안에서만.
+ * 실제 모드(2026-11-22): 보드 데이터와 저장은 useBoardData (웹 보드와 같음).
  * 메모 상세 · 새 메모 · AI 연결 = UI v2 (④ · app/(detail)/memo). 체크리스트 화면은 아직 옛 화면.
  */
 export default function StockDetail() {
@@ -30,8 +33,17 @@ export default function StockDetail() {
   const empty = code === mockEmptyStock.stock_code;
   /* 종목 머리 시세: 실제 모드면 GET /stocks/{code}/quote (2026-11-21), mock 모드면 mock 그대로 */
   const { stock, priceNote } = useBoardStock(code, empty ? mockEmptyStock : mockBoardStock);
-  const [memos, setMemos] = useState<Memo[]>(empty ? [] : mockBoardMemos);
-  const [checklist, setChecklist] = useState<Checklist | null>(empty ? null : mockBoardChecklist);
+  const real = !env.useMock;
+  const [memos, setMemos] = useState<Memo[]>(real || empty ? [] : mockBoardMemos);
+  const [checklist, setChecklist] = useState<Checklist | null>(real || empty ? null : mockBoardChecklist);
+  /* 실제 모드: 서버 보드를 새로 받으면(메모 화면에서 돌아올 때 포함) 화면 상태를 서버 값으로 */
+  const bd = useBoardData(code, null);
+  const [seenVersion, setSeenVersion] = useState(0);
+  if (bd.data && bd.version !== seenVersion) {
+    setSeenVersion(bd.version);
+    setMemos(bd.data.memos);
+    setChecklist(bd.data.checklist);
+  }
   const removed = useRef<Memo[]>([]);
   const [offFor, setOffFor] = useState<Memo | null>(null);
   /* 다른 화면으로 가면 고르기 때문에 숨긴 탭바를 다시 보이게 */
@@ -53,9 +65,19 @@ export default function StockDetail() {
       onOpenChecklist={() => router.push({ pathname: '/checklist/[id]', params: { id: checklist?.id ?? 'new' } })}
       onNewMemo={(first) => router.push({ pathname: '/memo/new', params: { code: stock.stock_code, name: stock.name, first_line: first ?? '' } })}
       onNewChecklist={() => router.push({ pathname: '/checklist/[id]', params: { id: 'new', code: stock.stock_code, name: stock.name } })}
-      onToggleChecklistItem={(iid) => setChecklist((c) => (c ? { ...c, items: c.items.map((i) => (i.id === iid ? { ...i, done: !i.done } : i)) } : c))}
-      onPin={(ids, pinned) => setMemos((all) => all.map((m) => (ids.includes(m.id) ? { ...m, pinned } : m)))}
-      onTogglePin={(pinned) => setChecklist((c) => (c ? { ...c, pinned } : c))}
+      onToggleChecklistItem={(iid) => {
+        const it = checklist?.items.find((i) => i.id === iid);
+        if (checklist && it) bd.ops.checkItem(checklist.id, iid, !it.done);
+        setChecklist((c) => (c ? { ...c, items: c.items.map((i) => (i.id === iid ? { ...i, done: !i.done } : i)) } : c));
+      }}
+      onPin={(ids, pinned) => {
+        bd.ops.pin(ids, pinned);
+        setMemos((all) => all.map((m) => (ids.includes(m.id) ? { ...m, pinned } : m)));
+      }}
+      onTogglePin={(pinned) => {
+        if (checklist) bd.ops.pin([checklist.id], pinned);
+        setChecklist((c) => (c ? { ...c, pinned } : c));
+      }}
       onToggleAi={(id) => {
         const m = memos.find((x) => x.id === id);
         /* 원본 aiToggle: 켜져 있으면 해제 확인 시트, 꺼져 있으면 AI 연결 창 */
@@ -63,16 +85,21 @@ export default function StockDetail() {
         else if (m) router.push({ pathname: '/memo/link', params: { id: m.id } });
       }}
       onDelete={(ids) => {
+        bd.ops.remove(ids);
         removed.current = [...removed.current, ...memos.filter((m) => ids.includes(m.id))];
         setMemos((all) => all.filter((m) => !ids.includes(m.id)));
       }}
       onUndoDelete={(ids) => {
+        bd.ops.undoRemove(ids);
         const back = removed.current.filter((m) => ids.includes(m.id));
         removed.current = removed.current.filter((m) => !ids.includes(m.id));
-        setMemos((all) => [...all, ...back]);
+        setMemos((all) => [...all.filter((m) => !ids.includes(m.id)), ...back]);
       }}
       onCopy={() => {}}
-      onChangeColor={(ids, color) => setMemos((all) => all.map((m) => (ids.includes(m.id) ? { ...m, color } : m)))}
+      onChangeColor={(ids, color) => {
+        bd.ops.color(ids, color);
+        setMemos((all) => all.map((m) => (ids.includes(m.id) ? { ...m, color } : m)));
+      }}
       onReorder={() => {}}
       onChangeTab={setTab}
       onSelectionChange={onSelectionChange}
@@ -87,6 +114,7 @@ export default function StockDetail() {
       onConfirm={() => {
         const id = offFor?.id;
         setOffFor(null);
+        if (id) bd.ops.aiOff(id);
         setMemos((all) => all.map((x) => (x.id === id ? { ...x, ai_linked: false } : x)));
       }}
     />
