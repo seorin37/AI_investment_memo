@@ -1,5 +1,9 @@
 import React, { useCallback, useMemo } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { api } from '@/api';
+import { env } from '@/config/env';
+import { useQueryClient } from '@tanstack/react-query';
+import { qk } from '@/hooks/queries';
 import { useUI } from '@/store/ui';
 import { AppNewMemo } from '@/ui/screens/memo/app/NewMemo';
 import { mockDetailStockName } from '@/ui/screens/memo/MemoDetail.mock';
@@ -14,6 +18,7 @@ export default function NewMemoScreen() {
   const { code, name, first_line, from_onboarding, onboarding_selected } = useLocalSearchParams<{ code?: string; name?: string; first_line?: string; from_onboarding?: string; onboarding_selected?: string }>();
   const router = useRouter();
   const toast = useUI((s) => s.showToast);
+  const qc = useQueryClient();
   const cancel = useCallback(() => router.back(), [router]);
   const firstStocks = useMemo(() => (from_onboarding === '1' ? mockFirstHomeStocks(onboarding_selected) : []), [from_onboarding, onboarding_selected]);
 
@@ -47,7 +52,19 @@ export default function NewMemoScreen() {
       initialText={first_line || undefined}
       onCancel={cancel}
       onEmpty={() => (code ? router.dismissTo({ pathname: '/stocks/[code]', params: { code, notice: 'empty', t: String(Date.now()) } }) : cancel())}
-      onSave={({ title, body, ai }) => {
+      onSave={({ title, body, color, ai }) => {
+        /* 실제 모드(2026-11-22): 일반 메모로 저장 → AI 를 켰으면 그 메모로 AI 연결 창 (창이 열릴 때 켜고 분석) */
+        if (!env.useMock && code) {
+          void api.createMemo(code, { title, body, color, tags: [], ai_linked: false }).then(
+            (m) => {
+              void qc.invalidateQueries({ queryKey: qk.board(code) });
+              if (ai) router.replace({ pathname: '/memo/link', params: { id: m.id, from: 'new' } });
+              else router.dismissTo({ pathname: '/stocks/[code]', params: { code, notice: 'saved', t: String(Date.now()) } });
+            },
+            () => toast('메모를 저장하지 못했어요 · 잠시 뒤 다시 해 주세요'),
+          );
+          return;
+        }
         if (ai) {
           router.replace({ pathname: '/memo/link', params: { id: 'new', title, body, from: 'new' } });
           return;

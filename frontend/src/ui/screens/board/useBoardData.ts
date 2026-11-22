@@ -60,7 +60,7 @@ export function detailFrom(t: MemoTimeline & { tracking_items?: { type: string; 
 
 export type ConnectResult = { state: 'items' | 'empty' | 'error'; items: AiTrackItem[] };
 
-const connectResult = (a: MemoAnalysis | null | undefined): ConnectResult => {
+export const connectResult = (a: MemoAnalysis | null | undefined): ConnectResult => {
   if (!a || a.status === 'failed') return { state: 'error', items: [] };
   const items = toTrackItems(a.items.filter((i) => i.type !== 'ask'));
   return { state: items.length ? 'items' : 'empty', items };
