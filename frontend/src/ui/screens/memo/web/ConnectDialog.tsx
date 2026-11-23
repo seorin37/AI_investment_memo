@@ -26,7 +26,7 @@ export function WebConnectDialog({ open, memo, state, items, onConfirm, onCancel
   const steps = ['메모 확인', '항목 확인', '연결 시작'];
   const primary =
     state === 'items'
-      ? { label: `${items.length}개 항목으로 AI 연결`, run: onConfirm, dis: false }
+      ? { label: items.every((x) => x.kind === 'ask') ? `질문 ${items.length}개로 AI 연결` : `${items.length}개 항목으로 AI 연결`, run: onConfirm, dis: false }
       : state === 'empty'
         ? { label: '메모 수정', run: () => onEditMemo?.(), dis: false }
         : state === 'error'
@@ -108,7 +108,8 @@ export function WebConnectDialog({ open, memo, state, items, onConfirm, onCancel
 }
 
 /* 항목 둘째 줄: 가격 조건은 판정 기준 · 조건 · 확인 시점, 공시·뉴스는 메모 속 문장 */
-const detail = (x: AiTrackItem) => (x.kind === 'price' ? `전일 종가 · ${won(x.price)}원 ${x.direction} · 매 거래일 장 마감 후` : `메모 속 문장 · "${x.quote}"`);
+const detail = (x: AiTrackItem) =>
+  x.kind === 'price' ? `전일 종가 · ${won(x.price)}원 ${x.direction} · 매 거래일 장 마감 후` : x.kind === 'ask' ? '질문 · 다음 날 아침 공시·뉴스·재무 자료로 한 번 답해 드려요' : `메모 속 문장 · "${x.quote}"`;
 
 /**
  * 분석 중 (2026-11-22): 앱 AI 연결 창처럼 도는 원 + 항목 자리 회색 막대. 실제 분석(LLM)은 몇 초 걸려서

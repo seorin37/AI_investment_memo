@@ -53,7 +53,9 @@ export interface MemoFeedItem {
 /** AI 가 메모에서 찾은 추적 항목 (서버가 정함 · 읽기 전용) */
 export type AiTrackItem =
   | { kind: 'price'; label: string; price: number; direction: '이하' | '미만' | '이상'; quote: string }
-  | { kind: 'fact'; label: string; quote: string };
+  | { kind: 'fact'; label: string; quote: string }
+  /** 한 번 답하는 질문 (tracking_items.type='ask', 다음 매일 실행에서 답) — 연결 창에만 보인다 (2026-11-23) */
+  | { kind: 'ask'; label: string; quote: string };
 
 /** 메모 상세 (웹·앱 같은 props) */
 export interface MemoDetailProps {

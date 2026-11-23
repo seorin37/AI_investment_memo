@@ -62,7 +62,11 @@ export type ConnectResult = { state: 'items' | 'empty' | 'error'; items: AiTrack
 
 export const connectResult = (a: MemoAnalysis | null | undefined): ConnectResult => {
   if (!a || a.status === 'failed') return { state: 'error', items: [] };
-  const items = toTrackItems(a.items.filter((i) => i.type !== 'ask'));
+  /* 질문(ask)도 보여 준다 — 빼면 '찾지 못했어요'로 보여 '일반 메모로 두기'를 누르게 되고, 그러면 답을 못 받는다 (2026-11-23) */
+  const items: AiTrackItem[] = [
+    ...toTrackItems(a.items.filter((i) => i.type !== 'ask')),
+    ...a.items.filter((i) => i.type === 'ask').map((i) => ({ kind: 'ask' as const, label: i.description, quote: i.description })),
+  ];
   return { state: items.length ? 'items' : 'empty', items };
 };
 
