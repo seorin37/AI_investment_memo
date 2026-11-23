@@ -12,11 +12,10 @@ import { env } from '@/config/env';
 import { AppAudioSheet } from '@/ui/screens/studio/app/AudioSheet';
 import { AppReportSheet } from '@/ui/screens/studio/app/ReportSheet';
 import { AppStudioHome } from '@/ui/screens/studio/app/StudioHome';
-import { useStudioHead } from '@/ui/screens/studio/useStudioHead';
 
 /**
  * 앱 스튜디오 탭 = UI v2 (원본 app/studio.html · ⑧).
- * 사용량·갱신일은 useUsageView, 종목 수·AI 연결 메모 수는 useStudioHead (실제 API · mock 모드는 예시). 오디오(8b): 시트 → 만드는 중 → 플레이어 · 미니 플레이어(탭 레이아웃).
+ * 사용량·갱신일은 My.mock. 오디오(8b): 시트 → 만드는 중 → 플레이어 · 미니 플레이어(탭 레이아웃).
  * 주간보고서(8c): 시트 → 만드는 중 → 보고서. 실험실·퀴즈는 8d 전까지 안내만 (옛 화면으로 보내지 않음).
  * mock: 개발 빌드(__DEV__)에서만 ?fail=1 이면 다음 만들기가 실패로 끝남 (실패 화면 확인용 · 배포 빌드는 무시). ?make=audio 면 시트를 열고 시작.
  * 웹은 오른쪽 스튜디오 열을 쓰므로 홈으로.
@@ -26,10 +25,8 @@ const NOT_YET = '아직 연결되지 않았어요 · 데이터는 그대로예�
 export default function StudioTab() {
   const router = useRouter();
   const { profile: { name: myName, photoUrl } } = useMyProfile();
-  /* AI 사용량: 실제 모드면 GET /me/usage, mock 모드면 My.mock (설정 · MY 와 같은 값) */
+  /* AI 사용량: 실제 모드면 GET /me/usage, mock 모드면 My.mock */
   const usage = useUsageView();
-  /* 내 종목 수 · AI 연결 메모 수: 실제 API (GET /stocks · /ai/stats). mock 모드는 예시 */
-  const head = useStudioHead();
   const toast = useUI((s) => s.showToast);
   const { fail, make } = useLocalSearchParams<{ fail?: string; make?: string }>();
   const p = useStudioPlayer();
@@ -65,8 +62,7 @@ export default function StudioTab() {
         }}
         usage_pct={usage.usage_pct}
         usage_refill={usage.usage_refill}
-        stock_count={head.stock_count}
-        ai_memo_count={head.ai_memo_count}
+        {...mockStudioCounts}
         onFeature={(k) => (k === 'audio' ? setSheet(true) : k === 'report' ? setRSheet(true) : router.push(k === 'quiz' ? '/studio-quiz' : '/studio-lab'))}
         onOpenMade={(m) => {
           if (m.kind === 'lab') {

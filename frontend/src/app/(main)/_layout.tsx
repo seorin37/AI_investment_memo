@@ -6,7 +6,7 @@ import { env } from '@/config/env';
 import { coachPlace } from '@/lib/coachTarget';
 import { useIntroSeen } from '@/lib/introSeen';
 import { useAuth } from '@/store/auth';
-import { mockPopular, mockRecentSearches, mockSideProfile } from '@/ui/layout/web/WebShell.mock';
+import { mockPopular, mockRecentSearches, mockSideProfile, mockStudioHead } from '@/ui/layout/web/WebShell.mock';
 import { useSideStocks } from '@/ui/layout/web/useSideStocks';
 import { WebShell } from '@/ui/layout/web/WebShell';
 import type { SideKey, SideSearchHit } from '@/ui/layout/web/WebShell.types';
@@ -14,7 +14,6 @@ import { useAddStockSearch } from '@/ui/screens/stocks/useAddStockSearch';
 import { WebAddStockDialog } from '@/ui/screens/stocks/web/AddStockDialog';
 import { useMyMock } from '@/store/myMock';
 import { useMyProfile } from '@/ui/screens/my/useMyProfile';
-import { useStudioHead } from '@/ui/screens/studio/useStudioHead';
 import { planKey, withCurrentPlan } from '@/ui/screens/my/planLabel';
 import { useUsageView } from '@/ui/screens/my/useUsageView';
 import { useTrackedView } from '@/ui/screens/my/useTrackedView';
@@ -150,8 +149,6 @@ export default function MainLayout() {
   const uiToast = useUI((s) => s.toast);
   /* ⑧-8a 스튜디오: 사용량 창 · PLUS 창(다 쓴 뒤 만들기) · 충전 창. 결제·만들기는 연결 안 됨 */
   const [studioPop, setStudioPop] = useState<'usage' | 'credit' | 'charge' | 'audio' | 'report' | null>(null);
-  /* 스튜디오 종목 수 · AI 연결 메모 수: 실제 API (GET /stocks · /ai/stats). mock 모드는 예시. 사용량은 위 usage */
-  const studioHead = useStudioHead();
   const usageSpent = usage.paused || usage.usage_pct >= 100;
   const studioFeat = (k: StudioKind) => {
     if (k !== 'quiz' && usageSpent) return setStudioPop('credit');
