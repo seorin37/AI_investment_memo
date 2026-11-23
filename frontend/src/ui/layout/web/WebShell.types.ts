@@ -30,8 +30,6 @@ export interface SidebarProps {
   profile: { name: string; job: string; photoUrl?: string | null };
   /** 종 배지 (읽지 않은 알림 수) */
   unreadNotifs: number;
-  /** 다크 모드 (이번 묶음은 표시만 · ⑩에서 바뀜) */
-  dark: boolean;
   /** 검색 */
   recentSearches: string[];
   popular: { stock_code: string; name: string; mine: boolean }[];
@@ -48,7 +46,6 @@ export interface SidebarProps {
   onReorderStocks: (codes: string[]) => void;
   onAddStock: () => void;
   onBell: () => void;
-  onToggleDark: () => void;
   onTrash: () => void;
   onSettings: () => void;
   onFeedback: () => void;

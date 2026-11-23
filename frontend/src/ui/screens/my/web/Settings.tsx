@@ -6,7 +6,9 @@ import type { AuthProvider } from '@/types/models';
 import { GoogleGlyph, KakaoGlyph, NaverGlyph } from '@/ui/screens/auth/AuthGlyphs';
 import { Avatar } from '@/ui/shared/Avatar';
 import { ConfirmDialog } from '@/ui/shared/ConfirmDialog';
+import { DARK_SUPPORTED } from '@/ui/shared/Dark';
 import { Sheet } from '@/ui/shared/Sheet';
+import { SkySwitch } from '@/ui/shared/SkySwitch';
 import { WITHDRAW_REASONS, type InfoDoc, type MyProfile, type WithdrawProps } from '../My.types';
 import { SBtn } from './parts';
 import { DataTab, DocModal, InfoTab, NotiTab, PlanBar, PlanView, UsageTab, type WebSettingsExtra } from './SettingsTabs';
@@ -31,6 +33,9 @@ export interface WebSettingsProps extends WebSettingsExtra {
   onChangeProfile: (p: Pick<MyProfile, 'name' | 'intro'>) => void;
   onPhoto: () => void;
   onPhotoDelete: () => void;
+  /** 다크 모드 (사이드바에서 옮겨 옴 · 내 프로필 › 로그아웃 위) */
+  dark: boolean;
+  onToggleDark: () => void;
   /** 확인창에서 [로그아웃] 까지 누른 뒤 */
   onLogout: () => void;
   /** 탈퇴 마지막 확인까지 누른 뒤 (mock: 실제 삭제 없음) */
@@ -184,6 +189,18 @@ function ProfileTab(p: WebSettingsProps & { onAskLogout: () => void; onAskWithdr
         </View>
       </View>
       <View style={st.hr} />
+      {DARK_SUPPORTED ? (
+        <>
+          <View style={st.row}>
+            <View style={[st.rowText, { width: 598 }]}>
+              <Text style={st.t15}>다크 모드</Text>
+              <Text style={st.d14}>화면을 어둡게 바꿔요.</Text>
+            </View>
+            <View style={st.darkSw}><SkySwitch on={p.dark} onToggle={p.onToggleDark} width={48} /></View>
+          </View>
+          <View style={st.hr} />
+        </>
+      ) : null}
       <View style={st.row}>
         <View style={[st.rowText, { width: 598 }]}>
           <Text style={st.t15}>로그아웃</Text>
@@ -332,6 +349,7 @@ const st = StyleSheet.create({
   row: { width: 718, flexDirection: 'row', alignItems: 'center', gap: 24 },
   row2: { flexDirection: 'row', alignItems: 'center', gap: 24 },
   rowText: { gap: 4 },
+  darkSw: { width: 96, alignItems: 'center' },
   wd: { width: 680, maxWidth: '100%', gap: 20, borderRadius: 28, backgroundColor: '#FFFFFF', paddingHorizontal: 32, paddingVertical: 28 },
   wdT: { fontSize: 22, lineHeight: 31, fontWeight: '700', color: '#15171A' },
   wdS: { fontSize: 17, lineHeight: 26, color: '#747D8D' },
