@@ -308,9 +308,12 @@ function WebNote({ j, fresh, onUpdate, onMenu }: { j: JournalEntry; fresh: boole
             value={title}
             autoFocus={fresh}
             multiline
-            submitBehavior="submit"
-            onSubmitEditing={() => setFocusEnd((n) => n + 1)}
-            onChangeText={(v) => put(body, todo, v.replace(/\n/g, ''))}
+            /* 제목에서 Enter → 본문으로. react-native-web 0.21 은 submitBehavior 를 몰라 onSubmitEditing 이 안 불림 (2026-11-23).
+               키 이벤트 대신 '줄바꿈이 들어왔는지'로 봄 — 한글 조합 중 Enter 도 한 번에 넘어감 (keydown 은 조합 중엔 229 로 와서 두 번 눌러야 했음) */
+            onChangeText={(v) => {
+              put(body, todo, v.replace(/\n/g, ''));
+              if (v.includes('\n')) setFocusEnd((n) => n + 1);
+            }}
             onContentSizeChange={(e) => setTitleH(Math.max(40, e.nativeEvent.contentSize.height))}
             placeholder="제목"
             placeholderTextColor="#9A9EA7"
