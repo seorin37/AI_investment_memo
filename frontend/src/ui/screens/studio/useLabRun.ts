@@ -42,8 +42,10 @@ export function useRunLab() {
     try {
       const result = await api.runLab({ stock_code: stock.stock_code, dirs });
       const t = labTitle(stock.stock_code, dirs, stock.name);
+      /* 서버에 저장됐으면 그 id로 (새로고침 뒤에도 같은 항목) — 목록을 다시 받아 서버 값으로 맞춘다 (2026-11-23) */
       addLab({
-        id: `m${Date.now()}`,
+        id: result.item_id ?? `m${Date.now()}`,
+        server: !!result.item_id,
         kind: 'lab',
         title: t.title,
         sub: t.sub,
@@ -52,6 +54,7 @@ export function useRunLab() {
         lab: { code: stock.stock_code, dirs, name: stock.name, groups: result.groups },
       });
       void queryClient.invalidateQueries({ queryKey: qk.usage });
+      if (result.item_id) void queryClient.invalidateQueries({ queryKey: qk.studioItems });
       return true;
     } catch (error) {
       toast(error instanceof ApiError ? error.message : '실험을 실행하지 못했어요. 잠시 뒤 다시 시도해 주세요.');

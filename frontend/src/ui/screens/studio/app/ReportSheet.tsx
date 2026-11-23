@@ -13,8 +13,14 @@ import type { ReportStock } from '../Studio.mock';
  */
 const C = { a: '#8569E3', ink: '#16171A', ink2: '#575B63', ink3: '#9A9EA7' };
 
-export function AppReportSheet({ open, stocks, period, onClose, onMake }: { open: boolean; stocks: ReportStock[]; period: string; onClose: () => void; onMake: (p: { codes: string[]; market: boolean }) => void }) {
+export function AppReportSheet({ open, stocks, period, onClose, onMake, counts = true }: { open: boolean; stocks: ReportStock[]; period: string; onClose: () => void; onMake: (p: { codes: string[]; market: boolean }) => void; /** 종목별 공시·뉴스 수 미리 보기 (실제 모드는 없음) */ counts?: boolean }) {
   const [pick, setPick] = useState<string[]>(stocks.map((s) => s.stock_code));
+  /* 열 때마다 전체 선택 (실제 모드는 내 종목을 늦게 받아 처음 값이 비어 있을 수 있다) */
+  const [was, setWas] = useState(open);
+  if (open !== was) {
+    setWas(open);
+    if (open) setPick(stocks.map((s) => s.stock_code));
+  }
   const [mkt, setMkt] = useState(false);
   const want = (q: 'all' | 'own' | 'watch') => stocks.filter((s) => q === 'all' || (q === 'own' ? s.own === '보유' : s.own === '관심')).map((s) => s.stock_code);
   const same = (a: string[]) => a.length === pick.length && a.every((c) => pick.includes(c));
@@ -38,7 +44,7 @@ export function AppReportSheet({ open, stocks, period, onClose, onMake }: { open
         </View>
         {stocks.map((s) => {
           const k = s.counts.공시 + s.counts.뉴스;
-          return <Row key={s.stock_code} on={pick.includes(s.stock_code)} dim={!k} name={s.name} sub={k ? `이번 주 공시·뉴스 ${k}건` : '이번 주 공시·뉴스 없음'} tag={s.own} onPress={() => setPick((a) => (a.includes(s.stock_code) ? a.filter((x) => x !== s.stock_code) : [...a, s.stock_code]))} />;
+          return <Row key={s.stock_code} on={pick.includes(s.stock_code)} dim={counts && !k} name={s.name} sub={!counts ? '지난주 시세·공시·뉴스·내 메모' : k ? `이번 주 공시·뉴스 ${k}건` : '이번 주 공시·뉴스 없음'} tag={s.own} onPress={() => setPick((a) => (a.includes(s.stock_code) ? a.filter((x) => x !== s.stock_code) : [...a, s.stock_code]))} />;
         })}
         <Row on={mkt} name="국내 증시 흐름" sub="코스피·코스닥·원/달러" tag="선택" gray onPress={() => setMkt(!mkt)} />
         <Text style={st.note}>공시·뉴스가 없는 종목도 시세·재무·메모 추적 현황은 들어가요</Text>

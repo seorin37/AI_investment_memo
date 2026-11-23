@@ -3,6 +3,7 @@ import { useUI } from '@/store/ui';
 import { mockAudioEpisode, mockAudioGen, mockLabStocks, mockLabVars, mockMade, mockReport, type LabDir } from '@/ui/screens/studio/Studio.mock';
 import type { MadeItem } from '@/ui/screens/studio/Studio.types';
 import { registerUserReset } from '@/lib/sessionReset';
+import { env } from '@/config/env';
 
 /**
  * 스튜디오 만들기 · 재생 mock 상태 (앱·웹 같이 씀, 메모리에만).
@@ -45,12 +46,15 @@ interface StudioPlayerState {
   /** 방금 완성된 결과 종류 (openPlayer 신호와 같이) */
   openKind: 'audio' | 'report';
   startAudio(p: { sub: string; n: number; codes?: string[]; market?: boolean }, fail?: boolean): void;
-  startReport(p: { sub: string; codes: string[]; market: boolean }, fail?: boolean): void;
+  /** server를 주면(실제 모드) 단계 표시는 그대로 하고 완성은 서버 결과를 기다린다 (2026-11-23) */
+  startReport(p: { sub: string; codes: string[]; market: boolean }, fail?: boolean, server?: () => Promise<MadeItem>): void;
   openReport(id: string): void;
   /** 투자 실험실: 지금 보는 결과 · 실험 실행(크레딧 차감 없음)으로 만든 항목에 추가 */
   curLab: string | null;
   addLab(item: MadeItem): void;
   openLab(id: string): void;
+  /** 서버 만든 항목으로 바꾸기. 이번 세션에서 만든 mock 오디오·보고서(server 아님)는 위에 남긴다 (2026-11-23) */
+  setServerMade(items: MadeItem[]): void;
   /** 실험실 화면에서 고른 종목 · 조건 (원본 labStk · lab) */
   labCode: string;
   labDirs: LabDir[];
@@ -79,6 +83,8 @@ interface StudioPlayerState {
 const DUR = mockAudioEpisode.dur;
 let genT: ReturnType<typeof setTimeout>[] = [];
 let playT: ReturnType<typeof setInterval> | null = null;
+/* 실제 모드 보고서 다시 시도에 쓸 서버 호출 */
+let lastServer: (() => Promise<MadeItem>) | null = null;
 
 export const useStudioPlayer = create<StudioPlayerState>((set, get) => {
   const step = (i: number, s: StepState, pct?: number) =>
@@ -93,6 +99,37 @@ export const useStudioPlayer = create<StudioPlayerState>((set, get) => {
       set({ t: nt });
       if (nt >= DUR) { set({ playing: false }); runPlay(false); }
     }, 250);
+  };
+  /* 실제 모드 주간보고서: 앞 단계는 시간으로 진행하고, 마지막 단계는 서버 완성(또는 실패)을 기다린다 */
+  const runServer = (server: () => Promise<MadeItem>) => {
+    genT.forEach(clearTimeout);
+    genT = [];
+    const T = (fn: () => void, ms: number) => genT.push(setTimeout(fn, ms));
+    T(() => step(0, 'run', 8), 300);
+    T(() => { step(0, 'done'); step(1, 'run', 35); }, 2500);
+    T(() => { step(1, 'done'); step(2, 'run', 70); }, 9000);
+    server().then(
+      (item) => {
+        genT.forEach(clearTimeout);
+        genT = [];
+        const s = get();
+        if (s.job?.kind !== 'report') return;
+        const here = s.genVisible || s.webView === 'gen';
+        set({ made: [item, ...s.made.filter((m) => m.id !== item.id)], job: null, curReport: item.id, openKind: 'report',
+          webView: s.webView === 'gen' ? 'report' : s.webView, openPlayer: s.genVisible ? s.openPlayer + 1 : s.openPlayer });
+        if (!here) useUI.getState().showToast(KIND_T.report.done);
+      },
+      (err: unknown) => {
+        genT.forEach(clearTimeout);
+        genT = [];
+        const s = get();
+        if (!s.job) return;
+        const at = s.job.steps.findIndex((x) => x !== 'done');
+        step(at < 0 ? 2 : at, 'bad');
+        set({ job: get().job && { ...get().job!, status: 'fail' }, webView: s.webView === 'gen' ? 'fail' : s.webView });
+        useUI.getState().showToast(err instanceof Error ? err.message : KIND_T.report.bad);
+      },
+    );
   };
   const run = (fail: boolean) => {
     genT.forEach(clearTimeout);
@@ -132,7 +169,8 @@ export const useStudioPlayer = create<StudioPlayerState>((set, get) => {
     }, 5500);
   };
   return {
-    made: mockMade,
+    /* 실제 모드는 서버 목록(useStudioItemsSync)으로 채운다. 가짜 3개는 mock 모드에서만 */
+    made: env.useMock ? mockMade : [],
     job: null,
     genVisible: false,
     webView: 'home',
@@ -148,14 +186,21 @@ export const useStudioPlayer = create<StudioPlayerState>((set, get) => {
       set({ job: { kind: 'audio', sub: p.sub, n: p.n, codes: p.codes ?? [], market: !!p.market, pct: 0, steps: mockAudioGen.steps.map(() => 'wait'), status: 'run', fail } });
       run(fail);
     },
-    startReport: (p, fail = false) => {
+    startReport: (p, fail = false, server) => {
       set({ job: { kind: 'report', sub: p.sub, n: p.codes.length, codes: p.codes, market: p.market, pct: 0, steps: mockReport.steps.map(() => 'wait'), status: 'run', fail } });
-      run(fail);
+      lastServer = server ?? null;
+      if (server) runServer(server);
+      else run(fail);
     },
     openReport: (id) => set({ curReport: id }),
     curLab: null,
     addLab: (item) => set((s) => ({ made: [item, ...s.made], curLab: item.id })),
     openLab: (id) => set({ curLab: id }),
+    setServerMade: (items) =>
+      set((s) => {
+        const ids = new Set(items.map((m) => m.id));
+        return { made: [...s.made.filter((m) => !m.server && !ids.has(m.id)), ...items] };
+      }),
     labCode: mockLabStocks[0].stock_code,
     labDirs: mockLabVars.map((v) => v.def),
     setLab: (p) => set((s) => ({ labCode: p.code ?? s.labCode, labDirs: p.dirs ?? s.labDirs })),
@@ -165,7 +210,8 @@ export const useStudioPlayer = create<StudioPlayerState>((set, get) => {
       const j = get().job;
       if (!j) return;
       set({ job: { ...j, pct: 0, steps: j.steps.map(() => 'wait'), status: 'run', fail: false } });
-      run(false);
+      if (j.kind === 'report' && lastServer) runServer(lastServer);
+      else run(false);
     },
     dropFailed: () => set((s) => (s.job?.status === 'fail' ? { job: null } : s)),
     setGenVisible: (v) => set({ genVisible: v }),
