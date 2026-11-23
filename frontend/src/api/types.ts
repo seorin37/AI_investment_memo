@@ -1,5 +1,6 @@
 import type {
   AiStats,
+  AiTrackingStock,
   AiUpdate,
   AuthToken,
   BoardItem,
@@ -21,6 +22,8 @@ import type {
   JournalEntry,
   LabDirection,
   LabRunResult,
+  StudioItem,
+  ReportCreateResult,
   MacroOverview,
   MarketOverview,
   MarketUpdate,
@@ -162,6 +165,11 @@ export interface Api {
   getMacro(): Promise<MacroOverview>;
   /** 투자 실험실 실행 (LLM) */
   runLab(input: { stock_code: string; dirs: LabDirection[] }): Promise<LabRunResult>;
+  /** 스튜디오 만든 항목 (studio_items, 내 것·만료 전) */
+  listStudioItems(): Promise<StudioItem[]>;
+  deleteStudioItem(id: string): Promise<void>;
+  /** 주간보고서 만들기 (백그라운드, 완성은 listStudioItems로 확인) */
+  createReport(input: { codes: string[]; market: boolean }): Promise<ReportCreateResult>;
   listCalendar(month: string): Promise<CalendarEvent[]>;
   createCalendarEvent(input: { date: string; title: string }): Promise<CalendarEvent>;
   listNews(): Promise<NewsHeadline[]>;
@@ -187,6 +195,8 @@ export interface Api {
   updateSettings(patch: DeepPartial<Settings>): Promise<Settings>;
   disconnectMcpApp(appId: string): Promise<Settings>;
   getAiStats(): Promise<AiStats>;
+  /** 설정 사용량 탭 종목별 추적 현황 */
+  getAiTracking(): Promise<AiTrackingStock[]>;
   /** 이번 기간 AI 크레딧 사용량. 이번 달 기본량을 아직 안 받았으면 서버가 이 호출에서 지급한다 */
   getUsage(): Promise<CreditUsage>;
   /** 오늘의 퀴즈 1문제 (한국 시간 오전 10시마다 다음 문제). 문제가 없으면 404 */

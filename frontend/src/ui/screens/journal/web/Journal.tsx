@@ -290,6 +290,7 @@ function WebNote({ j, fresh, onUpdate, onMenu }: { j: JournalEntry; fresh: boole
   const [focusEnd, setFocusEnd] = useState(0);
   const [focusTodo, setFocusTodo] = useState<number | null>(null);
   const [titleH, setTitleH] = useState(40);
+  const titleRef = useRef<HTMLTextAreaElement>(null); // 웹: react-native-web 의 multiline TextInput ref = <textarea>
   const { title, body, todo } = splitWeb(j.blocks);
   const hits = useFindHits(ed, find, j.html ?? j.blocks);
   const put = (b: JBlock[], t: JBlock[], ti = title, html?: string) => onUpdate(j.id, { blocks: [{ ...(j.blocks[0] ?? { s: 'title' }), text: ti }, ...b, ...t], ...(html !== undefined ? { html } : null) });
@@ -305,6 +306,7 @@ function WebNote({ j, fresh, onUpdate, onMenu }: { j: JournalEntry; fresh: boole
           <Text style={st.full}>{j.full}</Text>
           <View style={{ height: 18 }} />
           <TextInput
+            ref={titleRef as never}
             value={title}
             autoFocus={fresh}
             multiline
@@ -314,7 +316,11 @@ function WebNote({ j, fresh, onUpdate, onMenu }: { j: JournalEntry; fresh: boole
               put(body, todo, v.replace(/\n/g, ''));
               if (v.includes('\n')) setFocusEnd((n) => n + 1);
             }}
-            onContentSizeChange={(e) => setTitleH(Math.max(40, e.nativeEvent.contentSize.height))}
+            /* Enter 순간 잠깐 들어온 줄바꿈으로 두 줄 높이를 재면, 줄바꿈을 지운 뒤에도 그 높이가 남아 본문과 사이가 벌어짐 → 그 측정은 버림 (2026-11-23) */
+            onContentSizeChange={(e) => {
+              if (titleRef.current?.value?.includes('\n')) return;
+              setTitleH(Math.max(40, e.nativeEvent.contentSize.height));
+            }}
             placeholder="제목"
             placeholderTextColor="#9A9EA7"
             accessibilityLabel="제목"

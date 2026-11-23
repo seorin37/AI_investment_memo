@@ -17,9 +17,11 @@ import { useMyProfile } from '@/ui/screens/my/useMyProfile';
 import { useStudioHead } from '@/ui/screens/studio/useStudioHead';
 import { planKey, withCurrentPlan } from '@/ui/screens/my/planLabel';
 import { useUsageView } from '@/ui/screens/my/useUsageView';
+import { useTrackedView } from '@/ui/screens/my/useTrackedView';
+import { useAiStats, useMyStocks } from '@/hooks/queries';
 import Constants from 'expo-constants';
 import { legalDocument } from '@/ui/screens/auth/Auth.mock';
-import { mockCreditDefault, mockCreditPacks, mockPayMethods, mockDataSources, mockInbox, mockOss, mockPlanCompare, mockPlanDefault, mockPlanNotes, mockPlans, mockReportKinds, mockTracked, mockWithdrawCounts } from '@/ui/screens/my/My.mock';
+import { mockCreditDefault, mockCreditPacks, mockPayMethods, mockDataSources, mockInbox, mockOss, mockPlanCompare, mockPlanDefault, mockPlanNotes, mockPlans, mockReportKinds, mockWithdrawCounts } from '@/ui/screens/my/My.mock';
 import { WebFeedback } from '@/ui/screens/my/web/Feedback';
 import { WebInbox } from '@/ui/screens/my/web/Inbox';
 import { WebSettings, type SettingsTab } from '@/ui/screens/my/web/Settings';
@@ -27,12 +29,14 @@ import { useTodayQuizView } from '@/ui/screens/studio/useTodayQuiz';
 import { useTrashData } from '@/ui/screens/my/useTrashData';
 import { WebTrash } from '@/ui/screens/my/web/Trash';
 import { chapterAt, fmt, useStudioPlayer } from '@/store/studioPlayer';
-import { mockAudioEpisode, mockAudioGen, mockAudioPeriods, mockAudioStocks, mockLabDisclaimer, mockLabNote, mockLabVars, mockLastClose, mockReport, mockReportStocks, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
+import { mockAudioEpisode, mockAudioGen, mockAudioPeriods, mockAudioStocks, mockLabDisclaimer, mockLabNote, mockLabVars, mockLastClose, mockReport, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
 import { WebFail, WebGen, WebMini, WebPlayer } from '@/ui/screens/studio/web/Audio';
 import { WebReportPopup, WebReportSum } from '@/ui/screens/studio/web/Report';
 import { WebLab, WebLabResult, WebQuiz } from '@/ui/screens/studio/web/QuizLab';
 import { labResultGroups } from '@/ui/screens/studio/labParts';
 import { labStockFor, useLabStocks, useRunLab } from '@/ui/screens/studio/useLabRun';
+import { useStudioItemsSync } from '@/ui/screens/studio/studioItems';
+import { reportView, useCreateReport, useReportPickStocks } from '@/ui/screens/studio/reportView';
 import { useLabVars } from '@/ui/screens/studio/useLabVars';
 import { WebAudioPopup } from '@/ui/screens/studio/web/AudioPopup';
 import type { StudioKind } from '@/ui/screens/studio/Studio.types';
@@ -65,6 +69,8 @@ function sideKeyOf(path: string): SideKey {
  */
 export default function MainLayout() {
   const status = useAuth((s) => s.status);
+  /* 스튜디오 만든 항목: 실제 모드면 서버 목록으로 (2026-11-23) */
+  useStudioItemsSync();
   /* 로그인한 채 다른 사용자로 바뀌면(A → B) 커짐 → 아래 Stack 을 다시 마운트해 열린 화면을 새 사용자 값으로 (store/auth sessionKey) */
   const sessionKey = useAuth((s) => s.sessionKey);
   /* 로그인 전: 서비스 설명을 본 적 없으면 /intro (원본 웹처럼 처음 한 번만), 봤으면 /login */
@@ -124,6 +130,14 @@ export default function MainLayout() {
   const { profile: myProfile, save: saveMyProfile, plan: myPlan } = useMyProfile();
   /* AI 사용량: 실제 모드면 GET /me/usage (2026-11-22), mock 모드면 My.mock */
   const usage = useUsageView();
+  /* 설정 사용량 탭 종목별 추적 현황 (설정 창이 열렸을 때만 부름) */
+  const tracked = useTrackedView(settings !== null);
+  /* 스튜디오 머리글 '내 종목 N · AI 연결 메모 N': 실제 모드는 GET /stocks · GET /ai/stats (홈 제목 줄과 같은 값, 2026-11-23) */
+  const myStocks = useMyStocks();
+  const aiStats = useAiStats();
+  const studioHead = env.useMock
+    ? mockStudioHead
+    : { stockCount: myStocks.data?.length ?? 0, aiMemoCount: aiStats.data?.linked_memos ?? 0 };
   const myNoti = useMyMock((s) => s.noti);
   const setMyNoti = useMyMock((s) => s.setNoti);
   /* ⑨-3c 휴지통 · 피드백 · 알림함 (mock: 복원·읽음은 화면 상태만, 영구 삭제·보내기는 연결 안 됨) */
@@ -154,7 +168,10 @@ export default function MainLayout() {
   /* ⑧-8c 주간보고서: 스튜디오 열 요약 · 가운데 /report 자세히 */
   const repItem = sp.made.find((m) => m.id === sp.curReport && m.kind === 'report');
   const labItem = sp.made.find((m) => m.id === sp.curLab && m.kind === 'lab');
-  const repStocks = mockReportStocks.filter((s) => (repItem?.codes ?? []).includes(s.stock_code));
+  /* 서버 보고서면 그 내용, 아니면 mock 예시 (reportView, 2026-11-23) */
+  const repView = reportView(repItem);
+  const reportPick = useReportPickStocks();
+  const createReport = useCreateReport();
   const { studio_fail } = useGlobalSearchParams<{ studio_fail?: string }>();
   const unreadShown = mockInbox.filter((n) => unread.includes(n.id) && (n.kind === 'ai' ? myNoti.ai : myNoti.studio)).length;
   const say = (x: { msg: string; undo?: () => void; check?: boolean }) => {
@@ -229,9 +246,8 @@ export default function MainLayout() {
       studio={{
         open: studioOpen,
         onToggle: () => setStudioOpen((o) => !o),
-        stockCount: studioHead.stock_count,
-        aiMemoCount: studioHead.ai_memo_count,
-        /* AI 사용량은 설정 창과 같은 값 */
+        /* AI 사용량은 설정 창(My.mock)과 같은 값 */
+        ...studioHead,
         usagePct: usage.usage_pct,
         onUsage: () => setStudioPop('usage'),
         /* 접힌 열: 만드는 중인 기능에 '·' 점 (원본 studio.tsx 177 — 퀴즈 제외) */
@@ -272,10 +288,10 @@ export default function MainLayout() {
               )
               : sp.webView === 'report' && repItem ? (
                 <WebReportSum
-                  rep={mockReport}
+                  rep={repView.rep}
                   item={repItem}
-                  stocks={repStocks}
-                  allDefault={repStocks.length === mockReportStocks.length}
+                  stocks={repView.stocks}
+                  allDefault={repView.allDefault}
                   onBack={() => sp.setWebView('home')}
                   onDetail={() => router.navigate('/report')}
                 />
@@ -413,7 +429,7 @@ export default function MainLayout() {
       }}
       /* 사용량 % · 갱신일: GET /me/usage · 플랜 이름 · 현재 플랜: 로그인 사용자 plan */
       usage={usage}
-      tracked={mockTracked}
+      tracked={tracked}
       onOpenMemo={(code) => { setSettings(null); openStock(code); }}
       plans={withCurrentPlan(mockPlans, planKey(myPlan))}
       compare={mockPlanCompare}
@@ -461,14 +477,16 @@ export default function MainLayout() {
     />
     <WebReportPopup
       open={studioPop === 'report'}
-      stocks={mockReportStocks}
-      sub={mockReport.web_period}
+      stocks={reportPick.stocks}
+      counts={reportPick.counts}
+      sub={env.useMock ? mockReport.web_period : '지난주(월~금) 보고서에 넣을 종목'}
       onClose={() => setStudioPop(null)}
       onMake={({ codes, market }) => {
         setStudioPop(null);
         setStudioOpen(true);
         sp.setWebView('gen');
-        sp.startReport({ sub: `${codes.length}종목${market ? ' · 국내 증시 흐름 포함' : ''} · ${mockReport.gen_range}`, codes, market }, __DEV__ && studio_fail === '1');
+        sp.startReport({ sub: `${codes.length}종목${market ? ' · 국내 증시 흐름 포함' : ''}${env.useMock ? ` · ${mockReport.gen_range}` : ' · 지난주'}`, codes, market },
+          __DEV__ && studio_fail === '1', env.useMock ? undefined : () => createReport(codes, market));
       }}
     />
     <WebUsageSheet open={studioPop === 'usage'} pct={usage.usage_pct} refill={usage.usage_refill} onClose={() => setStudioPop(null)} onBuyCredit={() => setStudioPop('charge')} onChangePlan={() => setSettings('사용량')} />

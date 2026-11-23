@@ -40,13 +40,15 @@ export const qk = {
   trash: ['trash'] as const,
   settings: ['settings'] as const,
   aiStats: ['aiStats'] as const,
+  aiTracking: ['aiTracking'] as const,
   todayQuiz: ['todayQuiz'] as const,
+  studioItems: ['studioItems'] as const,
   usage: ['usage'] as const,
   dataStats: ['dataStats'] as const,
 };
 
 /** 메모/보드가 바뀌면 함께 갱신해야 하는 홈 위젯 키 */
-const memoDependents = [qk.pinned, qk.homeChecklist, qk.priceConditions, qk.memoUpdateSummary, qk.backtests, qk.compare, qk.conclude, qk.aiStats, qk.dataStats];
+const memoDependents = [qk.aiTracking, qk.pinned, qk.homeChecklist, qk.priceConditions, qk.memoUpdateSummary, qk.backtests, qk.compare, qk.conclude, qk.aiStats, qk.dataStats];
 
 function useInvalidate() {
   const qc = useQueryClient();
@@ -399,3 +401,15 @@ export function useUpdateMe() {
 export function useSendFeedback() {
   return useMutation({ mutationFn: (p: FeedbackPayload) => api.sendFeedback(p) });
 }
+
+/** 스튜디오 만든 항목 (GET /studio/items, 2026-11-23). 실제 모드·로그인 뒤에만 */
+export const useStudioItems = (enabled = true) =>
+  useQuery({ queryKey: qk.studioItems, queryFn: api.listStudioItems, staleTime: 60_000, enabled });
+
+export function useDeleteStudioItem() {
+  const inv = useInvalidate();
+  return useMutation({ mutationFn: (id: string) => api.deleteStudioItem(id), onSuccess: () => inv(qk.studioItems) });
+}
+
+/** 설정 사용량 탭 종목별 추적 현황 (GET /ai/tracking, 2026-11-23) */
+export const useAiTracking = (enabled = true) => useQuery({ queryKey: qk.aiTracking, queryFn: api.getAiTracking, enabled });

@@ -9,6 +9,7 @@ import { mockAudioEpisode } from '@/ui/screens/studio/Studio.mock';
 import { AppMiniPlayer } from '@/ui/screens/studio/app/MiniPlayer';
 import { size } from '@/ui/theme';
 import { useUI } from '@/store/ui';
+import { useStudioItemsSync } from '@/ui/screens/studio/studioItems';
 import { BottomTabBar } from '@/ui/layout/app/BottomTabBar';
 import { AppSnackbar } from '@/ui/shared/Snackbar';
 import { mockTabBadges } from '@/ui/layout/app/BottomTabBar.mock';
@@ -23,6 +24,8 @@ const TAB_OF: Record<string, AppTab> = { index: 'home', updates: 'updates', stoc
 
 export default function MainTabsLayout() {
   const status = useAuth((s) => s.status);
+  /* 스튜디오 만든 항목: 실제 모드면 서버 목록으로 (2026-11-23) */
+  useStudioItemsSync();
   /* 로그인한 채 다른 사용자로 바뀌면(A → B) 커짐 → 탭을 다시 마운트해 열린 화면을 새 사용자 값으로 (store/auth sessionKey) */
   const sessionKey = useAuth((s) => s.sessionKey);
   /* 메모 고르기 중 탭바 숨김 (옛 보드가 store/ui 로 알려 줌) */

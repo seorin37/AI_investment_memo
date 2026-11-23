@@ -74,7 +74,7 @@ const st = StyleSheet.create({
   fi: { width: 44, height: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   fT: { fontSize: 17, lineHeight: 24, fontWeight: '700', color: '#16171A' },
   fD: { fontSize: 15, lineHeight: 22, color: '#575B63' },
-  secr: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, paddingTop: 8 },
+  secr: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, paddingTop: 28 },   // 위 기능 목록과 띄움 (2026-11-23, 8 → 28)
   secrT: { fontSize: 17, lineHeight: 26, fontWeight: '700', color: '#16171A' },
   secrS: { fontSize: 14, lineHeight: 21, color: '#9A9EA7' },
   made: { borderRadius: 18, backgroundColor: '#FFFFFF', paddingHorizontal: 16 },

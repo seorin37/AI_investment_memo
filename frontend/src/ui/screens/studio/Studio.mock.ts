@@ -90,8 +90,15 @@ export interface ReportStock {
   counts: { 공시: number; 뉴스: number };
   story: string;
   items: ReportItem[];
-  memo?: { bg: string; ink: string; title: string; meta: string; body: string };
+  /** linked_count: 메모 추적 항목에 그 주 붙은 소식 수 (서버 보고서, 없으면 종목 소식 전체 수) */
+  memo?: { bg: string; ink: string; title: string; meta: string; body: string; memo_id?: string; linked_count?: number };
   watch: { text: string; why: string }[];
+  /** 서버 보고서 (2026-11-23): 이번 주 이슈 정리 7~8문장 (문단은 빈 줄로 나뉨) */
+  issues?: string;
+  /** PER·PBR·EPS·시가총액·52주 위치 (stock_fundamentals_snapshot) */
+  valuation?: { basis: string; per: number | null; pbr: number | null; eps: number | null; market_cap: string; w52_high: number | null; w52_low: number | null; w52_pos: number | null } | null;
+  /** 최근 분기 실적 (financials_quarterly, 연결 우선) */
+  quarter?: { label: string; basis: string; revenue: string; operating_income: string; net_income: string; revenue_yoy: number | null; op_yoy: number | null } | null;
 }
 export const mockReportStocks: ReportStock[] = [
   {
@@ -150,6 +157,8 @@ export const mockReport = {
     { day: '11.05 수', text: '외국인, 사흘 연속 코스피 순매수', src: '[6]' },
     { day: '11.07 금', text: '원/달러 환율 1,350원대로 하락', src: '[7]' },
   ],
+  /** 서버 보고서: 국내 증시 시황 정리 7~8문장 (mock 은 비움) */
+  market_summary: '',
   /** 기본 3종목일 때 '이번 주 한눈에' (다른 조합은 화면에서 숫자로 만듦) */
   summary_default: '내 종목 3곳 중 2곳이 올랐어요. SK하이닉스는 화요일 신규 시설투자 공시[1]가 나왔고 한 주 동안 6.2% 올라 가장 크게 움직였어요. 삼성전자는 메모에 적어 둔 자기주식 취득 공시[2]가 나왔어요. 네이버는 새 공시·뉴스 없이 0.8% 내렸어요.',
   sources: [

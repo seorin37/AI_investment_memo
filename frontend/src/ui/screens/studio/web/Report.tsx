@@ -8,7 +8,7 @@ import { Sheet } from '@/ui/shared/Sheet';
 import { CloseX } from '../../my/web/parts';
 import type { mockReport, ReportStock } from '../Studio.mock';
 import type { MadeItem } from '../Studio.types';
-import { reportSummary, sign, won } from '../reportParts';
+import { issueParas, quarterLine, reportSummary, sign, valuationCells, won } from '../reportParts';
 import { Check } from './AudioPopup';
 import { GBtn } from './Credit';
 import { Keep } from '@/ui/shared/Dark';
@@ -20,7 +20,7 @@ const pc = (v: number) => (v >= 0 ? UPC : DNC);
 const TR = { letterSpacing: -0.2 };
 
 /** 웹 주간보고서 만들기 창 = 원본 studio.tsx ReportPopup (468) */
-export function WebReportPopup({ open, stocks, sub, onClose, onMake }: { open: boolean; stocks: ReportStock[]; sub: string; onClose: () => void; onMake: (p: { codes: string[]; market: boolean }) => void }) {
+export function WebReportPopup({ open, stocks, sub, onClose, onMake, counts = true }: { open: boolean; stocks: ReportStock[]; sub: string; onClose: () => void; onMake: (p: { codes: string[]; market: boolean }) => void; /** 종목별 '공시·뉴스 N' 미리 보기 (실제 모드는 없음) */ counts?: boolean }) {
   const all = stocks.map((s) => s.stock_code);
   const [sel, setSel] = useState<string[]>(all);
   const [sum, setSum] = useState(false);
@@ -57,7 +57,7 @@ export function WebReportPopup({ open, stocks, sub, onClose, onMake }: { open: b
                 <Pressable key={s.stock_code} onPress={() => setSel((a) => (on ? a.filter((x) => x !== s.stock_code) : [...a, s.stock_code]))} accessibilityRole="checkbox" accessibilityState={{ checked: on }} style={({ hovered }: Hover) => [st.row, hovered && { backgroundColor: '#F9F9F9' }]}>
                   <Check on={on} />
                   <Text style={st.name} numberOfLines={1}>{s.name}</Text>
-                  <Text style={st.cnt}>공시 {s.counts.공시} · 뉴스 {s.counts.뉴스}</Text>
+                  {counts ? <Text style={st.cnt}>공시 {s.counts.공시} · 뉴스 {s.counts.뉴스}</Text> : null}
                   <View style={st.chip}><Text style={st.chipT}>{s.own}</Text></View>
                 </Pressable>
               );
@@ -110,9 +110,9 @@ export function WebReportSum({ rep, item, stocks, allDefault, onBack, onDetail }
         <View style={{ gap: 4 }}>
           <Text style={st.sLbl}>MEMO&apos;S 주간보고서 · {rep.week}</Text>
           <Text style={st.sTitle}>{item.title}</Text>
-          <Text style={st.sLbl2}>{rep.range} · 거래일 5일 · {stocks.length}종목</Text>
+          <Text style={st.sLbl2}>{rep.range} · 거래일 {rep.days.length}일 · {stocks.length}종목</Text>
         </View>
-        <View style={st.glance}><Text style={st.glanceH}>이번 주 한눈에</Text><Text keepAll style={st.glanceP}>{reportSummary(stocks, allDefault, rep.summary_default, rep.days[4].split(' ')[0])}</Text></View>
+        <View style={st.glance}><Text style={st.glanceH}>이번 주 한눈에</Text><Text keepAll style={st.glanceP}>{reportSummary(stocks, allDefault, rep.summary_default, rep.days[rep.days.length - 1].split(' ')[0])}</Text></View>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {rep.market.map((m) => <View key={m.name} style={st.mk}><Text style={st.sLbl2}>{m.name}</Text><Text style={[st.mkV, { color: pc(m.pct) }]}>{sign(m.pct)}</Text></View>)}
         </View>
@@ -155,7 +155,7 @@ function DetailChart({ s, days }: { s: ReportStock; days: string[] }) {
         <Line x1={X(0)} x2={W - 20} y1={Y(v[0])} y2={Y(v[0])} stroke="#9AA0AA" strokeDasharray="4 4" />
         <Path d={v.slice(1).map((x, k) => `${k ? 'L' : 'M'}${X(k + 1).toFixed(1)} ${Y(x).toFixed(1)}`).join('')} stroke={c} strokeWidth={2.4} strokeLinejoin="round" strokeLinecap="round" />
         {v.slice(1).map((x, k) => <Circle key={k} cx={X(k + 1)} cy={Y(x)} r={ev.has(k) ? 5 : 3} fill={ev.has(k) ? '#15171A' : '#FFFFFF'} stroke={c} strokeWidth={2} />)}
-        {days.map((d, k) => <SvgText key={d} x={X(k + 1)} y={H - 6} textAnchor="middle" fontSize={11} fill="#8B95A1">{d.split(' ')[0]}</SvgText>)}
+        {days.slice(0, s.closes.length).map((d, k) => <SvgText key={d} x={X(k + 1)} y={H - 6} textAnchor="middle" fontSize={11} fill="#8B95A1">{d.split(' ')[0]}</SvgText>)}
         <SvgText x={X(0) + 4} y={Y(v[0]) - 6} fontSize={11} fill="#8B95A1">지난주 종가</SvgText>
       </Svg>
     </View>
@@ -192,7 +192,7 @@ export function WebReportDetail({ rep, item, stocks, market, allDefault, onMemo 
             </View>
             <View style={{ gap: 6 }}>
               <Text style={st.heroT}>{item.title}</Text>
-              <Text style={st.heroS}>{rep.range} · 거래일 5일 · {stocks.length}종목 · {rep.made_at} 작성</Text>
+              <Text style={st.heroS}>{rep.range} · 거래일 {rep.days.length}일 · {stocks.length}종목 · {rep.made_at} 작성</Text>
             </View>
             <View style={{ height: 1, alignSelf: 'stretch', backgroundColor: 'rgba(255,255,255,0.14)' }} />
             <View style={{ flexDirection: 'row', gap: 10, alignSelf: 'stretch' }}>
@@ -214,11 +214,12 @@ export function WebReportDetail({ rep, item, stocks, market, allDefault, onMemo 
               {([['공시', `${tot.d}건`], ['뉴스', `${tot.n}건`], ['메모와 연결', `${tot.m}개`]] as const).map(([l, n]) => <Text key={l} style={st.heroS}>{l} <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>{n}</Text></Text>)}
             </View>
           </View>
-          <View style={st.dGlance}><Text style={[st.glanceH, { fontSize: 17 }]}>이번 주 한눈에</Text><Text keepAll style={{ fontSize: 17, lineHeight: 27, color: '#2B2F36' }}>{reportSummary(stocks, allDefault, rep.summary_default, rep.days[4].split(' ')[0])}</Text></View>
+          <View style={st.dGlance}><Text style={[st.glanceH, { fontSize: 17 }]}>이번 주 한눈에</Text><Text keepAll style={{ fontSize: 17, lineHeight: 27, color: '#2B2F36' }}>{reportSummary(stocks, allDefault, rep.summary_default, rep.days[rep.days.length - 1].split(' ')[0])}</Text></View>
           {market ? (
             <View style={st.sec}>
               <Text style={st.secH}><Text style={{ color: '#8B95A1' }}>01  </Text>국내 증시 주간 요약</Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>{rep.market.map((m) => <View key={m.name} style={st.cell}><Text style={st.cellL}>{m.name}</Text><Text style={[st.cellV, { color: pc(m.pct) }]}>{sign(m.pct)}</Text></View>)}</View>
+              {rep.market_summary ? <Text keepAll style={st.story}>{rep.market_summary.replace(/\s*\[\d+\]/g, '')}</Text> : null}
               {rep.flow.map((f) => <Text key={f.day} keepAll style={st.flow}>{f.day} · {f.text}</Text>)}
             </View>
           ) : null}
@@ -233,9 +234,21 @@ export function WebReportDetail({ rep, item, stocks, market, allDefault, onMemo 
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 {([['주간 등락', sign(s.pct)], ['주간 최고', s.hi], ['주간 최저', s.lo]] as const).map(([l, x]) => <View key={l} style={st.cell}><Text style={st.cellL}>{l}</Text><Text style={st.cellV}>{x}</Text></View>)}
               </View>
+              {valuationCells(s).length ? (
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {valuationCells(s).map(([l, x]) => <View key={l} style={st.cell}><Text style={st.cellL}>{l}</Text><Text style={st.cellV}>{x}</Text></View>)}
+                </View>
+              ) : null}
+              {quarterLine(s) ? <Text keepAll style={st.note}>{quarterLine(s)}</Text> : null}
               <DetailChart s={s} days={rep.days} />
               <Text style={st.note}>검은 점은 공시·뉴스가 나온 날이에요</Text>
-              <Text keepAll style={st.story}>{s.story.replace(/\[\d\]/g, '')}</Text>
+              <Text keepAll style={st.story}>{s.story.replace(/\[\d+\]/g, '')}</Text>
+              {issueParas(s).length ? (
+                <View style={{ gap: 8 }}>
+                  <Text style={st.subH}>이번 주 이슈 정리</Text>
+                  {issueParas(s).map((t, k) => <Text key={k} keepAll style={st.flow}>{t}</Text>)}
+                </View>
+              ) : null}
               <View style={{ gap: 8 }}>
                 <Text style={st.subH}>이번 주 소식</Text>
                 {!s.items.length ? <Text style={st.note}>새로 나온 소식이 없어요</Text> : null}
@@ -253,7 +266,7 @@ export function WebReportDetail({ rep, item, stocks, market, allDefault, onMemo 
                   <Text style={st.subH}>내 메모와의 연결</Text>
                   <Pressable onPress={() => onMemo(s.stock_code)} accessibilityRole="link">{({ hovered }: Hover) => <Text style={[st.memoL, hovered && { color: '#15171A' }]}>{s.memo ? '원본 메모 보기 ›' : '메모 쓰기 ›'}</Text>}</Pressable>
                 </View>
-                <Text keepAll style={[st.flow, !s.memo && { color: '#747D8D' }]}>{s.memo ? `“${s.memo.title}”에 이번 주 소식 ${s.counts.공시 + s.counts.뉴스}건이 붙었어요.` : '이번 주 소식과 연결된 메모가 없어요.'}</Text>
+                <Text keepAll style={[st.flow, !s.memo && { color: '#747D8D' }]}>{s.memo ? `“${s.memo.title}”에 이번 주 소식 ${s.memo.linked_count ?? s.counts.공시 + s.counts.뉴스}건이 붙었어요.` : '이번 주 소식과 연결된 메모가 없어요.'}</Text>
               </View>
               <View style={{ gap: 8 }}>
                 <Text style={st.subH}>앞으로 지켜볼 것</Text>
