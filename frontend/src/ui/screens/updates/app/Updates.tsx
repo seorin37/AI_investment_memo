@@ -25,7 +25,7 @@ const nextKey = () => ++seq;
 
 /**
  * 앱 업데이트 탭 (원본 update.html · 11.05 A안: 종목별 업데이트도 같은 화면에서 칩만 바뀜)
- * 큰 제목 · 읽지 않은 소식 · 종목 칩(검은 알약) · 종류 칩 · 종목 카드(최근 3건) / 종목을 고르면 종목 카드 + 날짜 묶음 + ④ 소식 카드
+ * 머리 한 줄 제목 · 읽지 않은 소식 · 종목 칩(검은 알약) · 종류 칩 · 종목 카드(최근 3건) / 종목을 고르면 종목 카드 + 날짜 묶음 + ④ 소식 카드
  * ✓ 모두 읽음(전체에서만 · 5초 되돌리기) · 내 종목에서 찾기 · 소식 줄 왼쪽으로 밀어 읽음/안 읽음 · 넛지.
  * 당겨서 새로고침은 API 단계(③ 결정).
  */
@@ -35,7 +35,7 @@ export function AppUpdates(p: AppUpdatesProps) {
   const [code, setCode] = useState<string | undefined>(p.code);
   const [kind, setKind] = useState<KindFilter>('전체');
   const [ready, setReady] = useState(false);
-  const [y, setY] = useState(0);
+  const [scrolled, setScrolled] = useState(false);
   const [search, setSearch] = useState(false);
   const [q, setQ] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
@@ -90,16 +90,13 @@ export function AppUpdates(p: AppUpdatesProps) {
     setOpenId((o) => (o === u.id ? null : u.id));
     if (u.unread) p.onMarkRead([u.id], true);
   };
-  const tScale = 1 - Math.min(1, y / 60) * 0.12;
-  const tOpacity = 1 - Math.min(1, y / 60) * 0.9;
   const nN = cur ? unreadOf(byStock(p.items, cur.stock_code)) : total;
 
   return (
     <View style={st.root}>
-      {p.header({ title: y > 44, line: y > 44, onSearch: () => (setQ(''), setSearch(true)), onReadAll: code ? undefined : readAll, readAllOff: !total })}
-      <ScrollView style={st.flex} contentContainerStyle={st.pw} stickyHeaderIndices={[1]} scrollEventThrottle={16} onScroll={(e) => setY(e.nativeEvent.contentOffset.y)} showsVerticalScrollIndicator={false}>
-        <View style={[st.lt, { opacity: tOpacity, transform: [{ scale: tScale }] }]}>
-          <Text style={st.ltH}>최신 업데이트</Text>
+      {p.header({ line: scrolled, onSearch: () => (setQ(''), setSearch(true)), onReadAll: code ? undefined : readAll, readAllOff: !total })}
+      <ScrollView style={st.flex} contentContainerStyle={st.pw} stickyHeaderIndices={[1]} scrollEventThrottle={16} onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > 0)} showsVerticalScrollIndicator={false}>
+        <View style={st.lt}>
           <Text style={st.ltP}>내 종목의 공시·뉴스·주가 변동을 모아봤어요</Text>
           <View style={st.unr}>
             <View style={st.unrDot} />
@@ -640,8 +637,7 @@ const st = StyleSheet.create({
   flex: { flex: 1 },
   flexMin: { flex: 1, minWidth: 0 },
   pw: { paddingBottom: 30 },
-  lt: { paddingHorizontal: 18, paddingBottom: 10, transformOrigin: 'left top' },
-  ltH: { fontSize: 27, lineHeight: 34, fontWeight: '800', letterSpacing: -0.5, color: appColor.ink },
+  lt: { paddingHorizontal: 18, paddingBottom: 10 },
   ltP: { ...ft(13.5), color: appColor.ink2, marginTop: 6 },
   unr: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', marginTop: 10, minHeight: 30, paddingHorizontal: 12, borderRadius: 15, backgroundColor: '#EEE9FB' },
   unrDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#E5484D', marginRight: 6 },

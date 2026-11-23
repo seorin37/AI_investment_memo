@@ -30,7 +30,7 @@ const TAB_TITLE: TextStyle = { ...ft(21), fontWeight: '800', color: appColor.ink
 const SPEC: Record<TopBarPreset, Spec> = {
   home: { h: 60, padL: 18, padR: 12, bg: appColor.bg, btn: 42, btnGap: 2, avatarGap: 6, logo: true },
   start: { h: 56, padL: 18, padR: 10, bg: appColor.bg, btn: 40, btnGap: 2, avatarGap: 6, logo: true },
-  updates: { h: 56, padL: 18, padR: 10, bg: appColor.bg, btn: 42, btnGap: 0, avatarGap: 4, title: TAB_TITLE },
+  updates: { h: 60, padL: 18, padR: 12, bg: appColor.bg, btn: 40, btnGap: 2, avatarGap: 6, title: TAB_TITLE },
   stocks: { h: 60, padL: 18, padR: 12, bg: appColor.bg, btn: 40, btnGap: 2, avatarGap: 6, title: TAB_TITLE },
   journal: { h: 60, padL: 18, padR: 12, bg: appColor.bg, btn: 40, btnGap: 6, avatarGap: 6, title: TAB_TITLE },
   studio: { h: 56, padL: 18, padR: 10, bg: appColor.bg, btn: 42, btnGap: 0, avatarGap: 6, title: TAB_TITLE },
