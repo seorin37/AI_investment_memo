@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Linking } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { env } from '@/config/env';
 import { useCoach } from '@/store/coach';
@@ -266,6 +267,9 @@ function BoardTab({ code, memoParam, ev, firstFlow, stockName, onboardingSelecte
         onSeenUpdates={() => {
           setFeed((f) => ({ ...f, [opened.id]: (f[opened.id] ?? []).map((x) => ({ ...x, unread: false })) }));
           patch(opened.id, (m) => ({ ...m, unread_updates: 0 }));
+        }}
+        onOpenSource={(f) => {
+          if (f.url) void Linking.openURL(f.url);
         }}
       />
     ) : null}
