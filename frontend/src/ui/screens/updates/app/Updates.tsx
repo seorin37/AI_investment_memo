@@ -3,18 +3,21 @@ import { Animated, BackHandler, PanResponder, Pressable, ScrollView, StyleSheet,
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { Text, TextInput } from '@/components/ui/AppText';
+import { ChevDown16 } from '@/ui/icons/MemoGlyphs';
+import { Collapse } from '@/ui/motion/Collapse';
 import { Odometer } from '@/ui/motion/Numbers';
 import { Reveal } from '@/ui/motion/Reveal';
 import { Skeleton } from '@/ui/motion/Skeleton';
-import { useMotionK } from '@/ui/motion/useMotion';
-import { FeedCard } from '@/ui/screens/memo/app/MemoFeed';
+import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
+import { FeedBody, Turn } from '@/ui/screens/memo/app/MemoFeed';
+import { KindTag } from '@/ui/shared/KindTag';
 import { NudgePill } from '@/ui/shared/NudgePill';
 import { AppSnackbar } from '@/ui/shared/Snackbar';
 import { StockLogo } from '@/ui/shared/StockLogo';
 import { appColor, curve, ft } from '@/ui/theme';
 import type { AppUpdatesProps, KindFilter, UpdateItem, UpdateStock } from '../Updates.types';
 import { versionsOf } from '../Updates.mock';
-import { APP_TAG, KINDS, ago, byStock, dayGroup, unreadOf } from '../updatesFormat';
+import { APP_TAG, KINDS, ago, byStock, dayGroup, sourceLine, unreadOf } from '../updatesFormat';
 import { useNudge } from '@/store/nudge';
 
 let seq = 0;
@@ -346,28 +349,76 @@ function StockView({ p, s, kind, setKind, openId, onOpen }: { p: AppUpdatesProps
       {groups.map(([g, list]) => (
         <View key={g}>
           <Text style={st.gh}>{g}</Text>
-          {list.map((u) => (
-            <ReadSwipe key={u.id} read={!u.unread} onToggle={() => p.onMarkRead([u.id], u.unread)}>
-              <FeedCard f={u} ver={versionsOf(u.memo_id).find((v) => v.version === u.memo_version)} open={openId === u.id} onToggle={() => onOpen(u)} onOpenSource={() => p.onOpenSource(u)} onOpenEvidence={() => p.onOpenEvidence(u)} />
-            </ReadSwipe>
-          ))}
+          <View style={st.gc}>
+            {list.map((u, i) => (
+              <ReadSwipe key={u.id} line={i > 0} open={openId === u.id} read={!u.unread} onToggle={() => p.onMarkRead([u.id], u.unread)}>
+                <NewsRow u={u} open={openId === u.id} onToggle={() => onOpen(u)} onOpenSource={() => p.onOpenSource(u)} onOpenEvidence={() => p.onOpenEvidence(u)} />
+              </ReadSwipe>
+            ))}
+          </View>
         </View>
       ))}
     </View>
   );
 }
 
+/** 종목별 소식 한 줄: 태그 · 제목 · 안 읽음 점 · ⌄ / 내 메모 / 출처 · 시간 */
+function NewsRow({ u, open, onToggle, onOpenSource, onOpenEvidence }: { u: UpdateItem; open: boolean; onToggle: () => void; onOpenSource: () => void; onOpenEvidence: () => void }) {
+  return (
+    <View style={st.nr}>
+      <Pressable onPress={onToggle} accessibilityRole="button" accessibilityState={{ expanded: open }}>
+        <View style={st.nrTop}>
+          <View style={st.nrTag}>
+            <KindTag kind={u.kind} variant="app" />
+          </View>
+          <Text style={st.nrT}>{u.headline}</Text>
+          {u.unread ? <View style={st.nrDot} /> : null}
+          <View style={st.nrChev}>
+            <Turn on={open}>
+              <ChevDown16 />
+            </Turn>
+          </View>
+        </View>
+        {u.memo_title ? (
+          <View style={st.nrMemo}>
+            <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={appColor.deepPurple} strokeWidth={2} strokeLinejoin="round">
+              <Path d="M5 4h14v11l-5 5H5z" />
+              <Path d="M14 20v-5h5" />
+            </Svg>
+            <Text style={st.nrMemoT} numberOfLines={1}>
+              내 메모 · {u.memo_title}
+            </Text>
+          </View>
+        ) : null}
+        <Text style={st.nrSrc}>{sourceLine(u.source)}</Text>
+      </Pressable>
+      <Collapse open={open} duration={420}>
+        <FeedBody flat f={u} ver={versionsOf(u.memo_id).find((v) => v.version === u.memo_version)} onOpenSource={onOpenSource} onOpenEvidence={onOpenEvidence} />
+      </Collapse>
+    </View>
+  );
+}
+
 /** 소식 줄 왼쪽으로 밀기 → 읽음/안 읽음 (원본 .dr .act 88 · 보라) */
-function ReadSwipe({ read, onToggle, children }: { read: boolean; onToggle: () => void; children: React.ReactNode }) {
+function ReadSwipe({ line, open, read, onToggle, children }: { line: boolean; open: boolean; read: boolean; onToggle: () => void; children: React.ReactNode }) {
   const k = useMotionK();
   const [x] = useState(() => new Animated.Value(0));
   const [opened, setOpened] = useState(false);
+  /* 펼치면 제자리로 · 버튼 숨김 */
+  if (open && opened) setOpened(false);
+  useEffect(() => {
+    if (!open) return;
+    const a = Animated.timing(x, { toValue: 0, duration: 320 * k, easing: curve.ease, useNativeDriver: NATIVE });
+    a.start();
+    return () => a.stop();
+  }, [open, x, k]);
   const pan = useMemo(() => {
     const s = { base: 0, cur: 0 };
     return PanResponder.create({
-      onMoveShouldSetPanResponderCapture: (_, g) => Math.abs(g.dx) > 8 && Math.abs(g.dx) > Math.abs(g.dy),
+      onMoveShouldSetPanResponderCapture: (_, g) => !open && Math.abs(g.dx) > 8 && Math.abs(g.dx) > Math.abs(g.dy),
       onPanResponderGrant: () => {
         s.base = opened ? -88 : 0;
+        s.cur = s.base;
       },
       onPanResponderMove: (_, g) => {
         let v = s.base + g.dx;
@@ -379,28 +430,32 @@ function ReadSwipe({ read, onToggle, children }: { read: boolean; onToggle: () =
       onPanResponderRelease: () => {
         const o = s.cur < -44;
         setOpened(o);
-        Animated.timing(x, { toValue: o ? -88 : 0, duration: 320 * k, easing: curve.ease, useNativeDriver: true }).start();
+        Animated.timing(x, { toValue: o ? -88 : 0, duration: 320 * k, easing: curve.ease, useNativeDriver: NATIVE }).start();
       },
       onPanResponderTerminationRequest: () => false,
     });
-  }, [opened, x, k]);
+  }, [open, opened, x, k]);
   return (
-    <View style={st.swWrap} {...pan.panHandlers}>
-      <Pressable
-        onPress={() => {
-          onToggle();
-          setOpened(false);
-          Animated.timing(x, { toValue: 0, duration: 320 * k, easing: curve.ease, useNativeDriver: true }).start();
-        }}
-        accessibilityRole="button"
-        style={st.act}
-      >
-        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-          <Path d="M4 12.5l5 5L20 7" />
-        </Svg>
-        <Text style={st.actT}>{read ? '안 읽음' : '읽음'}</Text>
-      </Pressable>
-      <Animated.View style={{ transform: [{ translateX: x }] }}>{children}</Animated.View>
+    <View style={[st.swWrap, line && st.swLine]} {...pan.panHandlers}>
+      {open ? null : (
+        <Animated.View style={[st.act, { opacity: x.interpolate({ inputRange: [-1, 0], outputRange: [1, 0], extrapolate: 'clamp' }) }]}>
+          <Pressable
+            onPress={() => {
+              onToggle();
+              setOpened(false);
+              Animated.timing(x, { toValue: 0, duration: 320 * k, easing: curve.ease, useNativeDriver: NATIVE }).start();
+            }}
+            accessibilityRole="button"
+            style={st.actIn}
+          >
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+              <Path d="M4 12.5l5 5L20 7" />
+            </Svg>
+            <Text style={st.actT}>{read ? '안 읽음' : '읽음'}</Text>
+          </Pressable>
+        </Animated.View>
+      )}
+      <Animated.View style={[st.swFace, { transform: [{ translateX: x }] }]}>{children}</Animated.View>
     </View>
   );
 }
@@ -541,8 +596,22 @@ const st = StyleSheet.create({
   sub2T: { ...ft(13), color: appColor.ink2 },
   sub2B: { fontSize: 13, lineHeight: 17, fontWeight: '700', color: appColor.deepPurple },
   gh: { ...ft(13), fontWeight: '700', color: appColor.ink2, paddingTop: 12, paddingHorizontal: 20, paddingBottom: 7 },
-  swWrap: { marginHorizontal: 16, marginBottom: 8, borderRadius: 18, overflow: 'hidden', backgroundColor: appColor.accent },
-  act: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 88, alignItems: 'center', justifyContent: 'center', gap: 3 },
+  /* 같은 날짜 소식 한 카드 */
+  gc: { backgroundColor: '#FFFFFF', borderRadius: 20, marginHorizontal: 16, overflow: 'hidden' },
+  swWrap: { position: 'relative', overflow: 'hidden' },
+  swLine: { borderTopWidth: 1, borderTopColor: '#F0F1F4' },
+  swFace: { backgroundColor: '#FFFFFF' },
+  nr: { paddingVertical: 14, paddingHorizontal: 16 },
+  nrTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  nrTag: { marginTop: 1 },
+  nrT: { flex: 1, minWidth: 0, fontSize: 15, lineHeight: 21, fontWeight: '700', color: appColor.ink },
+  nrDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: appColor.accent, marginTop: 7 },
+  nrChev: { marginTop: 3 },
+  nrMemo: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
+  nrMemoT: { flex: 1, minWidth: 0, ...ft(12.5), color: appColor.deepPurple },
+  nrSrc: { ...ft(12), color: appColor.ink3, marginTop: 4 },
+  act: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 88, backgroundColor: appColor.accent },
+  actIn: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3 },
   actT: { ...ft(12.5), fontWeight: '700', color: '#FFFFFF' },
   fin: { alignItems: 'center', gap: 8, paddingTop: 22, paddingBottom: 10 },
   finT: { ...ft(13), color: appColor.ink3 },

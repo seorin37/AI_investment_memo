@@ -170,11 +170,9 @@ function SkBar({ w, h }: { w: number; h: number }) {
   return <View style={{ width: w, maxWidth: '100%', height: h, borderRadius: 6, backgroundColor: '#E2E5EA' }} />;
 }
 
-/** 소식 카드 — 메모 상세 AI 탭 · 업데이트 탭(⑥)이 같이 씀 (원본 .uc: 라운드 18 · 안쪽 14·16 · 아래 10 · 종류별 바탕) */
+/** 소식 카드 — 메모 상세 AI 탭 (원본 .uc: 라운드 18 · 안쪽 14·16 · 아래 10 · 종류별 바탕) */
 export function FeedCard({ f, ver, open, onToggle, onOpenSource, onOpenEvidence }: { f: MemoFeedItem; ver?: MemoVersion; open: boolean; onToggle: () => void; onOpenSource?: (f: MemoFeedItem) => void; onOpenEvidence?: (f: MemoFeedItem) => void }) {
   const [bg, ic] = FK[f.kind];
-  const [cite, setCite] = useState(false);
-  const srcName = f.source.split(' · ')[0];
   return (
     <View style={[st.uc, { backgroundColor: bg }]}>
       <Pressable onPress={onToggle} accessibilityRole="button" accessibilityState={{ expanded: open }} style={st.uh}>
@@ -202,60 +200,71 @@ export function FeedCard({ f, ver, open, onToggle, onOpenSource, onOpenEvidence 
         </View>
       </Pressable>
       <Collapse open={open} duration={420}>
-        <View style={st.ux}>
-          <Text style={st.usum}>
-            <Text style={cite ? st.sOn : null}>{f.summary}</Text>
-            {f.kind === '주가' ? <Text style={{ color: '#9A9EA7' }}> (코드 계산)</Text> : null}
-            {f.kind === '공시' && f.quote ? (
-              <Text onPress={() => setCite((c) => !c)} accessibilityRole="button" accessibilityLabel="출처 1" style={[st.cite, cite && st.citeOn]}>
-                {' 1 '}
-              </Text>
-            ) : null}
+        <FeedBody f={f} ver={ver} onOpenSource={onOpenSource} onOpenEvidence={onOpenEvidence} />
+      </Collapse>
+    </View>
+  );
+}
+
+/** 소식 펼친 내용. flat = 흰 카드 줄(업데이트 종목별): 들여쓰기 없음 · 안쪽 상자는 회색 */
+export function FeedBody({ f, ver, flat, onOpenSource, onOpenEvidence }: { f: MemoFeedItem; ver?: MemoVersion; flat?: boolean; onOpenSource?: (f: MemoFeedItem) => void; onOpenEvidence?: (f: MemoFeedItem) => void }) {
+  const [cite, setCite] = useState(false);
+  const srcName = f.source.split(' · ')[0];
+  const ind = flat ? st.flatInd : null;
+  const box = flat ? st.flatBox : null;
+  return (
+    <View style={st.ux}>
+      <Text style={[st.usum, ind]}>
+        <Text style={cite ? st.sOn : null}>{f.summary}</Text>
+        {f.kind === '주가' ? <Text style={{ color: '#9A9EA7' }}> (코드 계산)</Text> : null}
+        {f.kind === '공시' && f.quote ? (
+          <Text onPress={() => setCite((c) => !c)} accessibilityRole="button" accessibilityLabel="출처 1" style={[st.cite, cite && st.citeOn]}>
+            {' 1 '}
           </Text>
-          {f.kind === '공시' && f.quote ? (
-            <Collapse open={cite} duration={400}>
-              <View style={st.quote}>
-                <Text style={st.quoteT}>
-                  {splitMark(f.quote, f.quote_mark).map((p, i) => (
-                    <Text key={i} style={p.mark && cite ? st.mark : null}>
-                      {p.t}
-                    </Text>
-                  ))}
+        ) : null}
+      </Text>
+      {f.kind === '공시' && f.quote ? (
+        <Collapse open={cite} duration={400}>
+          <View style={[st.quote, box]}>
+            <Text style={st.quoteT}>
+              {splitMark(f.quote, f.quote_mark).map((p, i) => (
+                <Text key={i} style={p.mark && cite ? st.mark : null}>
+                  {p.t}
                 </Text>
-                <View style={st.from}>
-                  <Text style={st.fromT}>DART · {mmdd(f.at)} · 원문 일부</Text>
-                  <Pressable onPress={() => onOpenSource?.(f)} accessibilityRole="link" hitSlop={8}>
-                    <Text style={st.fromB}>원문 열기 ↗</Text>
-                  </Pressable>
-                </View>
-              </View>
-            </Collapse>
-          ) : null}
-          {f.kind === '뉴스' ? (
-            <View style={st.nlink}>
-              <Text style={st.nsrc}>{srcName}</Text>
-              <Text style={st.nlinkB}>{f.article_title}</Text>
-              <Pressable onPress={() => onOpenSource?.(f)} accessibilityRole="link" style={st.selfStart}>
-                <Text style={st.nlinkBtn}>원문 기사 열기 ↗</Text>
+              ))}
+            </Text>
+            <View style={st.from}>
+              <Text style={st.fromT}>DART · {mmdd(f.at)} · 원문 일부</Text>
+              <Pressable onPress={() => onOpenSource?.(f)} accessibilityRole="link" hitSlop={8}>
+                <Text style={st.fromB}>원문 열기 ↗</Text>
               </Pressable>
             </View>
-          ) : null}
-          {ver ? (
-            <View style={st.lm}>
-              <Text style={st.lmB}>
-                연결된 내 메모 · 버전 {ver.version} ({mmdd(ver.saved_at)})
-              </Text>
-              <Text style={st.lmT} numberOfLines={2}>
-                {ver.title}
-              </Text>
-            </View>
-          ) : null}
-          <Text style={st.ufrom}>{f.kind === '뉴스' ? '기사 내용은 원문 링크에서 볼 수 있어요' : f.kind === '공시' ? `출처 · ${f.source}` : `시세 · ${f.source}`}</Text>
-          <Pressable onPress={() => onOpenEvidence?.(f)} accessibilityRole="button" style={st.evlink}>
-            <Text style={st.evlinkT}>근거 자세히 보기 ›</Text>
+          </View>
+        </Collapse>
+      ) : null}
+      {f.kind === '뉴스' ? (
+        <View style={[st.nlink, box]}>
+          <Text style={st.nsrc}>{srcName}</Text>
+          <Text style={st.nlinkB}>{f.article_title}</Text>
+          <Pressable onPress={() => onOpenSource?.(f)} accessibilityRole="link" style={st.selfStart}>
+            <Text style={st.nlinkBtn}>원문 기사 열기 ↗</Text>
           </Pressable>
         </View>
-      </Collapse>
+      ) : null}
+      {ver ? (
+        <View style={[st.lm, box]}>
+          <Text style={st.lmB}>
+            연결된 내 메모 · 버전 {ver.version} ({mmdd(ver.saved_at)})
+          </Text>
+          <Text style={st.lmT} numberOfLines={2}>
+            {ver.title}
+          </Text>
+        </View>
+      ) : null}
+      <Text style={[st.ufrom, ind]}>{f.kind === '뉴스' ? '기사 내용은 원문 링크에서 볼 수 있어요' : f.kind === '공시' ? `출처 · ${f.source}` : `시세 · ${f.source}`}</Text>
+      <Pressable onPress={() => onOpenEvidence?.(f)} accessibilityRole="button" style={[st.evlink, ind]}>
+        <Text style={st.evlinkT}>근거 자세히 보기 ›</Text>
+      </Pressable>
     </View>
   );
 }
@@ -302,7 +311,7 @@ function RevRow({ v, first, color, open, onToggle }: { v: MemoVersion; first: bo
 }
 
 /** 펼침 화살 돌기 (원본 .35s) */
-function Turn({ on, children }: { on: boolean; children: React.ReactNode }) {
+export function Turn({ on, children }: { on: boolean; children: React.ReactNode }) {
   const k = useMotionK();
   const [v] = useState(() => new Animated.Value(on ? 1 : 0));
   useEffect(() => {
@@ -392,6 +401,8 @@ const st = StyleSheet.create({
   more: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingTop: 2 },
   moreT: { ...ft(13), color: appColor.ink2 },
   ux: { paddingBottom: 0 },
+  flatInd: { marginLeft: 0 },
+  flatBox: { marginLeft: 0, backgroundColor: appColor.row },
   usum: { ...ft(14.5, 1.8), color: '#25262B', marginTop: 10, marginLeft: 44 },
   sOn: { backgroundColor: 'rgba(133,105,227,0.28)' },
   cite: { ...ft(11), fontWeight: '800', color: appColor.deepPurple, backgroundColor: 'rgba(133,105,227,0.16)' },
