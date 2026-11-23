@@ -121,15 +121,14 @@ def test_zero_volume_ohl_representation_difference_is_strictly_allowed():
     ) == staged.ZERO_VOLUME_OHL_DIFFERENCE
 
 
-def test_same_zero_volume_pattern_is_not_allowed_for_other_symbols():
+def test_same_proven_zero_volume_pattern_is_allowed_for_other_symbols():
     raw = normalized_daily(symbol="005930")
     adjusted = normalized_daily(symbol="005930")
-    with pytest.raises(staged.FundamentalsSnapshotError):
-        staged.verify_raw_daily_against_krx(
-            raw,
-            zero_volume_krx(symbol="005930"),
-            adjusted_daily=adjusted,
-        )
+    assert staged.verify_raw_daily_against_krx(
+        raw,
+        zero_volume_krx(symbol="005930"),
+        adjusted_daily=adjusted,
+    ) == staged.ZERO_VOLUME_OHL_DIFFERENCE
 
 
 @pytest.mark.parametrize(
@@ -434,6 +433,8 @@ def test_reviewed_status_registry_activates_conversion_on_effective_date():
     assert statuses["002787"].is_terminal_on(date(2026, 11, 10)) is True
     assert statuses["004415"].is_terminal_on(date(2020, 1, 1)) is True
     assert statuses["011155"].is_terminal_on(date(2020, 1, 1)) is True
+    assert statuses["417310"].is_terminal_on(date(2026, 11, 19)) is False
+    assert statuses["417310"].is_terminal_on(date(2026, 11, 20)) is True
 
 
 def test_terminal_inactive_marker_stops_retry_without_api_or_db_changes(tmp_path):
