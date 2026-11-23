@@ -13,7 +13,7 @@ import { Sheet } from '@/ui/shared/Sheet';
 import { AppStockCard } from '@/ui/shared/StockHead';
 import { appColor, curve, ft } from '@/ui/theme';
 import type { CompanyInfoProps } from '../CompanyInfo.types';
-import { FINANCIAL_HEALTH_KEYS, FINANCIAL_HEALTH_NOTE, HEALTH_KEYS, TERM_TIP, TERMS, appQuoteRows, financialHealthScore, healthScore, healthVal, mdOf, mmddOf, won, yoyAt, type FinKey, type TermKey } from '../companyFormat';
+import { FINANCIAL_HEALTH_NOTE, HEALTH_KEYS, TERM_TIP, TERMS, appQuoteRows, financialHealthScore, healthScore, healthVal, mdOf, mmddOf, won, yoyAt, type FinKey, type TermKey } from '../companyFormat';
 import { useProgress } from '@/ui/motion/useProgress';
 import { CANDLE_H, CandleChart, GrowthChart, ProfitChart, Radar } from './CompanyCharts';
 import { useNudge } from '@/store/nudge';
@@ -76,8 +76,6 @@ export function AppCompanyInfo(p: CompanyInfoProps) {
   const pr = p.profile;
   const candles = p.candles[range];
   const all = p.quarters;
-  /* 금융회사는 세 축 고정(삼각형), 일반 기업은 값이 있는 축만 */
-  const healthKeys = p.financial ? FINANCIAL_HEALTH_KEYS : HEALTH_KEYS.filter((h) => p.health[h.key] != null);
   const scoreOf = p.financial ? financialHealthScore : healthScore;
   const shown = all.slice(-8);
   const last = shown[shown.length - 1];
@@ -309,17 +307,17 @@ export function AppCompanyInfo(p: CompanyInfoProps) {
                       {p.health_as_of.slice(0, 4)}년 {Number(p.health_as_of.slice(5, 7))}월 기준
                     </Text>
                   </View>
-                  <Radar labels={healthKeys.map((h) => h.k)} scores={healthKeys.map((h) => scoreOf(h.key, p.health[h.key]))} missing={healthKeys.map((h) => p.health[h.key] == null)} width={cw} visible={seen} />
+                  <Radar labels={HEALTH_KEYS.map((h) => h.k)} scores={HEALTH_KEYS.map((h) => scoreOf(h.key, p.health[h.key]))} missing={HEALTH_KEYS.map((h) => p.health[h.key] == null)} width={cw} visible={seen} />
                   <View style={st.hl}>
-                    {healthKeys.map((h, i) => (
-                      <View key={h.k} style={[st.hli, i === healthKeys.length - 1 && { borderBottomWidth: 0 }]}>
+                    {HEALTH_KEYS.map((h, i) => (
+                      <View key={h.k} style={[st.hli, i === HEALTH_KEYS.length - 1 && { borderBottomWidth: 0 }]}>
                         <View style={st.kvL}>
                           <Text style={st.hliT}>{h.k}</Text>
                           <Q onPress={() => setTerm(h.term)} label={h.k} />
                         </View>
                         <View style={st.hliR}>
                           {p.financial && h.key === 'interest' && (p.health.interest ?? 0) < 0 ? <Text style={st.hliN}>금융업은 참고용</Text> : null}
-                          <Text style={st.hliV}>{healthVal(h.key, p.health[h.key])}</Text>
+                          <Text style={st.hliV}>{p.health[h.key] == null ? '-' : healthVal(h.key, p.health[h.key])}</Text>
                         </View>
                       </View>
                     ))}

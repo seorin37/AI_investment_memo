@@ -264,7 +264,7 @@ export function ProfitChart({ series, labels, width, visible }: { series: { name
 
 /* ---------- 건전성 레이더 (원본 drawRadar: 가운데 (가로 가운데, 118) · 반지름 82 · 고리 1 · .66 · .33 · 가운데서 퍼짐 .7s spring) ---------- */
 export const RADAR_H = 230;
-/** missing: 값이 없는 축 — 라벨 옆 '-', 다각형은 가운데, 점 없음 */
+/** missing: 값이 없는 축 — 다각형은 가운데, 점 없음 */
 export function Radar({ labels, scores, missing, width, visible }: { labels: string[]; scores: number[]; missing?: boolean[]; width: number; visible: boolean }) {
   const t = useProgress(visible && width > 0, 900);
   const sc = springE(seg(t * 900, 200, 700));
@@ -288,7 +288,7 @@ export function Radar({ labels, scores, missing, width, visible }: { labels: str
               <G key={l}>
                 <Line x1={cx} y1={cy} x2={p[0]} y2={p[1]} stroke="#EEECF6" />
                 <SvgText x={q[0]} y={q[1] + 4} fontSize={11} fill="#575B63" textAnchor="middle">
-                  {missing?.[i] ? `${l} -` : l}
+                  {l}
                 </SvgText>
               </G>
             );
