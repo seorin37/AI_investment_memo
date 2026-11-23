@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { env } from '@/config/env';
 import { useCoach } from '@/store/coach';
+import { useUI } from '@/store/ui';
 import type { Checklist, Memo, MemoColor, MemoVersion } from '@/types/models';
 import { mockCompanyByCode } from '@/ui/screens/company/CompanyInfo.mock';
 import { WebCompanyInfo } from '@/ui/screens/company/web/CompanyInfo';
@@ -14,6 +15,7 @@ import { mockExtract, mockFeed, mockToday, mockTrackItems, mockVersions } from '
 import type { AiLinkState, AiTrackItem } from '@/ui/screens/memo/MemoDetail.types';
 import { WebConnectDialog } from '@/ui/screens/memo/web/ConnectDialog';
 import { WebMemoDialog } from '@/ui/screens/memo/web/MemoDialog';
+import type { ChecklistDraft } from '@/ui/screens/memo/web/ChecklistTab';
 import { WebNewMemoDialog } from '@/ui/screens/memo/web/NewMemoDialog';
 import { feedOf, findMemo, versionsOf } from '@/ui/screens/updates/Updates.mock';
 
@@ -53,6 +55,9 @@ function BoardTab({ code, memoParam, ev, firstFlow, stockName, onboardingSelecte
   const [dlg, setDlg] = useState(!!memoParam);
   const [newOpen, setNewOpen] = useState(firstFlow);
   const [newKey, setNewKey] = useState(0);
+  /* 새 메모 창의 처음 탭 (0 메모 · 1 체크리스트 — '체크리스트 만들기' · 체크리스트 카드 열기) */
+  const [newTab, setNewTab] = useState<0 | 1>(0);
+  const toast = useUI((s) => s.showToast);
   const [first, setFirst] = useState<string | undefined>(undefined);
   const [connect, setConnect] = useState<Connect | null>(null);
   const [cState, setCState] = useState<AiLinkState>('loading');
@@ -121,6 +126,39 @@ function BoardTab({ code, memoParam, ev, firstFlow, stockName, onboardingSelecte
     /* 실제 모드: 연결 창이 열릴 때 AI 켜기 → 분석 결과 (결정 7 임시안) */
     if (real && c.id) analyze(c.id);
   };
+  const openChecklist = () => {
+    setFirst(undefined);
+    setNewTab(1);
+    setNewKey((n) => n + 1);
+    setNewOpen(true);
+  };
+  /** 체크리스트 저장 (종목당 하나: 있으면 고치고 없으면 만들기). mock 모드는 화면 안에서만.
+   *  보드 순서는 체크리스트를 'cl' 칸으로 따로 두고, 순서에 없으면 맨 앞이라 순서는 건드리지 않음 */
+  const saveChecklist = (d: ChecklistDraft) => {
+    setNewOpen(false);
+    const had = checklist;
+    const ok = had ? '체크리스트를 저장했어요' : '체크리스트를 만들었어요';
+    if (!real) {
+      const items = d.items.map((i, n) => ({ id: i.id ?? `c${Date.now()}${n}`, text: i.text, done: i.done }));
+      const next: Checklist = had ? { ...had, title: d.title, items } : { ...mockBoardChecklist, id: `cl${Date.now()}`, stock_code: code, title: d.title, items, pinned: false };
+      setChecklist(next);
+      return toast(ok);
+    }
+    void bd.ops.saveChecklist(had?.id ?? null, d).then((saved) => {
+      if (!saved) return toast('체크리스트를 저장하지 못했어요 · 잠시 뒤 다시 해 주세요');
+      setChecklist(saved);
+      toast(ok);
+    });
+  };
+  /** 항목을 모두 지우고 저장 → 있던 체크리스트는 휴지통으로 (원본 6.2) */
+  const emptyChecklist = () => {
+    setNewOpen(false);
+    if (!checklist) return toast('빈 체크리스트는 저장하지 않았어요');
+    const id = checklist.id;
+    bd.ops.remove([id]);
+    setChecklist(null);
+    toast('체크리스트를 휴지통으로 옮겼어요');
+  };
   const remove = (ids: string[]) => {
     bd.ops.remove(ids);
     removed.current = [...removed.current, ...memos.filter((m) => ids.includes(m.id))];
@@ -140,13 +178,14 @@ function BoardTab({ code, memoParam, ev, firstFlow, stockName, onboardingSelecte
         setOpenTab(t);
         setDlg(true);
       }}
-      onOpenChecklist={() => {}}
+      onOpenChecklist={openChecklist}
       onNewMemo={(line) => {
+        setNewTab(0);
         setFirst(line);
         setNewKey((n) => n + 1);
         setNewOpen(true);
       }}
-      onNewChecklist={() => {}}
+      onNewChecklist={openChecklist}
       onToggleChecklistItem={(iid) => {
         const it = checklist?.items.find((i) => i.id === iid);
         if (checklist && it) bd.ops.checkItem(checklist.id, iid, !it.done);
@@ -235,6 +274,10 @@ function BoardTab({ code, memoParam, ev, firstFlow, stockName, onboardingSelecte
       open={newOpen}
       stockName={stock.name}
       initialText={first}
+      tab0={newTab}
+      checklist={checklist}
+      onSaveChecklist={saveChecklist}
+      onEmptyChecklist={emptyChecklist}
       onCancel={() => setNewOpen(false)}
       onSave={({ title, body, color, ai }) => {
         if (real) {

@@ -12,7 +12,7 @@ import {
   useSetBoardChecklistItem,
   useUpdateBoardItem,
 } from '@/hooks/queries';
-import type { BoardItem, Checklist, Memo, MemoAnalysis, MemoColor, MemoTimeline, MemoVersion } from '@/types/models';
+import type { BoardItem, Checklist, ChecklistItem, Memo, MemoAnalysis, MemoColor, MemoTimeline, MemoVersion } from '@/types/models';
 import type { AiTrackItem, MemoFeedItem } from '@/ui/screens/memo/MemoDetail.types';
 import { toFeedItem } from '@/ui/screens/memo/toFeedItem';
 
@@ -109,6 +109,23 @@ export function useBoardData(code: string, openId: string | null) {
         return { state: 'error', items: [] };
       } finally {
         void refresh();
+      }
+    },
+    /**
+     * 체크리스트 저장 (웹 새 메모 창 [체크리스트] 탭, 2026-11-22). 종목당 하나: 있으면 PATCH(이름 · 항목 통째로), 없으면 POST.
+     * 서버 id 가 있는 항목은 id 를 그대로 보내 체크 상태가 이어지고, 새 항목은 id 없이 보낸다.
+     */
+    async saveChecklist(existingId: string | null, d: { title: string; items: { id?: string; text: string; done: boolean }[] }): Promise<Checklist | null> {
+      const items = d.items.map((i) => (i.id && /^\d+$/.test(i.id) ? { id: i.id, text: i.text, done: i.done } : { text: i.text, done: i.done }));
+      try {
+        const saved = existingId
+          ? await api.updateBoardItem(existingId, { title: d.title, items: items as ChecklistItem[] })
+          : await api.createChecklist(code, { title: d.title, items });
+        void refresh();
+        void qc.invalidateQueries({ queryKey: qk.homeChecklist });
+        return saved.kind === 'checklist' ? saved : null;
+      } catch {
+        return null;
       }
     },
     /** 새 메모 저장 (AI 켜면 저장 응답에 분석이 같이 옴) */
