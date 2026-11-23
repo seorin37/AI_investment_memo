@@ -37,6 +37,8 @@ def draft_to_dict(d: UpdateDraft) -> dict:
             out["calculations"] = d.calculations
         if d.source_list:                           # 실험(2026-11-18) ask: 답 아래 출처 목록
             out["source_list"] = d.source_list
+        if d.decision_note:                         # 2026-11-23 판단 질문 답 끝 고정 문장 (explanation에 이미 붙어 있다)
+            out["decision_note"] = d.decision_note
     return out
 
 
