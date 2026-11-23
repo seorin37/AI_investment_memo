@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, BackHandler, Keyboard, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent, type TextInputInstance, type TextStyle } from 'react-native';
+import { Animated, BackHandler, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent, type TextInputInstance, type TextStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { useMotionK } from '@/ui/motion/useMotion';
@@ -20,6 +20,9 @@ const strip = (it: Item[]): JBlock[] =>
     void _k;
     return b;
   });
+
+/** 웹의 여러 줄 입력칸은 기본 2줄 높이에 스스로 줄지 않음 → 같은 글의 안 보이는 Text 높이에 맞춤 (기기는 내용만큼 저절로) */
+const FIT = Platform.OS === 'web';
 
 export interface AppNoteProps {
   /** 연 기록 (없으면 새 기록) */
@@ -243,7 +246,7 @@ export function AppNote(p: AppNoteProps) {
         <Text style={st.ndt}>{p.entry?.full ?? p.full}</Text>
         {items.map((b, i) => {
           const ts = textStyle(b);
-          const input = (
+          const field = (
             <TextInput
               ref={(r: TextInputInstance | null) => {
                 refs.current[b.k] = r;
@@ -251,6 +254,7 @@ export function AppNote(p: AppNoteProps) {
               value={b.text}
               multiline
               scrollEnabled={false}
+              {...(FIT ? { numberOfLines: 1 } : null)}
               editable={editing}
               pointerEvents={editing ? 'auto' : 'none'}
               placeholder={i === 0 && empty ? '제목' : undefined}
@@ -258,12 +262,22 @@ export function AppNote(p: AppNoteProps) {
               onFocus={() => setCur(i)}
               onChangeText={(t) => onText(i, t)}
               onKeyPress={(e) => onKey(i, e.nativeEvent.key)}
-              style={[st.in, ts, b.check ? { color: appColor.ink3 } : null]}
+              style={[st.in, ts, b.check ? { color: appColor.ink3 } : null, FIT && st.inFit]}
               accessibilityLabel={i === 0 ? '제목' : '기록 내용'}
             />
           );
+          const input = FIT ? (
+            <View>
+              <Text style={[ts, st.ghost]} accessibilityElementsHidden aria-hidden>
+                {`${b.text}\u200B`}
+              </Text>
+              {field}
+            </View>
+          ) : (
+            field
+          );
           return (
-            <Pressable key={b.k} disabled={editing} onPress={() => startEdit(i)} style={[st.b, b.s === 'title' && st.bTitle, b.s === 'head' && st.bHead, (b.l === 'dot' || b.l === 'dash' || b.l === 'num') && st.bList, b.l === 'quote' && st.bQuote]}>
+            <Pressable key={b.k} disabled={editing} onPress={() => startEdit(i)} style={[st.b, b.s === 'title' && st.bTitle, b.s === 'head' && st.bHead, b.check !== undefined && st.bCk, (b.l === 'dot' || b.l === 'dash' || b.l === 'num') && st.bList, b.l === 'quote' && st.bQuote]}>
               {b.check !== undefined ? (
                 <View style={st.ckl}>
                   <Pressable onPress={() => toggleCheck(i)} accessibilityRole="checkbox" accessibilityState={{ checked: !!b.check }} accessibilityLabel={b.text || '할 일'} hitSlop={8} style={[st.cbx, b.check && st.cbxOn]}>
@@ -343,7 +357,7 @@ export function AppNote(p: AppNoteProps) {
 
 /** 줄 글 모양 (원본 #ned .b[data-s] · 줄 서식) */
 function textStyle(b: JBlock): TextStyle {
-  const base: TextStyle = b.s === 'title' ? { ...ft(26, 1.35), fontWeight: '800' } : b.s === 'head' ? { ...ft(20, 1.65), fontWeight: '800' } : b.s === 'sub' ? { ...ft(17.5, 1.65), fontWeight: '700' } : { ...ft(16, 1.65) };
+  const base: TextStyle = b.s === 'title' ? { fontSize: 26, lineHeight: 35, fontWeight: '800' } : b.s === 'head' ? { ...ft(20, 1.65), fontWeight: '800' } : b.s === 'sub' ? { ...ft(17.5, 1.65), fontWeight: '700' } : { ...ft(16, 1.65) };
   const deco = [b.u && 'underline', b.x && 'line-through'].filter(Boolean).join(' ') as TextStyle['textDecorationLine'];
   return {
     ...base,
@@ -454,9 +468,13 @@ const st = StyleSheet.create({
   b: { marginBottom: 6 },
   bTitle: { marginBottom: 10 },
   bHead: { marginTop: 12 },
+  /* 체크 줄: 26.4 + 위아래 3.3 = 33 */
+  bCk: { marginTop: 0, marginBottom: 0, paddingVertical: 3.3 },
   bList: { paddingLeft: 22 },
   bQuote: { paddingLeft: 14, borderLeftWidth: 3, borderLeftColor: '#D9D2F5' },
   in: { padding: 0, margin: 0, textAlignVertical: 'top' },
+  inFit: { position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', overflow: 'hidden' },
+  ghost: { opacity: 0 },
   mk: { position: 'absolute', top: 0 },
   ckl: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   cbx: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#C5C8CF', marginTop: 3, alignItems: 'center', justifyContent: 'center' },
