@@ -1,0 +1,511 @@
+{
+ "prompt": "configs/tracking_judge_prompt_intent.md",
+ "rows": [
+  {
+   "id": "T01",
+   "group": "price",
+   "expect": "ask",
+   "symbol": "000660",
+   "company": "SK하이닉스",
+   "text": "이 가격이면 비싼거임?",
+   "got": "ask",
+   "ok": true,
+   "asks": [
+    "SK하이닉스의 현재 주가가 실적과 기업가치 대비 비싼 수준인지"
+   ],
+   "items": [],
+   "confirm": []
+  },
+  {
+   "id": "T02",
+   "group": "price",
+   "expect": "ask",
+   "symbol": "005930",
+   "company": "삼성전자",
+   "text": "삼전 지금 가격대 어떰",
+   "got": "ask",
+   "ok": true,
+   "asks": [
+    "삼성전자의 현재 주가 수준이 적정한지"
+   ],
+   "items": [],
+   "confirm": []
+  },
+  {
+   "id": "T03",
+   "group": "price",
+   "expect": "ask",
+   "symbol": "035420",
+   "company": "NAVER",
+   "text": "네이버 요즘 많이 싸진듯? 맞나",
+   "got": "ask",
+   "ok": true,
+   "asks": [
+    "네이버의 최근 주가가 저렴한 수준인지"
+   ],
+   "items": [],
+   "confirm": []
+  },
+  {
+   "id": "T04",
+   "group": "price",
+   "expect": "ask",
+   "symbol": "105560",
+   "company": "KB금융",
+   "text": "kb 지금 고점이야 저점이야",
+   "got": "ask",
+   "ok": true,
+   "asks": [
+    "KB금융의 현재 주가가 고점인지 저점인지"
+   ],
+   "items": [],
+   "confirm": []
+  },
+  {
+   "id": "T05",
+   "group": "price",
+   "expect": "ask",
+   "symbol": "005380",
+   "company": "현대차",
+   "text": "현대차 주가 지금 높은 편이야?",
+   "got": "ask",
+   "ok": true,
+   "asks": [
+    "현대차의 현재 주가가 높은 수준인지"
+   ],
+   "items": [],
+   "confirm": []
+  },
+  {
+   "id": "T06",
+   "group": "decide",
+   "expect": "ask",
+   "symbol": "000660",
+   "company": "SK하이닉스",
+   "text": "하닉 지금 탑승 가능?",
+   "got": "drop",
+   "ok": false,
+   "asks": [],
+   "items": [],
+   "confirm": []
+  },
+  {
+   "id": "T07",
+   "group": "decide",
+   "expect": "ask",
+   "symbol": "005930",
+   "company": "삼성전자",
+   "text": "삼전 존버할까 그냥 던질까",
+   "got": "drop",
+   "ok": false,
+   "asks": [],
+   "items": [],
+   "confirm": []
+  },
+  {
+   "id": "T08",
+   "group": "decide",
+   "expect": "ask",
+   "symbol": "035420",
+   "company": "NAVER",
+   "text": "네이버 물렸는데 물타기 ㄱ?",
+   "got": "drop",
+   "ok": false,
+   "asks": [],
+   "items": [],
+   "confirm": []
+  },
+  {
+   "id": "T09",
+   "group": "decide",
+   "expect": "ask",
+   "symbol": "105560",
+   "company": "KB금융",
+   "text": "배당 보고 kb 들어갈까 하는데 지금 타이밍 어때",
+   "got": "ask",
+   "ok": true,
+   "asks": [
+    "KB금융에 지금 투자하는 타이밍이 적절한지"
+   ],
+   "items": [
+    "KB금융의 배당 발표 및 배당 수준"
+   ],
+   "confirm": []
+  },
+  {
+   "id": "T10",
+   "group": "decide",
+   "expect": "ask",
+   "symbol": "005380",
+   "company": "현대차",
+   "text": "현대차 지금이라도 줍줍해야되나",
+   "got": "drop",
+   "ok": false,
+   "asks": [],
+   "items": [],
+   "confirm": []
+  },
+  {
+   "id": "T11",
+   "group": "decide",
+   "expect": "ask",
+   "symbol": "000660",
+   "company": "SK하이닉스",
+   "text": "친구들 다 하닉으로 돈 벌었다는데 나도 들어가야 하나ㅠ",
+   "got": "drop",
+   "ok": false,
+   "asks": [],
+   "items": [],
+   "confirm": []
+  },
+  {
+   "id": "T12",
+   "group": "predict",
+   "expect": "ask",
+   "symbol": "005930",
+   "company": "삼성전자",
+   "text": "삼전 언제 오르냐 진짜",
+   "got": "ask",
+   "ok": true,
+   "asks": [
+    "삼성전자 주가가 언제 오를지"
+   ],
+   "items": [],
+   "confirm": []
+  },
+  {
+   "id": "T13",
+   "group": "predict",
+   "expect": "ask",
+   "symbol": "000660",
+   "company": "SK하이닉스",
+   "text": "하닉 여기서 더 빠짐?",
+   "got": "drop",
+   "ok": false,
+   "asks": [],
+   "items": [],
+   "confirm": []
+  },
+  {
+   "id": "T14",
+   "group": "predict",
+   "expect": "ask",
+   "symbol": "035420",
+   "company": "NAVER",
+   "text": "네이버 내년엔 좀 갈까",
+   "got": "drop",
+   "ok": false,
+   "asks": [],
+   "items": [],
+   "confirm": []
+  },
+  {
+   "id": "T15",
+   "group": "predict",
+   "expect": "ask",
+   "symbol": "005380",
+   "company": "현대차",
+   "text": "현대차 반등각 나오나",
+   "got": "drop",
+   "ok": false,
+   "asks": [],
+   "items": [],
+   "confirm": []
+  },
+  {
+   "id": "T16",
+   "group": "predict",
+   "expect": "ask",
+   "symbol": "105560",
+   "company": "KB금융",
+   "text": "kb 이번 실적 나오면 뛰려나",
+   "got": "track",
+   "ok": false,
+   "asks": [],
+   "items": [
+    "KB금융의 이번 실적 발표 일정과 실적 내용"
+   ],
+   "confirm": []
+  },
+  {
+   "id": "T17",
+   "group": "cause",
+   "expect": "ask",
+   "symbol": "000660",
+   "company": "SK하이닉스",
+   "text": "하닉 오늘 빠진거 마이크론 실적 때문이라던데",
+   "got": "drop",
+   "ok": false,
+   "asks": [],
+   "items": [],
+   "confirm": []
+  },
+  {
+   "id": "T18",
+   "group": "cause",
+   "expect": "ask",
+   "symbol": "005930",
+   "company": "삼성전자",
+   "text": "삼전 반도체 업황 때문에 계속 내리는 거 같음",
+   "got": "track",
+   "ok": false,
+   "asks": [],
+   "items": [
+    "삼성전자 주가 하락의 근거로 언급한 반도체 업황 변화"
+   ],
+   "confirm": []
+  },
+  {
+   "id": "T19",
+   "group": "cause",
+   "expect": "ask",
+   "symbol": "035420",
+   "company": "NAVER",
+   "text": "네이버 AI 투자 비용 때문에 떨어진다던데",
+   "got": "track",
+   "ok": false,
+   "asks": [],
+   "items": [
+    "네이버 AI 투자 비용과 관련 실적 부담 추이"
+   ],
+   "confirm": []
+  },
+  {
+   "id": "T20",
+   "group": "cause",
+   "expect": "ask",
+   "symbol": "005380",
+   "company": "현대차",
+   "text": "현대차 관세 때문에 계속 약하네",
+   "got": "track",
+   "ok": false,
+   "asks": [],
+   "items": [
+    "현대차에 영향을 미치는 자동차 관세 정책 및 부담 변화"
+   ],
+   "confirm": []
+  },
+  {
+   "id": "T21",
+   "group": "cause",
+   "expect": "ask",
+   "symbol": "000660",
+   "company": "SK하이닉스",
+   "text": "오늘 하닉 오른 거 엔비 실적 덕인가",
+   "got": "ask",
+   "ok": true,
+   "asks": [
+    "오늘 SK하이닉스 주가 상승이 엔비디아 실적 때문인지"
+   ],
+   "items": [],
+   "confirm": []
+  },
+  {
+   "id": "T22",
+   "group": "multi",
+   "expect": "ask",
+   "symbol": "000660",
+   "company": "SK하이닉스",
+   "text": "아 하닉 왜이렇게 떨어짐 ㅠㅠ 지금 사도 되는 거야?",
+   "got": "ask",
+   "ok": true,
+   "asks": [
+    "최근 SK하이닉스 주가가 하락하는 원인이 무엇인지"
+   ],
+   "items": [],
+   "confirm": []
+  },
+  {
+   "id": "T23",
+   "group": "multi",
+   "expect": "ask",
+   "symbol": "005930",
+   "company": "삼성전자",
+   "text": "삼전 10주 들고 있음. 더 사도 될까?",
+   "got": "drop",
+   "ok": false,
+   "asks": [],
+   "items": [],
+   "confirm": []
+  },
+  {
+   "id": "T24",
+   "group": "drop",
+   "expect": "drop",
+   "symbol": "000660",
+   "company": "SK하이닉스",
+   "text": "하닉 떡상 기원",
+   "got": "drop",
+   "ok": true,
+   "asks": [],
+   "items": [],
+   "confirm": []
+  },
+  {
+   "id": "T25",
+   "group": "drop",
+   "expect": "drop",
+   "symbol": "005930",
+   "company": "삼성전자",
+   "text": "삼전 오늘도 파란불 ㅋㅋ",
+   "got": "drop",
+   "ok": true,
+   "asks": [],
+   "items": [],
+   "confirm": []
+  },
+  {
+   "id": "T26",
+   "group": "drop",
+   "expect": "drop",
+   "symbol": "035420",
+   "company": "NAVER",
+   "text": "네이버 내 돈 돌려줘",
+   "got": "drop",
+   "ok": true,
+   "asks": [],
+   "items": [],
+   "confirm": []
+  },
+  {
+   "id": "T27",
+   "group": "drop",
+   "expect": "drop",
+   "symbol": "005380",
+   "company": "현대차",
+   "text": "현대차 무조건 간다 믿는다",
+   "got": "drop",
+   "ok": true,
+   "asks": [],
+   "items": [],
+   "confirm": []
+  },
+  {
+   "id": "T28",
+   "group": "drop",
+   "expect": "drop",
+   "symbol": "105560",
+   "company": "KB금융",
+   "text": "kb 어제 5주 삼",
+   "got": "drop",
+   "ok": true,
+   "asks": [],
+   "items": [],
+   "confirm": []
+  },
+  {
+   "id": "T29",
+   "group": "drop",
+   "expect": "drop",
+   "symbol": "000660",
+   "company": "SK하이닉스",
+   "text": "존버는 승리한다",
+   "got": "drop",
+   "ok": true,
+   "asks": [],
+   "items": [],
+   "confirm": []
+  },
+  {
+   "id": "T30",
+   "group": "drop",
+   "expect": "drop",
+   "symbol": "005930",
+   "company": "삼성전자",
+   "text": "삼전 진짜 지겹다",
+   "got": "drop",
+   "ok": true,
+   "asks": [],
+   "items": [],
+   "confirm": []
+  },
+  {
+   "id": "T31",
+   "group": "drop",
+   "expect": "drop",
+   "symbol": "000660",
+   "company": "SK하이닉스",
+   "text": "형이 사라고 해서 하닉 샀다",
+   "got": "drop",
+   "ok": true,
+   "asks": [],
+   "items": [],
+   "confirm": []
+  },
+  {
+   "id": "T32",
+   "group": "keep",
+   "expect": "track",
+   "symbol": "000660",
+   "company": "SK하이닉스",
+   "text": "하닉 HBM4 양산 소식 뜨면 알려줘",
+   "got": "track",
+   "ok": true,
+   "asks": [],
+   "items": [
+    "SK하이닉스 HBM4 양산 관련 소식"
+   ],
+   "confirm": []
+  },
+  {
+   "id": "T33",
+   "group": "keep",
+   "expect": "track",
+   "symbol": "005930",
+   "company": "삼성전자",
+   "text": "삼전 배당 발표 나오면 작년이랑 비교",
+   "got": "track",
+   "ok": true,
+   "asks": [],
+   "items": [
+    "삼성전자 배당 발표 시 배당 내용을 전년과 비교"
+   ],
+   "confirm": []
+  },
+  {
+   "id": "T34",
+   "group": "keep",
+   "expect": "track",
+   "symbol": "035420",
+   "company": "NAVER",
+   "text": "네이버 15만원 깨지면 체크",
+   "got": "track",
+   "ok": true,
+   "asks": [],
+   "items": [
+    "150,000원 아래로"
+   ],
+   "confirm": []
+  },
+  {
+   "id": "T35",
+   "group": "keep",
+   "expect": "ask",
+   "symbol": "000660",
+   "company": "SK하이닉스",
+   "text": "CXL이 뭐임?",
+   "got": "ask",
+   "ok": true,
+   "asks": [
+    "CXL이 무엇인지"
+   ],
+   "items": [],
+   "confirm": []
+  },
+  {
+   "id": "T36",
+   "group": "keep",
+   "expect": "track",
+   "symbol": "105560",
+   "company": "KB금융",
+   "text": "kb 다음 실적 발표 일정 나오면 알려줘",
+   "got": "track",
+   "ok": true,
+   "asks": [],
+   "items": [
+    "KB금융의 다음 실적 발표 일정 공지"
+   ],
+   "confirm": []
+  }
+ ]
+}

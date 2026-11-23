@@ -135,6 +135,7 @@ class UpdateDraft:
     coverage: str = ""                                        # 자료 범위 문구 ("10월 28일 이후 기사 기준", 뉴스를 쓴 v2 카드만)
     calculations: list[dict] = field(default_factory=list)   # 실험(2026-11-17) ask: 코드가 검증·계산한 값 (calc.compute)
     source_list: list[dict] = field(default_factory=list)    # 실험(2026-11-18) ask: 답 아래에 모아 보일 출처 (topic.source_list)
+    decision_note: str = ""                                    # 2026-11-23 판단 질문 답 끝에 코드가 붙인 문장 (decision_note.py)
 
 
 @dataclass

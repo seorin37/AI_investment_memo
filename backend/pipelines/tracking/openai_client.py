@@ -99,8 +99,9 @@ class OpenAIClient:
             raise TransientError("timeout") from exc
 
     def _post_once(self, prompt: str) -> dict:
+        sent_temperature = self.temperature        # 보낼 때의 값 (동시에 부른 다른 호출이 None으로 바꿔도 이 호출은 다시 보낸다)
         res = self._send(prompt)
-        if res.status_code == 400 and self.temperature is not None and "temperature" in _error_info(res)[1].lower():
+        if res.status_code == 400 and sent_temperature is not None and "temperature" in _error_info(res)[1].lower():
             self.temperature = None  # 이 모델은 temperature를 받지 않는다 — 빼고 다시 보낸다
             res = self._send(prompt)
         if res.status_code == 429 and _error_info(res)[0] == "insufficient_quota":
