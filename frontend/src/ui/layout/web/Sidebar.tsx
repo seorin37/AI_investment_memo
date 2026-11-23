@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Animated, Image, Platform, Pressable, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
-import { AppIcon, WebIcon, type WebIconName } from '@/ui/icons/Icon';
+import { WebIcon, type WebIconName } from '@/ui/icons/Icon';
 import { Collapse } from '@/ui/motion/Collapse';
 import { useMotionK } from '@/ui/motion/useMotion';
 import { Avatar } from '@/ui/shared/Avatar';
 import { CountBadge } from '@/ui/shared/CountBadge';
-import { SkySwitch } from '@/ui/shared/SkySwitch';
 import { StockLogo } from '@/ui/shared/StockLogo';
 import { curve, fpx, shadow, size, webColor } from '@/ui/theme';
 import { SortList } from './sidebarSort.web';
@@ -152,9 +151,6 @@ export function Sidebar(p: SidebarProps) {
         </View>
         <View style={st.gap20}>
           <View style={st.gap8}>
-            <Pressable onPress={p.onToggleDark} accessibilityRole="button" accessibilityLabel={p.dark ? '라이트 모드로 바꾸기' : '다크 모드로 바꾸기'} style={({ hovered }: HoverState) => [st.rail, { backgroundColor: hovered ? webColor.hover : webColor.surface }]}>
-              <AppIcon name={p.dark ? 'moon' : 'sun'} size={20} color={webColor.icon} />
-            </Pressable>
             <RailBtn icon="trash" label="휴지통" onPress={p.onTrash} />
             {support}
           </View>
@@ -308,11 +304,6 @@ export function Sidebar(p: SidebarProps) {
       {/* 아래 · 고정 */}
       <View style={st.gap20}>
         <View style={st.gap8}>
-          <View style={[st.row, { width: size.sideInner }]}>
-            <AppIcon name={p.dark ? 'moon' : 'sun'} size={20} color={webColor.icon} />
-            <Text style={[LABEL, st.flex]}>다크 모드</Text>
-            <SkySwitch on={p.dark} onToggle={p.onToggleDark} width={48} />
-          </View>
           <Row icon="trash" label="휴지통" onPress={p.onTrash} />
           {support}
         </View>
