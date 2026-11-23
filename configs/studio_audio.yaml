@@ -1,0 +1,55 @@
+# AI 오디오(내 종목 라디오) 설정 (2026-11-23 시험용). 숫자는 시험해 보며 조정한다.
+brief:
+  max_cards_per_stock: 4     # 종목마다 대본에 넣는 업데이트 수 (넘으면 "그 밖에 n건"으로만)
+  max_memos_per_stock: 3
+script:
+  prompt: configs/studio_audio_prompt.md
+  model_env: STUDIO_AUDIO_MODEL   # 없으면 LLM_MODEL → gpt-4.1-mini
+  temperature: 0.5
+  tries: 2                   # 검사에 걸리면 고칠 점을 주고 한 번 더. 그래도 안 되면 규칙 대본(fallback)
+  # 길이 목표: 한국어 TTS는 1분에 약 330자(공백 포함). 목표 = base + 소식 있는 종목 + 카드 추가분 + 소식 없는 종목
+  chars_per_minute: 330
+  base_seconds: 35           # 오프닝·증시·마무리
+  per_stock_seconds: 45      # 새 소식이 있는 종목 하나
+  per_card_seconds: 15       # 그 종목 두 번째 카드부터 하나당
+  quiet_seconds: 6           # 새 소식이 없는 종목 하나
+  max_seconds: 420           # 7분 상한
+  over_ratio: 1.6            # 대본 글자 수가 목표의 이 배를 넘으면 검사 실패 (TTS 비용 보호)
+  line_max_chars: 90         # 프롬프트는 80자, 검사는 조금 넉넉하게
+  max_same_speaker: 3        # 같은 진행자 연속 줄 수 상한
+hosts:
+  A: 진행자 A · 메인
+  B: 진행자 B · 해설
+tts:
+  provider: fish
+  url: https://api.fish.audio/v1/tts
+  model: s2.1-pro            # 헤더 model. 구독 요금제에 따라 s2-pro · s2.1-pro-free 로 바꿀 수 있다
+  # 목소리: Fish Audio 음성 모델 id (https://fish.audio/m/<id> 의 id). 비밀값은 아니지만 .env 로 바꿔 끼우게 환경변수 우선
+  voices:
+    A: {env: FISH_VOICE_A, id: ""}
+    B: {env: FISH_VOICE_B, id: ""}
+  format: wav                # 줄마다 받아 길이를 재고 이어 붙인다 (마지막에 ffmpeg가 있으면 mp3로)
+  sample_rate: 44100
+  latency: normal
+  speed: 1.0                 # prosody.speed (0.5~2)
+  temperature: 0.7
+  top_p: 0.7
+  normalize: true            # Fish의 숫자 읽기. 우리 쪽 speech.py가 먼저 한글로 바꾸므로 남는 숫자에만 적용된다
+  timeout: 60
+  retries: 3
+  gap_line: 0.30             # 줄 사이 쉼 (초)
+  gap_segment: 0.70          # 구간(오프닝·종목…) 사이 쉼
+  lead: 0.30                 # 맨 앞 쉼
+  mp3_bitrate: 128k
+# 소리 내어 읽을 때만 바꾸는 말 (화면 대본은 그대로). 종목 이름·약어를 Fish가 엉뚱하게 읽으면 여기에 더한다
+pronounce:
+  NAVER: 네이버
+  KB금융지주: 케이비금융지주
+  KB금융: 케이비금융
+  SK하이닉스: 에스케이하이닉스
+  DART: 다트
+  HBM4: 에이치비엠 포
+  HBM: 에이치비엠
+  AI: 에이아이
+  KOSPI: 코스피
+  KOSDAQ: 코스닥
