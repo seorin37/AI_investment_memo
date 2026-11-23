@@ -28,6 +28,13 @@
       "effective_date": null,
       "reason": "기존 운영 정책에서 상장폐지가 확인된 CJ씨푸드1우",
       "source": "기존 KIS 자동 수집 제외 정책"
+    },
+    {
+      "symbol": "417310",
+      "status": "delisted",
+      "effective_date": "2026-11-20",
+      "reason": "코람코더원리츠 해산에 따른 유가증권시장 상장폐지",
+      "source": "KRX 2026-11-20 상장폐지 및 기존 금요일 최종 실험 확인 기록"
     }
   ]
 }
