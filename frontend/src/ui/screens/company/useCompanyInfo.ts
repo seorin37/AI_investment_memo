@@ -1,4 +1,5 @@
 import { useCandles, useFinancials, useMyStocks, useProfile, useQuote } from '@/hooks/queries';
+import { BRAND_LOGOS } from '@/lib/brandLogos';
 import type { Candle, ChartRange, Financials, Quote, StockProfile } from '@/types/models';
 import type { StockHeadProps } from '@/ui/shared/StockHead.types';
 import type { CompanyInfoProps } from './CompanyInfo.types';
@@ -13,8 +14,13 @@ export type CompanyData = Omit<CompanyInfoProps, 'onBack' | 'onMore' | 'onChange
 
 const PALETTE = ['#3D73F0', '#EA002C', '#00A86B', '#F59E0B', '#7046F5', '#0EA5E9', '#E11D48', '#14B8A6'];
 
-/** 로고가 정해지지 않은 종목: 이름 첫 글자 + 종목코드로 고른 색 */
-export function fallbackLogo(code: string, name: string): Pick<StockHeadProps, 'logo' | 'logo_bg'> {
+/**
+ * 종목 로고. 대표색 표(lib/brandLogos)에 있으면 그 값(2026-11-23),
+ * 없으면 이름 첫 글자 + 종목코드로 고른 색
+ */
+export function fallbackLogo(code: string, name: string): Pick<StockHeadProps, 'logo' | 'logo_bg' | 'logo_ink'> {
+  const brand = BRAND_LOGOS[code];
+  if (brand) return { ...brand };
   const n = [...code].reduce((a, c) => a + c.charCodeAt(0), 0);
   return { logo: (name || code).slice(0, 1), logo_bg: PALETTE[n % PALETTE.length] };
 }

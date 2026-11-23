@@ -1,7 +1,9 @@
 """금요일 데이터 최종 실증 실험 (거래일 2026-11-20). DB에는 아무것도 쓰지 않는다.
 
-  saturday-krx  토 08:00  KRX stk_bydd_trd 1회 조회 → Capture 대상 완전성 검증 → EPS/BPS 결합 dry-run
+  saturday-krx  토 08:00  KRX stk_bydd_trd 조회 → Capture 대상 완전성 검증 → EPS/BPS 결합 dry-run
+  saturday-krx-recovery  2026-11-20 장애 복구 전용 지연 수집(1회 요청, 기존 정상 산출물 보호)
   monday-kis    월 08:00  Capture 대상 전 종목 KIS 원시·수정 일봉 → 토요일 KRX와 전수 비교
+  monday-kis-delayed-recovery  2026-11-23 WSL 종료 장애에 한정한 월요일 KIS 지연 실행
   report        저장된 파일만으로 비교·요약을 다시 만든다 (API 호출 없음)
 
 재사용: pipelines.market.krx.fetch_kospi_daily / parse_number, metadata.normalize_market_metadata,
@@ -52,8 +54,11 @@ SAT_DIRNAME, MON_DIRNAME = "20261120", "20261123"
 SAT_WINDOW = (datetime(2026, 11, 21, 7, 59, tzinfo=SEOUL), datetime(2026, 11, 21, 8, 30, tzinfo=SEOUL))
 MON_WINDOW = (datetime(2026, 11, 23, 7, 59, tzinfo=SEOUL), datetime(2026, 11, 23, 8, 15, tzinfo=SEOUL))
 MON_DEADLINE = datetime(2026, 11, 23, 8, 45, tzinfo=SEOUL)  # Morning 09:00 전 여유. 이후 새 요청 없음
+MON_DELAYED_RUN_DATE = date(2026, 11, 23)
+MON_DELAYED_MAX_RUNTIME = timedelta(minutes=45)
 EXPECTED_INTERVAL = 0.5
 REQUEST_CAP_EXTRA = 200  # 2N + 재시도 여유
+MONDAY_ALLOWED_NO_KRX = {TRADE_DATE: {"417310"}}  # 11/20 상장폐지. 이 실험에만 한정
 GUARDED_SERVICES = (
     "memos-market-refresh-morning.service",
     "memos-market-refresh-evening.service",
@@ -335,16 +340,30 @@ def fundamentals_dry_run(targets: list[str], by_symbol: dict, capture_root: Path
 
 def run_saturday(out_dir: Path, *, trade_date: date = TRADE_DATE, capture_root: Path = RAW_SNAPSHOT_ROOT,
                  fetcher: Callable[[date], list[dict]] = fetch_kospi_daily, window=SAT_WINDOW,
-                 lock_kwargs: dict | None = None, now=now_kst) -> int:
+                 lock_kwargs: dict | None = None, now=now_kst, recovery: bool = False,
+                 max_attempts: int = 3) -> int:
     started = now()
     out_dir.mkdir(parents=True, exist_ok=True)
-    if not (window[0] <= started <= window[1]):
+    if recovery and trade_date != TRADE_DATE:
+        print("ABORT: 지연 복구는 거래일 2026-11-20에만 허용됨")
+        return 10
+    if not recovery and not (window[0] <= started <= window[1]):
         Store(out_dir).write(f"saturday_missed_{started.strftime('%Y%m%dT%H%M%S')}.json",
                              {"status": "missed", "started_at_kst": iso(started), "window": [iso(w) for w in window],
                               "note": "예약 창 밖이라 KRX를 호출하지 않음"})
         print("MISSED: 예약 창 밖 실행 — 아무것도 호출하지 않음"); return 2
-    store = claim_run(out_dir, "saturday", started)
-    meta = {"trade_date": trade_date.isoformat(), "started_at_kst": iso(started), "db_writes": 0}
+    if recovery:
+        completed_outputs = [
+            "saturday_summary.json", "krx_normalized.json", "krx_completeness.json",
+            "fundamentals_dry_run.json", "SHA256SUMS",
+        ]
+        existing = [name for name in completed_outputs if (out_dir / name).exists()]
+        if existing:
+            print("ABORT: 기존 KRX 정상/검증 산출물 보호 — " + ", ".join(existing))
+            return 11
+    store = claim_run(out_dir, "saturday_recovery" if recovery else "saturday", started)
+    meta = {"trade_date": trade_date.isoformat(), "started_at_kst": iso(started), "db_writes": 0,
+            "delayed_recovery": recovery, "max_attempts": max_attempts}
     try:
         targets_info = frozen_targets(capture_root, trade_date)
     except Exception as exc:
@@ -352,7 +371,17 @@ def run_saturday(out_dir: Path, *, trade_date: date = TRADE_DATE, capture_root: 
         store.write("saturday_summary.json", meta); store.checksums()
         print("ABORT: 금요일 Capture 대상 목록 없음 —", meta["error"]); return 3
     targets = targets_info["target_symbols"]
-    store.write("capture_targets.json", targets_info)
+    capture_targets_path = out_dir / "capture_targets.json"
+    if recovery and capture_targets_path.exists():
+        saved_targets = json.loads(capture_targets_path.read_text(encoding="utf-8"))
+        if (saved_targets.get("capture_summary_sha256") != targets_info["capture_summary_sha256"]
+                or saved_targets.get("target_symbols") != targets_info["target_symbols"]):
+            meta.update(status="aborted_capture_targets_changed")
+            store.write("saturday_summary.json", meta); store.checksums()
+            print("ABORT: 기존 토요일 Capture 대상 또는 summary 해시가 현재 원본과 다름")
+            return 12
+    else:
+        store.write("capture_targets.json", targets_info)
     meta["capture"] = {k: v for k, v in targets_info.items() if k != "target_symbols"}
     meta["capture"]["snapshots"] = capture_snapshot_stats(capture_root, trade_date, targets)
 
@@ -366,7 +395,8 @@ def run_saturday(out_dir: Path, *, trade_date: date = TRADE_DATE, capture_root: 
         fetch_error = None
         with recorded_krx_http(http_log) if fetcher is fetch_kospi_daily else nullcontext():
             try:
-                rows = fetcher(trade_date)
+                rows = (fetcher(trade_date, max_attempts=max_attempts)
+                        if fetcher is fetch_kospi_daily else fetcher(trade_date))
             except Exception as exc:
                 rows, fetch_error = None, f"{type(exc).__name__}: {str(exc)[:300]}"
     for n, entry in enumerate(http_log, 1):
@@ -435,6 +465,91 @@ class RequestCapExceeded(RuntimeError):
     pass
 
 
+class MondayInputError(RuntimeError):
+    pass
+
+
+def _verify_sha256_manifest(root: Path, required: set[str]) -> dict[str, str]:
+    manifest_path = root / "SHA256SUMS"
+    if not manifest_path.is_file():
+        raise MondayInputError("KRX SHA256SUMS가 없습니다.")
+    entries: dict[str, str] = {}
+    for line in manifest_path.read_text(encoding="utf-8").splitlines():
+        digest, separator, rel = line.partition("  ")
+        if not separator or len(digest) != 64 or Path(rel).is_absolute() or ".." in Path(rel).parts:
+            raise MondayInputError("KRX SHA256SUMS 형식이 올바르지 않습니다.")
+        path = root / rel
+        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+            raise MondayInputError(f"KRX SHA-256 불일치: {rel}")
+        entries[rel] = digest
+    missing = sorted(required - set(entries))
+    if missing:
+        raise MondayInputError(f"KRX SHA256SUMS 필수 항목 누락: {missing}")
+    return entries
+
+
+def validate_monday_inputs(sat_dir: Path, targets_info: dict, trade_date: date) -> dict:
+    """KIS 요청 전에 토요일 원본·검증 결과를 고정 조건으로 확인한다."""
+    expected_bas_dd = trade_date.strftime("%Y%m%d")
+    targets = targets_info["target_symbols"]
+    allowed_missing = MONDAY_ALLOWED_NO_KRX.get(trade_date, set())
+    if trade_date != TRADE_DATE or len(targets) != 936:
+        raise MondayInputError("거래일 또는 Capture 936종목 조건이 다릅니다.")
+
+    required = {"capture_targets.json", "saturday_summary.json", "krx_raw_response_attempt1.json",
+                "krx_normalized.json", "krx_completeness.json", "fundamentals_dry_run.json"}
+    manifest = _verify_sha256_manifest(sat_dir, required)
+    saved_targets = json.loads((sat_dir / "capture_targets.json").read_text(encoding="utf-8"))
+    if (saved_targets.get("capture_summary_sha256") != targets_info["capture_summary_sha256"]
+            or saved_targets.get("target_symbols") != targets):
+        raise MondayInputError("금요일 Capture 대상 또는 summary SHA-256이 토요일 입력과 다릅니다.")
+
+    summary = json.loads((sat_dir / "saturday_summary.json").read_text(encoding="utf-8"))
+    attempts = (summary.get("krx_request") or {}).get("attempts") or []
+    if (summary.get("trade_date") != trade_date.isoformat()
+            or (summary.get("krx_request") or {}).get("params", {}).get("basDd") != expected_bas_dd
+            or (summary.get("krx_request") or {}).get("http_requests") != 1
+            or len(attempts) != 1 or attempts[0].get("status") != 200):
+        raise MondayInputError("KRX 요청 기준일·요청 수·HTTP 결과가 고정 조건과 다릅니다.")
+    raw_name = attempts[0].get("saved_as")
+    raw_path = sat_dir / str(raw_name)
+    raw_digest = hashlib.sha256(raw_path.read_bytes()).hexdigest() if raw_path.is_file() else None
+    if (raw_name != "krx_raw_response_attempt1.json" or attempts[0].get("sha256") != raw_digest
+            or manifest.get(raw_name) != raw_digest):
+        raise MondayInputError("KRX 원본 SHA-256 기록이 서로 일치하지 않습니다.")
+
+    raw_rows = json.loads(raw_path.read_text(encoding="utf-8")).get("OutBlock_1")
+    comp = json.loads((sat_dir / "krx_completeness.json").read_text(encoding="utf-8"))
+    norm_rows = json.loads((sat_dir / "krx_normalized.json").read_text(encoding="utf-8")).get("rows")
+    if not isinstance(raw_rows, list) or not isinstance(norm_rows, list):
+        raise MondayInputError("KRX 원본 또는 정규화 행 형식이 올바르지 않습니다.")
+    missing = set(comp.get("missing_targets") or [])
+    blocking = {
+        "response_rows": comp.get("response_rows") != 935,
+        "targets_present": comp.get("targets_present") != 935,
+        "target_count": comp.get("target_count") != 936,
+        "bas_dd": comp.get("bas_dd_values") != [expected_bas_dd] or not comp.get("all_rows_bas_dd_ok"),
+        "duplicates": bool(comp.get("duplicate_symbols")),
+        "extras": bool(comp.get("extra_kospi_symbols")),
+        "parse_errors": bool(comp.get("parse_error_symbols")),
+        "missing": missing != allowed_missing,
+        "raw_rows": len(raw_rows) != 935,
+        "normalized_rows": len(norm_rows) != 935,
+    }
+    failed = sorted(name for name, bad in blocking.items() if bad)
+    norm_symbols = {r.get("symbol") for r in norm_rows if r.get("market") == "KOSPI"}
+    expected_comparable = set(targets) - allowed_missing
+    if failed or norm_symbols != expected_comparable:
+        detail = failed or ["normalized_symbol_set"]
+        raise MondayInputError(f"KRX 935종목 사전검증 실패: {detail}")
+    return {
+        "capture_targets": len(targets), "kis_query_targets": len(targets),
+        "krx_comparison_targets": len(expected_comparable),
+        "unverified_no_krx": sorted(allowed_missing), "bas_dd": expected_bas_dd,
+        "raw_sha256": raw_digest,
+    }
+
+
 def pick_row(rows: list[dict], trade_date: date) -> dict | None:
     target = trade_date.strftime("%Y%m%d")
     matches = [r for r in rows if r.get("stck_bsop_date") == target]
@@ -474,37 +589,66 @@ def output1_reference(records: list[dict]) -> dict | None:
     return None
 
 
+def monday_effective_deadline(started: datetime, trade_date: date, *, delayed_recovery: bool,
+                              normal_deadline: datetime = MON_DEADLINE) -> datetime:
+    """정상 deadline은 고정하고, 승인된 11/20 복구 실행에만 45분 예산을 부여한다."""
+    if not delayed_recovery:
+        return normal_deadline
+    if trade_date != TRADE_DATE or started.astimezone(SEOUL).date() != MON_DELAYED_RUN_DATE:
+        raise MondayInputError("KIS 지연 복구는 2026-11-23에 거래일 2026-11-20만 허용됩니다.")
+    return started + MON_DELAYED_MAX_RUNTIME
+
+
 def run_monday(out_dir: Path, sat_dir: Path, *, trade_date: date = TRADE_DATE, capture_root: Path = RAW_SNAPSHOT_ROOT,
                client_factory=None, window=MON_WINDOW, deadline=MON_DEADLINE, lock_kwargs: dict | None = None,
-               now=now_kst) -> int:
+               now=now_kst, delayed_recovery: bool = False) -> int:
     started = now()
     out_dir.mkdir(parents=True, exist_ok=True)
-    if not (window[0] <= started <= window[1]):
+    try:
+        effective_deadline = monday_effective_deadline(
+            started, trade_date, delayed_recovery=delayed_recovery, normal_deadline=deadline)
+    except MondayInputError as exc:
+        print("ABORT:", exc)
+        return 14
+    if not delayed_recovery and not (window[0] <= started <= window[1]):
         Store(out_dir).write(f"monday_missed_{started.strftime('%Y%m%dT%H%M%S')}.json",
                              {"status": "missed", "started_at_kst": iso(started), "window": [iso(w) for w in window],
                               "note": "예약 창 밖이라 KIS를 호출하지 않음 — 별도 일정으로 연기 필요"})
         print("MISSED: 예약 창 밖 실행 — 아무것도 호출하지 않음"); return 2
-    store = claim_run(out_dir, "monday", started)
-    meta = {"trade_date": trade_date.isoformat(), "started_at_kst": iso(started), "deadline_kst": iso(deadline), "db_writes": 0}
+    meta = {"trade_date": trade_date.isoformat(), "started_at_kst": iso(started),
+            "deadline_kst": iso(effective_deadline), "normal_deadline_kst": iso(deadline),
+            "scheduled_window_kst": [iso(w) for w in window], "delayed_recovery": delayed_recovery,
+            "actual_execution_date_kst": started.astimezone(SEOUL).date().isoformat(), "db_writes": 0}
     try:
         info = frozen_targets(capture_root, trade_date)
     except Exception as exc:
         meta.update(status="aborted_no_capture_targets", error=f"{type(exc).__name__}: {str(exc)[:300]}")
-        store.write("monday_summary.json", meta); store.checksums(); return 3
+        Store(out_dir).write(f"monday_preflight_failed_{started.strftime('%Y%m%dT%H%M%S')}.json", meta)
+        return 3
+    try:
+        input_validation = validate_monday_inputs(sat_dir, info, trade_date)
+    except Exception as exc:
+        meta.update(status="aborted_invalid_krx_input", error=f"{type(exc).__name__}: {str(exc)[:300]}")
+        Store(out_dir).write(f"monday_preflight_failed_{started.strftime('%Y%m%dT%H%M%S')}.json", meta)
+        print("ABORT: KIS 호출 전 KRX 입력 사전검증 실패 —", meta["error"])
+        return 13
+    store = claim_run(out_dir, "monday_delayed_recovery" if delayed_recovery else "monday", started)
     targets = info["target_symbols"]
     sat_targets = sat_dir / "capture_targets.json"
     meta["targets"] = {"count": len(targets), "capture_summary_sha256": info["capture_summary_sha256"],
                        "same_as_saturday": (json.loads(sat_targets.read_text(encoding="utf-8"))["capture_summary_sha256"]
                                             == info["capture_summary_sha256"]) if sat_targets.exists() else None}
+    meta["input_validation"] = input_validation
     cap = 2 * len(targets) + REQUEST_CAP_EXTRA
     est_seconds = 2 * len(targets) * (EXPECTED_INTERVAL + 0.12)
     meta["plan"] = {"expected_quotation_requests": 2 * len(targets), "request_cap": cap,
                     "estimated_seconds": round(est_seconds), "estimated_finish_kst": iso(started + timedelta(seconds=est_seconds)),
-                    "fits_before_deadline": started + timedelta(seconds=est_seconds) <= deadline}
+                    "fits_before_deadline": started + timedelta(seconds=est_seconds) <= effective_deadline}
     results: dict[str, dict] = {}
     deferred: list[str] = []
     stop_reason = None
-    with guarded_lock(window[1], now=now, **(lock_kwargs or {})) as guard:
+    lock_wait_until = started if delayed_recovery else window[1]
+    with guarded_lock(lock_wait_until, now=now, **(lock_kwargs or {})) as guard:
         meta["preflight"] = guard
         if not guard["lock_acquired"]:
             meta["status"] = "aborted_lock_or_services_busy"
@@ -518,9 +662,10 @@ def run_monday(out_dir: Path, sat_dir: Path, *, trade_date: date = TRADE_DATE, c
         if meta["client"]["request_interval"] not in (None, EXPECTED_INTERVAL):
             meta["status"] = "aborted_interval_mismatch"
             store.write("monday_summary.json", meta); store.checksums(); return 7
+        meta["kis_query_started_at_kst"] = iso(now())
         try:
             for i, symbol in enumerate(targets):
-                if now() >= deadline:
+                if now() >= effective_deadline:
                     deferred = targets[i:]; stop_reason = "deadline"; break
                 mark = len(session.records)
                 before = dict(client.request_metrics()) if hasattr(client, "request_metrics") else {}
@@ -536,6 +681,7 @@ def run_monday(out_dir: Path, sat_dir: Path, *, trade_date: date = TRADE_DATE, c
                                    "rate_limit_errors": after.get("rate_limit_errors", 0) - before.get("rate_limit_errors", 0)}
                 store.write(f"kis_raw/{symbol}.json", {"symbol": symbol, "requests": recs})
         finally:
+            meta["kis_query_finished_at_kst"] = iso(now())
             if client_factory is None:
                 client.close(); session.close()
     meta["metrics"] = client.request_metrics() if hasattr(client, "request_metrics") else {}
@@ -546,13 +692,13 @@ def run_monday(out_dir: Path, sat_dir: Path, *, trade_date: date = TRADE_DATE, c
     comparison = compare_all(sat_dir, results, targets, trade_date)
     store.write("comparison.json", comparison)
     meta["comparison"] = comparison["summary"]
-    failed = meta["comparison"]["kis_raw_missing"] or meta["comparison"]["kis_adj_missing"]
-    meta["status"] = ("partial" if deferred or stop_reason else "complete_with_symbol_failures" if failed else "complete")
+    meta["status"] = monday_result_status(deferred, stop_reason, meta["comparison"])
     store.write("monday_summary.json", meta)
     store.write("report.md", render_report(sat_dir, out_dir, meta).encode("utf-8"))
     store.checksums()
     print(json.dumps({k: meta[k] for k in ("status", "metrics", "comparison")}, ensure_ascii=False, default=str, indent=1))
-    return {"complete": 0, "complete_with_symbol_failures": 9}.get(meta["status"], 8)
+    return {"complete": 0, "complete_with_unverified_symbols": 0,
+            "complete_with_symbol_failures": 9}.get(meta["status"], 8)
 
 
 # ───────────────────────── 비교 ─────────────────────────
@@ -573,8 +719,11 @@ def compare_symbol(krx: dict | None, raw: dict, adj: dict, ref: dict | None, tra
         out["adj_ratio_close"] = str((ac / rc).quantize(Decimal("0.000001"))) if rc and ac else None
         rv, av = _d(raw.get("volume")), _d(adj.get("volume"))
         out["adj_ratio_volume"] = str((av / rv).quantize(Decimal("0.000001"))) if rv and av else None
-    if not krx or raw.get("status") != "ok":
-        out["category"] = "krx_missing" if not krx else "kis_raw_unavailable"
+    if not krx:
+        out.update(category="unverified_no_krx", verification_status="unverified_no_krx")
+        return out
+    if raw.get("status") != "ok":
+        out["category"] = "kis_raw_unavailable"
         return out
     fields = {}
     for k in OHLCV:
@@ -616,28 +765,57 @@ def compare_all(sat_dir: Path, results: dict, targets: list[str], trade_date: da
         cats[c["category"]] = cats.get(c["category"], 0) + 1
     both = [c for c in per.values() if "fields" in c]
     traded = [c for c in both if not c["category"].startswith("C_")]
+    zero_volume = [c for c in both if c["category"].startswith("C_")]
+    unverified = sorted(s for s, c in per.items() if c["category"] == "unverified_no_krx")
+    comparable = set(targets) - set(unverified)
     rate = lambda xs, pred: (f"{sum(1 for x in xs if pred(x))}/{len(xs)}" if xs else "0/0")
+    def kis_counts(key: str) -> dict[str, int]:
+        counts = {"ok": 0, "error": 0, "no_row": 0, "other": 0, "not_queried": len(targets) - len(results)}
+        for row in results.values():
+            status = (row.get(key) or {}).get("status")
+            counts[status if status in ("ok", "error", "no_row") else "other"] += 1
+        return counts
     summary = {
-        "krx_available": bool(krx_rows), "targets": len(targets), "kis_completed": len(results),
+        "krx_available": bool(krx_rows), "targets": len(targets), "capture_targets": len(targets),
+        "kis_query_targets": len(targets), "kis_completed": len(results),
+        "kis_raw_status": kis_counts("raw"), "kis_adjusted_status": kis_counts("adjusted"),
+        "krx_comparison_targets": len(set(krx_rows) & set(targets)),
         "categories": cats,
         "ohlcv_exact_all": rate(both, lambda c: c["ohlcv_match"]),
+        "krx_ohlcv_match": sum(1 for c in both if c["ohlcv_match"]),
+        "krx_ohlcv_mismatch": sum(1 for c in both if not c["ohlcv_match"]),
         "close_match_all": rate(both, lambda c: c["fields"]["close"]["match"]),
         "volume_match_all": rate(both, lambda c: c["fields"]["volume"]["match"]),
         "trade_value_match_all": rate(both, lambda c: c["fields"]["trade_value"]["match"]),
         "ohlcv_exact_traded": rate(traded, lambda c: c["ohlcv_match"]),
-        "zero_volume_count": sum(1 for c in both if c["category"].startswith("C_")),
-        "zero_volume_close_volume_match": rate([c for c in both if c["category"].startswith("C_")], lambda c: c.get("zero_volume_close_volume_match")),
+        "zero_volume_count": len(zero_volume),
+        "zero_volume_ohl_representation_diff": sum(1 for c in zero_volume if c["category"] == "C_zero_volume_representation"),
+        "zero_volume_close_volume_match": rate(zero_volume, lambda c: c.get("zero_volume_close_volume_match")),
         "listed_shares_ref_match": rate([c for c in both if "listed_shares_ref" in c["fields"]], lambda c: c["fields"]["listed_shares_ref"]["match"]),
         "market_cap_ref_match_100m": rate([c for c in both if "market_cap_ref_100m" in c["fields"]], lambda c: c["fields"]["market_cap_ref_100m"]["match"]),
         "kis_raw_missing": sorted(s for s, c in per.items() if c["kis_raw"] != "ok"),
         "kis_adj_missing": sorted(s for s, c in per.items() if c["kis_adj"] != "ok"),
+        "kis_raw_blocking": sorted(s for s, c in per.items()
+                                   if c["kis_raw"] != "ok" and (s in comparable or c["kis_raw"] != "no_row")),
+        "kis_adj_blocking": sorted(s for s, c in per.items()
+                                   if c["kis_adj"] != "ok" and (s in comparable or c["kis_adj"] != "no_row")),
         "kis_raw_vs_adj_differs": sorted(s for s, c in per.items() if c.get("raw_vs_adj_diff")),
         "B_adjusted_differs_from_krx": sorted(s for s, c in per.items() if c.get("B_adjusted_differs_from_krx")),
         "D_traded_raw_mismatch": sorted(s for s, c in per.items() if c["category"] == "D_traded_raw_mismatch"),
-        "krx_missing": sorted(s for s, c in per.items() if c["category"] == "krx_missing"),
+        "unverified_no_krx": unverified,
         "symbols_with_retries": sorted(s for s, r in results.items() if r.get("retries")),
     }
     return {"summary": summary, "per_symbol": per}
+
+
+def monday_result_status(deferred: list[str], stop_reason: str | None, comparison: dict) -> str:
+    if deferred or stop_reason:
+        return "partial"
+    if comparison.get("kis_raw_blocking") or comparison.get("kis_adj_blocking"):
+        return "complete_with_symbol_failures"
+    if comparison.get("unverified_no_krx"):
+        return "complete_with_unverified_symbols"
+    return "complete"
 
 
 def render_report(sat_dir: Path, mon_dir: Path, mon_meta: dict | None) -> str:
@@ -646,22 +824,27 @@ def render_report(sat_dir: Path, mon_dir: Path, mon_meta: dict | None) -> str:
              f"- 거래일: {TRADE_DATE.isoformat()} · 생성: {iso(now_kst())}", ""]
     lines += ["## 토요일 KRX", "```json", json.dumps({k: sat.get(k) for k in ("status", "started_at_kst", "finished_at_kst", "capture", "krx_request", "completeness", "fundamentals", "fundamentals_null_reasons")}, ensure_ascii=False, indent=1, default=str)[:12000], "```", ""]
     if mon_meta:
-        lines += ["## 월요일 KIS", "```json", json.dumps({k: mon_meta.get(k) for k in ("status", "started_at_kst", "finished_at_kst", "targets", "plan", "preflight", "client", "metrics", "token_requests_seen", "completed_symbols", "stop_reason", "comparison")}, ensure_ascii=False, indent=1, default=str)[:16000], "```"]
+        lines += ["## 월요일 KIS", "```json", json.dumps({k: mon_meta.get(k) for k in ("status", "started_at_kst", "finished_at_kst", "delayed_recovery", "kis_query_started_at_kst", "kis_query_finished_at_kst", "targets", "plan", "preflight", "client", "metrics", "token_requests_seen", "completed_symbols", "stop_reason", "comparison")}, ensure_ascii=False, indent=1, default=str)[:16000], "```"]
     return "\n".join(lines) + "\n"
 
 
 # ───────────────────────── CLI ─────────────────────────
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=("saturday-krx", "monday-kis", "report"))
+    parser.add_argument("command", choices=("saturday-krx", "saturday-krx-recovery", "monday-kis",
+                                             "monday-kis-delayed-recovery", "report"))
     args = parser.parse_args(argv)
     load_env()
     sat_dir, mon_dir = OUT_ROOT / SAT_DIRNAME, OUT_ROOT / MON_DIRNAME
     print(f"[{iso(now_kst())}] {args.command} 시작 (trade_date={TRADE_DATE})", flush=True)
     if args.command == "saturday-krx":
         return run_saturday(sat_dir)
+    if args.command == "saturday-krx-recovery":
+        return run_saturday(sat_dir, recovery=True, max_attempts=1)
     if args.command == "monday-kis":
         return run_monday(mon_dir, sat_dir)
+    if args.command == "monday-kis-delayed-recovery":
+        return run_monday(mon_dir, sat_dir, delayed_recovery=True)
     # report: 파일만 읽어 다시 비교 (API 호출 없음). 결과는 새 이름으로 저장
     obs_path = mon_dir / "kis_observations.json"
     if not obs_path.exists():

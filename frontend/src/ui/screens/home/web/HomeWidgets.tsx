@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Circle, ClipPath, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { Text, TextInput } from '@/components/ui/AppText';
@@ -34,7 +34,9 @@ export function MarketCardBase({ q, h = 264, usdLabel, onMore, onPress }: { q: M
   const md = mkData(q, r);
   const col = md.up ? '#E5484D' : '#2F6BDB';
   const [ex, ey] = md.pts[md.pts.length - 1];
-  const gid = `mg-${q.key}-${h}`;
+  /* 2026-11-23: 홈이 다시 쌓여도(이전 홈은 숨김) id 가 겹치지 않게 useId 를 붙임 (Sparkline 과 같은 방식) */
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
+  const gid = `mg-${q.key}-${h}-${uid}`;
   /* 원본 .m-line: 왼쪽부터 1s 동안 드러남 (기간을 바꾸면 다시) */
   const t = useProgress(true, 1000, r);
   const e = curve.ease(t);

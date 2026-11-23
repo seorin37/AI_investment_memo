@@ -1,0 +1,40 @@
+{"id": "D01", "group": "price", "expect": "ask", "symbol": "000660", "company": "SK하이닉스", "text": "이거 가격 괜찮은거야??"}
+{"id": "D02", "group": "price", "expect": "ask", "symbol": "000660", "company": "SK하이닉스", "text": "하이닉스 지금 너무 비싼 거 아니야?"}
+{"id": "D03", "group": "price", "expect": "ask", "symbol": "005930", "company": "삼성전자", "text": "삼성전자 지금 가격이면 싼 편이야?"}
+{"id": "D04", "group": "price", "expect": "ask", "symbol": "000660", "company": "SK하이닉스", "text": "요즘 하이닉스 많이 오른 건가?"}
+{"id": "D05", "group": "price", "expect": "ask", "symbol": "005930", "company": "삼성전자", "text": "삼전 지금 바닥인가?"}
+{"id": "D06", "group": "price", "expect": "ask", "symbol": "000660", "company": "SK하이닉스", "text": "고점 대비 얼마나 빠진 거지?"}
+{"id": "D07", "group": "price", "expect": "ask", "symbol": "005930", "company": "삼성전자", "text": "이 가격대면 괜찮은 건지 모르겠어"}
+{"id": "D08", "group": "decide", "expect": "ask", "symbol": "000660", "company": "SK하이닉스", "text": "SK하이닉스 한국인들 다 있는 것 같은데 나만 없는데 지금이라도 사야되나?"}
+{"id": "D09", "group": "decide", "expect": "ask", "symbol": "000660", "company": "SK하이닉스", "text": "지금 들어가도 될까?"}
+{"id": "D10", "group": "decide", "expect": "ask", "symbol": "005930", "company": "삼성전자", "text": "삼성전자 팔아야 하나 고민돼"}
+{"id": "D11", "group": "decide", "expect": "ask", "symbol": "000660", "company": "SK하이닉스", "text": "하이닉스 더 담아도 되나?"}
+{"id": "D12", "group": "decide", "expect": "ask", "symbol": "005930", "company": "삼성전자", "text": "삼전 지금 손절해야 할까?"}
+{"id": "D13", "group": "decide", "expect": "ask", "symbol": "000660", "company": "SK하이닉스", "text": "물타기 해도 될까?"}
+{"id": "D14", "group": "decide", "expect": "ask", "symbol": "005930", "company": "삼성전자", "text": "지금 사면 늦은 걸까?"}
+{"id": "D15", "group": "predict", "expect": "ask", "symbol": "000660", "company": "SK하이닉스", "text": "하이닉스 이거 오르나"}
+{"id": "D16", "group": "predict", "expect": "ask", "symbol": "005930", "company": "삼성전자", "text": "삼성전자 앞으로 더 떨어질까?"}
+{"id": "D17", "group": "predict", "expect": "ask", "symbol": "000660", "company": "SK하이닉스", "text": "연말까지 오를 수 있을까?"}
+{"id": "D18", "group": "predict", "expect": "ask", "symbol": "005930", "company": "삼성전자", "text": "삼전 반등 언제 오냐"}
+{"id": "D19", "group": "predict", "expect": "ask", "symbol": "000660", "company": "SK하이닉스", "text": "하이닉스 이제 내려갈 일만 남은 건가?"}
+{"id": "D20", "group": "predict", "expect": "ask", "symbol": "005930", "company": "삼성전자", "text": "이번 실적 나오면 주가 오를까?"}
+{"id": "D21", "group": "cause", "expect": "ask", "symbol": "000660", "company": "SK하이닉스", "text": "지금 엔비디아 때문에 많이 떨어졌던데"}
+{"id": "D22", "group": "cause", "expect": "ask", "symbol": "005930", "company": "삼성전자", "text": "외국인이 계속 팔아서 빠지는 거라던데"}
+{"id": "D23", "group": "cause", "expect": "ask", "symbol": "000660", "company": "SK하이닉스", "text": "오늘 HBM 뉴스 때문에 오른 것 같아"}
+{"id": "D24", "group": "cause", "expect": "ask", "symbol": "005930", "company": "삼성전자", "text": "환율 때문에 삼전이 약한 거래"}
+{"id": "D25", "group": "cause", "expect": "ask", "symbol": "000660", "company": "SK하이닉스", "text": "마이크론 실적 때문에 같이 빠진 듯"}
+{"id": "D26", "group": "cause", "expect": "ask", "symbol": "005930", "company": "삼성전자", "text": "요즘 삼전 빠지는 게 파운드리 때문이라던데 맞나"}
+{"id": "D27", "group": "drop", "expect": "drop", "symbol": "000660", "company": "SK하이닉스", "text": "가즈아!!"}
+{"id": "D28", "group": "drop", "expect": "drop", "symbol": "005930", "company": "삼성전자", "text": "삼전 망했다 진짜"}
+{"id": "D29", "group": "drop", "expect": "drop", "symbol": "000660", "company": "SK하이닉스", "text": "머지않아 간다"}
+{"id": "D30", "group": "drop", "expect": "drop", "symbol": "005930", "company": "삼성전자", "text": "오늘 또 파랗네 미쳤다"}
+{"id": "D31", "group": "drop", "expect": "drop", "symbol": "000660", "company": "SK하이닉스", "text": "하이닉스는 무조건 오른다"}
+{"id": "D32", "group": "drop", "expect": "drop", "symbol": "005930", "company": "삼성전자", "text": "10주 샀다"}
+{"id": "D33", "group": "drop", "expect": "drop", "symbol": "000660", "company": "SK하이닉스", "text": "한 종목에 몰빵하지 않기"}
+{"id": "D34", "group": "drop", "expect": "drop", "symbol": "005930", "company": "삼성전자", "text": "주식 너무 어렵다"}
+{"id": "D35", "group": "drop", "expect": "drop", "symbol": "000660", "company": "SK하이닉스", "text": "내일 점심 뭐 먹지"}
+{"id": "D36", "group": "drop", "expect": "drop", "symbol": "005930", "company": "삼성전자", "text": "유튜버가 사라고 해서 샀음"}
+{"id": "D37", "group": "keep", "expect": "ask", "symbol": "000660", "company": "SK하이닉스", "text": "HBM이 정확히 뭐야?"}
+{"id": "D38", "group": "keep", "expect": "track", "symbol": "000660", "company": "SK하이닉스", "text": "HBM 공급계약 소식 나오면 알려줘"}
+{"id": "D39", "group": "keep", "expect": "track", "symbol": "005930", "company": "삼성전자", "text": "5만원 아래로 내려가면 다시 보기"}
+{"id": "D40", "group": "keep", "expect": "track", "symbol": "000660", "company": "SK하이닉스", "text": "다음 분기 실적 발표 나오면 영업이익 확인"}

@@ -352,6 +352,22 @@ class OpenAIClientTest(unittest.TestCase):
         self.assertIn("temperature", sent[0][2])
         self.assertNotIn("temperature", sent[1][2])
 
+    def test_temperature_retry_when_other_call_already_dropped_it(self):
+        # 2026-11-22: 동시에 보낸 다른 호출이 먼저 거부받아 temperature 를 None 으로 바꿔도, 이 호출(0 으로 보냄)은 다시 보내야 한다
+        reject = self.FakeResponse(400, {"error": {"message": "Unsupported value: 'temperature' does not support 0 with this model."}})
+        client, sent = self.make([])
+        replies = [reject, self.FakeResponse(200, self.ok_body("[3]"))]
+
+        def send(prompt):
+            sent.append(("", {}, client._body(prompt)))
+            client.temperature = None                        # 다른 호출이 그사이 바꿈
+            return replies.pop(0)
+
+        client._send = send
+        self.assertEqual(client("p"), "[3]")
+        self.assertIn("temperature", sent[0][2])
+        self.assertNotIn("temperature", sent[1][2])
+
     def test_out_of_credit_is_not_retried(self):
         credit = self.FakeResponse(429, {"error": {"code": "insufficient_quota", "message": "quota"}})
         client, sent = self.make([credit])

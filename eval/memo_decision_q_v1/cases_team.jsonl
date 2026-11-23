@@ -1,0 +1,36 @@
+{"id": "T01", "group": "price", "expect": "ask", "symbol": "000660", "company": "SK하이닉스", "text": "이 가격이면 비싼거임?"}
+{"id": "T02", "group": "price", "expect": "ask", "symbol": "005930", "company": "삼성전자", "text": "삼전 지금 가격대 어떰"}
+{"id": "T03", "group": "price", "expect": "ask", "symbol": "035420", "company": "NAVER", "text": "네이버 요즘 많이 싸진듯? 맞나"}
+{"id": "T04", "group": "price", "expect": "ask", "symbol": "105560", "company": "KB금융", "text": "kb 지금 고점이야 저점이야"}
+{"id": "T05", "group": "price", "expect": "ask", "symbol": "005380", "company": "현대차", "text": "현대차 주가 지금 높은 편이야?"}
+{"id": "T06", "group": "decide", "expect": "ask", "symbol": "000660", "company": "SK하이닉스", "text": "하닉 지금 탑승 가능?"}
+{"id": "T07", "group": "decide", "expect": "ask", "symbol": "005930", "company": "삼성전자", "text": "삼전 존버할까 그냥 던질까"}
+{"id": "T08", "group": "decide", "expect": "ask", "symbol": "035420", "company": "NAVER", "text": "네이버 물렸는데 물타기 ㄱ?"}
+{"id": "T09", "group": "decide", "expect": "ask", "symbol": "105560", "company": "KB금융", "text": "배당 보고 kb 들어갈까 하는데 지금 타이밍 어때"}
+{"id": "T10", "group": "decide", "expect": "ask", "symbol": "005380", "company": "현대차", "text": "현대차 지금이라도 줍줍해야되나"}
+{"id": "T11", "group": "decide", "expect": "ask", "symbol": "000660", "company": "SK하이닉스", "text": "친구들 다 하닉으로 돈 벌었다는데 나도 들어가야 하나ㅠ"}
+{"id": "T12", "group": "predict", "expect": "ask", "symbol": "005930", "company": "삼성전자", "text": "삼전 언제 오르냐 진짜"}
+{"id": "T13", "group": "predict", "expect": "ask", "symbol": "000660", "company": "SK하이닉스", "text": "하닉 여기서 더 빠짐?"}
+{"id": "T14", "group": "predict", "expect": "ask", "symbol": "035420", "company": "NAVER", "text": "네이버 내년엔 좀 갈까"}
+{"id": "T15", "group": "predict", "expect": "ask", "symbol": "005380", "company": "현대차", "text": "현대차 반등각 나오나"}
+{"id": "T16", "group": "predict", "expect": "ask", "symbol": "105560", "company": "KB금융", "text": "kb 이번 실적 나오면 뛰려나"}
+{"id": "T17", "group": "cause", "expect": "ask", "symbol": "000660", "company": "SK하이닉스", "text": "하닉 오늘 빠진거 마이크론 실적 때문이라던데"}
+{"id": "T18", "group": "cause", "expect": "ask", "symbol": "005930", "company": "삼성전자", "text": "삼전 반도체 업황 때문에 계속 내리는 거 같음"}
+{"id": "T19", "group": "cause", "expect": "ask", "symbol": "035420", "company": "NAVER", "text": "네이버 AI 투자 비용 때문에 떨어진다던데"}
+{"id": "T20", "group": "cause", "expect": "ask", "symbol": "005380", "company": "현대차", "text": "현대차 관세 때문에 계속 약하네"}
+{"id": "T21", "group": "cause", "expect": "ask", "symbol": "000660", "company": "SK하이닉스", "text": "오늘 하닉 오른 거 엔비 실적 덕인가"}
+{"id": "T22", "group": "multi", "expect": "ask", "symbol": "000660", "company": "SK하이닉스", "text": "아 하닉 왜이렇게 떨어짐 ㅠㅠ 지금 사도 되는 거야?"}
+{"id": "T23", "group": "multi", "expect": "ask", "symbol": "005930", "company": "삼성전자", "text": "삼전 10주 들고 있음. 더 사도 될까?"}
+{"id": "T24", "group": "drop", "expect": "drop", "symbol": "000660", "company": "SK하이닉스", "text": "하닉 떡상 기원"}
+{"id": "T25", "group": "drop", "expect": "drop", "symbol": "005930", "company": "삼성전자", "text": "삼전 오늘도 파란불 ㅋㅋ"}
+{"id": "T26", "group": "drop", "expect": "drop", "symbol": "035420", "company": "NAVER", "text": "네이버 내 돈 돌려줘"}
+{"id": "T27", "group": "drop", "expect": "drop", "symbol": "005380", "company": "현대차", "text": "현대차 무조건 간다 믿는다"}
+{"id": "T28", "group": "drop", "expect": "drop", "symbol": "105560", "company": "KB금융", "text": "kb 어제 5주 삼"}
+{"id": "T29", "group": "drop", "expect": "drop", "symbol": "000660", "company": "SK하이닉스", "text": "존버는 승리한다"}
+{"id": "T30", "group": "drop", "expect": "drop", "symbol": "005930", "company": "삼성전자", "text": "삼전 진짜 지겹다"}
+{"id": "T31", "group": "drop", "expect": "drop", "symbol": "000660", "company": "SK하이닉스", "text": "형이 사라고 해서 하닉 샀다"}
+{"id": "T32", "group": "keep", "expect": "track", "symbol": "000660", "company": "SK하이닉스", "text": "하닉 HBM4 양산 소식 뜨면 알려줘"}
+{"id": "T33", "group": "keep", "expect": "track", "symbol": "005930", "company": "삼성전자", "text": "삼전 배당 발표 나오면 작년이랑 비교"}
+{"id": "T34", "group": "keep", "expect": "track", "symbol": "035420", "company": "NAVER", "text": "네이버 15만원 깨지면 체크"}
+{"id": "T35", "group": "keep", "expect": "ask", "symbol": "000660", "company": "SK하이닉스", "text": "CXL이 뭐임?"}
+{"id": "T36", "group": "keep", "expect": "track", "symbol": "105560", "company": "KB금융", "text": "kb 다음 실적 발표 일정 나오면 알려줘"}

@@ -123,7 +123,7 @@ def _judge(item: TrackingItem, evidence, call: Callable[[str], str] | None, bann
         if cfg.get("on_check_fail", "fixed") == "drop":
             return TopicOutcome("no_update", evidence, card, codes, raw=raw, retried=retried)
         draft = fixed_card(item, evidence)
-        if draft is not None and draft.type == "disclosure":
+        if draft is not None and draft.type == "disclosure" and item.category != "ask":
             draft.related_news = related_news(evidence, set(), cfg.get("related_news_min_similarity", 0.6))
         return TopicOutcome("fixed_card", evidence, card, codes, draft, raw, retried)
 
@@ -175,7 +175,7 @@ def _judge(item: TrackingItem, evidence, call: Callable[[str], str] | None, bann
     import re
     summary = " ".join(re.sub(r"\s*\[E\d+\]", "", s).strip() for s in card.summary)
     related = related_news(evidence, {ref for ref, _ in sources}, cfg.get("related_news_min_similarity", 0.6)) \
-        if utype == "disclosure" else []
+        if utype == "disclosure" and item.category != "ask" else []   # 질문 답에는 관련 기사(유사도만 본 제목 목록)를 붙이지 않는다 (2026-11-23)
     draft = UpdateDraft(item=item, type=utype, title=card.title, summary=summary, reason=card.reason,
                         sources=sources, related_news=related)
     return TopicOutcome("update", evidence, card, [], draft, raw, retried)
@@ -263,7 +263,7 @@ def _judge_v2_run(item: TrackingItem, evidence, call: Callable[[str], str] | Non
             return TopicOutcome("no_update", evidence, card, codes, raw=raw, retried=retried)
         real = [e for e in evidence if e.candidate.doc != "compare"]
         draft = fixed_card(item, real)
-        if draft is not None and draft.type == "disclosure":
+        if draft is not None and draft.type == "disclosure" and item.category != "ask":
             draft.related_news = related_news(real, set(), cfg.get("related_news_min_similarity", 0.6))
         return TopicOutcome("fixed_card", evidence, card, codes, draft, raw, retried)
 
@@ -382,7 +382,7 @@ def _judge_v2_run(item: TrackingItem, evidence, call: Callable[[str], str] | Non
     kinds = {by_id[eid].candidate.kind for _, eid in facts if by_id[eid].candidate.doc != "compare"}
     utype = "disclosure" if "disclosure" in kinds else "news"
     related = related_news(evidence, {r for r, _ in sources}, cfg.get("related_news_min_similarity", 0.6)) \
-        if utype == "disclosure" else []
+        if utype == "disclosure" and item.category != "ask" else []   # 질문 답에는 관련 기사(유사도만 본 제목 목록)를 붙이지 않는다 (2026-11-23)
     draft = UpdateDraft(item=item, type=utype, title=card.headline, summary=" ".join(r["text"] for r in fact_rows),
                         reason=card.memo_link, sources=sources, related_news=related,
                         card_schema="v2", when=card.when, facts=fact_rows, explanation=card.explanation if explain else "",
@@ -393,6 +393,8 @@ def _judge_v2_run(item: TrackingItem, evidence, call: Callable[[str], str] | Non
     if item.category == "ask":                               # 실험(2026-11-18): 답 아래에 모아 보일 출처 (답에 쓴 근거만)
         draft.source_list = source_list(evidence, {eid for _, eid in facts}
                                         | {c.get(k, {}).get("evidence_id") for c in card.calc for k in ("a", "b")})
+        from .decision_note import add_decision_note
+        add_decision_note(draft, cfg)                          # 2026-11-23: 사야 되나·오르나 질문의 답 끝에 고정 문장 (코드가 붙인다)
     return TopicOutcome("update", evidence, card, [], draft, raw, retried)
 
 
