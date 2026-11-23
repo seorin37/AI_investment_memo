@@ -538,12 +538,10 @@ function Health({ p }: { p: CompanyInfoProps }) {
   const t = useProgress(true, 700);
   const sc = 1 - Math.pow(1 - t, 3);
   const keyOf = (name: string) => HEALTH_KEYS.find((h) => h.k === name)!.key;
-  /* 값이 있는 축만 그린다 (11-21 결정 ②: 금융사는 부채비율·유보율 두 축 = 선 하나). 다섯 축이면 원본 좌표 그대로 */
-  const axes = AX.map((name, i) => ({ name, lbl: LBL[i] })).filter((a) => p.health[keyOf(a.name)] != null);
-  const n = axes.length;
-  const ang = (i: number) => -Math.PI / 2 + (i * 2 * Math.PI) / Math.max(n, 1);
-  const lblAt = (i: number): [number, number] =>
-    n === AX.length ? axes[i].lbl : [150 + Math.cos(ang(i)) * 100 - 26, 150 + Math.sin(ang(i)) * 100 - 10];
+  /* 다섯 축을 늘 그린다 (11-23: 11-21 결정 ② 대신). 값이 없는 지표(금융사의 유동·당좌·이자보상비율 등)는
+     가운데 점으로 두고 점·라벨을 흐리게 → 금융사는 부채비율·유보율과 가운데를 잇는 삼각형이 된다 */
+  const axes = AX.map((name, i) => ({ name, lbl: LBL[i], has: p.health[keyOf(name)] != null }));
+  const ang = (i: number) => -Math.PI / 2 + (i * 2 * Math.PI) / AX.length;
   const R0 = axes.map((_, i) => [150 + Math.cos(ang(i)) * 72, 150 + Math.sin(ang(i)) * 72] as const);
   const pts = R0.map(([x, y], i) => {
     const s = healthScore(keyOf(axes[i].name), p.health[keyOf(axes[i].name)]) * sc;
@@ -553,7 +551,8 @@ function Health({ p }: { p: CompanyInfoProps }) {
     axes
       .map((_, i) => `${(150 + Math.cos(ang(i)) * r).toFixed(1)},${(150 + Math.sin(ang(i)) * r).toFixed(1)}`)
       .join(' ');
-  const LIST = ['부채비율', '유동비율', '당좌비율', '이자보상비율', '유보율'].filter((name) => p.health[keyOf(name)] != null);
+  const LIST = ['부채비율', '유동비율', '당좌비율', '이자보상비율', '유보율'];
+  const hasOf = (name: string) => p.health[keyOf(name)] != null;
   const val = (name: string) => healthVal(keyOf(name), p.health[keyOf(name)]);
   return (
     <View style={[st.card, st.pad24, { height: 404 }]}>
@@ -572,13 +571,13 @@ function Health({ p }: { p: CompanyInfoProps }) {
             <Line key={i} x1={150} y1={150} x2={x} y2={y} stroke="#B4B2A9" strokeOpacity={0.55} strokeWidth={0.8} />
           ))}
           <Polygon points={pts.map((q) => q.join(',')).join(' ')} fill="#378ADD" fillOpacity={0.18} stroke="#378ADD" strokeWidth={1.8} />
-          {pts.map((q, i) => (
-            <Circle key={i} cx={q[0]} cy={q[1]} r={sel === axes[i].name ? 4 : 3} fill="#378ADD" stroke="#FFFFFF" strokeWidth={1.5} />
-          ))}
+          {pts.map((q, i) =>
+            axes[i].has ? <Circle key={i} cx={q[0]} cy={q[1]} r={sel === axes[i].name ? 4 : 3} fill="#378ADD" stroke="#FFFFFF" strokeWidth={1.5} /> : null,
+          )}
         </Svg>
         {axes.map(({ name: a }, i) => (
-          <Pressable key={a} onPress={() => setSel(sel === a ? null : a)} accessibilityRole="button" style={{ position: 'absolute', left: lblAt(i)[0] + HX, top: lblAt(i)[1] }}>
-            {({ hovered }: Hover) => <Text style={[st.hT, sel === a || hovered ? { color: '#191F28' } : null, sel === a && { fontWeight: '700' }]}>{a}</Text>}
+          <Pressable key={a} onPress={() => setSel(sel === a ? null : a)} accessibilityRole="button" style={{ position: 'absolute', left: axes[i].lbl[0] + HX, top: axes[i].lbl[1] }}>
+            {({ hovered }: Hover) => <Text style={[st.hT, !axes[i].has && st.hOff, sel === a || hovered ? { color: '#191F28' } : null, sel === a && { fontWeight: '700' }]}>{a}</Text>}
           </Pressable>
         ))}
         <View style={[st.hLegend, { left: HL }]}>
@@ -590,8 +589,8 @@ function Health({ p }: { p: CompanyInfoProps }) {
             const on = sel === name;
             return (
               <Pressable key={name} onPress={() => setSel(on ? null : name)} accessibilityRole="button" style={st.hRow}>
-                <Text style={[st.hT, on && st.hOn]}>{name}</Text>
-                <Text style={[st.hT, on && st.hOn]}>{val(name)}</Text>
+                <Text style={[st.hT, !hasOf(name) && st.hOff, on && st.hOn]}>{name}</Text>
+                <Text style={[st.hT, !hasOf(name) && st.hOff, on && st.hOn]}>{val(name)}</Text>
               </Pressable>
             );
           })}
@@ -603,12 +602,12 @@ function Health({ p }: { p: CompanyInfoProps }) {
                 {sel} · {val(sel)}
               </Text>
               <Text style={[st.hInfoP, { color: '#4E5968' }]}>{HDESC[sel][0]}</Text>
-              <Text style={st.hInfoP}>{HDESC[sel][1]}</Text>
+              <Text style={st.hInfoP}>{hasOf(sel) ? HDESC[sel][1] : '이 회사는 이 지표를 계산할 재무 값이 없어요. 은행·보험 같은 금융업은 공시하지 않는 지표예요.'}</Text>
             </>
           ) : (
             <>
               <Text style={st.hInfoB}>{p.stock.name} 재무 건전성</Text>
-              <Text style={[st.hInfoP, { color: '#4E5968' }]}>바깥쪽으로 갈수록 안정적이에요. 지표 이름을 누르면 설명이 나와요.</Text>
+              <Text style={[st.hInfoP, { color: '#4E5968' }]}>바깥쪽으로 갈수록 안정적이에요. 지표 이름을 누르면 설명이 나와요.{axes.some((x) => !x.has) ? ' 값이 없는 지표는 가운데에 두고 흐리게 보여요.' : ''}</Text>
               <Text style={st.hInfoP}>바깥 테두리는 메모스톡 자체 기준 · 최근 분기 재무제표</Text>
             </>
           )}
@@ -672,6 +671,7 @@ const st = StyleSheet.create({
   legT: { ...fpx(13, 20), fontWeight: '500', color: '#6B7684' },
   hT: { ...fpx(13, 20), fontWeight: '500', color: '#333D4B' },
   hOn: { fontWeight: '700', color: '#191F28' },
+  hOff: { color: '#B0B8C1' },
   hLegend: { position: 'absolute', top: 10, flexDirection: 'row', alignItems: 'center', gap: 6 },
   hDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#378ADD' },
   hRow: { height: 30, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#E5E8EB' },
