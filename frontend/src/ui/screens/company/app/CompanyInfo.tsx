@@ -13,7 +13,7 @@ import { Sheet } from '@/ui/shared/Sheet';
 import { AppStockCard } from '@/ui/shared/StockHead';
 import { appColor, curve, ft } from '@/ui/theme';
 import type { CompanyInfoProps } from '../CompanyInfo.types';
-import { HEALTH_KEYS, TERM_TIP, TERMS, appQuoteRows, healthScore, healthVal, mdOf, mmddOf, won, yoyAt, type FinKey, type TermKey } from '../companyFormat';
+import { FINANCIAL_HEALTH_KEYS, FINANCIAL_HEALTH_NOTE, HEALTH_KEYS, TERM_TIP, TERMS, appQuoteRows, financialHealthScore, healthScore, healthVal, mdOf, mmddOf, won, yoyAt, type FinKey, type TermKey } from '../companyFormat';
 import { useProgress } from '@/ui/motion/useProgress';
 import { CANDLE_H, CandleChart, GrowthChart, ProfitChart, Radar } from './CompanyCharts';
 import { useNudge } from '@/store/nudge';
@@ -76,7 +76,9 @@ export function AppCompanyInfo(p: CompanyInfoProps) {
   const pr = p.profile;
   const candles = p.candles[range];
   const all = p.quarters;
-  const healthKeys = HEALTH_KEYS.filter((h) => p.health[h.key] != null);
+  /* 금융회사는 세 축 고정(삼각형), 일반 기업은 값이 있는 축만 */
+  const healthKeys = p.financial ? FINANCIAL_HEALTH_KEYS : HEALTH_KEYS.filter((h) => p.health[h.key] != null);
+  const scoreOf = p.financial ? financialHealthScore : healthScore;
   const shown = all.slice(-8);
   const last = shown[shown.length - 1];
   const gkey = GTABS[gtab].key;
@@ -307,8 +309,7 @@ export function AppCompanyInfo(p: CompanyInfoProps) {
                       {p.health_as_of.slice(0, 4)}년 {Number(p.health_as_of.slice(5, 7))}월 기준
                     </Text>
                   </View>
-                  {/* 값이 있는 축만 (11-21 결정 ②: 금융사는 부채비율·유보율 두 축 = 선 하나) */}
-                  <Radar labels={healthKeys.map((h) => h.k)} scores={healthKeys.map((h) => healthScore(h.key, p.health[h.key]))} width={cw} visible={seen} />
+                  <Radar labels={healthKeys.map((h) => h.k)} scores={healthKeys.map((h) => scoreOf(h.key, p.health[h.key]))} missing={healthKeys.map((h) => p.health[h.key] == null)} width={cw} visible={seen} />
                   <View style={st.hl}>
                     {healthKeys.map((h, i) => (
                       <View key={h.k} style={[st.hli, i === healthKeys.length - 1 && { borderBottomWidth: 0 }]}>
@@ -316,11 +317,14 @@ export function AppCompanyInfo(p: CompanyInfoProps) {
                           <Text style={st.hliT}>{h.k}</Text>
                           <Q onPress={() => setTerm(h.term)} label={h.k} />
                         </View>
-                        <Text style={st.hliV}>{healthVal(h.key, p.health[h.key])}</Text>
+                        <View style={st.hliR}>
+                          {p.financial && h.key === 'interest' && (p.health.interest ?? 0) < 0 ? <Text style={st.hliN}>금융업은 참고용</Text> : null}
+                          <Text style={st.hliV}>{healthVal(h.key, p.health[h.key])}</Text>
+                        </View>
                       </View>
                     ))}
                   </View>
-                  <Text style={st.note}>바깥쪽으로 갈수록 재무가 안정적이에요.</Text>
+                  <Text style={st.note}>{p.financial ? FINANCIAL_HEALTH_NOTE : '바깥쪽으로 갈수록 재무가 안정적이에요.'}</Text>
                 </View>
               )}
             </Section>
@@ -555,6 +559,8 @@ const st = StyleSheet.create({
   hl: { marginTop: 10 },
   hli: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: '#F1F2F4' },
   hliT: { ...ft(13.5), color: appColor.ink },
+  hliR: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  hliN: { ...ft(11), color: appColor.ink3 },
   hliV: { ...ft(13.5), fontWeight: '700', color: appColor.ink, fontVariant: ['tabular-nums'] },
   note: { backgroundColor: '#F4F5F7', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, ...ft(12, 1.6), color: appColor.ink3, marginTop: 10, overflow: 'hidden' },
   src: { textAlign: 'center', ...ft(11.5, 1.6), color: appColor.ink3, marginTop: 4, marginHorizontal: 16, marginBottom: 8 },
