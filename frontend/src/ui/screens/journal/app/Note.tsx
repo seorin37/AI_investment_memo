@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, BackHandler, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent, type TextInputInstance, type TextStyle } from 'react-native';
+import { Animated, BackHandler, Keyboard, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent, type TextInputInstance, type TextStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { useMotionK } from '@/ui/motion/useMotion';
+import { ON_DOM } from '@/ui/shared/onDom';
 import { Sheet } from '@/ui/shared/Sheet';
 import { appColor, curve, ft } from '@/ui/theme';
 import type { JBlock, JBlockStyle, JList, JournalEntry } from '../Journal.types';
@@ -22,7 +23,7 @@ const strip = (it: Item[]): JBlock[] =>
   });
 
 /** 웹의 여러 줄 입력칸은 기본 2줄 높이에 스스로 줄지 않음 → 같은 글의 안 보이는 Text 높이에 맞춤 (기기는 내용만큼 저절로) */
-const FIT = Platform.OS === 'web';
+const FIT = ON_DOM;
 
 export interface AppNoteProps {
   /** 연 기록 (없으면 새 기록) */
