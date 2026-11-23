@@ -43,15 +43,16 @@ def _split(text: str) -> list[str]:
     return out + ([cur] if cur else [])
 
 
-def _line(speaker: str, text: str, refs: list[str] | None = None) -> dict:
-    return {"speaker": speaker, "text": text, "refs": refs or []}
+def _line(speaker: str, text: str, refs: list[str] | None = None, tone: str = "calm") -> dict:
+    return {"speaker": speaker, "text": text, "refs": refs or [], "tone": tone}
 
 
 def fallback(brief: Brief) -> dict:
     segs = []
     n = len(brief.stocks)
     segs.append({"kind": "opening", "stock_code": "", "lines": [
-        _line("A", (f"{_day(brief.end)}" if brief.start == brief.end else f"{_day(brief.start)}부터 {_day(brief.end)}까지")
+        _line("A", tone="warm", text=(f"{_day(brief.end)}" if brief.start == brief.end
+                                      else f"{_day(brief.start)}부터 {_day(brief.end)}까지")
               + f", 내 종목 {n}곳의 소식을 정리해 드릴게요.")]})
     if brief.market:
         m = brief.market[0]
@@ -59,7 +60,7 @@ def fallback(brief: Brief) -> dict:
             _line("B", f"{_day(m.last_date)} {josa(m.label, '은/는')} {m.last:,.2f}{m.unit}로 마감했어요.")]})
     for st in brief.news_stocks:
         memo = st.cards[0].memo_titles[0] if st.cards[0].memo_titles else (st.memos[0].title if st.memos else "")
-        lines = [_line("A", f"{st.name} 소식이에요." + (f" \"{memo}\" 메모를 남기셨죠." if memo else ""))]
+        lines = [_line("A", f"{st.name} 소식이에요." + (f" \"{memo}\" 메모를 남기셨죠." if memo else ""), tone="curious")]
         for c in st.cards:
             src = (c.sources[0]["source"] if c.sources else "") or ""
             if c.kind == "뉴스":
@@ -85,6 +86,6 @@ def fallback(brief: Brief) -> dict:
         segs.append({"kind": "no_news", "stock_code": "", "lines": [
             _line("A", f"{names[: -len(last)]}{josa(last, '은/는')} 이번 기간에 새 소식이 없었어요.")]})
     segs.append({"kind": "closing", "stock_code": "", "lines": [
-        _line("B", "오늘은 여기까지예요. 자세한 내용은 앱의 업데이트 카드에서 볼 수 있어요."),
-        _line("A", "판단은 메모와 원문을 직접 보고 해 주세요.")]})
+        _line("B", "오늘은 여기까지예요. 자세한 내용은 앱의 업데이트 카드에서 볼 수 있어요.", tone="gentle"),
+        _line("A", "판단은 메모와 원문을 직접 보고 해 주세요.", tone="gentle")]})
     return {"title": f"{_day(brief.end)}까지 내 종목 라디오", "segments": segs}

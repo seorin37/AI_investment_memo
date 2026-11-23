@@ -13,6 +13,7 @@ from .collect import Brief
 from .prompt import build_user, config, target_chars
 
 KINDS = ["opening", "market", "stock", "no_news", "closing"]
+TONES = ["warm", "calm", "curious", "serious", "gentle"]          # configs/studio_audio.yaml tts.tones 키와 같게
 AUDIO_SCHEMA = {
     "name": "audio_script",
     "strict": True,
@@ -36,11 +37,12 @@ AUDIO_SCHEMA = {
                             "items": {
                                 "type": "object",
                                 "additionalProperties": False,
-                                "required": ["speaker", "text", "refs"],
+                                "required": ["speaker", "text", "refs", "tone"],
                                 "properties": {
                                     "speaker": {"type": "string", "enum": ["A", "B"]},
                                     "text": {"type": "string"},
                                     "refs": {"type": "array", "items": {"type": "string"}},
+                                    "tone": {"type": "string", "enum": TONES},
                                 },
                             },
                         },
@@ -178,6 +180,8 @@ def check(raw: dict, brief: Brief, cfg: dict | None = None) -> list[str]:
                 continue
             if len(t) > s["line_max_chars"]:
                 errors.append(f"한 줄이 {len(t)}자로 길어요 ({s['line_max_chars']}자 이내): \"{t[:25]}…\"")
+            if line.get("tone") is not None and line.get("tone") not in TONES:
+                errors.append(f"tone은 {TONES} 중 하나여야 해요: \"{t[:20]}\"")
             sp = line.get("speaker")
             run, run_speaker = (run + 1, sp) if sp == run_speaker else (1, sp)
             if run > s["max_same_speaker"]:

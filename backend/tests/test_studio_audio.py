@@ -246,7 +246,7 @@ def test_synthesize_timings(tmp_path):
     res = synthesize(lines, FakeTTS(cps=10, rate=8000), cfg, tmp_path)
     starts = res["starts"]
     assert starts[0] == 0.3 and starts == sorted(starts) and len(starts) == len(lines)
-    dur = lambda ln: max(0.4, len(ln.speech) / 10)
+    dur = lambda ln: max(0.4, len(ln.tts_text) / 10)
     line_gap = starts[1] - starts[0] - dur(lines[0])
     assert lines[1].seg == lines[0].seg and abs(line_gap - 0.3) < 0.01       # 같은 구간 안은 0.3초
     k = next(i for i in range(1, len(lines)) if lines[i].seg != lines[i - 1].seg)
@@ -346,3 +346,39 @@ def test_market_off_and_single_day():
     assert "market" not in [g["kind"] for g in script["segments"]]
     assert script["segments"][0]["lines"][0]["text"].startswith("1월 11일,")
     assert any("market" in e for e in check(GOOD, b))         # 증시를 껐는데 market 구간을 쓰면 걸린다
+
+
+# ───────── 감정·말투 태그 (S2 [대괄호] 지시)
+def test_tone_tags_go_to_tts_only():
+    lines = flatten(GOOD)
+    assert [ln.tone for ln in lines][:4] == ["warm", "warm", "warm", "calm"]
+    first = lines[0]
+    assert first.tag == config()["tts"]["tones"]["warm"] and first.tts_text.startswith("[warm")
+    assert "[" not in first.text and "[" not in first.speech            # 화면 대본·읽기 문장에는 태그가 없다
+    off = flatten(GOOD, emotion=False)
+    assert all(ln.tag == "" and ln.tts_text == ln.speech for ln in off)
+    assert text_hash(lines, {"A": "a", "B": "b"}, "s2") != text_hash(off, {"A": "a", "B": "b"}, "s2")
+
+
+def test_tone_in_schema_fallback_and_old_scripts():
+    props = AUDIO_SCHEMA["schema"]["properties"]["segments"]["items"]["properties"]["lines"]["items"]
+    assert "tone" in props["required"] and set(props["properties"]["tone"]["enum"]) == set(config()["tts"]["tones"])
+    assert all(line["tone"] for g in fallback(BRIEF)["segments"] for line in g["lines"])
+    old = copy.deepcopy(GOOD)                                # tone이 없는 예전 대본은 구간별 기본 톤
+    for g in old["segments"]:
+        for line in g["lines"]:
+            line.pop("tone")
+    assert [ln.tone for ln in flatten(old)][0] == "warm" and flatten(old)[-1].tone == "gentle"
+    bad = answer(**{"0_0_tone": "excited"})
+    assert any("tone" in e for e in check(bad, BRIEF))
+
+
+def test_fish_receives_tag(tmp_path):
+    sent = []
+
+    def post(url, headers, json, timeout):
+        sent.append(json["text"])
+        return _Resp(200, _wav(0.2))
+    cfg = {**config()["tts"], "voices": {"A": {"id": "a"}, "B": {"id": "b"}}}
+    synthesize(flatten(GOOD)[:2], FishTTS(cfg, tmp_path, api_key="k", post=post), cfg, tmp_path)
+    assert sent[0].startswith("[warm, friendly radio host tone] ") and "[" not in sent[0][1:].split("] ", 1)[1]

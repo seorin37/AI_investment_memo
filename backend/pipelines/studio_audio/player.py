@@ -51,7 +51,7 @@ const rows = C.script.map(([t, sp, text], i) => {
   const refs = (LINES[i] && LINES[i].refs.length)
     ? `<div class="refs">${LINES[i].refs.map(r => `<a href="#card-${esc(r)}" onclick="event.stopPropagation()">${esc(r)}</a>`).join('')}</div>` : '';
   d.innerHTML = `<div class="t">${fmt(t)}</div><div class="sp ${sp}">${sp}</div><div><div>${esc(text)}</div>`
-    + `<div class="say" style="display:none">${esc(LINES[i] ? LINES[i].speech : '')}</div>${refs}</div>`;
+    + `<div class="say" style="display:none">${esc(LINES[i] ? ((LINES[i].tag ? LINES[i].tag + ' ' : '') + LINES[i].speech) : '')}</div>${refs}</div>`;
   d.onclick = () => seek(t); box.appendChild(d); return d;
 });
 function esc(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }

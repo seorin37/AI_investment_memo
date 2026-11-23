@@ -42,6 +42,16 @@ tts:
   gap_segment: 0.70          # 구간(오프닝·종목…) 사이 쉼
   lead: 0.30                 # 맨 앞 쉼
   mp3_bitrate: 128k
+  # 감정·말투 태그 (S2 계열의 [대괄호] 자연어 지시). 대본 LLM이 줄마다 tone을 고르고, 코드가 읽기 문장 앞에 태그를 붙인다.
+  # 화면 대본에는 보이지 않는다. emotion: false 이거나 run --no-emotion 이면 태그 없이 보낸다 (비교 듣기용).
+  # 금융 소식이라 들뜬 톤은 일부러 넣지 않았다. 문구는 들어 보고 바꾼다 (한국어 문구로 바꿔 비교해도 된다).
+  emotion: true
+  tones:
+    warm: "[warm, friendly radio host tone]"          # 인사·오프닝·종목 넘어가기
+    calm: "[calm, clear news anchor tone]"            # 사실·숫자 전달 (기본)
+    curious: "[lightly curious, conversational tone]" # 메모를 꺼내며 묻는 줄
+    serious: "[serious, measured tone]"               # 하락·손실·부정적 사실을 전할 때
+    gentle: "[gentle, reassuring tone]"               # 마무리·안내
 # 소리 내어 읽을 때만 바꾸는 말 (화면 대본은 그대로). 종목 이름·약어를 Fish가 엉뚱하게 읽으면 여기에 더한다
 pronounce:
   NAVER: 네이버

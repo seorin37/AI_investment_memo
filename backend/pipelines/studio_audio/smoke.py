@@ -66,6 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--script", help="이 script.json으로 음성만 만든다 (LLM을 부르지 않음, 같은 --brief로)")
     ap.add_argument("--brief", choices=["sample", "fewshot"], default="sample",
                     help="sample: 예시와 다른 가상 브리프(기본) / fewshot: 프롬프트 예시와 같은 브리프")
+    ap.add_argument("--no-emotion", action="store_true", help="감정 태그 없이 보낸다 (같은 --script로 비교 듣기)")
     ap.add_argument("--out-dir", help="결과 폴더 (기본: results/studio_audio)")
     args = ap.parse_args(argv)
 
@@ -108,7 +109,7 @@ def main(argv: list[str] | None = None) -> int:
         meta["model"] = model_name(cfg) if llm else None
     _dump(out / "script.json", script)
     _dump(out / "meta.json", meta)
-    lines = flatten(script, cfg)
+    lines = flatten(script, cfg, emotion=False if args.no_emotion else None)
     print(f"[1] 대본 {meta['source']} · 모델 {meta['model']} · 시도 {meta['tries']} · {len(lines)}줄 · "
           f"{sum(len(ln.text) for ln in lines)}자 (목표 약 {target_chars(brief, cfg)}자) · 토큰 {meta['usage']}")
     for e in meta["errors"]:
@@ -127,7 +128,7 @@ def main(argv: list[str] | None = None) -> int:
         voices = {sp: synth.voice(sp) for sp in ("A", "B")}
         tts_info = {"provider": synth.provider, "model": synth.model, "path": res["path"], "duration_sec": duration,
                     "calls": synth.calls, "text_hash": text_hash(lines, voices, synth.model),
-                    "speech_chars": sum(len(ln.speech) for ln in lines)}
+                    "speech_chars": sum(len(ln.speech) for ln in lines), "emotion": any(ln.tag for ln in lines)}
         print(f"[2] {synth.provider} {synth.model} · 새 합성 {synth.calls['api']}줄 · 캐시 {synth.calls['cached']}줄 · "
               f"읽기 {tts_info['speech_chars']}자 · {duration:.1f}초 → {res['path']}")
     else:

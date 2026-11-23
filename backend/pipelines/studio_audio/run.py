@@ -47,9 +47,9 @@ def script_md(content: dict, lines: list[dict]) -> str:
         if t in chapters:
             out += ["", f"## {chapters.pop(t)} ({t // 60}:{t % 60:02d})"]
         refs = f"  `{', '.join(ln['refs'])}`" if ln["refs"] else ""
-        out.append(f"- **{sp}** {text}{refs}")
-        if ln["speech"] != text:
-            out.append(f"  - 읽기: {ln['speech']}")
+        out.append(f"- **{sp}** `{ln.get('tone', '')}` {text}{refs}")
+        if ln["speech"] != text or ln.get("tag"):
+            out.append(f"  - 읽기: {(ln.get('tag') + ' ') if ln.get('tag') else ''}{ln['speech']}")
     out += ["", "## 출처"] + [f"- [{s['kind']}] {s['text']} {('· ' + s['memo']) if s['memo'] else ''}" for s in content["sources"]]
     return "\n".join(out) + "\n"
 
@@ -69,6 +69,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--llm", choices=["openai", "none"], default="openai", help="none: LLM 없이 규칙 대본")
     ap.add_argument("--tts", choices=["fish", "fake", "none"], default="none", help="none: 대본만 / fake: 신호음")
     ap.add_argument("--script", help="이 script.json을 그대로 쓴다 (LLM을 부르지 않음)")
+    ap.add_argument("--no-emotion", action="store_true", help="감정 태그 없이 보낸다 (같은 대본으로 비교 듣기)")
     ap.add_argument("--test-db", action="store_true", help="TEST_DATABASE_URL에서 읽는다 (기본: READONLY_DATABASE_URL·DATABASE_URL)")
     ap.add_argument("--out-dir", help="결과 폴더 (기본: results/studio_audio)")
     args = ap.parse_args(argv)
@@ -167,7 +168,7 @@ def main(argv: list[str] | None = None) -> int:
         meta["model"] = model_name(cfg) if llm else None
     _dump(out / "script.json", script)
     _dump(out / "meta.json", meta)
-    lines = flatten(script, cfg)
+    lines = flatten(script, cfg, emotion=False if args.no_emotion else None)
     chars = sum(len(ln.text) for ln in lines)
     print(f"[2] 대본 {meta['source']} · 시도 {meta['tries']} · {len(lines)}줄 · {chars}자 (목표 약 {target_chars(brief, cfg)}자)"
           + (f" · 검사 오류 {len(meta['errors'])}건 (meta.json)" if meta["errors"] else ""))
@@ -186,7 +187,8 @@ def main(argv: list[str] | None = None) -> int:
         tts_info = {"provider": synth.provider, "model": synth.model, "voices": voices, "path": res["path"], "mime": res["mime"],
                     "bytes": res["bytes"], "duration_sec": duration, "calls": synth.calls,
                     "text_hash": text_hash(lines, voices, synth.model), "speech_chars": sum(len(ln.speech) for ln in lines),
-                    "speech_bytes": sum(len(ln.speech.encode('utf-8')) for ln in lines)}
+                    "speech_bytes": sum(len(ln.tts_text.encode('utf-8')) for ln in lines),
+                    "emotion": any(ln.tag for ln in lines)}
         print(f"[3] {synth.provider} {synth.model} · 새 합성 {synth.calls['api']}줄 · 캐시 {synth.calls['cached']}줄 · "
               f"{duration:.1f}초 → {res['path']}")
     else:

@@ -69,6 +69,13 @@ Fish가 이상하게 읽는 말이 있으면 여기에 더한다.
 - 줄마다 부르는 이유: 줄 시작 시각(플레이어 대본 따라가기·챕터)을 정확히 알 수 있고, 실패한 줄만 다시 부른다. 다중 화자 한 번 호출은 시각을 모른다.
 - 캐시 `results/studio_audio/tts_cache/` (모델·목소리·문장 해시): 같은 대본을 다시 만들면 Fish 비용이 들지 않는다.
 
+## 감정·말투 태그 (S2 계열 [대괄호] 지시)
+- 대본 LLM이 줄마다 `tone`(warm·calm·curious·serious·gentle)을 고르고, 코드가 `configs/studio_audio.yaml`의 `tts.tones` 문구를
+  읽기 문장 앞에 붙여 Fish로 보낸다 (`[calm, clear news anchor tone] 십일월 십팔일 …`). 화면 대본에는 보이지 않는다.
+- 금융 소식이라 들뜬 톤은 일부러 뺐다. 하락·손실 같은 무거운 사실은 serious.
+- 비교 듣기: 같은 대본으로 `--tts fish`와 `--tts fish --no-emotion`을 한 번씩 → 두 run 폴더의 player.html. 끄기: `tts.emotion: false`.
+- 태그 문구는 듣고 바꾼다 (영어·한국어 문구 비교). tone이 없는 예전 script.json은 구간별 기본 톤으로 읽는다.
+
 ## 결과 폴더 `results/studio_audio/run_<시각>/`
 `brief.txt`(LLM 입력) · `script.json` · `meta.json`(시도·검사 오류·토큰·거절된 대본) · `script.md`(화면/읽기 문장) · `episode.json` · `episode.mp3` · `player.html` · `summary.json`
 

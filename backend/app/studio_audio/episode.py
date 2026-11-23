@@ -33,8 +33,15 @@ class Line:
     stock_code: str
     speaker: str
     text: str           # 화면 문장
-    speech: str         # TTS 문장
+    speech: str         # 읽기 문장 (숫자 → 한글)
     refs: list[str]
+    tone: str = "calm"
+    tag: str = ""       # 감정 태그 ([calm, clear news anchor tone]). 켜져 있을 때만
+
+    @property
+    def tts_text(self) -> str:
+        """Fish Audio로 보내는 문장 = 태그 + 읽기 문장."""
+        return f"{self.tag} {self.speech}" if self.tag else self.speech
 
 
 def write_script(brief: Brief, llm: LLMCall | None, cfg: dict | None = None) -> tuple[dict, dict]:
@@ -68,20 +75,29 @@ def write_script(brief: Brief, llm: LLMCall | None, cfg: dict | None = None) -> 
     return script, meta
 
 
-def flatten(script: dict, cfg: dict | None = None) -> list[Line]:
-    words = (cfg or config()).get("pronounce") or {}
+DEFAULT_TONE = {"opening": "warm", "market": "calm", "stock": "calm", "no_news": "calm", "closing": "gentle"}
+
+
+def flatten(script: dict, cfg: dict | None = None, emotion: bool | None = None) -> list[Line]:
+    """emotion: 감정 태그를 붙일지 (None이면 설정 tts.emotion). tone이 없는 예전 대본은 구간별 기본 톤."""
+    cfg = cfg or config()
+    words = cfg.get("pronounce") or {}
+    tts = cfg.get("tts") or {}
+    on = tts.get("emotion", False) if emotion is None else emotion
+    tags = tts.get("tones") or {}
     out = []
     for i, g in enumerate(script["segments"]):
         for line in g["lines"]:
             text = " ".join(str(line["text"]).split())
+            tone = line.get("tone") or DEFAULT_TONE.get(g["kind"], "calm")
             out.append(Line(i, g["kind"], g.get("stock_code") or "", line["speaker"], text, to_speech(text, words),
-                            list(line.get("refs") or [])))
+                            list(line.get("refs") or []), tone, tags.get(tone, "") if on else ""))
     return out
 
 
 def text_hash(lines: list[Line], voices: dict[str, str], model: str) -> str:
     """대본·목소리·모델이 같으면 같은 값 (audio_assets.text_hash: 같은 대본은 다시 합성하지 않는다)."""
-    body = json.dumps([[ln.speaker, ln.speech] for ln in lines] + [voices, model], ensure_ascii=False)
+    body = json.dumps([[ln.speaker, ln.tts_text] for ln in lines] + [voices, model], ensure_ascii=False)
     return hashlib.sha256(body.encode("utf-8")).hexdigest()
 
 

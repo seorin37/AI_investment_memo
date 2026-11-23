@@ -196,7 +196,7 @@ def synthesize(lines: list[Line], synth: Synth, cfg: dict, out_dir: Path,
     """줄마다 합성 → episode.wav (+ episode.mp3). 반환: starts(줄 시작 초)·duration·파일 경로."""
     parts: list[Pcm] = []
     for i, ln in enumerate(lines):
-        parts.append(read_wav(synth(ln.speech, ln.speaker)))
+        parts.append(read_wav(synth(ln.tts_text, ln.speaker)))
         if progress:
             progress(i + 1, len(lines))
     base = parts[0]
