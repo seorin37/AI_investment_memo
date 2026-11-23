@@ -559,7 +559,6 @@ def analysis_ratios(row: dict) -> dict[str, Decimal | None]:
 
 
 ZERO_VOLUME_OHL_DIFFERENCE = "zero_volume_ohl_representation_difference"
-ZERO_VOLUME_OHL_EXCEPTION_SYMBOLS = frozenset({"002410", "069460", "074610"})
 
 
 def verify_raw_daily_against_krx(
@@ -628,7 +627,6 @@ def verify_raw_daily_against_krx(
 
     zero_volume_exception = (
         adjusted_daily is not None
-        and raw_daily.get("symbol") in ZERO_VOLUME_OHL_EXCEPTION_SYMBOLS
         and set(mismatches) == {"open", "high", "low"}
         and official_prices["open"] == 0
         and official_prices["high"] == 0
@@ -754,6 +752,7 @@ def finalize_snapshots(
                 result["ready_symbols"].append(symbol)
                 result["warnings"][symbol] = warnings
                 result["analysis_ratios"][symbol] = analysis_ratios(row)
+                row.update(result["analysis_ratios"][symbol])
                 result["records"][symbol] = {
                     "raw_ohlcv": {
                         key: raw_rows[0].get(key)
