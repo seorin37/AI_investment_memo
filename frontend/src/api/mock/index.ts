@@ -432,7 +432,11 @@ export const mockApi: Api = {
       groups: labGroups(stock_code, dirs),
       source: 'rules' as const,
       credits_used: 0,
+      item_id: null,
     }, 1400),
+  /* mock 모드의 만든 항목은 store 초기값(mockMade)이 보여 준다 — 서버 목록과 합치지 않게 비워 둔다 */
+  listStudioItems: async () => wait([]),
+  deleteStudioItem: async () => wait(undefined),
   listCalendar: async (month) => wait(db.calendar.filter((e) => e.date.startsWith(month))),
   createCalendarEvent: async (input) => {
     const e = { id: uid('e'), date: input.date, title: input.title, category: 'mine' as const, stock_code: null };

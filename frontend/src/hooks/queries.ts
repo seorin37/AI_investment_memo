@@ -41,6 +41,7 @@ export const qk = {
   settings: ['settings'] as const,
   aiStats: ['aiStats'] as const,
   todayQuiz: ['todayQuiz'] as const,
+  studioItems: ['studioItems'] as const,
   usage: ['usage'] as const,
   dataStats: ['dataStats'] as const,
 };
@@ -398,4 +399,13 @@ export function useUpdateMe() {
 
 export function useSendFeedback() {
   return useMutation({ mutationFn: (p: FeedbackPayload) => api.sendFeedback(p) });
+}
+
+/** 스튜디오 만든 항목 (GET /studio/items, 2026-11-23). 실제 모드·로그인 뒤에만 */
+export const useStudioItems = (enabled = true) =>
+  useQuery({ queryKey: qk.studioItems, queryFn: api.listStudioItems, staleTime: 60_000, enabled });
+
+export function useDeleteStudioItem() {
+  const inv = useInvalidate();
+  return useMutation({ mutationFn: (id: string) => api.deleteStudioItem(id), onSuccess: () => inv(qk.studioItems) });
 }

@@ -3,6 +3,7 @@ import { useUI } from '@/store/ui';
 import { mockAudioEpisode, mockAudioGen, mockLabStocks, mockLabVars, mockMade, mockReport, type LabDir } from '@/ui/screens/studio/Studio.mock';
 import type { MadeItem } from '@/ui/screens/studio/Studio.types';
 import { registerUserReset } from '@/lib/sessionReset';
+import { env } from '@/config/env';
 
 /**
  * 스튜디오 만들기 · 재생 mock 상태 (앱·웹 같이 씀, 메모리에만).
@@ -51,6 +52,8 @@ interface StudioPlayerState {
   curLab: string | null;
   addLab(item: MadeItem): void;
   openLab(id: string): void;
+  /** 서버 만든 항목으로 바꾸기. 이번 세션에서 만든 mock 오디오·보고서(server 아님)는 위에 남긴다 (2026-11-23) */
+  setServerMade(items: MadeItem[]): void;
   /** 실험실 화면에서 고른 종목 · 조건 (원본 labStk · lab) */
   labCode: string;
   labDirs: LabDir[];
@@ -132,7 +135,8 @@ export const useStudioPlayer = create<StudioPlayerState>((set, get) => {
     }, 5500);
   };
   return {
-    made: mockMade,
+    /* 실제 모드는 서버 목록(useStudioItemsSync)으로 채운다. 가짜 3개는 mock 모드에서만 */
+    made: env.useMock ? mockMade : [],
     job: null,
     genVisible: false,
     webView: 'home',
@@ -156,6 +160,11 @@ export const useStudioPlayer = create<StudioPlayerState>((set, get) => {
     curLab: null,
     addLab: (item) => set((s) => ({ made: [item, ...s.made], curLab: item.id })),
     openLab: (id) => set({ curLab: id }),
+    setServerMade: (items) =>
+      set((s) => {
+        const ids = new Set(items.map((m) => m.id));
+        return { made: [...s.made.filter((m) => !m.server && !ids.has(m.id)), ...items] };
+      }),
     labCode: mockLabStocks[0].stock_code,
     labDirs: mockLabVars.map((v) => v.def),
     setLab: (p) => set((s) => ({ labCode: p.code ?? s.labCode, labDirs: p.dirs ?? s.labDirs })),

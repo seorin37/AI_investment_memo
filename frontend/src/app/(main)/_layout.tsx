@@ -32,6 +32,7 @@ import { WebReportPopup, WebReportSum } from '@/ui/screens/studio/web/Report';
 import { WebLab, WebLabResult, WebQuiz } from '@/ui/screens/studio/web/QuizLab';
 import { labResultGroups } from '@/ui/screens/studio/labParts';
 import { labStockFor, useLabStocks, useRunLab } from '@/ui/screens/studio/useLabRun';
+import { useStudioItemsSync } from '@/ui/screens/studio/studioItems';
 import { useLabVars } from '@/ui/screens/studio/useLabVars';
 import { WebAudioPopup } from '@/ui/screens/studio/web/AudioPopup';
 import type { StudioKind } from '@/ui/screens/studio/Studio.types';
@@ -64,6 +65,8 @@ function sideKeyOf(path: string): SideKey {
  */
 export default function MainLayout() {
   const status = useAuth((s) => s.status);
+  /* 스튜디오 만든 항목: 실제 모드면 서버 목록으로 (2026-11-23) */
+  useStudioItemsSync();
   /* 로그인한 채 다른 사용자로 바뀌면(A → B) 커짐 → 아래 Stack 을 다시 마운트해 열린 화면을 새 사용자 값으로 (store/auth sessionKey) */
   const sessionKey = useAuth((s) => s.sessionKey);
   /* 로그인 전: 서비스 설명을 본 적 없으면 /intro (원본 웹처럼 처음 한 번만), 봤으면 /login */

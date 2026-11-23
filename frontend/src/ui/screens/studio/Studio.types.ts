@@ -28,6 +28,8 @@ export interface MadeItem {
   /** 주간보고서: 넣은 종목 · 국내 증시 흐름 포함 */
   codes?: string[];
   market?: boolean;
+  /** 서버(studio_items)에 저장된 항목 — 목록을 다시 받으면 서버 값으로 바뀐다 (2026-11-23) */
+  server?: boolean;
   /** 투자 실험실: 종목 · 조건 4칸 (상승/유지/하락) */
   lab?: { code: string; dirs: ('상승' | '유지' | '하락')[]; name?: string; groups?: LabRunGroup[] };
 }

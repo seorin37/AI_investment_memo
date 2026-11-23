@@ -1,10 +1,11 @@
-"""POST /api/v1/studio/lab: 투자 실험 실행 (LLM 답이 나왔을 때만 크레딧 lab 차감)."""
+"""POST /api/v1/studio/lab: 투자 실험 실행 (LLM 답이 나왔을 때만 크레딧 lab 차감).
+GET /api/v1/studio/items · DELETE /api/v1/studio/items/{id}: 만든 항목 (studio_items, 2026-11-23)."""
 from __future__ import annotations
 
 import logging
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -15,6 +16,7 @@ from app.db import get_read_db, get_session
 from app.marketdata.repository import MarketDataRepository
 from app.marketdata.service import MarketDataService
 
+from . import items as studio_items
 from .lab import run_lab
 from .llm import openai_call
 from .prompt import StockCtx
@@ -90,4 +92,33 @@ def post_lab(body: LabRequest, current: dict = Depends(get_current_user), db: Se
                 charged = ledger.spend(credit_db, user_id, cost, "lab")
         except Exception:  # 이미 만든 답은 사용자에게 돌려주고 차감 실패만 기록한다
             log.exception("lab credit charge failed user=%s", user_id)
-    return {**result, "credits_used": charged}
+    item_id = None
+    if result["source"] == "llm":                    # 만든 항목으로 저장 (2026-11-23). 실패해도 결과는 돌려준다
+        try:
+            with get_session() as item_db:
+                item_id = studio_items.save_lab(item_db, user_id, stock.stock_code, stock.name, list(body.dirs),
+                                                result.get("groups") or [], charged)
+        except Exception:
+            log.exception("lab item save failed user=%s", user_id)
+    return {**result, "credits_used": charged, "item_id": item_id}
+
+
+def _uid(current: dict) -> int:
+    try:
+        return int(current["id"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(401, detail="유효하지 않은 인증 사용자입니다.") from exc
+
+
+@router.get("/items")
+def get_items(current: dict = Depends(get_current_user), db: Session = Depends(get_read_db)):
+    return studio_items.list_items(db, _uid(current))
+
+
+@router.delete("/items/{item_id}", status_code=204)
+def delete_item(item_id: int, current: dict = Depends(get_current_user)):
+    user_id = _uid(current)
+    with get_session() as db:
+        if not studio_items.delete_item(db, user_id, item_id):
+            raise HTTPException(404, detail="항목을 찾을 수 없어요.")
+    return Response(status_code=204)

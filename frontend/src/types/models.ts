@@ -655,4 +655,21 @@ export interface LabRunResult {
   groups: LabRunGroup[];
   source: 'llm' | 'rules';
   credits_used: number;
+  /** 만든 항목으로 저장된 id (LLM 답일 때만, 저장 실패면 null) — studio_items (2026-11-23) */
+  item_id?: string | null;
+}
+
+/** GET /studio/items — 스튜디오 만든 항목 (studio_items, 30일 보관) */
+export interface StudioItem {
+  id: string;
+  kind: 'report' | 'audio' | 'lab';
+  status: 'queued' | 'generating' | 'ready' | 'failed';
+  title: string;
+  symbols: string[];
+  /** lab: { stock_code, name, dirs, groups } */
+  content: { stock_code?: string; name?: string; dirs?: LabDirection[]; groups?: LabRunGroup[] } & Record<string, unknown>;
+  credits_used: number;
+  created_at: ISODate;
+  expires_at: ISODate;
+  days_left: number;
 }

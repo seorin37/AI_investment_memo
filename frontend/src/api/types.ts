@@ -21,6 +21,7 @@ import type {
   JournalEntry,
   LabDirection,
   LabRunResult,
+  StudioItem,
   MacroOverview,
   MarketOverview,
   MarketUpdate,
@@ -162,6 +163,9 @@ export interface Api {
   getMacro(): Promise<MacroOverview>;
   /** 투자 실험실 실행 (LLM) */
   runLab(input: { stock_code: string; dirs: LabDirection[] }): Promise<LabRunResult>;
+  /** 스튜디오 만든 항목 (studio_items, 내 것·만료 전) */
+  listStudioItems(): Promise<StudioItem[]>;
+  deleteStudioItem(id: string): Promise<void>;
   listCalendar(month: string): Promise<CalendarEvent[]>;
   createCalendarEvent(input: { date: string; title: string }): Promise<CalendarEvent>;
   listNews(): Promise<NewsHeadline[]>;
