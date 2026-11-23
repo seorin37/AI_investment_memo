@@ -164,3 +164,23 @@ def test_periodic_report_not_sent_to_llm():
     called = []
     story, issues, meta = llm_stock("SK하이닉스", P, periodic, lambda m: called.append(m) or {}, "코드 문장")
     assert called == [] and story == "코드 문장" and issues == ""
+
+
+def test_news_window_includes_weekend():
+    from app.studio_report.build import news_window
+    mon = date(2026, 11, 16)
+    start, end, partial = news_window(mon, datetime(2026, 11, 23, 9, tzinfo=SEOUL))          # 다음 주 월요일 → 일요일 밤까지
+    assert (start, end, partial) == (datetime(2026, 11, 16, tzinfo=SEOUL), datetime(2026, 11, 23, tzinfo=SEOUL), False)
+    start, end, partial = news_window(mon, datetime(2026, 11, 21, 15, tzinfo=SEOUL))         # 토요일 오후 → 지금까지
+    assert end == datetime(2026, 11, 21, 15, tzinfo=SEOUL) and partial is True
+
+
+def test_sentence_end_with_period_before_refs():
+    from app.studio_report.story import sentences
+    assert len(sentences("찬성하기로 했어요.[3][4] 통과됐어요.[8] 임기는 3년이에요[8]. 끝이에요.")) == 4
+
+
+def test_pick_news_per_day_cap_lets_weekend_in():
+    rows = [_n(i, f"SK하이닉스 평일 기사 {i}번 제목입니다", 0.9 - i * 0.01, day=17) for i in range(1, 6)] + [_n(9, "SK하이닉스 주말 기사 제목입니다", 0.1, day=22)]
+    out = pick_news(rows, ["SK하이닉스"], limit=10, per_day=2)
+    assert [i.day.day for i in out] == [17, 17, 22]

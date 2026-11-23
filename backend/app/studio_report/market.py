@@ -11,6 +11,9 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from .story import ask, md, sentences, check_text, verify_texts, WEEKDAYS
+from zoneinfo import ZoneInfo
+
+SEOUL = ZoneInfo("Asia/Seoul")
 
 MARKET_PROMPT = "configs/report_market_prompt.md"
 PER_DAY = 3
@@ -109,7 +112,9 @@ def code_summary(cells: list[dict], last_day: date) -> str:
 def market_section(db, monday: date, last_day: date, start: datetime, end: datetime, call, first_no: int) -> dict[str, Any]:
     """{cells, summary, flow, items(번호·출처), source, meta}. 기사 번호는 first_no부터."""
     lines, cells = macro_lines(db, monday, last_day)
-    days = [monday + timedelta(days=k) for k in range((last_day - monday).days + 1) if (monday + timedelta(days=k)).weekday() < 5]
+    # 시황 기사는 주말 것도 (토요일 아침 뉴욕증시 마감 등). 지수 숫자는 거래일(last_day)까지
+    news_days = (end - timedelta(microseconds=1)).astimezone(SEOUL).date()
+    days = [monday + timedelta(days=k) for k in range((news_days - monday).days + 1)]
     news = pick_market_news(_rows(db, MARKET_NEWS_SQL, start=start, end=end), days)
     items = []
     for n, r in enumerate(news, first_no):
@@ -122,7 +127,8 @@ def market_section(db, monday: date, last_day: date, start: datetime, end: datet
                 "meta": {"tries": 0, "problems": [], "usage": {"input": 0, "output": 0}}}
     if call is None or not items:
         return fallback
-    source = "\n".join(["한 주: " + f"{md(monday)}({WEEKDAYS[0]}) ~ {md(last_day)}({WEEKDAYS[last_day.weekday()]})", *lines,
+    source = "\n".join(["한 주: " + f"{md(monday)}({WEEKDAYS[0]}) ~ {md(news_days)}({WEEKDAYS[news_days.weekday()]})"
+                        + f" (지수는 거래일 {md(last_day)}까지, 주말 기사도 포함)", *lines,
                         "시황 기사 (번호 · 날짜 · 출처 · 제목 / 내용은 본문 앞부분):"]
                        + [f"[{i['no']}] {md(i['day'])}({WEEKDAYS[i['day'].weekday()]}) · {i['src']} · {i['title']}"
                           + (f"\n    내용: {i['snippet']}" if i["snippet"] else "") for i in items])
@@ -131,8 +137,8 @@ def market_section(db, monday: date, last_day: date, start: datetime, end: datet
     def check(out: dict) -> list[str]:
         probs = check_text(out.get("summary", ""), source, nos, 4, 9, 1000, "summary")
         flow = out.get("flow") or []
-        if not (2 <= len(flow) <= 5):
-            probs.append(f"flow: {len(flow)}줄 (3~5줄)")
+        if not (2 <= len(flow) <= 7):                       # 주말 포함 최대 7일
+            probs.append(f"flow: {len(flow)}줄 (3~7줄)")
         for f in flow:
             probs += check_text(f.get("text", ""), source, nos, 1, 2, 80, "flow", need_refs=False)
             if set(f.get("refs") or []) - nos:
