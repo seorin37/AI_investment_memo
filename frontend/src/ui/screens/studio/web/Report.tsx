@@ -220,12 +220,11 @@ export function WebReportDetail({ rep, item, stocks, market, allDefault, onMemo 
           </View>
           <View style={st.dGlance}><Text style={[st.glanceH, { fontSize: 17 }]}>이번 주 한눈에</Text><Text keepAll style={{ fontSize: 17, lineHeight: 27, color: '#2B2F36' }}>{reportSummary(stocks, allDefault, rep.summary_default, lastClose)}</Text></View>
           {market ? (
+            <>
+            {/* 섹션 제목은 '02 종목별 리포트'와 같은 모양 (카드 바깥, 2026-11-23) */}
+            <View style={st.sectionIntro}><Text style={st.sectionNo}>01</Text><View style={{ gap: 2 }}><Text style={st.sectionTitle}>국내 증시 현황</Text><Text style={st.sectionDesc}>{rep.range} · 거래일 {rep.days.length}일 기준 지수와 한 주 시황이에요</Text></View></View>
             <View style={[st.sec, st.marketSec]}>
-              <View style={st.marketHead}>
-                <Text style={st.secH}><Text style={{ color: '#8B95A1' }}>01  </Text>국내 증시 현황</Text>
-                <Text style={st.marketBasis}>{rep.range} · 거래일 {rep.days.length}일 기준</Text>
-              </View>
-              <View style={st.marketStrip}>
+              <View style={[st.marketStrip, st.marketStripTop]}>
                 {rep.market.map((m, i) => <View key={m.name} style={[st.marketCell, i > 0 && st.marketCellLine]}><Text style={st.cellL}>{m.name}</Text><View style={st.marketNumber}><Text style={st.marketValue}>{m.value}</Text><Text style={[st.marketPct, { color: pc(m.pct) }]}>{sign(m.pct)}</Text></View></View>)}
               </View>
               {marketText.length || rep.flow.length ? (
@@ -235,6 +234,7 @@ export function WebReportDetail({ rep, item, stocks, market, allDefault, onMemo 
                 </View>
               ) : null}
             </View>
+            </>
           ) : null}
           <View style={st.sectionIntro}><Text style={st.sectionNo}>{market ? '02' : '01'}</Text><View style={{ gap: 2 }}><Text style={st.sectionTitle}>종목별 리포트</Text><Text style={st.sectionDesc}>숫자부터 소식과 메모까지 종목별로 정리했어요</Text></View></View>
           {stocks.map((s, stockIndex) => (
@@ -350,9 +350,9 @@ const st = StyleSheet.create({
   sectionTitle: { fontSize: 20, lineHeight: 28, fontWeight: '700', color: '#15171A' },
   sectionDesc: { fontSize: 14, lineHeight: 20, color: '#747D8D' },
   marketSec: { gap: 0, padding: 0, overflow: 'hidden' },
-  marketHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 22, paddingBottom: 18 },
-  marketBasis: { fontSize: 13, lineHeight: 18, color: '#8B95A1' },
   marketStrip: { flexDirection: 'row', borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#E8ECF3', backgroundColor: '#FAFAFB', paddingHorizontal: 24, paddingVertical: 14 },
+  /* 카드 맨 위에 올 때는 위 선 없이 (제목을 카드 밖으로 뺌) */
+  marketStripTop: { borderTopWidth: 0 },
   marketCell: { flex: 1, minWidth: 0, gap: 4, paddingHorizontal: 18 },
   marketCellLine: { borderLeftWidth: 1, borderLeftColor: '#E1E4E8' },
   marketNumber: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 },
