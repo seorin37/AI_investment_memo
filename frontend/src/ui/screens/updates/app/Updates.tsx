@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Animated, BackHandler, PanResponder, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Animated, BackHandler, PanResponder, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { Text, TextInput } from '@/components/ui/AppText';
@@ -11,6 +11,7 @@ import { Skeleton } from '@/ui/motion/Skeleton';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { Turn, splitMark } from '@/ui/screens/memo/app/MemoFeed';
 import { KindTag } from '@/ui/shared/KindTag';
+import { ON_DOM } from '@/ui/shared/onDom';
 import { NudgePill } from '@/ui/shared/NudgePill';
 import { AppSnackbar } from '@/ui/shared/Snackbar';
 import { StockLogo } from '@/ui/shared/StockLogo';
@@ -403,7 +404,7 @@ function MemoIcon({ size, color }: { size: number; color: string }) {
 }
 
 /** 근거 칩 글자. 기기에서는 중첩 Text 의 좌우 여백이 안 먹어 빈칸으로 */
-const CITE = Platform.OS === 'web' ? '1' : '\u00A01\u00A0';
+const CITE = ON_DOM ? '1' : '\u00A01\u00A0';
 
 /** 펼친 내용: 공시 = AI 요약 · 원문 인용 / 뉴스 = 기사 상자 / 주가 = 요약. 공통: 내 메모 · 버튼 */
 function NewsBody({ u, onOpenSource, onOpenBoard }: { u: UpdateItem; onOpenSource: () => void; onOpenBoard: () => void }) {
