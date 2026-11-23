@@ -5,12 +5,12 @@ import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-nativ
 import { Text } from '@/components/ui/AppText';
 import { Head } from '../../my/app/parts';
 import type { mockReport, ReportStock } from '../Studio.mock';
-import { Spark, SparkWide, WeekChart, issueParas, quarterLine, reportSummary, sign, valuationCells, won } from '../reportParts';
+import { Spark, SparkWide, WeekChart, issueParas, marketParas, quarterLine, reportSummary, sign, stripRefs, valuationCells, won } from '../reportParts';
 import { Keep } from '@/ui/shared/Dark';
 
 /**
  * 앱 주간보고서 = 원본 studio.html #pgRp renderReport2 (16 · 회사 보고서 형식)
- * 검정 표지(종목 카드 · 공시/뉴스/메모 수) · 이번 주 한눈에 · (01 증시 핫이슈) · 종목별 흐름(주간 4칸 · 차트 · 사실 문장 · 이번 주 소식 · 내 메모 · 앞으로 지켜볼 것) · 출처
+ * 검정 표지(종목 카드 · 공시/뉴스/메모 수) · 이번 주 한눈에 · (01 국내 증시 주간 요약) · 종목별 흐름(숫자 · 차트 · 사실 문장 · 이번 주 소식 · 내 메모 · 앞으로 지켜볼 것) · 출처
  * 원본 아래 줄의 '숫자는 시안용 예시'는 개발 상태 표현이라 뺌. 숫자·문장은 모두 Studio.mock
  */
 type Rep = typeof mockReport;
@@ -24,8 +24,9 @@ export function AppReport({ rep, stocks, market, allDefault, onBack, onOpenMemo,
   const insets = useSafeAreaInsets();
   const g = stocks.reduce((a, r) => a + r.counts.공시, 0), nw = stocks.reduce((a, r) => a + r.counts.뉴스, 0), mc = stocks.filter((r) => r.memo).length;
   const one = stocks.length === 1 ? stocks[0] : null;
-  const last = rep.days[rep.days.length - 1].split(' ')[0];
+  const last = rep.days[rep.days.length - 1]?.split(' ')[0] ?? rep.range;
   const sum = reportSummary(stocks, allDefault, rep.summary_default, last);
+  const marketText = marketParas(rep.market_summary);
   const codes = stocks.map((s) => s.stock_code);
   const no = (k: number) => String(market ? k : k - 1).padStart(2, '0');
   return (
@@ -45,7 +46,7 @@ export function AppReport({ rep, stocks, market, allDefault, onBack, onOpenMemo,
               <View style={st.qn}><Logo s={one} size={22} /><Text style={st.oneN}>{one.name}</Text><View style={st.em}><Text style={st.emT}>{one.own}</Text></View></View>
               <View style={st.pr}><Text style={st.prB}>{won(one.close)}원</Text><Text style={[st.prS, { color: one.pct >= 0 ? '#FF6B6B' : '#5B9BFF' }]}>{sign(one.pct)}</Text><Text style={st.prSm}>이번 주</Text></View>
               <View style={{ marginTop: 8 }}><SparkWide c={one.closes} color={one.pct >= 0 ? '#FF6B6B' : '#5B9BFF'} /></View>
-              <View style={st.dl}>{rep.days_short.map((d) => <Text key={d} style={st.dlT}>{d}</Text>)}</View>
+              <View style={st.dl}>{rep.days_short.slice(0, one.closes.length).map((d) => <Text key={d} style={st.dlT}>{d}</Text>)}</View>
               <View style={st.ost}>
                 {[['주간 최고', one.hi], ['주간 최저', one.lo], ['이번 주 소식', one.items.length ? `공시 ${one.counts.공시} · 뉴스 ${one.counts.뉴스}` : '없음']].map(([l, v]) => (
                   <View key={l} style={{ flex: 1 }}><Text style={st.ostL}>{l}</Text><Text style={st.ostV} numberOfLines={1}>{v}</Text></View>
@@ -76,15 +77,16 @@ export function AppReport({ rep, stocks, market, allDefault, onBack, onOpenMemo,
         </View>
         {market ? (
           <>
-            <SecH n="01" t="증시 핫이슈" />
+            <SecH n="01" t="국내 증시 현황" />
             <View style={st.r3s}>
+              <Text style={st.marketBasis}>{rep.range} · 거래일 {rep.days.length}일 기준</Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 {rep.market.map((m) => (
                   <View key={m.name} style={st.mk}><Text style={st.mkS}>{m.name}</Text><Text style={st.mkB}>{m.value}</Text><Text style={[st.mkP, { color: up(m.pct) }]}>{sign(m.pct)}</Text></View>
                 ))}
               </View>
-              {rep.market_summary ? <Text keepAll style={st.tx}>{rep.market_summary.replace(/\s*\[\d+\]/g, '')}</Text> : null}
-              <View style={{ marginTop: 6 }}>
+              {marketText.length ? <View style={st.marketBrief}><Text style={st.blockLabel}>한 주 시황</Text>{marketText.map((p, i) => <Text key={i} keepAll style={st.txPlain}>{p}</Text>)}</View> : null}
+              <View style={{ marginTop: 4 }}><Text style={st.blockLabel}>날짜별 흐름</Text>
                 {rep.flow.map((f, i) => (
                   <View key={f.day} style={[st.nw, i === rep.flow.length - 1 && { borderBottomWidth: 0, paddingBottom: 0 }]}>
                     <Text style={st.nwD}>{f.day}</Text><Text keepAll style={st.nwB}>{f.text}</Text><Text style={st.nwR}>{f.src}</Text>
@@ -107,34 +109,38 @@ export function AppReport({ rep, stocks, market, allDefault, onBack, onOpenMemo,
               </View>
             </View>
             <View style={st.bd}>
-              <View style={st.st4}>
-                {[['주간 등락', sign(r.pct), up(r.pct)], ['주간 최고', r.hi], ['주간 최저', r.lo], ['거래량', r.vol]].map(([l, v, c]) => (
-                  <View key={l} style={st.st4C}><Text style={st.st4S}>{l}</Text><Text style={[st.st4B, c ? { color: c } : null]}>{v}</Text></View>
-                ))}
-              </View>
-              {valuationCells(r).length ? (
-                <View style={[st.st4, { marginTop: 8 }]}>
-                  {valuationCells(r).map(([l, v]) => <View key={l} style={st.st4C}><Text style={st.st4S}>{l}</Text><Text style={st.st4B}>{v}</Text></View>)}
+              <View style={st.metricBlock}>
+                <View style={st.blockHead}><Text style={st.blockLabel}>핵심 숫자</Text><Text style={st.blockMeta}>{r.valuation?.basis ?? rep.range}</Text></View>
+                <View style={st.st4}>
+                  {[['주간 등락', sign(r.pct), up(r.pct)], ['주간 최고', r.hi], ['주간 최저', r.lo], ['거래량', r.vol]].map(([l, v, c]) => (
+                    <View key={l} style={st.st4C}><Text style={st.st4S}>{l}</Text><Text style={[st.st4B, c ? { color: c } : null]}>{v}</Text></View>
+                  ))}
                 </View>
-              ) : null}
-              {quarterLine(r) ? <Text keepAll style={[st.lgT, { marginTop: 8 }]}>{quarterLine(r)}</Text> : null}
-              <View style={{ marginTop: 12 }}><WeekChart r={r} days={rep.days} id={r.stock_code} /></View>
+                {valuationCells(r).length ? (
+                  <View style={st.st4}>
+                    {valuationCells(r).map(([l, v]) => <View key={l} style={st.st4C}><Text style={st.st4S}>{l}</Text><Text style={st.st4B}>{v}</Text></View>)}
+                  </View>
+                ) : null}
+              </View>
+              {quarterLine(r) ? <View style={st.quarterBox}><View style={st.blockHead}><Text style={st.blockLabel}>최근 분기 실적</Text><Text style={st.blockMeta}>{r.quarter?.label} · {r.quarter?.basis}</Text></View><Text keepAll style={st.quarterText}>{quarterLine(r)}</Text></View> : null}
+              <Text style={st.sub}>이번 주 흐름</Text>
+              <View style={{ marginTop: 4 }}><WeekChart r={r} days={rep.days} id={r.stock_code} /></View>
               <View style={st.lg}>
                 <Text style={st.lgT}><Text style={{ color: '#7C5CE0' }}>● </Text>공시</Text>
                 <Text style={st.lgT}><Text style={{ color: '#3D73F0' }}>● </Text>뉴스</Text>
                 <View style={st.lgI}><View style={st.dash} /><Text style={st.lgT}>지난주 종가</Text></View>
                 <Text style={[st.lgT, { width: '100%' }]}>번호는 아래 소식·출처 번호예요</Text>
               </View>
-              <Text keepAll style={st.tx}>{r.story}</Text>
+              <Text keepAll style={st.tx}>{stripRefs(r.story)}</Text>
               {issueParas(r).length ? (
-                <>
-                  <Text style={st.sub}>이번 주 이슈 정리</Text>
-                  {issueParas(r).map((t, k) => <Text key={k} keepAll style={st.tx}>{t}</Text>)}
-                </>
+                <View style={st.issueBox}>
+                  <Text style={[st.sub, { marginTop: 0 }]}>이번 주 이슈 정리</Text>
+                  {issueParas(r).map((t, k) => <Text key={k} keepAll style={st.issueText}>{t}</Text>)}
+                </View>
               ) : null}
+              <Text style={st.sub}>이번 주 소식 <Text style={st.subMeta}>공시 {r.counts.공시} · 뉴스 {r.counts.뉴스}</Text></Text>
               {r.items.length ? (
                 <>
-                  <Text style={st.sub}>이번 주 소식</Text>
                   {r.items.map((x, i) => (
                     <View key={x.no} style={[st.ev, i === r.items.length - 1 && { borderBottomWidth: 0 }]}>
                       <View style={[st.no, { backgroundColor: x.kind === '공시' ? '#7C5CE0' : '#3D73F0' }]}><Text style={st.noT}>{x.no}</Text></View>
@@ -145,14 +151,15 @@ export function AppReport({ rep, stocks, market, allDefault, onBack, onOpenMemo,
                     </View>
                   ))}
                 </>
-              ) : null}
+              ) : <Text style={st.empty}>새로 나온 소식이 없어요</Text>}
               {r.memo ? (
                 <View style={[st.mc, { backgroundColor: r.memo.bg }]}>
                   <View style={st.mcH}><Text style={[st.mcHT, { color: r.memo.ink }]}>내 메모와의 연결</Text><Pressable onPress={() => onOpenMemo(r.stock_code)} accessibilityRole="link"><Text style={[st.mcHT, { color: r.memo.ink, fontWeight: '700', opacity: 1 }]}>원본 메모 보기 ›</Text></Pressable></View>
                   <Text style={[st.mcB, { color: r.memo.ink }]}>{r.memo.title}  <Text style={st.mcS}>{r.memo.meta}</Text></Text>
-                  <Text keepAll style={[st.mcP, { color: r.memo.ink }]}>{r.memo.body}</Text>
+                  <Text keepAll style={[st.mcP, { color: r.memo.ink }]}>{stripRefs(r.memo.body)}</Text>
+                  <Text style={[st.mcS, { color: r.memo.ink, marginTop: 6 }]}>이번 주 연결된 소식 {r.memo.linked_count ?? r.counts.공시 + r.counts.뉴스}건</Text>
                 </View>
-              ) : null}
+              ) : <View style={st.mcEmpty}><View style={st.mcH}><Text style={st.mcEmptyH}>내 메모와의 연결</Text><Pressable onPress={() => onOpenMemo(r.stock_code)} accessibilityRole="link"><Text style={st.mcEmptyL}>메모 쓰기 ›</Text></Pressable></View><Text style={st.empty}>이번 주 소식과 연결된 메모가 없어요.</Text></View>}
               <View style={st.wt}>
                 <View style={st.wtH}>
                   <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#5B3BD1" strokeWidth={2}><Path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><Circle cx={12} cy={12} r={3} /></Svg>
@@ -229,6 +236,12 @@ const st = StyleSheet.create({
   mkS: { fontSize: 11.5, lineHeight: 16, color: C.ink3 },
   mkB: { fontSize: 14.5, lineHeight: 20, fontWeight: '700', color: C.ink },
   mkP: { fontSize: 12, lineHeight: 17, fontWeight: '700' },
+  marketBasis: { fontSize: 11.5, lineHeight: 16, color: C.ink3, marginBottom: 9 },
+  marketBrief: { borderTopWidth: 1, borderTopColor: '#ECEEF2', paddingTop: 12, marginTop: 12 },
+  blockHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  blockLabel: { fontSize: 12.5, lineHeight: 18, fontWeight: '800', color: C.ink2 },
+  blockMeta: { flexShrink: 1, textAlign: 'right', fontSize: 11.5, lineHeight: 16, color: C.ink3 },
+  txPlain: { fontSize: 13.5, lineHeight: 22, color: '#2E2E38', marginTop: 6 },
   nw: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: '#F0F1F4' },
   nwD: { width: 46, fontSize: 12, lineHeight: 19, color: C.ink3 },
   nwB: { flex: 1, fontSize: 13.5, lineHeight: 20, fontWeight: '600', color: C.ink },
@@ -241,10 +254,13 @@ const st = StyleSheet.create({
   qpr: { fontSize: 15, lineHeight: 20, fontWeight: '800', color: C.ink },
   qprS: { fontSize: 12.5, lineHeight: 17, fontWeight: '700' },
   bd: { paddingTop: 14, paddingHorizontal: 16, paddingBottom: 16 },
+  metricBlock: { gap: 8, backgroundColor: '#F7F8FA', borderRadius: 14, padding: 12 },
   st4: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  st4C: { width: '48.5%', borderWidth: 1, borderColor: '#ECEDF1', borderRadius: 12, paddingVertical: 8, paddingHorizontal: 10 },
+  st4C: { width: '48.5%', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#ECEDF1', borderRadius: 12, paddingVertical: 8, paddingHorizontal: 10 },
   st4S: { fontSize: 11.5, lineHeight: 16, color: C.ink3 },
   st4B: { fontSize: 15, lineHeight: 21, fontWeight: '700', color: C.ink },
+  quarterBox: { gap: 7, borderWidth: 1, borderColor: '#E5E7EC', borderRadius: 14, padding: 12, marginTop: 10 },
+  quarterText: { fontSize: 13.5, lineHeight: 21, color: '#2E2E38' },
   lg: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 6 },
   lgT: { fontSize: 11.5, lineHeight: 16, color: C.ink3 },
   /* ┄ 기호 대신 점선 막대 (412 폭에서 글자 잘림 방지) */
@@ -252,6 +268,10 @@ const st = StyleSheet.create({
   dash: { width: 12, height: 0, borderTopWidth: 1, borderColor: '#B5B9C0', borderStyle: 'dashed' },
   tx: { fontSize: 14, lineHeight: 23, color: '#2E2E38', marginTop: 10 },
   sub: { fontSize: 13, lineHeight: 18, fontWeight: '800', color: C.ink, marginTop: 14, marginBottom: 2 },
+  subMeta: { fontSize: 11.5, fontWeight: '500', color: C.ink3 },
+  issueBox: { gap: 8, borderLeftWidth: 3, borderLeftColor: '#8569E3', backgroundColor: '#F8F7FC', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12, marginTop: 14 },
+  issueText: { fontSize: 14, lineHeight: 23, color: '#2E2E38' },
+  empty: { fontSize: 12.5, lineHeight: 19, color: C.ink3, marginTop: 6 },
   ev: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
   no: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   noT: { fontSize: 11, lineHeight: 14, fontWeight: '800', color: '#FFFFFF' },
@@ -265,6 +285,9 @@ const st = StyleSheet.create({
   mcB: { fontSize: 14.5, lineHeight: 20, fontWeight: '700', marginTop: 4 },
   mcS: { fontSize: 12, fontWeight: '500', opacity: 0.7 },
   mcP: { fontSize: 13, lineHeight: 20, marginTop: 4 },
+  mcEmpty: { borderRadius: 14, backgroundColor: '#F7F8FA', paddingVertical: 12, paddingHorizontal: 14, marginTop: 12 },
+  mcEmptyH: { fontSize: 12.5, lineHeight: 18, fontWeight: '800', color: C.ink2 },
+  mcEmptyL: { fontSize: 12.5, lineHeight: 18, fontWeight: '700', color: C.ink2 },
   wt: { backgroundColor: '#FBF8FF', borderWidth: 1, borderColor: '#EEE7FB', borderRadius: 14, padding: 12, marginTop: 12 },
   wtH: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   wtHT: { fontSize: 13, lineHeight: 18, fontWeight: '800', color: '#5B3BD1' },
