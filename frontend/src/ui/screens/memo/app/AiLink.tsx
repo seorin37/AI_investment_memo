@@ -219,6 +219,8 @@ function TrackCard({ x }: { x: AiTrackItem }) {
           </View>
           <Text style={[st.small, { marginTop: 6 }]}>ⓘ 실시간 알림이 아닌 종가 기준이에요.</Text>
         </>
+      ) : x.kind === 'ask' ? (
+        <Text style={st.small}>다음 날 아침, 공시·뉴스·재무 자료로 한 번 답해 드려요.</Text>
       ) : (
         <>
           <Text style={st.small}>정기보고서와 뉴스에서 관련 소식을 찾아 연결해요.</Text>
