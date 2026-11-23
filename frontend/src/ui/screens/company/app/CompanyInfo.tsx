@@ -280,14 +280,16 @@ export function AppCompanyInfo(p: CompanyInfoProps) {
                       const nul = shown.every((q) => q[pf.key] == null);
                       const off = !!hidden[pf.name];
                       return (
-                        <Pressable key={pf.name} disabled={nul} onPress={() => setHidden((h) => ({ ...h, [pf.name]: !h[pf.name] }))} accessibilityRole="button" accessibilityState={{ selected: !off, disabled: nul }} style={[st.lgBtn, off && { opacity: 0.35 }]}>
-                          <View style={[st.lgDot, { backgroundColor: pf.color }, nul && { opacity: 0.35 }]} />
-                          <Text style={[st.lgT, nul && { color: '#B5B8BF' }]}>
-                            {pf.name}
-                            {nul ? ' —' : ''}
-                          </Text>
+                        <View key={pf.name} style={[st.lgBtn, off && { opacity: 0.35 }]}>
+                          <Pressable disabled={nul} onPress={() => setHidden((h) => ({ ...h, [pf.name]: !h[pf.name] }))} accessibilityRole="button" accessibilityState={{ selected: !off, disabled: nul }} style={[st.lgBtn, st.lgHit]}>
+                            <View style={[st.lgDot, { backgroundColor: pf.color }, nul && { opacity: 0.35 }]} />
+                            <Text style={[st.lgT, nul && { color: '#B5B8BF' }]}>
+                              {pf.name}
+                              {nul ? ' —' : ''}
+                            </Text>
+                          </Pressable>
                           <Q onPress={() => setTerm(pf.term)} label={pf.name} />
-                        </Pressable>
+                        </View>
                       );
                     })}
                   </View>
@@ -547,6 +549,7 @@ const st = StyleSheet.create({
   cap: { ...ft(11.5), color: appColor.ink3, marginTop: 4, marginBottom: 6 },
   lg: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 12, rowGap: 6, marginTop: 10, marginBottom: 4 },
   lgBtn: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  lgHit: { alignSelf: 'stretch' },
   lgDot: { width: 8, height: 8, borderRadius: 4 },
   lgT: { ...ft(12), color: appColor.ink },
   hl: { marginTop: 10 },
