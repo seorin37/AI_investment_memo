@@ -6,7 +6,9 @@ import { useUI } from '@/store/ui';
 import { TopBar } from '@/ui/layout/app/TopBar';
 import { useUsageView } from '@/ui/screens/my/useUsageView';
 import { useMyProfile } from '@/ui/screens/my/useMyProfile';
-import { mockAudioPeriods, mockAudioStocks, mockReport, mockReportStocks, mockStudioCounts, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
+import { mockAudioPeriods, mockAudioStocks, mockReport, mockStudioCounts, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
+import { useCreateReport, useReportPickStocks } from '@/ui/screens/studio/reportView';
+import { env } from '@/config/env';
 import { AppAudioSheet } from '@/ui/screens/studio/app/AudioSheet';
 import { AppReportSheet } from '@/ui/screens/studio/app/ReportSheet';
 import { AppStudioHome } from '@/ui/screens/studio/app/StudioHome';
@@ -28,6 +30,9 @@ export default function StudioTab() {
   const toast = useUI((s) => s.showToast);
   const { fail, make } = useLocalSearchParams<{ fail?: string; make?: string }>();
   const p = useStudioPlayer();
+  /* 주간보고서: 실제 모드면 내 종목 · POST /studio/reports (2026-11-23) */
+  const reportPick = useReportPickStocks();
+  const createReport = useCreateReport();
   const [sheet, setSheet] = useState(false);
   const [rsheet, setRSheet] = useState(false);
   const [mk, setMk] = useState(make);
@@ -88,12 +93,14 @@ export default function StudioTab() {
       />
       <AppReportSheet
         open={rsheet}
-        stocks={mockReportStocks}
-        period={mockReport.period}
+        stocks={reportPick.stocks}
+        counts={reportPick.counts}
+        period={env.useMock ? mockReport.period : '지난주 월~금'}
         onClose={() => setRSheet(false)}
         onMake={({ codes, market }) => {
           setRSheet(false);
-          p.startReport({ sub: `${codes.length}종목${market ? ' · 국내 증시 흐름 포함' : ''} · ${mockReport.gen_range}`, codes, market }, __DEV__ && fail === '1');
+          p.startReport({ sub: `${codes.length}종목${market ? ' · 국내 증시 흐름 포함' : ''}${env.useMock ? ` · ${mockReport.gen_range}` : ' · 지난주'}`, codes, market },
+            __DEV__ && fail === '1', env.useMock ? undefined : () => createReport(codes, market));
           setTimeout(() => router.push('/studio-gen'), 220);
         }}
       />

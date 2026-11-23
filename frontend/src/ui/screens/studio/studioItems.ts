@@ -7,6 +7,7 @@ import type { StudioItem } from '@/types/models';
 import type { LabDir } from './Studio.mock';
 import type { MadeItem } from './Studio.types';
 import { labTitle } from './labParts';
+import { fromServerReportItem } from './reportView';
 
 const KIND_LABEL: Record<StudioItem['kind'], string> = { lab: '투자 실험실', report: '주간보고서', audio: '오디오' };
 
@@ -20,6 +21,7 @@ export function fromServerItem(s: StudioItem): MadeItem {
     const t = labTitle(code, dirs, name);
     return { id: s.id, server: true, kind: 'lab', title: t.title, sub: t.sub, meta: t.sub, left, lab: { code, dirs, name, groups: s.content.groups } };
   }
+  if (s.kind === 'report') return fromServerReportItem(s);
   const meta = `${KIND_LABEL[s.kind]} · ${s.symbols.length}종목`;
   return { id: s.id, server: true, kind: s.kind, title: s.title, sub: meta, meta, left, codes: s.symbols };
 }
@@ -30,6 +32,6 @@ export function useStudioItemsSync() {
   const { data } = useStudioItems(!env.useMock && signedIn);
   const setServerMade = useStudioPlayer((s) => s.setServerMade);
   useEffect(() => {
-    if (data) setServerMade(data.map(fromServerItem));
+    if (data) setServerMade(data.filter((s) => s.status === 'ready').map(fromServerItem));   // 만드는 중·실패는 목록에 안 보인다
   }, [data, setServerMade]);
 }

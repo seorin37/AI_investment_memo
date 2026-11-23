@@ -46,7 +46,8 @@ interface StudioPlayerState {
   /** 방금 완성된 결과 종류 (openPlayer 신호와 같이) */
   openKind: 'audio' | 'report';
   startAudio(p: { sub: string; n: number; codes?: string[]; market?: boolean }, fail?: boolean): void;
-  startReport(p: { sub: string; codes: string[]; market: boolean }, fail?: boolean): void;
+  /** server를 주면(실제 모드) 단계 표시는 그대로 하고 완성은 서버 결과를 기다린다 (2026-11-23) */
+  startReport(p: { sub: string; codes: string[]; market: boolean }, fail?: boolean, server?: () => Promise<MadeItem>): void;
   openReport(id: string): void;
   /** 투자 실험실: 지금 보는 결과 · 실험 실행(크레딧 차감 없음)으로 만든 항목에 추가 */
   curLab: string | null;
@@ -82,6 +83,8 @@ interface StudioPlayerState {
 const DUR = mockAudioEpisode.dur;
 let genT: ReturnType<typeof setTimeout>[] = [];
 let playT: ReturnType<typeof setInterval> | null = null;
+/* 실제 모드 보고서 다시 시도에 쓸 서버 호출 */
+let lastServer: (() => Promise<MadeItem>) | null = null;
 
 export const useStudioPlayer = create<StudioPlayerState>((set, get) => {
   const step = (i: number, s: StepState, pct?: number) =>
@@ -96,6 +99,37 @@ export const useStudioPlayer = create<StudioPlayerState>((set, get) => {
       set({ t: nt });
       if (nt >= DUR) { set({ playing: false }); runPlay(false); }
     }, 250);
+  };
+  /* 실제 모드 주간보고서: 앞 단계는 시간으로 진행하고, 마지막 단계는 서버 완성(또는 실패)을 기다린다 */
+  const runServer = (server: () => Promise<MadeItem>) => {
+    genT.forEach(clearTimeout);
+    genT = [];
+    const T = (fn: () => void, ms: number) => genT.push(setTimeout(fn, ms));
+    T(() => step(0, 'run', 8), 300);
+    T(() => { step(0, 'done'); step(1, 'run', 35); }, 2500);
+    T(() => { step(1, 'done'); step(2, 'run', 70); }, 9000);
+    server().then(
+      (item) => {
+        genT.forEach(clearTimeout);
+        genT = [];
+        const s = get();
+        if (s.job?.kind !== 'report') return;
+        const here = s.genVisible || s.webView === 'gen';
+        set({ made: [item, ...s.made.filter((m) => m.id !== item.id)], job: null, curReport: item.id, openKind: 'report',
+          webView: s.webView === 'gen' ? 'report' : s.webView, openPlayer: s.genVisible ? s.openPlayer + 1 : s.openPlayer });
+        if (!here) useUI.getState().showToast(KIND_T.report.done);
+      },
+      (err: unknown) => {
+        genT.forEach(clearTimeout);
+        genT = [];
+        const s = get();
+        if (!s.job) return;
+        const at = s.job.steps.findIndex((x) => x !== 'done');
+        step(at < 0 ? 2 : at, 'bad');
+        set({ job: get().job && { ...get().job!, status: 'fail' }, webView: s.webView === 'gen' ? 'fail' : s.webView });
+        useUI.getState().showToast(err instanceof Error ? err.message : KIND_T.report.bad);
+      },
+    );
   };
   const run = (fail: boolean) => {
     genT.forEach(clearTimeout);
@@ -152,9 +186,11 @@ export const useStudioPlayer = create<StudioPlayerState>((set, get) => {
       set({ job: { kind: 'audio', sub: p.sub, n: p.n, codes: p.codes ?? [], market: !!p.market, pct: 0, steps: mockAudioGen.steps.map(() => 'wait'), status: 'run', fail } });
       run(fail);
     },
-    startReport: (p, fail = false) => {
+    startReport: (p, fail = false, server) => {
       set({ job: { kind: 'report', sub: p.sub, n: p.codes.length, codes: p.codes, market: p.market, pct: 0, steps: mockReport.steps.map(() => 'wait'), status: 'run', fail } });
-      run(fail);
+      lastServer = server ?? null;
+      if (server) runServer(server);
+      else run(fail);
     },
     openReport: (id) => set({ curReport: id }),
     curLab: null,
@@ -174,7 +210,8 @@ export const useStudioPlayer = create<StudioPlayerState>((set, get) => {
       const j = get().job;
       if (!j) return;
       set({ job: { ...j, pct: 0, steps: j.steps.map(() => 'wait'), status: 'run', fail: false } });
-      run(false);
+      if (j.kind === 'report' && lastServer) runServer(lastServer);
+      else run(false);
     },
     dropFailed: () => set((s) => (s.job?.status === 'fail' ? { job: null } : s)),
     setGenVisible: (v) => set({ genVisible: v }),

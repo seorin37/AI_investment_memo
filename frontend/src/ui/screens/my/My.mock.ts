@@ -24,7 +24,7 @@ export const mockPayMethods = ['카드', '간편결제', '계좌이체'];
 export const mockWithdrawCounts: WithdrawProps['counts'] = { memo: 8, journal: 4, stock: 3, ai: 5 };
 
 /** 종목별 추적 현황 (원본 TRK · 11.17 웹 통일: AI 연결된 메모 4개) */
-export interface TrackedMemo { title: string; chips: string[] }
+export interface TrackedMemo { title: string; chips: string[]; /** 실제 모드: 메모 id (GET /ai/tracking) */ memo_id?: string }
 export interface TrackedStock { stock_code: string; name: string; logo: string; logo_bg: string; memos: TrackedMemo[] }
 export const mockTracked: TrackedStock[] = [
   {

@@ -5,7 +5,7 @@ import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-nativ
 import { Text } from '@/components/ui/AppText';
 import { Head } from '../../my/app/parts';
 import type { mockReport, ReportStock } from '../Studio.mock';
-import { reportSummary, sign, Spark, SparkWide, WeekChart, won } from '../reportParts';
+import { Spark, SparkWide, WeekChart, issueParas, quarterLine, reportSummary, sign, valuationCells, won } from '../reportParts';
 import { Keep } from '@/ui/shared/Dark';
 
 /**
@@ -24,7 +24,7 @@ export function AppReport({ rep, stocks, market, allDefault, onBack, onOpenMemo,
   const insets = useSafeAreaInsets();
   const g = stocks.reduce((a, r) => a + r.counts.공시, 0), nw = stocks.reduce((a, r) => a + r.counts.뉴스, 0), mc = stocks.filter((r) => r.memo).length;
   const one = stocks.length === 1 ? stocks[0] : null;
-  const last = rep.days[4].split(' ')[0];
+  const last = rep.days[rep.days.length - 1].split(' ')[0];
   const sum = reportSummary(stocks, allDefault, rep.summary_default, last);
   const codes = stocks.map((s) => s.stock_code);
   const no = (k: number) => String(market ? k : k - 1).padStart(2, '0');
@@ -39,7 +39,7 @@ export function AppReport({ rep, stocks, market, allDefault, onBack, onOpenMemo,
           </Svg>
           <View style={st.k}><Text style={st.kT}>MEMO&apos;S WEEKLY REPORT</Text><View style={st.kP}><Text style={st.kPT}>{rep.week}</Text></View></View>
           <Text style={st.h2}>주간보고서</Text>
-          <Text style={st.pd}>{rep.range} · 거래일 5일 · {stocks.length}종목 · {rep.made_at} 작성</Text>
+          <Text style={st.pd}>{rep.range} · 거래일 {rep.days.length}일 · {stocks.length}종목 · {rep.made_at} 작성</Text>
           {one ? (
             <View style={st.one}>
               <View style={st.qn}><Logo s={one} size={22} /><Text style={st.oneN}>{one.name}</Text><View style={st.em}><Text style={st.emT}>{one.own}</Text></View></View>
@@ -83,6 +83,7 @@ export function AppReport({ rep, stocks, market, allDefault, onBack, onOpenMemo,
                   <View key={m.name} style={st.mk}><Text style={st.mkS}>{m.name}</Text><Text style={st.mkB}>{m.value}</Text><Text style={[st.mkP, { color: up(m.pct) }]}>{sign(m.pct)}</Text></View>
                 ))}
               </View>
+              {rep.market_summary ? <Text keepAll style={st.tx}>{rep.market_summary.replace(/\s*\[\d+\]/g, '')}</Text> : null}
               <View style={{ marginTop: 6 }}>
                 {rep.flow.map((f, i) => (
                   <View key={f.day} style={[st.nw, i === rep.flow.length - 1 && { borderBottomWidth: 0, paddingBottom: 0 }]}>
@@ -111,6 +112,12 @@ export function AppReport({ rep, stocks, market, allDefault, onBack, onOpenMemo,
                   <View key={l} style={st.st4C}><Text style={st.st4S}>{l}</Text><Text style={[st.st4B, c ? { color: c } : null]}>{v}</Text></View>
                 ))}
               </View>
+              {valuationCells(r).length ? (
+                <View style={[st.st4, { marginTop: 8 }]}>
+                  {valuationCells(r).map(([l, v]) => <View key={l} style={st.st4C}><Text style={st.st4S}>{l}</Text><Text style={st.st4B}>{v}</Text></View>)}
+                </View>
+              ) : null}
+              {quarterLine(r) ? <Text keepAll style={[st.lgT, { marginTop: 8 }]}>{quarterLine(r)}</Text> : null}
               <View style={{ marginTop: 12 }}><WeekChart r={r} days={rep.days} id={r.stock_code} /></View>
               <View style={st.lg}>
                 <Text style={st.lgT}><Text style={{ color: '#7C5CE0' }}>● </Text>공시</Text>
@@ -119,6 +126,12 @@ export function AppReport({ rep, stocks, market, allDefault, onBack, onOpenMemo,
                 <Text style={[st.lgT, { width: '100%' }]}>번호는 아래 소식·출처 번호예요</Text>
               </View>
               <Text keepAll style={st.tx}>{r.story}</Text>
+              {issueParas(r).length ? (
+                <>
+                  <Text style={st.sub}>이번 주 이슈 정리</Text>
+                  {issueParas(r).map((t, k) => <Text key={k} keepAll style={st.tx}>{t}</Text>)}
+                </>
+              ) : null}
               {r.items.length ? (
                 <>
                   <Text style={st.sub}>이번 주 소식</Text>

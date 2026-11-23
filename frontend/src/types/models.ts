@@ -592,6 +592,13 @@ export interface AiStats {
   linked_stocks: number;
 }
 
+/** GET /ai/tracking — 설정 사용량 탭 '종목별 추적 현황' (내 종목마다 추적 항목이 있는 AI 연결 메모, 2026-11-23) */
+export interface AiTrackingStock {
+  stock_code: string;
+  name: string;
+  memos: { memo_id: string; title: string; chips: string[] }[];
+}
+
 /** 이번 기간 AI 크레딧 사용량 (GET /me/usage, backend/app/credits/ledger.py Usage). 화면에는 %만 보인다 */
 export interface CreditUsage {
   usage_percent: number; // 0~100
@@ -658,6 +665,9 @@ export interface LabRunResult {
   /** 만든 항목으로 저장된 id (LLM 답일 때만, 저장 실패면 null) — studio_items (2026-11-23) */
   item_id?: string | null;
 }
+
+/** POST /studio/reports — 주간보고서 만들기 (같은 주·같은 조합이면 reused) */
+export interface ReportCreateResult { item_id: string; status: 'generating' | 'ready' | 'queued'; reused: boolean }
 
 /** GET /studio/items — 스튜디오 만든 항목 (studio_items, 30일 보관) */
 export interface StudioItem {

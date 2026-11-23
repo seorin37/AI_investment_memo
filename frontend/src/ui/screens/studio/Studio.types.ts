@@ -1,4 +1,5 @@
 import type { LabRunGroup } from '@/types/models';
+import type { ReportStock, mockReport } from './Studio.mock';
 import type { CreditPack } from '../my/My.mock';
 
 export type StudioKind = 'audio' | 'report' | 'lab' | 'quiz';
@@ -30,6 +31,8 @@ export interface MadeItem {
   market?: boolean;
   /** 서버(studio_items)에 저장된 항목 — 목록을 다시 받으면 서버 값으로 바뀐다 (2026-11-23) */
   server?: boolean;
+  /** 주간보고서: 서버가 만든 보고서 (없으면 mock 예시) — reportView.fromServerReport (2026-11-23) */
+  report?: { rep: typeof mockReport; stocks: ReportStock[] };
   /** 투자 실험실: 종목 · 조건 4칸 (상승/유지/하락) */
   lab?: { code: string; dirs: ('상승' | '유지' | '하락')[]; name?: string; groups?: LabRunGroup[] };
 }
