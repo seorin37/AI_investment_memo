@@ -109,6 +109,17 @@ class Brief:
         return next((s for s in self.stocks if s.code == code), None)
 
 
+PERIODS = {"전날": 1, "최근 3일": 3, "최근 7일": 7}          # 프론트 오디오 시트의 기간 칩 (mockAudioPeriods)
+
+
+def period_range(label: str, now: datetime | None = None) -> tuple[date, date]:
+    """'전날' → (어제, 어제), '최근 3일' → (그제-1, 어제) … 자료 날짜 기준, 끝은 늘 어제."""
+    if label not in PERIODS:
+        raise ValueError(f"기간은 {list(PERIODS)} 중 하나예요")
+    end = (now or datetime.now(SEOUL)).astimezone(SEOUL).date() - timedelta(days=1)
+    return end - timedelta(days=PERIODS[label] - 1), end
+
+
 def card_window(start: date, end: date) -> tuple[datetime, datetime]:
     return (datetime.combine(start + timedelta(days=1), time.min, SEOUL),
             datetime.combine(end + timedelta(days=2), time.min, SEOUL))
@@ -195,8 +206,52 @@ def _price(db: Session, code: str, start: date, end: date) -> PriceIn | None:
     return PriceIn(_iso(first[0]), float(first[1]), _iso(last[0]), float(last[1]), pct if len(rows) > 1 else None)
 
 
+def _card_rows(repo: UpdatesRepository, user_id: int, codes: set[str], lo: datetime, hi: datetime) -> tuple[list, list]:
+    """기간 카드 행(오래된 것부터)과 업데이트 화면 모양. 답을 못 찾은 질문 카드는 방송하지 않는다."""
+    rows = [r for r in repo.cards(user_id, ai_linked_only=False, active_stocks_only=True, limit=500)
+            if r["symbol"] in codes and lo <= r["created_at"] < hi
+            and (r["details"] or {}).get("answer_status") != "no_answer"]
+    rows.sort(key=lambda r: (r["created_at"], r["id"]))
+    return rows, UpdatesService(repo)._ai_updates(rows)
+
+
+def _same_key(r: dict, u: dict) -> tuple:
+    """같은 종목에서 근거가 같은 카드(메모 여러 개에 붙은 같은 기사·공시)는 하나로 센다."""
+    return (r["symbol"], u["type"], u["url"] or "", u["title"]) if u["sources"] else (r["symbol"], "card", r["id"])
+
+
+def audio_options(db: Session, user_id: int, now: datetime | None = None) -> dict:
+    """오디오 만들기 시트 (프론트 AudioStock): 내 종목마다 기간별 새 업데이트 수 [전날, 최근 3일, 최근 7일]와 직전 거래일.
+    수는 오디오에 실제로 들어갈 카드 수와 같다 (같은 근거 카드는 하나로)."""
+    now = now or datetime.now(SEOUL)
+    stocks = [dict(r) for r in db.execute(text(STOCKS_SQL), {"uid": user_id}).mappings()]
+    ranges = [period_range(label, now) for label in PERIODS]
+    lo = min(card_window(a, b)[0] for a, b in ranges)
+    hi = min(max(card_window(a, b)[1] for a, b in ranges), now)
+    repo = UpdatesRepository(db)
+    rows, updates = _card_rows(repo, user_id, {s["code"] for s in stocks}, lo, hi)
+    keys: dict[tuple, datetime] = {}
+    for r, u in zip(rows, updates):
+        keys.setdefault(_same_key(r, u), r["created_at"])
+    out = []
+    for s in stocks:
+        news = []
+        for a, b in ranges:
+            w_lo, w_hi = card_window(a, b)
+            news.append(sum(1 for k, at in keys.items() if k[0] == s["code"] and w_lo <= at < w_hi))
+        out.append({"stock_code": s["code"], "name": s["name"], "news": news,
+                    "hold": "보유" if s["status"] == "holding" else "관심"})
+    end = ranges[0][1]
+    last = db.execute(text("SELECT max(trade_date) FROM market_indices WHERE code = 'KOSPI' AND trade_date <= :end"),
+                      {"end": end}).scalar()
+    return {"stocks": out, "periods": list(PERIODS), "last_close": f"{last.month:02d}.{last.day:02d}({WEEKDAY[last.weekday()]})"
+            if last else None, "last_close_date": last.isoformat() if last else None}
+
+
 def collect_brief(db: Session, user_id: int, start: date, end: date, symbols: list[str] | None = None,
-                  max_cards_per_stock: int = 4, max_memos_per_stock: int = 3, now: datetime | None = None) -> Brief:
+                  max_cards_per_stock: int = 4, max_memos_per_stock: int = 3, now: datetime | None = None,
+                  include_market: bool = True) -> Brief:
+    """symbols: 들을 종목 (None이면 내 종목 전체, 내 보드에 없는 코드는 빠진다). include_market: 직전 거래일 증시 요약을 넣을지."""
     now = now or datetime.now(SEOUL)
     lo, hi = card_window(start, end)
     hi = min(hi, now)
@@ -209,18 +264,14 @@ def collect_brief(db: Session, user_id: int, start: date, end: date, symbols: li
 
     # 카드 (업데이트 화면과 같은 모양을 쓰려고 UpdatesService의 변환을 그대로 쓴다)
     repo = UpdatesRepository(db)
-    rows = [r for r in repo.cards(user_id, ai_linked_only=False, active_stocks_only=True, limit=500)
-            if r["symbol"] in by_code and lo <= r["created_at"] < hi
-            and (r["details"] or {}).get("answer_status") != "no_answer"]      # 답을 못 찾은 질문 카드는 방송하지 않는다
-    rows.sort(key=lambda r: (r["created_at"], r["id"]))     # 오래된 것부터 (방송은 날짜 순서로 말한다)
-    updates = UpdatesService(repo)._ai_updates(rows)
+    rows, updates = _card_rows(repo, user_id, set(by_code), lo, hi)
     merged: dict[tuple, CardIn] = {}
     n = 0
     for r, u in zip(rows, updates):
         details = r["details"] or {}
         srcs = [{"kind": "공시" if s["kind"] == "disclosure" else "뉴스", "title": s["title"] or "", "source": s["source"] or "",
                  "published_at": _iso(s["published_at"]), "url": s["url"]} for s in u["sources"]]
-        key = (r["symbol"], u["type"], u["url"] or "", u["title"]) if srcs else (r["symbol"], "card", r["id"])
+        key = _same_key(r, u)
         if key in merged:
             c = merged[key]
             c.card_ids.append(int(r["id"]))
@@ -269,4 +320,4 @@ def collect_brief(db: Session, user_id: int, start: date, end: date, symbols: li
             k += 1
             c.uid = f"U{k}"
     return Brief(user_id, start.isoformat(), end.isoformat(), now.isoformat(timespec="seconds"), stocks,
-                 _market(db, start, end))
+                 _market(db, start, end) if include_market else [])

@@ -16,7 +16,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
-from app.studio_audio.collect import collect_brief
+from app.studio_audio.collect import audio_options, collect_brief
 from pipelines.studio_audio.seed_week import SEOUL, backdate_cards, load_seed, memo_time, pg_dsn, sa_url
 from tests import studio_audio_fixtures as fx
 
@@ -100,3 +100,37 @@ def test_backdate_then_collect_and_run(seeded, tmp_path):
     assert content["source"] == "rules" and content["dur"] > 60 and len(content["sources"]) == len(fx.CARDS)
     assert (run / "player.html").exists() and ((run / "episode.mp3").exists() or (run / "episode.wav").exists())
     assert json.loads((run / "meta.json").read_text(encoding="utf-8")).get("fallback_warnings") is None
+
+
+def test_selection_options_and_subsets(seeded, tmp_path):
+    conn, created, ids = seeded
+    backdate_cards(conn, created["memo_ids"], {v["id"]: v["at"] for v in created["memos"].values()}, NOW)
+    conn.commit()
+    engine = create_engine(sa_url(URL))
+    with Session(engine) as db:
+        opts = audio_options(db, created["user_id"], NOW)
+        only = collect_brief(db, created["user_id"], START, END, ["000660", "035420"], now=NOW, include_market=False)
+    engine.dispose()
+    news = {o["stock_code"]: o["news"] for o in opts["stocks"]}
+    assert news["000660"] == [0, 1, 3] and news["105560"] == [0, 1, 2] and news["035420"] == [0, 0, 0]   # [전날, 3일, 7일]
+    assert {o["stock_code"]: o["hold"] for o in opts["stocks"]}["000660"] == "보유"
+    assert opts["periods"] == ["전날", "최근 3일", "최근 7일"] and opts["last_close"] == "11.20(금)"
+    assert [s.code for s in only.stocks] == ["000660", "035420"] and only.market == []
+
+    from pipelines.studio_audio.run import main
+    os.environ["TEST_DATABASE_URL"] = URL
+    # 전날(11.22) 소식은 없고 네이버만 골랐지만 증시 요약이 켜져 있으면 만든다
+    assert main(["--user-id", str(created["user_id"]), "--period", "전날", "--symbols", "035420", "--test-db",
+                 "--llm", "none", "--tts", "none", "--out-dir", str(tmp_path / "a")]) == 0
+    c = json.loads((next((tmp_path / "a").glob("run_*")) / "episode.json").read_text(encoding="utf-8"))
+    assert c["options"] == {"codes": ["035420"], "period": "전날", "market": True} and c["meta"].startswith("오디오 · 1종목 · 전날 · ")
+    # 증시 요약도 끄면 만들지 않는다
+    assert main(["--user-id", str(created["user_id"]), "--period", "전날", "--symbols", "035420", "--no-market", "--test-db",
+                 "--llm", "none", "--tts", "none", "--out-dir", str(tmp_path / "b")]) == 0
+    summary = json.loads((next((tmp_path / "b").glob("run_*")) / "summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "no_updates"
+    # 보유 종목 전체
+    assert main(["--user-id", str(created["user_id"]), "--end", END.isoformat(), "--group", "보유", "--test-db",
+                 "--llm", "none", "--tts", "none", "--out-dir", str(tmp_path / "c")]) == 0
+    c = json.loads((next((tmp_path / "c").glob("run_*")) / "episode.json").read_text(encoding="utf-8"))
+    assert sorted(c["options"]["codes"]) == ["000660", "105560"]

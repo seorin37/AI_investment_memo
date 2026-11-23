@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from app.studio_audio.collect import card_window, day_label
+from app.studio_audio.collect import card_window, day_label, period_range
 from app.studio_audio.episode import NoUpdatesError, estimate_starts, flatten, text_hash, to_content, write_script
 from app.studio_audio.fallback import fallback, josa
 from app.studio_audio.prompt import FEWSHOT_ANSWER, FEWSHOT_BRIEF, build_user, config, messages, target_chars
@@ -160,14 +160,9 @@ def test_two_failures_use_rules_script():
     assert meta["source"] == "rules" and len(meta["errors"]) == 2 and check(script, BRIEF) == []
 
 
-def test_no_llm_uses_rules_and_no_updates_raises():
+def test_no_llm_uses_rules():
     _, meta = write_script(BRIEF, None)
     assert meta["source"] == "rules" and meta["tries"] == 0
-    quiet = copy.deepcopy(BRIEF)
-    for st in quiet.stocks:
-        st.cards = []
-    with pytest.raises(NoUpdatesError):
-        write_script(quiet, None)
 
 
 def test_josa():
@@ -295,3 +290,35 @@ def test_seed_card_time():
 def test_db_url_helpers():
     assert sa_url("postgresql://u@h:5433/x_test") == "postgresql+psycopg://u@h:5433/x_test"
     assert pg_dsn("postgresql+psycopg://u@h:5433/x_test") == "postgresql://u@h:5433/x_test"
+
+
+# ───────── 고르기 (만들기 시트: 종목 · 기간 · 증시 요약)
+def test_period_range_ends_yesterday():
+    now = datetime(2026, 11, 23, 10, 0, tzinfo=SEOUL)
+    assert period_range("전날", now) == (date(2026, 11, 22), date(2026, 11, 22))
+    assert period_range("최근 3일", now) == (date(2026, 11, 20), date(2026, 11, 22))
+    assert period_range("최근 7일", now) == (date(2026, 11, 16), date(2026, 11, 22))
+    with pytest.raises(ValueError):
+        period_range("최근 30일", now)
+
+
+def test_market_only_episode_when_no_updates():
+    quiet = copy.deepcopy(BRIEF)
+    for st in quiet.stocks:
+        st.cards = []
+    script, meta = write_script(quiet, None)                 # 업데이트 0건이어도 증시 요약이 있으면 만든다 (프론트 시트 규칙)
+    assert [g["kind"] for g in script["segments"]] == ["opening", "market", "no_news", "closing"]
+    assert check(script, quiet) == []
+    quiet.market = []
+    with pytest.raises(NoUpdatesError):                      # 업데이트 0건 + 증시 요약 끔 → 만들지 않음
+        write_script(quiet, None)
+
+
+def test_market_off_and_single_day():
+    b = copy.deepcopy(BRIEF)
+    b.market, b.start = [], b.end
+    assert "[증시]" not in build_user(b) and "하루" in build_user(b)
+    script = fallback(b)
+    assert "market" not in [g["kind"] for g in script["segments"]]
+    assert script["segments"][0]["lines"][0]["text"].startswith("1월 11일,")
+    assert any("market" in e for e in check(GOOD, b))         # 증시를 껐는데 market 구간을 쓰면 걸린다

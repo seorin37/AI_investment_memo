@@ -51,7 +51,8 @@ def fallback(brief: Brief) -> dict:
     segs = []
     n = len(brief.stocks)
     segs.append({"kind": "opening", "stock_code": "", "lines": [
-        _line("A", f"{_day(brief.start)}부터 {_day(brief.end)}까지, 내 종목 {n}곳의 소식을 정리해 드릴게요.")]})
+        _line("A", (f"{_day(brief.end)}" if brief.start == brief.end else f"{_day(brief.start)}부터 {_day(brief.end)}까지")
+              + f", 내 종목 {n}곳의 소식을 정리해 드릴게요.")]})
     if brief.market:
         m = brief.market[0]
         segs.append({"kind": "market", "stock_code": "", "lines": [

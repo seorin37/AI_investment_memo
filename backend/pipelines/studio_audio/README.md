@@ -28,6 +28,17 @@ PYTHONPATH=backend python -m pipelines.updates.db_cleanup results/studio_audio/s
 ```
 비용 없이 흐름만 볼 때: `run ... --llm none --tts fake` (규칙 대본 + 신호음).
 
+## 고르기 (만들기 시트와 같은 규칙)
+| 시트 | CLI | 백엔드 |
+|---|---|---|
+| 종목 체크 · 전체/보유/관심 칩 | `--symbols 000660,035420` · `--group 보유` | `collect_brief(symbols=…)` — 내 보드에 없는 코드는 빠진다 |
+| 업데이트 기간 전날 / 최근 3일 / 최근 7일 | `--period 전날` | `period_range()` — 끝은 늘 어제(자료 날짜) |
+| 직전 거래일 증시 요약 | `--no-market`로 끔 | `collect_brief(include_market=…)` |
+| 종목별 "새 업데이트 n건", 직전 거래일 | `--options` | `audio_options()` → `{stocks: [{stock_code, name, news: [전날, 3일, 7일], hold}], periods, last_close}` (프론트 `AudioStock` 모양) |
+
+- 고른 종목에 업데이트가 0건이어도 증시 요약이 켜져 있으면 만든다 (오프닝 → 증시 → 새 소식 없음 → 마무리). 둘 다 없으면 만들지 않는다 (프론트 `empty` 규칙과 같다).
+- 고른 종목 중 소식 없는 종목은 "새 소식 없음" 한 줄로만 나온다. 결과 `episode.json`에 `options`({codes, period, market})와 만든 항목 줄 `meta`("오디오 · 3종목 · 전날 · 6:42")를 남긴다.
+
 ## 대본 틀 (configs/studio_audio_prompt.md)
 | 구간 | 줄 | 내용 |
 |---|---|---|
@@ -62,6 +73,6 @@ Fish가 이상하게 읽는 말이 있으면 여기에 더한다.
 `brief.txt`(LLM 입력) · `script.json` · `meta.json`(시도·검사 오류·토큰·거절된 대본) · `script.md`(화면/읽기 문장) · `episode.json` · `episode.mp3` · `player.html` · `summary.json`
 
 ## 본 백엔드로 옮길 때 (아직 안 함)
-- `POST /api/v1/studio/audio` {period, symbols} → `studio_items`(kind=audio, status queued→generating→ready) → 백그라운드에서 collect→script→TTS →
+- `GET /api/v1/studio/audio/options` → `audio_options()` (시트), `POST /api/v1/studio/audio` {codes, period, market} (프론트 `onMake`와 같은 이름) → `studio_items`(kind=audio, status queued→generating→ready) → 백그라운드에서 collect→script→TTS →
   `audio_assets`(storage_path, duration_sec, provider=fish, voice, text_hash) · 크레딧 `audio` 5 (만들어졌을 때만, 소식 0건이면 만들지 않음)
 - `GET /api/v1/studio/audio/{id}` → `content`, `GET .../file` → mp3. `user_settings.auto_audio`면 매일 실행 뒤 자동 생성.

@@ -9,7 +9,7 @@ from functools import lru_cache
 
 from .collect import Brief, CardIn, MarketRow, MemoIn, PriceIn, StockIn, day_label
 
-PROMPT_VERSION = "audio-v1 (2026-11-23)"
+PROMPT_VERSION = "audio-v2 (2026-11-23)"
 CONFIG_PATH = "configs/studio_audio.yaml"
 
 
@@ -79,7 +79,8 @@ def _card_lines(c: CardIn) -> list[str]:
 def build_user(brief: Brief, cfg: dict | None = None) -> str:
     sec, chars = target_seconds(brief, cfg), target_chars(brief, cfg)
     lines = ["[방송 정보]",
-             f"- 기간: {day_label(brief.start)} ~ {day_label(brief.end)}",
+             f"- 기간: {day_label(brief.start)} 하루" if brief.start == brief.end
+             else f"- 기간: {day_label(brief.start)} ~ {day_label(brief.end)}",
              f"- 종목: {len(brief.stocks)}개 (새 소식 있는 종목 {len(brief.news_stocks)}개, 없는 종목 {len(brief.quiet_stocks)}개)",
              f"- 길이 목표: 약 {sec // 60}분 {sec % 60}초 (대본 전체 약 {chars}자)"]
     if brief.market:

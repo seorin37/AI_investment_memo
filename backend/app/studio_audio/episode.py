@@ -22,7 +22,8 @@ LLMCall = Callable[[list[dict]], dict]
 
 
 class NoUpdatesError(LookupError):
-    """기간 안에 새 업데이트가 하나도 없음 (오디오를 만들지 않고 크레딧도 쓰지 않는다)."""
+    """고른 종목에 기간 안 새 업데이트가 없고 증시 요약도 끔 (오디오를 만들지 않고 크레딧도 쓰지 않는다).
+    프론트 시트와 같은 규칙: 업데이트 0건이어도 증시 요약을 켜면 만든다."""
 
 
 @dataclass
@@ -38,8 +39,8 @@ class Line:
 
 def write_script(brief: Brief, llm: LLMCall | None, cfg: dict | None = None) -> tuple[dict, dict]:
     cfg = cfg or config()
-    if not brief.news_stocks:
-        raise NoUpdatesError("기간 안에 새 업데이트가 없어요")
+    if not brief.news_stocks and not brief.market:
+        raise NoUpdatesError("고른 종목에 기간 안 새 업데이트가 없고 증시 요약도 꺼져 있어요")
     meta = {"prompt": PROMPT_VERSION, "tries": 0, "errors": [], "usage": [], "source": "rules"}
     script, fix = None, None
     for attempt in range(1, int(cfg["script"].get("tries", 2)) + 1) if llm else []:
