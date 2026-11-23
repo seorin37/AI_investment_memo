@@ -31,6 +31,9 @@ export function dayGroup(iso: string, now: string) {
   return label;
 }
 
+/** 한국 날짜 'MM.DD' */
+export const kstMd = (iso: string) => dayOf(iso).slice(5).replace('-', '.');
+
 /** 종목별 소식 줄 아래: '한국경제 · 08:40' · 'KIS · 종가' (시각이 없으면 출처만) */
 export function sourceLine(source: string) {
   const [name, ...rest] = source.split(' · ');

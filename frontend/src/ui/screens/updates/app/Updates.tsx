@@ -9,7 +9,7 @@ import { Odometer } from '@/ui/motion/Numbers';
 import { Reveal } from '@/ui/motion/Reveal';
 import { Skeleton } from '@/ui/motion/Skeleton';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
-import { FeedBody, Turn } from '@/ui/screens/memo/app/MemoFeed';
+import { Turn, splitMark } from '@/ui/screens/memo/app/MemoFeed';
 import { KindTag } from '@/ui/shared/KindTag';
 import { NudgePill } from '@/ui/shared/NudgePill';
 import { AppSnackbar } from '@/ui/shared/Snackbar';
@@ -17,7 +17,7 @@ import { StockLogo } from '@/ui/shared/StockLogo';
 import { appColor, curve, ft } from '@/ui/theme';
 import type { AppUpdatesProps, KindFilter, UpdateItem, UpdateStock } from '../Updates.types';
 import { versionsOf } from '../Updates.mock';
-import { APP_TAG, KINDS, ago, byStock, dayGroup, sourceLine, unreadOf } from '../updatesFormat';
+import { APP_TAG, KINDS, ago, byStock, dayGroup, kstMd, sourceLine, unreadOf } from '../updatesFormat';
 import { useNudge } from '@/store/nudge';
 
 let seq = 0;
@@ -352,7 +352,7 @@ function StockView({ p, s, kind, setKind, openId, onOpen }: { p: AppUpdatesProps
           <View style={st.gc}>
             {list.map((u, i) => (
               <ReadSwipe key={u.id} line={i > 0} open={openId === u.id} read={!u.unread} onToggle={() => p.onMarkRead([u.id], u.unread)}>
-                <NewsRow u={u} open={openId === u.id} onToggle={() => onOpen(u)} onOpenSource={() => p.onOpenSource(u)} onOpenEvidence={() => p.onOpenEvidence(u)} />
+                <NewsRow u={u} open={openId === u.id} onToggle={() => onOpen(u)} onOpenSource={() => p.onOpenSource(u)} onOpenBoard={() => p.onOpenBoard(s.stock_code)} />
               </ReadSwipe>
             ))}
           </View>
@@ -363,10 +363,10 @@ function StockView({ p, s, kind, setKind, openId, onOpen }: { p: AppUpdatesProps
 }
 
 /** 종목별 소식 한 줄: 태그 · 제목 · 안 읽음 점 · ⌄ / 내 메모 / 출처 · 시간 */
-function NewsRow({ u, open, onToggle, onOpenSource, onOpenEvidence }: { u: UpdateItem; open: boolean; onToggle: () => void; onOpenSource: () => void; onOpenEvidence: () => void }) {
+function NewsRow({ u, open, onToggle, onOpenSource, onOpenBoard }: { u: UpdateItem; open: boolean; onToggle: () => void; onOpenSource: () => void; onOpenBoard: () => void }) {
   return (
-    <View style={st.nr}>
-      <Pressable onPress={onToggle} accessibilityRole="button" accessibilityState={{ expanded: open }}>
+    <View>
+      <Pressable onPress={onToggle} accessibilityRole="button" accessibilityState={{ expanded: open }} style={st.nr}>
         <View style={st.nrTop}>
           <View style={st.nrTag}>
             <KindTag kind={u.kind} variant="app" />
@@ -381,10 +381,7 @@ function NewsRow({ u, open, onToggle, onOpenSource, onOpenEvidence }: { u: Updat
         </View>
         {u.memo_title ? (
           <View style={st.nrMemo}>
-            <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={appColor.deepPurple} strokeWidth={2} strokeLinejoin="round">
-              <Path d="M5 4h14v11l-5 5H5z" />
-              <Path d="M14 20v-5h5" />
-            </Svg>
+            <MemoIcon size={14} color={appColor.deepPurple} />
             <Text style={st.nrMemoT} numberOfLines={1}>
               내 메모 · {u.memo_title}
             </Text>
@@ -393,8 +390,92 @@ function NewsRow({ u, open, onToggle, onOpenSource, onOpenEvidence }: { u: Updat
         <Text style={st.nrSrc}>{sourceLine(u.source)}</Text>
       </Pressable>
       <Collapse open={open} duration={420}>
-        <FeedBody flat f={u} ver={versionsOf(u.memo_id).find((v) => v.version === u.memo_version)} onOpenSource={onOpenSource} onOpenEvidence={onOpenEvidence} />
+        <NewsBody u={u} onOpenSource={onOpenSource} onOpenBoard={onOpenBoard} />
       </Collapse>
+    </View>
+  );
+}
+
+function MemoIcon({ size, color }: { size: number; color: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round">
+      <Path d="M5 4h14v11l-5 5H5z" />
+      <Path d="M14 20v-5h5" />
+    </Svg>
+  );
+}
+
+/** 펼친 내용: 공시 = AI 요약 · 원문 인용 / 뉴스 = 기사 상자 / 주가 = 요약. 공통: 내 메모 · 버튼 */
+function NewsBody({ u, onOpenSource, onOpenBoard }: { u: UpdateItem; onOpenSource: () => void; onOpenBoard: () => void }) {
+  const [cite, setCite] = useState(false);
+  const ver = versionsOf(u.memo_id).find((v) => v.version === u.memo_version);
+  const memo = ver?.title || u.memo_title;
+  const press = ({ pressed }: { pressed: boolean }) => [st.nbBtn, pressed && { opacity: 0.6 }];
+  return (
+    <View style={st.nbWrap}>
+      {u.kind === '공시' ? (
+        <>
+          <View style={st.aiBox}>
+            <Text style={st.aiH}>✦ AI 요약 · 원문 근거</Text>
+            <Text style={st.aiT}>
+              {u.summary}
+              {u.quote ? ' ' : null}
+              {u.quote ? (
+                <Pressable onPress={() => setCite((c) => !c)} accessibilityRole="button" accessibilityLabel="출처 1" hitSlop={10} style={st.citeChip}>
+                  <Text style={st.citeChipT}>[1]</Text>
+                </Pressable>
+              ) : null}
+            </Text>
+          </View>
+          {u.quote ? (
+            <View style={st.qBox}>
+              <Text style={st.qH}>[1] DART · 원문</Text>
+              <Text style={st.qT}>
+                {/* 짚을 문장이 따로 없으면 인용 전체 */}
+                {splitMark(u.quote, u.quote_mark || u.quote).map((x, i) => (
+                  <Text key={i} style={x.mark && cite ? st.qMark : null}>
+                    {x.t}
+                  </Text>
+                ))}
+              </Text>
+            </View>
+          ) : null}
+        </>
+      ) : u.kind === '뉴스' ? (
+        <>
+          <Text style={st.nbLead}>{u.summary.startsWith('메모에서 확인하려던') ? u.summary : `메모에서 확인하려던 "${u.memo_title}" 관련 뉴스예요.`}</Text>
+          <View style={st.artBox}>
+            <Text style={st.artS}>{[u.source.split(' · ')[0], kstMd(u.at)].filter(Boolean).join(' · ')}</Text>
+            <Text style={st.artT}>{u.article_title}</Text>
+          </View>
+          <Text style={st.artNote}>기사 내용은 원문 링크에서 볼 수 있어요</Text>
+        </>
+      ) : (
+        <Text style={st.nbLead}>
+          {u.summary}
+          <Text style={{ color: appColor.ink3 }}> (코드 계산)</Text>
+        </Text>
+      )}
+      {memo ? (
+        <View style={st.mmBox}>
+          <View style={st.mmTop}>
+            <MemoIcon size={12} color="#A0802A" />
+            <Text style={st.mmH}>연결된 내 메모{ver ? ` · ${kstMd(ver.saved_at)} 작성 당시` : ''}</Text>
+          </View>
+          <Text style={st.mmT}>{memo}</Text>
+        </View>
+      ) : null}
+      <View style={st.nbBtns}>
+        {u.url && u.kind !== '주가' ? (
+          <Pressable onPress={onOpenSource} accessibilityRole="link" style={press}>
+            <Text style={st.nbBtnT}>{u.kind === '뉴스' ? '원문 기사 열기 ↗' : '원문 보기'}</Text>
+          </Pressable>
+        ) : null}
+        <Pressable onPress={onOpenBoard} accessibilityRole="button" style={press}>
+          <Text style={st.nbBtnT}>메모 보드에서 보기</Text>
+        </Pressable>
+      </View>
+      {u.kind === '공시' ? <Text style={st.nbNote}>AI가 원문에 있는 내용만 골라 적었어요 · 판단은 직접 해 주세요</Text> : null}
     </View>
   );
 }
@@ -610,6 +691,30 @@ const st = StyleSheet.create({
   nrMemo: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
   nrMemoT: { flex: 1, minWidth: 0, ...ft(12.5), color: appColor.deepPurple },
   nrSrc: { ...ft(12), color: appColor.ink3, marginTop: 4 },
+  /* 펼친 내용 */
+  nbWrap: { backgroundColor: '#FFFFFF', paddingTop: 2, paddingHorizontal: 16, paddingBottom: 16 },
+  aiBox: { backgroundColor: '#F7F5FF', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 13 },
+  aiH: { ...ft(11.5), fontWeight: '800', color: appColor.deepPurple, marginBottom: 3 },
+  aiT: { fontSize: 13.5, lineHeight: 23, color: appColor.ink },
+  citeChip: { backgroundColor: '#E3DBFF', borderRadius: 6, paddingHorizontal: 4 },
+  citeChipT: { ...ft(11), fontWeight: '800', color: '#5B3BD1' },
+  qBox: { marginTop: 8, backgroundColor: '#F6F7F9', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12 },
+  qH: { ...ft(11), fontWeight: '700', color: appColor.ink3, marginBottom: 2 },
+  qT: { fontSize: 12.5, lineHeight: 21, color: appColor.ink2 },
+  qMark: { backgroundColor: 'rgba(255,211,0,0.5)' },
+  nbLead: { fontSize: 13.5, lineHeight: 21.6, color: appColor.ink },
+  artBox: { marginTop: 10, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: appColor.line, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12 },
+  artS: { ...ft(11.5), color: '#8A8F98', marginBottom: 3 },
+  artT: { ...ft(14), fontWeight: '700', color: appColor.ink },
+  artNote: { ...ft(11.5), color: '#8A8F98', marginTop: 6 },
+  mmBox: { marginTop: 8, backgroundColor: '#FFF8E6', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12 },
+  mmTop: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 },
+  mmH: { ...ft(11), fontWeight: '700', color: '#A0802A' },
+  mmT: { ...ft(12.5), color: '#5B4A1A' },
+  nbBtns: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  nbBtn: { flex: 1, height: 38, backgroundColor: '#F2F2F5', borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  nbBtnT: { ...ft(13), fontWeight: '700', color: appColor.ink },
+  nbNote: { ...ft(11), color: appColor.ink3, marginTop: 8 },
   act: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 88, backgroundColor: appColor.accent },
   actIn: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3 },
   actT: { ...ft(12.5), fontWeight: '700', color: '#FFFFFF' },
