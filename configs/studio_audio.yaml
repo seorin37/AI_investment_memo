@@ -9,14 +9,15 @@ script:
   tries: 2                   # 검사에 걸리면 고칠 점을 주고 한 번 더. 그래도 안 되면 규칙 대본(fallback)
   # 길이 목표: 한국어 TTS는 1분에 약 330자(공백 포함). 목표 = base + 소식 있는 종목 + 카드 추가분 + 소식 없는 종목
   chars_per_minute: 330
-  base_seconds: 35           # 오프닝·증시·마무리
-  per_stock_seconds: 45      # 새 소식이 있는 종목 하나
-  per_card_seconds: 15       # 그 종목 두 번째 카드부터 하나당
+  # 2026-11-23 audio-v3: 두 DJ가 질문·반응을 주고받아 줄이 늘어서 늘렸다 (35·45·15 → 45·55·20)
+  base_seconds: 45           # 오프닝·증시·마무리
+  per_stock_seconds: 55      # 새 소식이 있는 종목 하나
+  per_card_seconds: 20       # 그 종목 두 번째 카드부터 하나당
   quiet_seconds: 6           # 새 소식이 없는 종목 하나
   max_seconds: 420           # 7분 상한
   over_ratio: 1.6            # 대본 글자 수가 목표의 이 배를 넘으면 검사 실패 (TTS 비용 보호)
   line_max_chars: 90         # 프롬프트는 80자, 검사는 조금 넉넉하게
-  max_same_speaker: 3        # 같은 진행자 연속 줄 수 상한
+  max_same_speaker: 2        # 같은 진행자 연속 줄 수 상한 (audio-v3: 주고받는 느낌이 나게 3 → 2)
 hosts:
   A: 진행자 A · 메인
   B: 진행자 B · 해설

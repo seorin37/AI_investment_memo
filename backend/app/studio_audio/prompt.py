@@ -9,7 +9,7 @@ from functools import lru_cache
 
 from .collect import Brief, CardIn, MarketRow, MemoIn, PriceIn, StockIn, day_label
 
-PROMPT_VERSION = "audio-v2 (2026-11-23)"
+PROMPT_VERSION = "audio-v3 (2026-11-23, 두 DJ 주고받기)"
 CONFIG_PATH = "configs/studio_audio.yaml"
 
 
@@ -124,22 +124,27 @@ FEWSHOT_ANSWER = {
     "title": "1월 첫째 주 내 종목 라디오",
     "segments": [
         {"kind": "opening", "stock_code": "", "lines": [
-            {"speaker": "A", "text": "1월 5일부터 11일까지, 내 종목 두 곳의 소식을 정리해 드릴게요. 먼저 증시부터 볼까요?", "refs": []}]},
+            {"speaker": "A", "text": "1월 5일부터 11일까지, 내 종목 라디오 시작할게요. 오늘은 두 종목이에요.", "refs": []},
+            {"speaker": "B", "text": "두 종목이면 커피 한 잔 다 마시기 전에 끝나겠는데요?", "refs": []},
+            {"speaker": "A", "text": "그럼 서둘러 볼까요. 먼저 증시부터 짚어 주세요.", "refs": []}]},
         {"kind": "market", "stock_code": "", "lines": [
-            {"speaker": "B", "text": "1월 9일 코스피는 2,510.4로 마감했어요. 기간 첫 거래일보다 1.64% 높은 값이에요.", "refs": []}]},
+            {"speaker": "B", "text": "1월 9일 코스피는 2,510.4로 마감했어요. 기간 첫 거래일보다 1.64% 높아요.", "refs": []},
+            {"speaker": "A", "text": "깔끔하네요. 그럼 내 종목으로 넘어가 볼게요.", "refs": []}]},
         {"kind": "stock", "stock_code": "000001", "lines": [
-            {"speaker": "A", "text": "예시전자부터 갈게요. 신공장 투자를 계속 보고 싶다는 메모를 남기셨죠.", "refs": []},
-            {"speaker": "B", "text": "네. 1월 7일 DART에 신규 시설투자 공시가 올라왔어요. 금액은 3,200억 원이에요.", "refs": ["U1"]},
-            {"speaker": "B", "text": "투자 기간은 2026년 1월부터 2027년 6월까지로 나와 있어요.", "refs": ["U1"]},
-            {"speaker": "A", "text": "메모에 적어 두신 금액과 기간이 이번 공시에 모두 담겼네요.", "refs": ["U1"]},
-            {"speaker": "B", "text": "배당 얘기도 있었어요. 1월 9일 예시경제 기사에서, 예시증권은 주당 배당금이 500원으로 늘 수 있다고 전망했어요.", "refs": ["U2"]},
-            {"speaker": "A", "text": "메모의 배당 정책 항목과 이어지는 기사예요. 시세도 짚어 주세요.", "refs": ["U2"]},
-            {"speaker": "B", "text": "1월 9일 종가는 52,300원이었어요.", "refs": []}]},
+            {"speaker": "A", "text": "예시전자예요. 신공장 투자를 계속 보겠다는 메모 남기셨죠? 소식 있었어요?", "refs": []},
+            {"speaker": "B", "text": "있었어요. 1월 7일 DART에 신규 시설투자 공시가 올라왔어요.", "refs": ["U1"]},
+            {"speaker": "A", "text": "오, 메모에 금액이랑 기간을 확인하고 싶다고 적어 두셨잖아요.", "refs": ["U1"]},
+            {"speaker": "B", "text": "딱 그게 나왔어요. 금액은 3,200억 원, 기간은 2026년 1월부터 2027년 6월까지예요.", "refs": ["U1"]},
+            {"speaker": "A", "text": "메모에 적어 둔 숙제가 한 번에 풀렸네요. 배당 얘기도 있었죠?", "refs": []},
+            {"speaker": "B", "text": "네, 1월 9일 예시경제 기사예요. 예시증권은 주당 배당금이 500원으로 늘 수 있다고 전망했어요.", "refs": ["U2"]},
+            {"speaker": "A", "text": "증권사가 그렇게 봤다는 거죠? 메모의 배당 정책 항목과 이어지는 기사예요.", "refs": ["U2"]},
+            {"speaker": "B", "text": "맞아요. 시세도 볼게요. 1월 9일 종가는 52,300원이었어요.", "refs": []}]},
         {"kind": "no_news", "stock_code": "", "lines": [
-            {"speaker": "A", "text": "예시금융은 이번 기간에 새 소식이 없었어요.", "refs": []}]},
+            {"speaker": "A", "text": "예시금융은 이번 기간에 새 소식이 없었어요.", "refs": []},
+            {"speaker": "B", "text": "조용한 주도 있는 법이죠. 소식 생기면 바로 들고 올게요.", "refs": []}]},
         {"kind": "closing", "stock_code": "", "lines": [
-            {"speaker": "B", "text": "오늘은 여기까지예요. 자세한 내용은 앱의 업데이트 카드에서 볼 수 있어요.", "refs": []},
-            {"speaker": "A", "text": "판단은 메모와 원문을 직접 보고 해 주세요. 다음 방송에서 만나요.", "refs": []}]},
+            {"speaker": "B", "text": "오늘 방송은 여기까지예요. 자세한 내용은 앱의 업데이트 카드에 있어요.", "refs": []},
+            {"speaker": "A", "text": "판단은 메모와 원문을 직접 보고 해 주세요. 다음 주에 또 만나요!", "refs": []}]},
     ],
 }
 

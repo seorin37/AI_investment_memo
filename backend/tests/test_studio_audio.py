@@ -54,6 +54,13 @@ def test_native():
     ("11.03~11.07", "십일월 삼일부터 십일월 칠일"),
     ("-3.1%p", "마이너스 삼 점 일 퍼센트포인트"),
     ("원/달러 1,450원대", "원 달러 천사백오십 원대"),
+    # 숫자 뒤 조사는 읽는 소리에 맞춘다 (끝 0을 빼면 받침이 바뀐다)
+    ("코스피는 2,510.40으로 마감했어요.", "코스피는 이천오백십 점 사로 마감했어요."),
+    ("2,517로 마감", "이천오백십칠로 마감"),
+    ("1.50은 2.0과 같아요", "일 점 오는 이와 같아요"),
+    ("3을 더해요", "삼을 더해요"),
+    ("180,500원이었어요", "십팔만 오백 원이었어요"),
+    ("2로봇", "이로봇"),
 ])
 def test_to_speech(text, want):
     assert to_speech(text) == want
@@ -100,6 +107,18 @@ def test_attributed_forecast_and_buyback_fact_are_allowed():
     assert banned_hits("예시증권은 배당금이 500원으로 늘 수 있다고 전망했다고 보도했어요.") == []
     assert banned_hits("회사가 자기주식을 매수하기로 했어요.") == []
     assert banned_hits("지금 매수하세요.") != []
+
+
+def test_check_wants_haeyo_style():
+    errors = check(answer(**{"2_5_text": "1월 9일 예시경제 기사입니다. 예시증권은 주당 배당금이 500원으로 늘 수 있다고 전망했습니다."}), BRIEF)
+    assert any("해요체" in e for e in errors)
+
+
+def test_sample_brief_rules_script_passes():
+    from pipelines.studio_audio.smoke import sample_brief
+    b = sample_brief()
+    assert [c.uid for s in b.stocks for c in s.cards] == ["U1", "U2", "U3"]
+    assert check(fallback(b), b) == []
 
 
 def test_check_finds_unknown_number():
@@ -227,8 +246,12 @@ def test_synthesize_timings(tmp_path):
     res = synthesize(lines, FakeTTS(cps=10, rate=8000), cfg, tmp_path)
     starts = res["starts"]
     assert starts[0] == 0.3 and starts == sorted(starts) and len(starts) == len(lines)
-    seg_gap = starts[1] - starts[0] - max(0.4, len(lines[0].speech) / 10)
-    assert abs(seg_gap - 0.7) < 0.01                         # 첫 줄(오프닝) 다음은 구간이 바뀌어 0.7초
+    dur = lambda ln: max(0.4, len(ln.speech) / 10)
+    line_gap = starts[1] - starts[0] - dur(lines[0])
+    assert lines[1].seg == lines[0].seg and abs(line_gap - 0.3) < 0.01       # 같은 구간 안은 0.3초
+    k = next(i for i in range(1, len(lines)) if lines[i].seg != lines[i - 1].seg)
+    seg_gap = starts[k] - starts[k - 1] - dur(lines[k - 1])
+    assert abs(seg_gap - 0.7) < 0.01                         # 구간(오프닝 → 증시)이 바뀌면 0.7초
     with wave.open(res["wav"]) as w:
         assert abs(w.getnframes() / w.getframerate() - res["duration"]) < 0.01
 
@@ -242,6 +265,7 @@ def test_fish_request_cache_and_errors(tmp_path, monkeypatch):
     monkeypatch.delenv("FISH_VOICE_A", raising=False)
     monkeypatch.delenv("FISH_VOICE_B", raising=False)
     monkeypatch.delenv("FISH_TTS_MODEL", raising=False)
+    monkeypatch.delenv("FISH_API_KEY", raising=False)       # 다른 테스트가 .env를 읽어 두면 '키 없음' 확인이 실제 키를 집는다
     sent = []
 
     def post(url, headers, json, timeout):

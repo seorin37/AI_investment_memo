@@ -115,9 +115,14 @@ class FishTTS:
         c = self.cfg
         return {"text": text, "reference_id": self.voice(speaker), "format": "wav",
                 "sample_rate": int(c.get("sample_rate", 44100)), "latency": c.get("latency", "normal"),
-                "normalize": bool(c.get("normalize", True)), "temperature": float(c.get("temperature", 0.7)),
-                "top_p": float(c.get("top_p", 0.7)),
-                "prosody": {"speed": float(c.get("speed", 1.0)), "volume": 0}}
+                "normalize": bool(c.get("normalize", True)), "temperature": float(self._opt(speaker, "temperature", 0.7)),
+                "top_p": float(self._opt(speaker, "top_p", 0.7)),
+                "prosody": {"speed": float(self._opt(speaker, "speed", 1.0)), "volume": 0}}
+
+    def _opt(self, speaker: str, name: str, default):
+        """진행자별 값(voices.<A|B>.<name>)이 있으면 그것, 없으면 tts.<name>. 목소리마다 원래 빠르기가 달라서 따로 맞춘다."""
+        v = ((self.cfg.get("voices") or {}).get(speaker) or {})
+        return v[name] if v.get(name) is not None else self.cfg.get(name, default)
 
     def key_of(self, text: str, speaker: str) -> str:
         b = self.body(text, speaker)

@@ -62,6 +62,8 @@ EXTRA_BANNED = [
     (re.compile(r"주가[^.?!]{0,12}(오를|올라갈|내릴|떨어질|상승할|하락할)"), "주가 방향 예측"),
 ]
 FACT_OK = re.compile(r"(자사주|자기주식|지분|주식)\s*(을|를)?\s*(매수|매도)")
+# 말투: 두 DJ 모두 해요체 (audio-v3). 합니다체가 섞이면 라디오가 아니라 뉴스 낭독처럼 들린다
+FORMAL = re.compile(r"(습니다|습니까|합니다|입니다|됩니다|십시오)(?=[\s.?!,]|$)")
 
 
 @lru_cache(maxsize=1)
@@ -186,6 +188,8 @@ def check(raw: dict, brief: Brief, cfg: dict | None = None) -> list[str]:
             cited |= set(line.get("refs") or []) & all_uids
             for h in banned_hits(t):
                 errors.append(f"{h}: \"{t[:30]}\"")
+            if FORMAL.search(t):
+                errors.append(f"해요체로 말해 주세요 ('~습니다·~합니다' 대신 '~예요·~했어요'): \"{t[:30]}\"")
             unknown = unknown_numbers(t, allowed)
             if unknown:
                 errors.append(f"입력에 없는 숫자 {[f'{v:g}' for v in unknown]}: \"{t[:30]}\"")

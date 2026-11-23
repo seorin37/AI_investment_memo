@@ -20,7 +20,12 @@ SINO_UNITS = ["개월", "달러", "퍼센트포인트", "퍼센트", "분기", "
               "포인트", "배럴", "층", "호", "회", "차"]
 NATIVE_UNITS = ["번째", "가지", "시간", "군데", "차례", "종목", "마리", "개", "곳", "명", "번", "살", "권", "잔", "건", "달", "배", "줄", "시"]
 _UNIT_RE = "|".join(sorted(SINO_UNITS + NATIVE_UNITS, key=len, reverse=True))
-NUM = re.compile(rf"(?P<sign>[+\-−])?(?P<num>\d[\d,]*(?:\.\d+)?)(?P<pct>%p|%)?(?P<big>조|억|만|천)?(?:\s*(?P<unit>{_UNIT_RE}))?")
+# 숫자 바로 뒤 조사: 화면 문장(2,510.40으로)과 읽는 소리(점 사)의 받침이 다를 수 있어 소리에 맞춰 다시 고른다.
+# 이/가는 서술격 조사(원이었어요)와 헷갈려서 다루지 않는다.
+JOSA = {"으로": ("으로", "로"), "로": ("으로", "로"), "은": ("은", "는"), "는": ("은", "는"),
+        "을": ("을", "를"), "를": ("을", "를"), "과": ("과", "와"), "와": ("과", "와")}
+NUM = re.compile(rf"(?P<sign>[+\-−])?(?P<num>\d[\d,]*(?:\.\d+)?)(?P<pct>%p|%)?(?P<big>조|억|만|천)?(?:\s*(?P<unit>{_UNIT_RE}))?"
+                 r"(?P<josa>으로|로|은|는|을|를|과|와)?(?(josa)(?=$|[^가-힣]|는|도|만|서|부터))")
 ISO_DATE = re.compile(r"(\d{4})-(\d{1,2})-(\d{1,2})")
 DOT_DATE = re.compile(r"(?<![\d.])(1[0-2]|0?[1-9])\.(0[1-9]|[12]\d|3[01])(?![\d%]|\s*(?:배|조|억|만|원|달러|포인트))")
 SYMBOLS = [("→", " "), ("※", ""), ("·", ", "), ("/", " "), ("&", " 앤 "), ("“", ""), ("”", ""), ('"', ""), ("‘", ""),
@@ -67,7 +72,25 @@ def decimal(num: str) -> str:
     return f"{s} 점 {''.join(DIG[int(c)] for c in frac)}" if frac else s
 
 
+def fit_josa(word: str, josa: str | None) -> str:
+    """읽는 소리의 마지막 글자 받침에 맞춰 조사를 붙인다 (점 사 + 으로 → 점 사로, 칠 + 으로 → 칠로)."""
+    if not josa:
+        return word
+    ch = word.rstrip()[-1:]
+    final = (ord(ch) - 0xAC00) % 28 if "가" <= ch <= "힣" else -1
+    if final < 0:
+        return word + josa
+    with_final, without = JOSA[josa]
+    if with_final == "으로":
+        return word + ("으로" if final not in (0, 8) else "로")      # ㄹ 받침(8)은 '로'
+    return word + (with_final if final else without)
+
+
 def _sub_number(m: re.Match) -> str:
+    return fit_josa(_number_word(m), m.group("josa"))
+
+
+def _number_word(m: re.Match) -> str:
     sign, num, pct, big, unit = m.group("sign"), m.group("num"), m.group("pct"), m.group("big"), m.group("unit")
     raw = num.replace(",", "")
     is_int = "." not in raw

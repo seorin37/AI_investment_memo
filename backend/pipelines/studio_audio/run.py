@@ -199,7 +199,7 @@ def main(argv: list[str] | None = None) -> int:
     _dump(out / "episode.json", content)
     _dump(out / "lines.json", lines_dict(lines))
     (out / "script.md").write_text(script_md(content, lines_dict(lines)), encoding="utf-8")
-    (out / "player.html").write_text(render(content, lines_dict(lines), audio_file), encoding="utf-8")
+    (out / "player.html").write_text(render(content, lines_dict(lines), audio_file, brief.to_dict()), encoding="utf-8")
     summary = {"status": "ready", "user_id": uid, "start": str(start), "end": str(end), "stocks": len(brief.stocks), "cards": n_cards,
                "script_source": meta["source"], "tries": meta["tries"], "llm_usage": meta.get("usage"), "lines": len(lines),
                "chars": chars, "target_chars": target_chars(brief, cfg), "duration_sec": round(duration, 1), "tts": tts_info}

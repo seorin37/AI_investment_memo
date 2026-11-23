@@ -18,6 +18,10 @@ PAGE = """<!DOCTYPE html>
  .sp.B{color:#555} .say{font-size:12px;color:#888;margin-top:2px} .refs{font-size:11px;color:#1A3C6E}
  h2{font-size:15px;margin:22px 0 8px} li{font-size:13px;margin:4px 0} .warn{color:#C0392B;font-size:13px}
  label{font-size:12px;color:#666}
+ .stock{border:1px solid #E1E4EA;border-radius:8px;padding:10px 12px;margin:10px 0} .stock h3{font-size:14px;margin:0 0 6px}
+ .memo,.card{font-size:13px;border-left:3px solid #ccd;padding:4px 10px;margin:6px 0} .card{border-left-color:#1A3C6E}
+ .card:target{background:#FFF7D6} .sub{color:#666;font-size:12px} .items span{display:inline-block;background:#EEF1F6;
+   border-radius:10px;padding:1px 8px;margin:2px 4px 0 0;font-size:12px} .refs a{color:#1A3C6E;margin-right:6px}
 </style></head><body>
 <h1>__TITLE__</h1>
 <div class="meta" id="meta"></div>
@@ -28,9 +32,11 @@ __AUDIO__
 <div id="script"></div>
 <h2>출처</h2><ul id="sources"></ul>
 <h2>메모 연결</h2><div id="memo" style="font-size:13px"></div>
+<h2>재료: 처음 메모 → 추적 항목 → 업데이트 카드 (LLM에 준 브리프)</h2><div id="brief" class="sub">브리프 없음</div>
 <script>
 const C = __CONTENT__;
 const LINES = __LINES__;
+const B = __BRIEF__;
 const audio = document.getElementById('audio');
 const fmt = s => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
 document.getElementById('meta').textContent =
@@ -42,7 +48,8 @@ C.chapters.forEach(([t, name]) => { const b = document.createElement('button'); 
 const box = document.getElementById('script');
 const rows = C.script.map(([t, sp, text], i) => {
   const d = document.createElement('div'); d.className = 'line';
-  const refs = (LINES[i] && LINES[i].refs.length) ? `<div class="refs">${LINES[i].refs.join(', ')}</div>` : '';
+  const refs = (LINES[i] && LINES[i].refs.length)
+    ? `<div class="refs">${LINES[i].refs.map(r => `<a href="#card-${esc(r)}" onclick="event.stopPropagation()">${esc(r)}</a>`).join('')}</div>` : '';
   d.innerHTML = `<div class="t">${fmt(t)}</div><div class="sp ${sp}">${sp}</div><div><div>${esc(text)}</div>`
     + `<div class="say" style="display:none">${esc(LINES[i] ? LINES[i].speech : '')}</div>${refs}</div>`;
   d.onclick = () => seek(t); box.appendChild(d); return d;
@@ -60,14 +67,42 @@ C.sources.forEach(s => { const li = document.createElement('li');
   li.lastChild.onclick = () => seek(s.seek); ul.appendChild(li); });
 const m = C.memo_link;
 document.getElementById('memo').textContent = m ? `${m.head} · “${m.title}” · ${m.count} — ${m.body}` : '없음';
+if (B) {
+  const out = [];
+  (B.market || []).forEach(x => out.push(`<div class="sub">[증시] ${esc(x.label)} ${esc(x.last_date)} ${esc(x.last)}${esc(x.unit)}</div>`));
+  B.stocks.forEach(st => {
+    let h = `<div class="stock"><h3>${esc(st.name)} (${esc(st.code)}) · ${esc(st.hold)}`
+      + (st.price ? ` <span class="sub">· ${esc(st.price.last_date)} 종가 ${esc(st.price.last_close.toLocaleString())}원</span>` : '') + `</h3>`;
+    h += st.memos.length ? '' : '<div class="sub">메모 없음</div>';
+    st.memos.forEach(mm => {
+      h += `<div class="memo"><b>메모 “${esc(mm.title)}”</b> <span class="sub">${esc(mm.created)} 작성 · 본문은 앞 220자</span>`
+        + `<div>${esc(mm.body)}</div><div class="items sub">추적 항목: ${mm.items.length ? mm.items.map(t => `<span>${esc(t)}</span>`).join('') : '없음'}</div></div>`;
+    });
+    h += st.cards.length ? '' : '<div class="sub">이 기간 새 업데이트 카드 없음</div>';
+    st.cards.forEach(c => {
+      h += `<div class="card" id="card-${esc(c.uid)}"><b>${esc(c.uid)} · ${esc(c.data_date)} · ${esc(c.kind)}</b> ${esc(c.headline)}`
+        + `<div class="sub">메모 ${c.memo_titles.map(t => `“${esc(t)}”`).join(', ')} · 추적 항목 “${esc(c.item)}” · 카드 id ${c.card_ids.join(', ')}</div>`
+        + `<ul>${c.facts.map(f => `<li>${esc(f)}</li>`).join('')}</ul>`
+        + (c.memo_link ? `<div>메모와의 연결: ${esc(c.memo_link)}</div>` : '')
+        + c.sources.map(s => `<div class="sub">출처: ${esc(s.kind)} · ${esc(s.source)} · `
+            + (s.url ? `<a href="${esc(s.url)}" target="_blank">${esc(s.title)}</a>` : esc(s.title)) + ` · ${esc(s.published_at)}</div>`).join('')
+        + `</div>`;
+    });
+    if (st.more_cards) h += `<div class="sub">그 밖의 카드 ${st.more_cards}장 (브리프에서 뺌)</div>`;
+    out.push(h + '</div>');
+  });
+  const el = document.getElementById('brief'); el.className = ''; el.innerHTML = out.join('');
+}
 </script></body></html>
 """
 
 
-def render(content: dict, lines: list[dict], audio_file: str | None) -> str:
+def render(content: dict, lines: list[dict], audio_file: str | None, brief: dict | None = None) -> str:
+    """brief: Brief.to_dict() (메모·추적 항목·카드). 주면 대본 아래에 재료를 보여 주고, 대본 줄의 U번호를 그 카드로 잇는다."""
     audio = (f'<audio id="audio" controls preload="metadata" src="{html.escape(audio_file)}"></audio>' if audio_file
              else '<div class="warn">오디오 없이 대본만 만들었어요 (--tts none). 시각은 글자 수로 어림한 값이에요.</div>'
                   '<audio id="audio"></audio>')
     dump = lambda v: json.dumps(v, ensure_ascii=False).replace("</", "<\\/")
     return (PAGE.replace("__TITLE__", html.escape(content.get("title") or "AI 오디오"))
-            .replace("__AUDIO__", audio).replace("__CONTENT__", dump(content)).replace("__LINES__", dump(lines)))
+            .replace("__AUDIO__", audio).replace("__CONTENT__", dump(content)).replace("__LINES__", dump(lines))
+            .replace("__BRIEF__", dump(brief)))
