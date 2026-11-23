@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Animated, BackHandler, PanResponder, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Animated, BackHandler, PanResponder, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { Text, TextInput } from '@/components/ui/AppText';
@@ -405,6 +405,9 @@ function MemoIcon({ size, color }: { size: number; color: string }) {
   );
 }
 
+/** 근거 칩 글자. 기기에서는 중첩 Text 의 좌우 여백이 안 먹어 빈칸으로 */
+const CITE = Platform.OS === 'web' ? '1' : '\u00A01\u00A0';
+
 /** 펼친 내용: 공시 = AI 요약 · 원문 인용 / 뉴스 = 기사 상자 / 주가 = 요약. 공통: 내 메모 · 버튼 */
 function NewsBody({ u, onOpenSource, onOpenBoard }: { u: UpdateItem; onOpenSource: () => void; onOpenBoard: () => void }) {
   const [cite, setCite] = useState(false);
@@ -421,9 +424,9 @@ function NewsBody({ u, onOpenSource, onOpenBoard }: { u: UpdateItem; onOpenSourc
               {u.summary}
               {u.quote ? ' ' : null}
               {u.quote ? (
-                <Pressable onPress={() => setCite((c) => !c)} accessibilityRole="button" accessibilityLabel="출처 1" hitSlop={10} style={st.citeChip}>
-                  <Text style={st.citeChipT}>[1]</Text>
-                </Pressable>
+                <Text onPress={() => setCite((c) => !c)} accessibilityRole="button" accessibilityLabel="출처 1" style={st.citeChip}>
+                  {CITE}
+                </Text>
               ) : null}
             </Text>
           </View>
@@ -696,8 +699,7 @@ const st = StyleSheet.create({
   aiBox: { backgroundColor: '#F7F5FF', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 13 },
   aiH: { ...ft(11.5), fontWeight: '800', color: appColor.deepPurple, marginBottom: 3 },
   aiT: { fontSize: 13.5, lineHeight: 23, color: appColor.ink },
-  citeChip: { backgroundColor: '#E3DBFF', borderRadius: 6, paddingHorizontal: 4 },
-  citeChipT: { ...ft(11), fontWeight: '800', color: '#5B3BD1' },
+  citeChip: { fontSize: 11, fontWeight: '800', color: '#5B3BD1', backgroundColor: '#E3DBFF', borderRadius: 6, paddingHorizontal: 4 },
   qBox: { marginTop: 8, backgroundColor: '#F6F7F9', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12 },
   qH: { ...ft(11), fontWeight: '700', color: appColor.ink3, marginBottom: 2 },
   qT: { fontSize: 12.5, lineHeight: 21, color: appColor.ink2 },
