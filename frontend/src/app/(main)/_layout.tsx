@@ -30,6 +30,7 @@ import { WebTrash } from '@/ui/screens/my/web/Trash';
 import { chapterAt, fmt, useStudioPlayer } from '@/store/studioPlayer';
 import { mockAudioEpisode, mockAudioGen, mockAudioPeriods, mockAudioStocks, mockLabDisclaimer, mockLabNote, mockLabVars, mockLastClose, mockReport, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
 import { WebFail, WebGen, WebMini, WebPlayer } from '@/ui/screens/studio/web/Audio';
+import { shellSizeFor } from '@/ui/layout/web/shellSize';
 import { WebReportPopup, WebReportSum } from '@/ui/screens/studio/web/Report';
 import { WebLab, WebLabResult, WebQuiz } from '@/ui/screens/studio/web/QuizLab';
 import { labResultGroups } from '@/ui/screens/studio/labParts';
@@ -255,6 +256,8 @@ export default function MainLayout() {
         /* ⑧-8a 스튜디오 홈 (원본 studio.tsx Home). 오디오·보고서·실험실·퀴즈 화면은 8b~8d */
         content: (
           <View style={{ flex: 1 }}>
+            {/* 미니 플레이어가 보이면 스튜디오 내용 아래 84 비움 (원본 studio.tsx 222 pb-[84px]) — 하단 고정 버튼도 함께 올라감 */}
+            <View style={{ flex: 1, minHeight: 0, paddingBottom: sp.mini && spItem && sp.webView !== 'player' ? 84 : 0 }}>
             {sp.webView === 'gen' && sp.job ? <WebGen job={sp.job} steps={sp.job.kind === 'report' ? mockReport.web_steps : mockAudioGen.steps} />
               : sp.webView === 'fail' ? <WebFail kind={sp.job?.kind ?? 'audio'} onHome={() => { sp.dropFailed(); sp.setWebView('home'); }} onRetry={() => { sp.retry(); sp.setWebView('gen'); }} />
               : sp.webView === 'quiz' ? <WebQuiz q={quiz} done={sp.quizPick} onBack={() => sp.setWebView('home')} onSubmit={sp.submitQuiz} />
@@ -312,7 +315,7 @@ export default function MainLayout() {
                 <WebStudioHome
                   features={mockStudioFeatures}
                   made={sp.made}
-                  bottomPad={sp.mini && spItem ? 60 : 0}
+                  bottomPad={0}
                   spent={usageSpent}
                   refill={usage.usage_refill}
                   onFeature={studioFeat}
@@ -329,6 +332,7 @@ export default function MainLayout() {
                   onChangePlan={() => setSettings('사용량')}
                 />
               )}
+            </View>
             {sp.mini && spItem && sp.webView !== 'player' ? (
               <WebMini
                 title={spItem.title}
@@ -492,7 +496,7 @@ export default function MainLayout() {
     <WebFeedback open={fbOpen} kinds={mockReportKinds} onClose={() => setFbOpen(false)} onSend={() => say({ msg: '아직 연결되지 않았어요' })} />
     <WebInbox
       open={inboxOpen}
-      left={(sideOpen ? 250 : 72) + 8}
+      left={sideOpen ? shellSizeFor(width).inboxLeft : size.rail + 8}
       items={mockInbox}
       unread={unread}
       noti={myNoti}

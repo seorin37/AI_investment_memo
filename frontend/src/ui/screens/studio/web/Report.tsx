@@ -126,7 +126,7 @@ export function WebReportSum({ rep, item, stocks, allDefault, onBack, onDetail }
                 <Logo s={s} size={28} r={8.4} />
                 <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                   <Text style={st.srN} numberOfLines={1}>{s.name}</Text>
-                  <Text style={st.srS} numberOfLines={1}>{[bits.length ? bits.join(' · ') : '새 소식 없음', memo || (bits.length ? '' : '연결된 메모 없음')].filter(Boolean).join(' · ')}</Text>
+                  <Text keepAll style={st.srS} numberOfLines={2}>{[bits.length ? bits.join(' · ') : '새 소식 없음', memo || (bits.length ? '' : '연결된 메모 없음')].filter(Boolean).join(' · ')}</Text>
                 </View>
                 <MiniLine v={s.closes} />
                 <Text style={[st.srP, { color: pc(s.pct) }]}>{sign(s.pct)}</Text>
