@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Svg, { Circle, ClipPath, Defs, Line, Path, Rect } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
@@ -368,6 +368,8 @@ function MarketDetailDialog({ q, onClose }: { q: MarketIndex | null; onClose: ()
   const [r, setR] = useState<WebRange>('1달');
   const [hx, setHx] = useState<number | null>(null);
   const t = useProgress(!!q, 1000, `${q?.key}-${r}`);
+  /* 2026-11-23: 홈이 다시 쌓여도 클립 id 가 겹치지 않게 (일찍 return 하기 전에 부름) */
+  const clipId = `mdc${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const shown = q ?? last;
   if (!shown) return <Sheet open={false} onClose={onClose} label="시장 상세" width={680}>{null}</Sheet>;
   const md = mkData(shown, r);
@@ -411,11 +413,11 @@ function MarketDetailDialog({ q, onClose }: { q: MarketIndex | null; onClose: ()
             {idx !== null ? (
               <>
                 <Defs>
-                  <ClipPath id="mdc">
+                  <ClipPath id={clipId}>
                     <Rect x={0} y={0} width={X(idx)} height={H} />
                   </ClipPath>
                 </Defs>
-                <Path d={line} stroke={col} strokeWidth={2.4} strokeLinejoin="round" strokeLinecap="round" clipPath="url(#mdc)" />
+                <Path d={line} stroke={col} strokeWidth={2.4} strokeLinejoin="round" strokeLinecap="round" clipPath={`url(#${clipId})`} />
                 <Line x1={X(idx)} x2={X(idx)} y1={0} y2={H - 24} stroke="#15171A" strokeDasharray="3 3" />
                 <Circle cx={X(idx)} cy={Y(sr[idx])} r={5} fill="#FFFFFF" stroke={col} strokeWidth={2.4} />
               </>
