@@ -21,7 +21,19 @@ export function reportSummary(S: ReportStock[], allDefault: boolean, fallback: s
   const downs = S.filter((r) => r.pct < 0).length;
   /* '4곳 중 0곳이 올랐어요' 대신 모두 오르거나 내린 주는 그렇게 말한다 (2026-11-23) */
   const head = ups === S.length ? `내 종목 ${S.length}곳이 모두 올랐어요.` : downs === S.length ? `내 종목 ${S.length}곳이 모두 내렸어요.` : `내 종목 ${S.length}곳 중 ${ups}곳이 올랐어요.`;
-  return `${head} ${top ? `${josa(top.name, '이', '가')} ${sign(top.pct)}로 가장 크게 움직였어요.` : ''}`;
+  return `${head} ${top ? `${josa(top.name, '이', '가')} ${sign(top.pct)}로 가장 크게 움직였어요.` : ''}${memoSummary(S)}`;
+}
+
+/** 이번 주 한눈에 끝 문장 (2026-11-24): "이번 주 내 메모 7개 중 4개에 새 소식이 붙었어요 (SK하이닉스 2 · NAVER 1)." */
+export function memoSummary(S: ReportStock[]): string {
+  const withMemos = S.filter((r) => r.memos?.length);
+  if (!withMemos.length) return '';
+  const n = withMemos.reduce((a, r) => a + (r.memos?.length ?? 0), 0);
+  const per = withMemos.map((r) => [r.name, (r.memos ?? []).filter((m) => m.cards.length).length] as const).filter(([, k]) => k > 0);
+  const k = per.reduce((a, [, x]) => a + x, 0);
+  return k
+    ? ` 이번 주 내 메모 ${n}개 중 ${k}개에 새 소식이 붙었어요 (${per.map(([name, x]) => `${name} ${x}`).join(' · ')}).`
+    : ` 이번 주 내 메모 ${n}개에 새로 붙은 소식은 없었어요.`;
 }
 
 /** 서버 보고서 추가 칸 (2026-11-23) — 이슈 정리 문단 · 밸류 칸 · 분기 실적 한 줄 */

@@ -245,3 +245,48 @@ def test_periodic_suggestion_uses_stock_quarter_numbers():
     assert s["memo_title"] == "SK하이닉스 사업보고서 실적" and s["memo_body"].startswith("SK하이닉스 사업보고서(3월 31일까지) 나오면")
     fin = periodic_suggestion(date(2026, 11, 24), "KB금융", {"label": "2026년 3분기", "operating_income": "", "net_income": "1조 6,000억원", "op_yoy": None})
     assert "순이익" in fin["text"] and "전년 대비" not in fin["text"]
+
+
+# ─── 이번 주 내 메모 정리 (2026-11-24) ───────────
+
+def _drow(memo_id, title, made, upd=None, **kw):
+    r = {"memo_id": memo_id, "title": title, "content": "", "created_at": made, "item_type": kw.get("item_type", "topic"),
+         "price_threshold": kw.get("th"), "upd_id": None, "upd_type": None, "upd_title": None, "summary": None, "upd_at": None, "refs": None}
+    if upd:
+        r.update(upd_id=upd[0], upd_type=upd[1], upd_title=upd[2], summary=upd[3], upd_at=upd[4], refs=upd[5])
+    return r
+
+
+def test_memo_digest_rows_groups_cards_by_memo_and_orders():
+    from app.studio_report.build import digest_code_line, memo_digest_rows
+    t = lambda d, h=6: datetime(2026, 11, d, h, 30, tzinfo=SEOUL)
+    rows = [
+        _drow(1, "HBM 공급", t(10), (11, "news", "HBM4 양산 확대", "SK하이닉스는 HBM4 양산을 늘렸어요.", t(18), ["news:5"])),
+        _drow(1, "HBM 공급", t(10), (12, "disclosure", "타법인 취득", "취득했어요.", t(21), ["disc:9"])),
+        _drow(2, "실적 어땠음?", t(11), (13, "answer", "3분기 영업이익", "영업이익은 4,513억원이에요. 사고파는 결정은 정해 드리지 않아요. 위 자료로 판단해 보세요.", t(19), None), item_type="ask"),
+        _drow(3, "왜 빠짐", t(12), (14, "answer", "-", "물으신 내용은 지금 가진 자료에서 확인되지 않았어요.", t(20), None), item_type="ask"),
+        _drow(4, "110만 아래", t(17), item_type="price_below", th=1_100_000),
+    ]
+    memos = memo_digest_rows(rows, {"news:5": 4}, close=1_085_000, as_of=date(2026, 11, 23))
+    assert [m["title"] for m in memos] == ["HBM 공급", "실적 어땠음?", "110만 아래", "왜 빠짐"]   # 카드 최근순 → 나머지 작성 최근순
+    hbm = memos[0]
+    assert [c["title"] for c in hbm["cards"]] == ["타법인 취득", "HBM4 양산 확대"] and hbm["cards"][1]["refs"] == [4]
+    assert memos[1]["cards"][0]["kind"] == "답" and memos[1]["cards"][0]["text"] == "영업이익은 4,513억원이에요."
+    assert memos[3]["cards"] == []                                    # '확인되지 않았어요' 답은 뺌
+    assert memos[2]["status"] == ["가격 조건 110만 원 아래는 11.23 종가 1,085,000원으로 도달했어요"]
+    assert digest_code_line(memos) == ("이번 주 내 메모 4개 중 2개에 새 소식이 붙었어요. "
+                                       "'110만 아래' 메모의 가격 조건 110만 원 아래는 11.23 종가 1,085,000원으로 도달했어요.")
+
+
+def test_llm_memo_digest_checks_numbers_and_falls_back():
+    from app.studio_report.story import llm_memo_digest
+    memos = [{"title": "HBM 공급", "meta": "11.10 작성", "cards": [{"date": "11.18", "kind": "카드", "title": "HBM4 양산 확대", "text": "늘렸어요.", "refs": [4]}], "status": []},
+             {"title": "왜 빠짐", "meta": "11.12 작성", "cards": [], "status": []}]
+    good = lambda msgs: {"digest": "이번 주 내 메모 2개 중 1개에 새 소식이 붙었어요. 'HBM 공급' 메모에는 HBM4 양산 확대 소식[4]이 붙었어요."}
+    text, meta = llm_memo_digest("SK하이닉스", memos, good, "코드 문장")
+    assert meta["source"] == "llm" and text.endswith("[4]이 붙었어요.")
+    bad = lambda msgs: {"digest": "HBM 매출이 30% 늘 거예요[4]."}
+    text, meta = llm_memo_digest("SK하이닉스", memos, bad, "코드 문장")
+    assert text == "코드 문장" and meta["source"] == "code"
+    text, meta = llm_memo_digest("SK하이닉스", [memos[1]], good, "코드 문장")   # 카드 없으면 LLM 안 부름
+    assert text == "코드 문장" and meta["tries"] == 0

@@ -132,16 +132,25 @@ export function useCreateReport() {
  * 제안의 memo_title·memo_body로 채워 연다 (AI 연결 켬). 서버 보고서면 저장 뒤 '추가됨'을 남기도록 보고서 id·키를 같이 넘긴다.
  */
 export function useWatchToMemo() {
+  const open = useOpenMemoDraft();
+  return (stock: ReportStock, w: ReportWatch, reportId?: string) =>
+    open({ code: stock.stock_code, name: stock.name, title: w.memo_title ?? w.text, body: w.memo_body ?? '',
+      itemId: reportId, key: w.sid ? `${stock.stock_code}:${w.sid}` : undefined });
+}
+
+/**
+ * 제안 → 메모 창 열기 (주간보고서·투자 실험실 공통, 2026-11-24). 웹은 종목 보드 새 메모 창, 앱은 메모 쓰기 화면을
+ * 제목·본문을 채우고 AI 연결을 켠 채로 연다. itemId·key가 있으면 저장 뒤 그 만든 항목에 '추가됨'을 남긴다.
+ */
+export function useOpenMemoDraft() {
   const router = useRouter();
-  return (stock: ReportStock, w: ReportWatch, reportId?: string) => {
-    const title = w.memo_title ?? w.text;
-    const body = w.memo_body ?? '';
-    const mark = reportId && w.sid ? { wr: reportId, wk: `${stock.stock_code}:${w.sid}` } : {};
+  return (p: { code: string; name?: string; title: string; body: string; itemId?: string; key?: string }) => {
+    const mark = p.itemId && p.key ? { wr: p.itemId, wk: p.key } : {};
     if (Platform.OS === 'web') {
-      router.navigate({ pathname: '/stocks/[code]', params: { code: stock.stock_code, new: '1', nt: title, nb: body, ...mark } });
+      router.navigate({ pathname: '/stocks/[code]', params: { code: p.code, new: '1', nt: p.title, nb: p.body, ...mark } });
       return;
     }
-    router.push({ pathname: '/memo/new', params: { code: stock.stock_code, name: stock.name, first_line: title, body, ai: '1', ...mark } });
+    router.push({ pathname: '/memo/new', params: { code: p.code, name: p.name ?? '', first_line: p.title, body: p.body, ai: '1', ...mark } });
   };
 }
 
