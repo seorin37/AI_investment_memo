@@ -37,7 +37,7 @@ function FeatHead({ f, title, sub, chips }: { f: 'quiz' | 'lab'; title: string; 
  * 웹 오늘의 퀴즈 = 원본 studio.tsx Quiz (4지선다 · 스튜디오 열 안)
  * 원본 웹의 '크레딧 +2 · 참여 +1' 보상 표기는 크레딧 연결 전이라 뺌 (크레딧 숫자는 My.mock 그대로)
  */
-export function WebQuiz({ q, done, onBack, onSubmit }: { q: typeof mockQuiz; done: number | null; onBack: () => void; onSubmit: (i: number) => void }) {
+export function WebQuiz({ q, done, locked = false, onBack, onSubmit }: { q: typeof mockQuiz; done: number | null; /** 문제·기록을 읽는 중이면 보기·제출 막음 */ locked?: boolean; onBack: () => void; onSubmit: (i: number) => void }) {
   const [pick, setPick] = useState<number | null>(null);
   const shown = done != null;
   const p = shown ? done : pick;
@@ -52,7 +52,7 @@ export function WebQuiz({ q, done, onBack, onSubmit }: { q: typeof mockQuiz; don
         {q.options.map((o, i) => {
           const isAns = i === q.answer, mine = p === i;
           return (
-            <Pressable key={o} disabled={shown} onPress={() => setPick(i)} accessibilityRole="radio" accessibilityState={{ selected: mine }}
+            <Pressable key={o} disabled={shown || locked} onPress={() => setPick(i)} accessibilityRole="radio" accessibilityState={{ selected: mine }}
               style={({ hovered }: Hover) => [st.opt, shown ? (isAns ? st.optAns : mine ? st.optNo : { opacity: 0.5 }) : mine ? st.optMine : hovered && { backgroundColor: '#F9F9F9' }]}>
               <View style={st.optN}><Text style={st.optNT}>{i + 1}</Text></View>
               <Text style={[st.optT, shown && isAns && { fontWeight: '700' }]}>{o}</Text>
@@ -64,7 +64,7 @@ export function WebQuiz({ q, done, onBack, onSubmit }: { q: typeof mockQuiz; don
       </View>
       {!shown ? (
         <>
-          <GBtn dark disabled={pick == null} onPress={() => pick != null && onSubmit(pick)}>제출하기</GBtn>
+          <GBtn dark disabled={pick == null || locked} onPress={() => pick != null && !locked && onSubmit(pick)}>제출하기</GBtn>
           <Text style={st.cap}>하루 한 번, 처음 제출한 답만 인정돼요</Text>
         </>
       ) : (
