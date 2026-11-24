@@ -89,7 +89,9 @@ class FishTTS:
     def __init__(self, cfg: dict, cache_dir: Path, api_key: str | None = None,
                  post: Callable[..., object] | None = None) -> None:
         self.cfg = cfg
-        self.model = os.getenv("FISH_TTS_MODEL") or cfg.get("model") or "s2.1-pro"
+        # 모델: FISH_TTS_MODEL(.env) → configs tts.model. 코드에는 기본 모델을 두지 않는다 (2026-11-24: 유료 크레딧이 떨어져
+        # s2.1-pro-free로 바꿈 — 값이 비면 유료 모델로 몰래 넘어가지 않고 check_ready가 막는다). 실패해도 다른 모델로 다시 부르지 않는다
+        self.model = (os.getenv("FISH_TTS_MODEL") or cfg.get("model") or "").strip()
         self.voices = {sp: (os.getenv(v.get("env", "")) or v.get("id") or "") for sp, v in (cfg.get("voices") or {}).items()}
         self.key = api_key or os.getenv("FISH_API_KEY") or ""
         self.cache = cache_dir
@@ -104,6 +106,8 @@ class FishTTS:
         problems = []
         if not self.key:
             problems.append("FISH_API_KEY가 없어요 (.env)")
+        if not self.model:
+            problems.append("Fish 모델이 없어요 (.env FISH_TTS_MODEL 또는 configs/studio_audio.yaml tts.model)")
         for sp in ("A", "B"):
             if not self.voice(sp):
                 problems.append(f"진행자 {sp} 목소리 id가 없어요 (.env FISH_VOICE_{sp} 또는 configs/studio_audio.yaml)")
