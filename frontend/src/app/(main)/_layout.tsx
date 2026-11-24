@@ -154,7 +154,10 @@ export default function MainLayout() {
   /* ⑧-8a 스튜디오: 사용량 창 · PLUS 창(다 쓴 뒤 만들기) · 충전 창. 결제·만들기는 연결 안 됨 */
   const [studioPop, setStudioPop] = useState<'usage' | 'credit' | 'charge' | 'audio' | 'report' | null>(null);
   const usageSpent = usage.paused || usage.usage_pct >= 100;
-  const studioFeat = (k: StudioKind) => {
+  /* 보고서·오디오 창에서 미리 고를 종목 (넛지에서 열 때만 · 다른 길로 열면 비워서 전체) */
+  const [popPreset, setPopPreset] = useState<string[] | undefined>(undefined);
+  const studioFeat = (k: StudioKind, codes?: string[]) => {
+    setPopPreset(codes);
     if (k !== 'quiz' && usageSpent) return setStudioPop('credit');
     if (k === 'audio') return setStudioPop('audio');
     if (k === 'report') return setStudioPop('report');
@@ -162,6 +165,24 @@ export default function MainLayout() {
   };
   /* ⑧-8b 오디오: 만들기 · 재생 mock 상태 (store/studioPlayer). 개발 빌드(__DEV__)에서만 ?studio_fail=1 이면 다음 만들기가 실패 (확인용 · 배포 빌드는 무시) */
   const sp = useStudioPlayer();
+  /* 넛지 → 스튜디오 (원본 nudge.tsx useStudioOpen): 스튜디오 펼치기 + 기능 버튼과 같은 처리 (사용량 다 쓰면 충전 안내).
+     실험실 넛지('환율이 바뀌면…')는 원/달러 환율만 '상승'으로 미리 (원본 labVars: { '원/달러 환율': '상승' }) */
+  const featRef = useRef(studioFeat);
+  useEffect(() => {
+    featRef.current = studioFeat;
+  });
+  useEffect(
+    () =>
+      useStudioPlayer.subscribe((s) => {
+        const a = s.ask;
+        if (!a) return;
+        s.clearAsk();
+        setStudioOpen(true);
+        if (a.kind === 'lab') s.setLab({ dirs: mockLabVars.map((v) => (v.name === '원/달러 환율' ? '상승' : '유지')) });
+        featRef.current(a.kind, a.codes);
+      }),
+    [],
+  );
   /* 오늘의 퀴즈: 실제 모드면 DB 문제 (퀴즈 화면을 열었을 때만 읽음) */
   const quiz = useTodayQuizView(sp.webView === 'quiz');
   const labStock = labStocks.find((s) => s.stock_code === sp.labCode) ?? labStocks[0];
@@ -352,7 +373,7 @@ export default function MainLayout() {
                   onToggle={sp.toggle}
                   onSeek={sp.seek}
                   onSpeed={() => sp.nextSpeed([1, 1.5, 2])}
-                  onRemake={() => setStudioPop('audio')}
+                  onRemake={() => { setPopPreset(undefined); setStudioPop('audio'); }}
                 />
               ) : (
                 <WebStudioHome
@@ -513,6 +534,7 @@ export default function MainLayout() {
       stocks={mockAudioStocks}
       periods={mockAudioPeriods}
       lastClose={mockLastClose}
+      preset={popPreset}
       onClose={() => setStudioPop(null)}
       onMake={({ codes, period, market }) => {
         setStudioPop(null);
@@ -525,6 +547,7 @@ export default function MainLayout() {
       open={studioPop === 'report'}
       stocks={reportPick.stocks}
       counts={reportPick.counts}
+      preset={popPreset}
       sub={env.useMock ? mockReport.web_period : '지난주(월~금) 보고서에 넣을 종목'}
       onClose={() => setStudioPop(null)}
       onMake={({ codes, market }) => {

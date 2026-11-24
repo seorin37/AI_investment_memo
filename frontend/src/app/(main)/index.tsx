@@ -7,6 +7,7 @@ import type { CustomItem } from '@/ui/screens/home/Home.types';
 import { useHomeData } from '@/ui/screens/home/useHomeData';
 import { useHomeMarket } from '@/ui/screens/home/useHomeMarket';
 import { WebHome } from '@/ui/screens/home/web/Home';
+import { useStudioPlayer } from '@/store/studioPlayer';
 import { useHomeNewsProps } from '@/ui/screens/home/useHomeNews';
 import { mockOnboardingStocks } from '@/ui/screens/onboarding/Onboarding.mock';
 import { WebFirstHome } from '@/ui/screens/onboarding/web/FirstHome';
@@ -79,7 +80,8 @@ export default function HomeScreen() {
       onRetryMarket={() => { setRetried(true); hm.retry(); }}
       onToggleCheck={home.onToggleCheck}
       onAddCheck={home.onAddCheck}
-      onNudge={() => {}}
+      /* 넛지: 'report' → 주간보고서 만들기 창 · 'lab' → 투자 실험실 (내 종목 전부) */
+      onNudge={(kind) => useStudioPlayer.getState().askStudio(kind)}
     />
   );
 }
