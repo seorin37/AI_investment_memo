@@ -50,7 +50,7 @@ export interface UpdatesCallbacks {
 }
 
 export interface AppUpdatesProps extends UpdatesData, UpdatesCallbacks {
-  header: (o: { line: boolean; onSearch: () => void; onReadAll?: () => void; readAllOff: boolean }) => ReactNode;
+  header: (o: { line: boolean; onReadAll?: () => void; readAllOff: boolean }) => ReactNode;
 }
 
 export type WebUpdatesProps = UpdatesData & UpdatesCallbacks;

@@ -95,7 +95,7 @@ export function AppUpdates(p: AppUpdatesProps) {
 
   return (
     <View style={st.root}>
-      {p.header({ line: scrolled, onSearch: () => (setQ(''), setSearch(true)), onReadAll: code ? undefined : readAll, readAllOff: !total })}
+      {p.header({ line: scrolled, onReadAll: code ? undefined : readAll, readAllOff: !total })}
       <ScrollView style={st.flex} contentContainerStyle={st.pw} stickyHeaderIndices={[1]} scrollEventThrottle={16} onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > 0)} showsVerticalScrollIndicator={false}>
         <View style={st.lt}>
           <Text style={st.ltP}>내 종목의 공시·뉴스·주가 변동을 모아봤어요</Text>
@@ -113,6 +113,13 @@ export function AppUpdates(p: AppUpdatesProps) {
             onChange={(c) => pick(c === 'all' ? undefined : c)}
           />
         </View>
+        <Pressable onPress={() => (setQ(''), setSearch(true))} accessibilityRole="search" accessibilityLabel="내 종목에서 찾기" style={st.find}>
+          <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={appColor.ink3} strokeWidth={2.2} strokeLinecap="round">
+            <Circle cx={11} cy={11} r={7} />
+            <Path d="M20 20l-4-4" />
+          </Svg>
+          <Text style={st.findT}>내 종목에서 찾기 (초성도 돼요)</Text>
+        </Pressable>
         {!cur ? (
           <Overview p={p} kind={kind} setKind={setKind} ready={ready} fading={fading} onOpenStock={pick} onOpenRow={(u) => {
             if (u.unread) p.onMarkRead([u.id], true);
@@ -645,6 +652,8 @@ const st = StyleSheet.create({
   unrT: { ...ft(13), fontWeight: '700', color: '#5B3BD1' },
   unrB: { fontSize: 13, lineHeight: 17, fontWeight: '700', color: '#5B3BD1' },
   chipsBar: { backgroundColor: appColor.bg, paddingTop: 8, paddingBottom: 12 },
+  find: { height: 42, marginHorizontal: 16, marginBottom: 12, borderRadius: 14, backgroundColor: '#FFFFFF', flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14 },
+  findT: { ...ft(14), color: appColor.ink3 },
   cin: { paddingHorizontal: 16, gap: 6 },
   cpill: { position: 'absolute', top: 0, height: 36, borderRadius: 18, backgroundColor: '#16171A' },
   chip: { minHeight: 36, paddingHorizontal: 14, borderRadius: 18, flexDirection: 'row', alignItems: 'center', gap: 6 },
