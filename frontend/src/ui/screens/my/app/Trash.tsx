@@ -105,12 +105,12 @@ function TrashIcon() {
 }
 
 const st = StyleSheet.create({
-  search: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFFFF', borderRadius: 14, paddingHorizontal: 14, minHeight: 46 },
-  searchIn: { flex: 1, fontSize: 14, lineHeight: 20, color: MC.ink, paddingVertical: 12 },
-  fch: { flexDirection: 'row', gap: 6, marginTop: 1, marginBottom: 12, flexWrap: 'wrap' },
-  fb: { borderWidth: 1, borderColor: '#DADDE2', backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 7, paddingHorizontal: 12, minHeight: 34, justifyContent: 'center' },
+  search: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFFFF', borderRadius: 14, paddingHorizontal: 14, height: 42 },
+  searchIn: { flex: 1, fontSize: 14, lineHeight: 18, includeFontPadding: false, color: MC.ink, paddingVertical: 12 },
+  fch: { flexDirection: 'row', gap: 6, marginVertical: 12, flexWrap: 'wrap' },
+  fb: { borderWidth: 1, borderColor: '#DADDE2', backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 7, paddingHorizontal: 12, minHeight: 31, justifyContent: 'center' },
   fbOn: { backgroundColor: MC.a, borderColor: MC.a },
-  fbT: { fontSize: 13, lineHeight: 18, fontWeight: '600', color: MC.ink },
+  fbT: { fontSize: 13, lineHeight: 15, fontWeight: '600', color: MC.ink },
   tr: { flexDirection: 'row', alignItems: 'center', gap: 12, height: 60, paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: '#F1F2F4' },
   ic2: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#F1F2F4', alignItems: 'center', justifyContent: 'center' },
   trB: { fontSize: 14.5, lineHeight: 21, fontWeight: '700', color: MC.ink },
