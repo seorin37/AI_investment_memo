@@ -37,6 +37,7 @@ export const realApi: Api = {
   listMemoAnswers: (memoId) => http.get(`/memos/${memoId}/answers`),
   listStockAiUpdates: (code) => http.get(`/stocks/${code}/ai-updates`),
   markAiUpdateRead: (id) => http.post(`/ai-updates/${id}/read`),
+  markMemoUpdatesRead: (memoId) => http.post(`/memos/${memoId}/ai-updates/read`),
   async uploadFile(file) {
     const form = new FormData();
     if (Platform.OS === 'web' && file.file) form.append('file', file.file, file.name);

@@ -34,7 +34,7 @@ export function useUpdatesData() {
   const onMarkRead = (ids: string[], read: boolean) => {
     if (!real) return setMockItems((all) => all.map((u) => (ids.includes(u.id) ? { ...u, unread: !read } : u)));
     setReadOverride((o) => ({ ...o, ...Object.fromEntries(ids.map((id) => [id, read])) }));
-    if (read) ids.forEach((id) => markRead.mutate(id));
+    if (read && ids.length) markRead.mutate(ids);
   };
 
   if (!real) return { stocks: mockUpdateStocks, items: mockItems, now: mockUpdatesNow, loading: false, error: null, onMarkRead };

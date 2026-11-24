@@ -67,3 +67,14 @@ def mark_ai_update_read(update_id: int, current: dict = Depends(get_current_user
     except UpdateNotFoundError as exc:
         raise HTTPException(404, detail="업데이트를 찾을 수 없습니다.") from exc
     return Response(status_code=204)
+
+
+@router.post("/memos/{memo_id}/ai-updates/read", status_code=204)
+def mark_memo_ai_updates_read(memo_id: int, current: dict = Depends(get_current_user),
+                              service: UpdatesService = Depends(get_command_service)):
+    """메모 창에서 AI 업데이트를 봤을 때: 그 메모에 붙은 안 읽은 카드를 모두 읽음으로 (보드 배지 unread_updates 가 0 이 됨)."""
+    try:
+        service.mark_memo_read(_user_id(current), memo_id)
+    except MemoNotFoundError as exc:
+        raise HTTPException(404, detail="메모를 찾을 수 없습니다.") from exc
+    return Response(status_code=204)

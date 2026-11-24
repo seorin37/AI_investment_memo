@@ -51,7 +51,7 @@ export default function MemoDetailScreen() {
       onCopy={() => {}}
       onConnectAi={() => router.push({ pathname: '/memo/link', params: { id: memo.id } })}
       onDisconnectAi={() => (ops ? void ops.aiOff() : patch({ ai_linked: false }))}
-      onSeenUpdates={() => (ops ? undefined : setTimeout(() => setMockSeen(true), 4000))}
+      onSeenUpdates={() => (ops ? ops.seenUpdates() : setTimeout(() => setMockSeen(true), 4000))}
       onOpenSource={(f) => (f.url ? Linking.openURL(f.url) : notice('원문 열기'))}
       onOpenEvidence={(f) => router.push({ pathname: '/memo/evidence', params: { id: memo.id, fid: f.id } })}
       onNudge={() => notice('주간보고서')}
