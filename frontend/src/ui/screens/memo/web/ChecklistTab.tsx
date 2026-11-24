@@ -16,6 +16,7 @@ export type ChecklistDraft = { title: string; items: { id?: string; text: string
  * 제목 칸 '체크리스트 제목 · 보드 카드 제목으로 보여요' · '확인할 항목 N / M 완료' + 고리
  * 항목 줄 44 (동그라미 · 글 · ×) · 아래 '항목 추가 · Enter로 바로 추가' · 'AI 연결 없음' 안내 · [취소] [체크리스트 저장]
  * 저장: 빈 글 항목은 빼고, 입력칸에 남은 글도 항목으로. 항목이 하나도 없으면 onEmpty (있던 체크리스트면 휴지통).
+ * 2026-11-24: 만든 항목도 글을 바로 고칠 수 있게 (입력칸).
  */
 export function ChecklistTab({ initial, onCancel, onSave, onEmpty }: {
   initial: { title: string; items: ChecklistItem[] } | null;
@@ -24,17 +25,20 @@ export function ChecklistTab({ initial, onCancel, onSave, onEmpty }: {
   onEmpty: () => void;
 }) {
   const [title, setTitle] = useState(initial?.title ?? '체크리스트');
-  const [items, setItems] = useState<{ id?: string; text: string; done: boolean }[]>(() => initial?.items.map((i) => ({ ...i })) ?? []);
+  /* k: 화면용 고유 키 (새 항목은 서버 id가 없어서, 지우거나 고칠 때 입력칸이 섞이지 않게) */
+  const [items, setItems] = useState<{ k: string; id?: string; text: string; done: boolean }[]>(() => initial?.items.map((i) => ({ ...i, k: `s${i.id}` })) ?? []);
   const [add, setAdd] = useState('');
   const done = items.filter((i) => i.done).length;
-  const push = () => {
-    const t = add.trim();
-    if (!t) return;
-    setItems((l) => [...l, { text: t, done: false }]);
+  /* Enter → 항목 추가. react-native-web 은 한글 조합 중 Enter(keyCode 229)를 무시해서 onSubmitEditing 으로는 두 번 눌러야 했음.
+     투자 기록 제목(#75)처럼 입력칸을 multiline 으로 두고 '줄바꿈이 들어왔는지'로 판단 → 한글도 Enter 한 번에 추가 (2026-11-24) */
+  const typeAdd = (v: string) => {
+    if (!v.includes('\n')) return setAdd(v);
+    const t = v.replace(/\n/g, '').trim();
+    if (t) setItems((l) => [...l, { k: `n${Date.now()}${l.length}`, text: t, done: false }]);
     setAdd('');
   };
   const save = () => {
-    const list = items.map((i) => ({ ...i, text: i.text.trim() })).filter((i) => i.text);
+    const list: ChecklistDraft['items'] = items.map(({ id, text, done }) => ({ id, text: text.trim(), done })).filter((i) => i.text);
     if (add.trim()) list.push({ text: add.trim(), done: false });
     if (!list.length) return onEmpty();
     onSave({ title: title.trim() || '체크리스트', items: list });
@@ -58,7 +62,7 @@ export function ChecklistTab({ initial, onCancel, onSave, onEmpty }: {
         </View>
         <View style={st.list}>
           {items.map((c, i) => (
-            <View key={c.id ?? `new-${i}`} style={st.item}>
+            <View key={c.k} style={st.item}>
               <Pressable
                 onPress={() => setItems((l) => l.map((x, j) => (j === i ? { ...x, done: !x.done } : x)))}
                 accessibilityRole="checkbox"
@@ -68,9 +72,13 @@ export function ChecklistTab({ initial, onCancel, onSave, onEmpty }: {
               >
                 <Dot on={c.done} />
               </Pressable>
-              <Text numberOfLines={1} style={[st.itemT, c.done && st.itemDone]}>
-                {c.text}
-              </Text>
+              <TextInput
+                value={c.text}
+                onChangeText={(v) => setItems((l) => l.map((x, j) => (j === i ? { ...x, text: v } : x)))}
+                maxLength={500}
+                accessibilityLabel={`항목 ${i + 1} 고치기`}
+                style={[st.itemT, c.done && st.itemDone]}
+              />
               <Pressable onPress={() => setItems((l) => l.filter((_, j) => j !== i))} accessibilityRole="button" accessibilityLabel={`${c.text} 지우기`} hitSlop={6}>
                 {({ hovered }: Hover) => <Text style={[st.x, hovered && { color: INK }]}>×</Text>}
               </Pressable>
@@ -83,9 +91,9 @@ export function ChecklistTab({ initial, onCancel, onSave, onEmpty }: {
             </View>
             <TextInput
               value={add}
-              onChangeText={setAdd}
-              onSubmitEditing={push}
-              blurOnSubmit={false}
+              onChangeText={typeAdd}
+              multiline
+              numberOfLines={1}
               placeholder="항목 추가 · Enter로 바로 추가"
               placeholderTextColor="#9AA3B2"
               accessibilityLabel="항목 추가"
@@ -149,13 +157,13 @@ const st = StyleSheet.create({
   titleIn: { height: 48, borderRadius: 12, borderWidth: 1, borderColor: '#E8ECF3', backgroundColor: '#FAFBFC', paddingHorizontal: 16, ...fpx(15, 23), fontWeight: '700', color: INK },
   list: { borderRadius: 16, borderWidth: 1, borderColor: '#E8ECF3', backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingVertical: 4 },
   item: { height: 44, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  itemT: { flex: 1, minWidth: 0, ...fpx(15, 23), color: '#333D4B' },
+  itemT: { flex: 1, minWidth: 0, ...fpx(15, 23), color: '#333D4B', ...({ outlineStyle: 'none' } as object) },
   itemDone: { color: '#9AA3B2', textDecorationLine: 'line-through' },
   x: { ...fpx(20, 29), fontWeight: '500', color: '#9AA3B2' },
   sep: { height: 1, backgroundColor: '#E8ECF3' },
   plus: { width: 18, height: 18, borderRadius: 5, borderWidth: 1, borderStyle: 'dashed', borderColor: '#D1D6DE', alignItems: 'center', justifyContent: 'center' },
   plusT: { ...fpx(13, 20), fontWeight: '500', color: '#9AA3B2' },
-  addIn: { flex: 1, minWidth: 0, ...fpx(15, 23), color: '#333D4B' },
+  addIn: { flex: 1, minWidth: 0, height: 23, ...fpx(15, 23), color: '#333D4B', ...({ resize: 'none', overflow: 'hidden', outlineStyle: 'none' } as object) },
   aiWrap: { paddingHorizontal: 24, paddingVertical: 12 },
   ai: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 12, backgroundColor: '#F2F3F4', paddingHorizontal: 16, paddingVertical: 12 },
   i: { width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: '#9AA3B2', alignItems: 'center', justifyContent: 'center' },
