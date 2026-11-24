@@ -30,7 +30,7 @@ import { useTrashData } from '@/ui/screens/my/useTrashData';
 import { WebTrash } from '@/ui/screens/my/web/Trash';
 import { chapterAt, fmt, useStudioPlayer } from '@/store/studioPlayer';
 import { mockAudioEpisode, mockAudioGen, mockAudioPeriods, mockAudioStocks, mockLabDisclaimer, mockLabNote, mockLabVars, mockLastClose, mockReport, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
-import { WebFail, WebGen, WebMini, WebPlayer } from '@/ui/screens/studio/web/Audio';
+import { WebFail, WebGen, WebLabGen, WebMini, WebPlayer } from '@/ui/screens/studio/web/Audio';
 import { shellSizeFor } from '@/ui/layout/web/shellSize';
 import { WebReportPopup, WebReportSum } from '@/ui/screens/studio/web/Report';
 import { WebLab, WebLabResult, WebQuiz } from '@/ui/screens/studio/web/QuizLab';
@@ -170,6 +170,31 @@ export default function MainLayout() {
   const labItem = sp.made.find((m) => m.id === sp.curLab && m.kind === 'lab');
   /* 실험 결과 '내 메모와 연결': 그 종목의 내 메모 1개 (실험 결과 화면일 때만 읽음 · 엑셀 웹 #11) */
   const labMemo = useLabMemo(labItem?.lab?.code, sp.webView === 'labResult');
+  /* 실험 중 화면 (원본 studio.tsx Gen · lab). 요청이 한 번뿐이라 단계는 시간으로:
+     누르자마자 '조건 읽기' 완료 → '영향 경로 찾기'에서 응답을 기다림(막대는 90% 까지만) → 응답 오면 전부 완료 후 결과.
+     실패하면 실험 조건 화면 그대로 (고른 조건 유지 · 안내 토스트는 useRunLab) */
+  const [labGen, setLabGen] = useState<{ pct: number; at: number } | null>(null);
+  const labBusy = useRef(false);
+  const runLabWithGen = async () => {
+    if (labBusy.current) return;
+    labBusy.current = true;
+    setLabGen({ pct: 33, at: 1 });
+    const tick = setInterval(() => setLabGen((g) => (g && g.at === 1 ? { ...g, pct: Math.min(90, g.pct + 3) } : g)), 500);
+    const ok = await runLab(labStock, sp.labDirs);
+    clearInterval(tick);
+    if (!ok) {
+      setLabGen(null);
+      labBusy.current = false;
+      return;
+    }
+    setLabGen({ pct: 100, at: 3 });
+    setTimeout(() => {
+      setLabGen(null);
+      labBusy.current = false;
+      /* 기다리는 사이 스튜디오에서 다른 화면으로 갔으면 그 화면 그대로 (결과는 만든 항목에 있음) */
+      if (useStudioPlayer.getState().webView === 'lab') sp.setWebView('labResult');
+    }, 400);
+  };
   /* 서버 보고서면 그 내용, 아니면 mock 예시 (reportView, 2026-11-23) */
   const repView = reportView(repItem);
   const reportPick = useReportPickStocks();
@@ -263,6 +288,7 @@ export default function MainLayout() {
             {sp.webView === 'gen' && sp.job ? <WebGen job={sp.job} steps={sp.job.kind === 'report' ? mockReport.web_steps : mockAudioGen.steps} />
               : sp.webView === 'fail' ? <WebFail kind={sp.job?.kind ?? 'audio'} onHome={() => { sp.dropFailed(); sp.setWebView('home'); }} onRetry={() => { sp.retry(); sp.setWebView('gen'); }} />
               : sp.webView === 'quiz' ? <WebQuiz q={quiz} done={sp.quizPick} onBack={() => sp.setWebView('home')} onSubmit={sp.submitQuiz} />
+              : sp.webView === 'lab' && labGen ? <WebLabGen pct={labGen.pct} at={labGen.at} />
               : sp.webView === 'lab' ? (
                 <WebLab
                   vars={labVars}
@@ -274,9 +300,7 @@ export default function MainLayout() {
                   onPick={(c) => sp.setLab({ code: c })}
                   onDir={(i, d) => sp.setLab({ dirs: sp.labDirs.map((x, j) => (j === i ? d : x)) })}
                   onReset={() => sp.setLab({ dirs: mockLabVars.map(() => '유지') })}
-                  onRun={async () => {
-                    if (await runLab(labStock, sp.labDirs)) sp.setWebView('labResult');
-                  }}
+                  onRun={runLabWithGen}
                 />
               )
               : sp.webView === 'labResult' && labItem?.lab ? (
