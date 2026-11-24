@@ -185,7 +185,7 @@ export function AppMemoBoard(p: MemoBoardProps & { header: React.ReactNode }) {
         <Text style={st.mh}>내 메모 {memoCount}</Text>
         {p.aiSpent ? (
           <View style={st.spb}>
-            <SpentBox variant="app" title="AI 연결이 잠시 멈췄어요" body={'이번 달 AI 사용량을 다 썼어요.\n12월 1일에 다시 찾아요. 메모는 계속 쓸 수 있어요.'} onCredit={() => p.onSpentAction?.('credit')} onPlan={() => p.onSpentAction?.('plan')} />
+            <SpentBox variant="app" title="AI 연결이 잠시 멈췄어요" body={`이번 달 AI 사용량을 다 썼어요.\n${p.aiRefill && p.aiRefill !== '—' ? p.aiRefill : '다음 달 1일'}에 다시 찾아요. 메모는 계속 쓸 수 있어요.`} onCredit={() => p.onSpentAction?.('credit')} onPlan={() => p.onSpentAction?.('plan')} />
           </View>
         ) : null}
         <View style={st.frow}>

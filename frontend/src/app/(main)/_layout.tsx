@@ -154,6 +154,14 @@ export default function MainLayout() {
   /* ⑧-8a 스튜디오: 사용량 창 · PLUS 창(다 쓴 뒤 만들기) · 충전 창. 결제·만들기는 연결 안 됨 */
   const [studioPop, setStudioPop] = useState<'usage' | 'credit' | 'charge' | 'audio' | 'report' | null>(null);
   const usageSpent = usage.paused || usage.usage_pct >= 100;
+  /* 보드·메모 창의 'AI 사용량 다 씀' 버튼: 스튜디오와 같게 충전 창 · 설정 사용량 탭 (2026-11-24) */
+  const spentReq = useUI((s) => s.spentReq);
+  const [spentSeen, setSpentSeen] = useState<number | null>(null);
+  if (spentReq && spentReq.id !== spentSeen) {                 // 렌더 중 상태 맞추기 (새 요청 id일 때만 한 번)
+    setSpentSeen(spentReq.id);
+    if (spentReq.kind === 'credit') setStudioPop('charge');
+    else setSettings('사용량');
+  }
   /* 보고서·오디오 창에서 미리 고를 종목 (넛지에서 열 때만 · 다른 길로 열면 비워서 전체) */
   const [popPreset, setPopPreset] = useState<string[] | undefined>(undefined);
   const studioFeat = (k: StudioKind, codes?: string[]) => {

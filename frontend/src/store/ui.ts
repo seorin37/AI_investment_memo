@@ -22,6 +22,9 @@ interface UIState {
   /** 앱 하단 탭바 숨김 (메모 고르기 중 — MemoBoard onSelectionChange) */
   tabBarHidden: boolean;
   setTabBarHidden(hidden: boolean): void;
+  /** 웹 보드·메모 창의 'AI 사용량 다 씀' 버튼 → 셸(_layout)이 충전 창·설정 사용량 탭을 연다 (2026-11-24) */
+  spentReq: { kind: 'credit' | 'plan'; id: number } | null;
+  requestSpent(kind: 'credit' | 'plan'): void;
   toggleSidebar(): void;
   setDrawer(open: boolean): void;
   openModal(m: NonNullable<ModalState>): void;
@@ -35,6 +38,8 @@ export const useUI = create<UIState>()((set) => ({
   modal: null,
   toast: null,
   tabBarHidden: false,
+  spentReq: null,
+  requestSpent: (kind) => set({ spentReq: { kind, id: Date.now() } }),
   setTabBarHidden: (hidden) => set({ tabBarHidden: hidden }),
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   setDrawer: (open) => set({ drawerOpen: open }),

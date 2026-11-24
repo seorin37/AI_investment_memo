@@ -78,6 +78,8 @@ export interface MemoDetailProps {
   tabRequest?: { tab: 'memo' | 'ai'; key: string };
   /** AI 사용량을 다 씀 */
   aiSpent?: boolean;
+  /** 사용량이 다시 채워지는 날 ('12월 1일', GET /me/usage) */
+  aiRefill?: string;
   /** 보드 이름 (앱 뒤로 버튼 옆 글자 · 알림에서 열면 '알림') */
   backLabel?: string;
   /** 머리에 붙는 칩 (사용법 안내 예시 화면의 '예시' — 실제 데이터로 보이지 않게) */

@@ -13,6 +13,7 @@ import { AppMemoBoard } from '@/ui/screens/board/app/MemoBoard';
 import { useBoardData } from '@/ui/screens/board/useBoardData';
 import { useMemoTimeline } from '@/hooks/queries';
 import { useBoardStock } from '@/ui/screens/board/useBoardStock';
+import { useUsageView } from '@/ui/screens/my/useUsageView';
 import { env } from '@/config/env';
 import { mockBoardChecklist, mockBoardMemos, mockBoardStock, mockEmptyStock } from '@/ui/screens/board/MemoBoard.mock';
 
@@ -39,6 +40,8 @@ export default function StockDetail() {
   const [checklist, setChecklist] = useState<Checklist | null>(real || empty ? null : mockBoardChecklist);
   /* 실제 모드: 서버 보드를 새로 받으면(메모 화면에서 돌아올 때 포함) 화면 상태를 서버 값으로 */
   const bd = useBoardData(code, null);
+  /* AI 사용량을 다 쓰면 보드 안내 상자 (스튜디오와 같은 기준, 2026-11-24) */
+  const usage = useUsageView();
   const [seenVersion, setSeenVersion] = useState(0);
   if (bd.data && bd.version !== seenVersion) {
     setSeenVersion(bd.version);
@@ -108,7 +111,9 @@ export default function StockDetail() {
       onReorder={() => {}}
       onChangeTab={setTab}
       onSelectionChange={onSelectionChange}
-      onSpentAction={(a) => notice(a === 'credit' ? '크레딧 구매' : '플랜 변경')}
+      aiSpent={usage.paused || usage.usage_pct >= 100}
+      aiRefill={usage.usage_refill}
+      onSpentAction={(a) => router.push(a === 'credit' ? '/studio-charge' : '/my-plans')}
     />
     <AiOffSheet
       open={!!offFor}

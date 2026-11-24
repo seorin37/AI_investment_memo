@@ -24,6 +24,8 @@ export interface MemoBoardProps {
   notice?: { message: string; key: string };
   /** AI 사용량을 다 씀 (원본 '.spent' · 웹 SpentBox) */
   aiSpent?: boolean;
+  /** 사용량이 다시 채워지는 날 ('12월 1일', GET /me/usage) */
+  aiRefill?: string;
 
   /** 메모 열기 — 상세는 ④에서. 새 소식이 있고 AI 연결이면 'ai' 탭으로 */
   onOpenMemo: (id: string, tab: 'memo' | 'ai') => void;

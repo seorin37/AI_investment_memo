@@ -6,6 +6,7 @@ import type { MemoVersion } from '@/types/models';
 import { AppMemoDetail } from '@/ui/screens/memo/app/MemoDetail';
 import { mockToday } from '@/ui/screens/memo/MemoDetail.mock';
 import { useMemoScreen } from '@/ui/screens/memo/useMemoScreen';
+import { useUsageView } from '@/ui/screens/my/useUsageView';
 
 /**
  * 앱 메모 상세 = UI v2 (ui/screens/memo/app).
@@ -18,6 +19,8 @@ export default function MemoDetailScreen() {
   const router = useRouter();
   const notice = useMockNotice();
   const { data, ops, setMockMemo } = useMemoScreen(id);
+  /* AI 사용량을 다 쓰면 안내 상자 (스튜디오와 같은 기준: 정지 또는 100% 이상, 2026-11-24) */
+  const usage = useUsageView();
   /* mock 모드에서만 쓰는 화면 안 상태 (수정 이력 · 소식 읽음) */
   const [mockVersions, setMockVersions] = useState<MemoVersion[] | null>(null);
   const [mockSeen, setMockSeen] = useState(false);
@@ -55,7 +58,9 @@ export default function MemoDetailScreen() {
       onOpenSource={(f) => (f.url ? Linking.openURL(f.url) : notice('원문 열기'))}
       onOpenEvidence={(f) => router.push({ pathname: '/memo/evidence', params: { id: memo.id, fid: f.id } })}
       onNudge={() => notice('주간보고서')}
-      onSpentAction={(a) => notice(a === 'credit' ? '크레딧 구매' : '플랜 변경')}
+      aiSpent={memo.ai_linked && (usage.paused || usage.usage_pct >= 100)}
+      aiRefill={usage.usage_refill}
+      onSpentAction={(a) => router.push(a === 'credit' ? '/studio-charge' : '/my-plans')}
     />
   );
 }
