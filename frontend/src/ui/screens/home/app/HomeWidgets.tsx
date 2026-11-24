@@ -249,7 +249,7 @@ export function UpdatesWidget({ rows, ready, editing, onAll, onRow }: { rows: Ho
               {u.name}
             </Text>
             <Text style={st.urS} numberOfLines={1}>
-              {u.status === 'holding' ? '보유' : '관심'} · {u.new_count ? `새 업데이트 ${u.new_count}건` : '모두 확인했어요'}
+              {u.status === 'holding' ? '보유' : '관심'} · {u.new_count ? `새 업데이트 ${u.new_count}건` : u.latest ? '모두 확인했어요' : '연결된 소식 없음'}
             </Text>
           </View>
           {u.new_count ? <NewBadge n={u.new_count} bye={bye.includes(u.stock_code)} /> : <Text style={st.urChev}>›</Text>}
