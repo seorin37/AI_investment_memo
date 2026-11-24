@@ -1,9 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, BackHandler, Keyboard, Pressable, ScrollView, StyleSheet, View, type TextInputInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { Text, TextInput } from '@/components/ui/AppText';
-import { Odometer } from '@/ui/motion/Numbers';
 import { Reveal } from '@/ui/motion/Reveal';
 import { Skeleton } from '@/ui/motion/Skeleton';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
@@ -245,6 +243,7 @@ export function AppJournal(p: AppJournalProps) {
         </Animated.View>
       )}
       <ScrollView style={st.flex} contentContainerStyle={st.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} onScrollBeginDrag={() => openRow && setOpenRow(null)}>
+        {!srch && !selecting ? <Text style={[st.lead, loading && { opacity: 0 }]}>{L.length}개의 기록 · AI 연결 없이 나만 보는 투자 일지예요</Text> : null}
         {/* 검색 줄 */}
         <View style={st.srow}>
           <Pressable onPress={() => input.current?.focus()} style={st.sbx}>
@@ -352,25 +351,6 @@ export function AppJournal(p: AppJournalProps) {
           </>
         )}
       </ScrollView>
-
-      {/* 아래 'N개의 기록' (원본 .jbar 46 · 위로 흐려지는 띠) — 검색·고르기 중엔 숨김 */}
-      {!srch && !selecting ? (
-        <View pointerEvents="none" style={st.jbar}>
-          <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" preserveAspectRatio="none">
-            <Defs>
-              <LinearGradient id="jbar" x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0" stopColor={appColor.bg} stopOpacity={0} />
-                <Stop offset="0.4" stopColor={appColor.bg} stopOpacity={1} />
-              </LinearGradient>
-            </Defs>
-            <Rect x="0" y="0" width="100%" height="100%" fill="url(#jbar)" />
-          </Svg>
-          <View style={st.jbarRow}>
-            <Odometer value={loading ? 0 : L.length} style={st.cnt} />
-            <Text style={st.cnt}>개의 기록</Text>
-          </View>
-        </View>
-      ) : null}
 
       <AppSnackbar visible={!!snack} message={snack?.msg ?? ''} onUndo={snack?.undo ? undo : undefined} style={[st.snack, { bottom: selecting ? 96 + insets.bottom : 16 }]} />
       <Pill toast={toastV} bottom={selecting ? 100 + insets.bottom : 20} />
@@ -644,6 +624,7 @@ const st = StyleSheet.create({
   selhT: { ...ft(18), fontWeight: '700', color: appColor.ink, marginLeft: 4 },
   all: { marginLeft: 'auto', padding: 8 },
   allT: { ...ft(14.5), fontWeight: '700', color: A2 },
+  lead: { ...ft(13.5), color: appColor.ink2, paddingHorizontal: 18, paddingBottom: 8 },
   srow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 2, paddingHorizontal: 16, paddingBottom: 6 },
   sbx: { flex: 1, minWidth: 0, height: 40, borderRadius: 12, backgroundColor: appColor.searchBg2, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10 },
   sin: { flex: 1, minWidth: 0, fontSize: 15, color: appColor.ink, paddingVertical: 0 },
@@ -672,9 +653,6 @@ const st = StyleSheet.create({
   eP: { ...ft(13.5, 1.6), color: appColor.ink2, textAlign: 'center', marginBottom: 18 },
   btn: { height: 46, paddingHorizontal: 20, borderRadius: 23, backgroundColor: appColor.accent, flexDirection: 'row', alignItems: 'center', gap: 6 },
   btnT: { ...ft(15), fontWeight: '700', color: '#FFFFFF' },
-  jbar: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 46, alignItems: 'center', justifyContent: 'center', zIndex: 5 },
-  jbarRow: { flexDirection: 'row', alignItems: 'center' },
-  cnt: { fontSize: 12.5, color: appColor.ink2 },
   snack: { position: 'absolute', left: 12, right: 12, zIndex: 65, elevation: 6 },
   pillWrap: { position: 'absolute', left: 16, right: 16, alignItems: 'center', zIndex: 80 },
   pill: { backgroundColor: '#1F2024', borderRadius: 20, paddingVertical: 10, paddingHorizontal: 16, maxWidth: 380 },
