@@ -3,6 +3,7 @@ import { Linking, Platform } from 'react-native';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { env } from '@/config/env';
 import { useCoach } from '@/store/coach';
+import { useStudioPlayer } from '@/store/studioPlayer';
 import { useUI } from '@/store/ui';
 import type { Checklist, Memo, MemoColor, MemoVersion } from '@/types/models';
 import { mockCompanyByCode } from '@/ui/screens/company/CompanyInfo.mock';
@@ -276,6 +277,11 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, pre, stockName, on
         trackItems={real ? bd.detail?.trackItems ?? [] : mockTrackItems[opened.id] ?? []}
         initialTab={openTab}
         onBack={() => setDlg(false)}
+        /* 메모 창 넛지: 메모 창을 닫고 주간보고서 만들기 창 · 이 메모의 종목만 (원본 board.tsx setDlg(null) 후 report) */
+        onNudge={() => {
+          setDlg(false);
+          useStudioPlayer.getState().askStudio('report', [opened.stock_code]);
+        }}
         onSave={({ title, body }) => {
           bd.ops.save(opened.id, { title, body });
           setVersions((v) => ({ ...v, [opened.id]: [{ version: (v[opened.id]?.[0]?.version ?? 0) + 1, title, body, saved_at: mockToday }, ...(v[opened.id] ?? [])] }));
@@ -413,5 +419,5 @@ function InfoTab({ code }: { code: string }) {
   /* 주가 데이터도 없는 종목: 예시 값을 지어내지 않고 '준비 중' (머리는 예시 틀에 종목코드만) */
   if (error) return <WebCompanyInfo {...mockCompanyByCode(code)} stock={{ ...mockCompanyByCode(code).stock, stock_code: code }} preparing onBack={() => router.back()} onChangeTab={onChangeTab} />;
   if (!data) return null;
-  return <WebCompanyInfo {...data} onBack={() => router.back()} onChangeTab={onChangeTab} onNudge={() => {}} />;
+  return <WebCompanyInfo {...data} onBack={() => router.back()} onChangeTab={onChangeTab} onNudge={() => useStudioPlayer.getState().askStudio('report', [code])} />;
 }
