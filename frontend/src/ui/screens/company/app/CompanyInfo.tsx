@@ -40,8 +40,8 @@ const PROF: { name: string; color: string; key: 'op_margin' | 'net_margin' | 'ro
 /**
  * 앱 기업정보 (원본 company.html 09.1 · 11.17 웹 통일판)
  * 머리 56 (뒤로 · 이름 18px → 요약 카드가 지나가면 이름 15px + 가격 12px 로 바뀜 · 스크롤하면 아래 선)
- * 요약 카드 · [메모 보드 | 기업정보] · 주가·거래량 (캔들 · 누른 채 훑기 · 1주/1달/3달/1년) · 시세·투자정보 (52주 막대 · 12칸 · ?)
- * 기업 개요 · 실적 (막대 + 전년 같은 분기 대비 선 · 칸 누르기) · 수익성 (범례 켜고 끄기) · 기업 건전성 (레이더 + 목록) · 출처
+ * 요약 카드 · [메모 보드 | 기업정보] · 기업 개요 · 주가·거래량 (캔들 · 누른 채 훑기 · 1주/1달/3달/1년) · 시세·투자정보 (52주 막대 · 12칸 · ?)
+ * 실적 (막대 + 전년 같은 분기 대비 선 · 칸 누르기) · 수익성 (범례 켜고 끄기) · 기업 건전성 (레이더 + 목록) · 출처
  * 카드는 화면에 들어올 때 아래 14에서 올라오고 그때 차트가 그려짐. ? 를 누르면 용어 시트.
  */
 export function AppCompanyInfo(p: CompanyInfoProps & {
@@ -154,8 +154,17 @@ export function AppCompanyInfo(p: CompanyInfoProps & {
           <Preparing name={p.stock.name} onBoard={() => p.onChangeTab('board')} />
         ) : (
           <>
-            {/* 주가 · 거래량 */}
+            {/* 기업 개요 */}
             <Section i={0} scrollY={y} vh={VH}>
+              {() => (
+                <View style={st.cd}>
+                  <Text style={st.h3}>기업 개요</Text>
+                  <Text style={st.ov}>{pr.overview}</Text>
+                </View>
+              )}
+            </Section>
+            {/* 주가 · 거래량 */}
+            <Section i={1} scrollY={y} vh={VH}>
               {(seen) => (
                 <View style={st.cd}>
                   <View style={st.h3row}>
@@ -182,7 +191,7 @@ export function AppCompanyInfo(p: CompanyInfoProps & {
               )}
             </Section>
             {/* 시세 · 투자정보 */}
-            <Section i={1} scrollY={y} vh={VH}>
+            <Section i={2} scrollY={y} vh={VH}>
               {(seen) => (
                 <View style={st.cd}>
                   <View style={st.h3row}>
@@ -205,15 +214,6 @@ export function AppCompanyInfo(p: CompanyInfoProps & {
                       </View>
                     ))}
                   </View>
-                </View>
-              )}
-            </Section>
-            {/* 기업 개요 */}
-            <Section i={2} scrollY={y} vh={VH}>
-              {() => (
-                <View style={st.cd}>
-                  <Text style={st.h3}>기업 개요</Text>
-                  <Text style={st.ov}>{pr.overview}</Text>
                 </View>
               )}
             </Section>
