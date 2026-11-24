@@ -5,7 +5,7 @@
  * - MobileToast: useUI().showToast 알림을 앱 상세 화면((detail)) 아래에 띄움 (탭 화면은 (main)/_layout.native 의 TabToast)
  */
 import type { ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -41,9 +41,21 @@ export function MobileToast({ bottom = 96 }: { bottom?: number }) {
   const insets = useSafeAreaInsets();
   if (!toast) return null;
   return (
-    <View pointerEvents="none" style={[st.wrap, { bottom: bottom + insets.bottom }]}>
+    <View pointerEvents={toast.action ? 'box-none' : 'none'} style={[st.wrap, { bottom: bottom + insets.bottom }]}>
       <View style={st.toast}>
         <Text style={st.text}>{toast.message}</Text>
+        {toast.action ? (
+          <Pressable
+            onPress={() => {
+              useUI.setState({ toast: null });
+              toast.action?.onPress();
+            }}
+            hitSlop={12}
+            accessibilityRole="button"
+          >
+            <Text style={st.action}>{toast.action.label}</Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
@@ -51,6 +63,7 @@ export function MobileToast({ bottom = 96 }: { bottom?: number }) {
 
 const st = StyleSheet.create({
   wrap: { position: 'absolute', left: 16, right: 16, alignItems: 'center', zIndex: 1000 },
-  toast: { backgroundColor: '#1F2228', paddingHorizontal: 18, paddingVertical: 12, borderRadius: 12, elevation: 8 },
-  text: { color: '#FFFFFF', fontSize: 14 },
+  toast: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#1F2228', paddingHorizontal: 18, paddingVertical: 12, borderRadius: 12, elevation: 8 },
+  action: { color: '#CDBBFF', fontSize: 14, fontWeight: '800' },
+  text: { flexShrink: 1, color: '#FFFFFF', fontSize: 14 },
 });

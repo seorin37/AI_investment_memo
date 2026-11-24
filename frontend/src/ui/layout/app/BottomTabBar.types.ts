@@ -7,6 +7,8 @@ export interface BottomTabBarProps {
   onPress: (tab: AppTab) => void;
   /** 탭 아이콘 위 빨간 숫자 (원본: 업데이트 = 고른 종목의 읽지 않은 소식 수) */
   badges?: Partial<Record<AppTab, number>>;
+  /** 탭 아이콘 위 점 (스튜디오: 새로 완성된 항목) */
+  dots?: Partial<Record<AppTab, boolean>>;
   /** 숨김 (메모 고르기 중 등): 아래로 내려가며 높이를 접음 — 빈 공간 없음 */
   hidden?: boolean;
 }

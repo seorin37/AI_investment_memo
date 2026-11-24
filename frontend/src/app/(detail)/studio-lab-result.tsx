@@ -1,6 +1,6 @@
 import React from 'react';
 import { Platform } from 'react-native';
-import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { useStudioPlayer } from '@/store/studioPlayer';
 import { mockLabDisclaimer, mockLabStocks, mockLabVars } from '@/ui/screens/studio/Studio.mock';
 import { AppLabResult } from '@/ui/screens/studio/app/LabResult';
@@ -14,7 +14,6 @@ export default function StudioLabResultScreen() {
   const made = useStudioPlayer((s) => s.made);
   const cur = useStudioPlayer((s) => s.curLab);
   const setLab = useStudioPlayer((s) => s.setLab);
-  const { from } = useLocalSearchParams<{ from?: string }>();
   /* 변수 '지금 값': 실제 모드면 GET /market/macro (2026-11-21) */
   const vars = useLabVars();
   const stocks = useLabStocks();
@@ -32,9 +31,8 @@ export default function StudioLabResultScreen() {
       onOpenMemo={() => router.push({ pathname: '/stocks/[code]', params: { code: stock.stock_code } })}
       onAgain={() => {
         setLab({ code: lab.code, dirs: lab.dirs });
-        /* 실험실에서 왔으면 뒤로(원본 popPg), 만든 항목에서 왔으면 실험실로 바꿔 열기 */
-        if (from === 'lab') router.back();
-        else router.replace('/studio-lab');
+        /* 실험실이 아래에 열려 있으면 그리로(원본 popPg), 없으면 실험실로 바꿔 열기 */
+        router.dismissTo('/studio-lab');
       }}
     />
   );

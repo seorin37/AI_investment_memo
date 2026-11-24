@@ -8,6 +8,8 @@ import { chapterAt, fmt, useStudioPlayer } from '@/store/studioPlayer';
 import { mockAudioEpisode } from '@/ui/screens/studio/Studio.mock';
 import { AppMiniPlayer } from '@/ui/screens/studio/app/MiniPlayer';
 import { size } from '@/ui/theme';
+import { useGenJobs } from '@/store/genJobs';
+import { useGenRestore } from '@/ui/screens/studio/genRuns';
 import { useUI } from '@/store/ui';
 import { useStudioItemsSync } from '@/ui/screens/studio/studioItems';
 import { BottomTabBar } from '@/ui/layout/app/BottomTabBar';
@@ -26,6 +28,8 @@ export default function MainTabsLayout() {
   const status = useAuth((s) => s.status);
   /* 스튜디오 만든 항목: 실제 모드면 서버 목록으로 (2026-11-23) */
   useStudioItemsSync();
+  useGenRestore();
+  const studioDot = useGenJobs((s) => s.dot);
   /* 로그인한 채 다른 사용자로 바뀌면(A → B) 커짐 → 탭을 다시 마운트해 열린 화면을 새 사용자 값으로 (store/auth sessionKey) */
   const sessionKey = useAuth((s) => s.sessionKey);
   /* 메모 고르기 중 탭바 숨김 (옛 보드가 store/ui 로 알려 줌) */
@@ -42,6 +46,7 @@ export default function MainTabsLayout() {
             current={TAB_OF[state.routes[state.index]?.name ?? 'index'] ?? 'home'}
             hidden={hidden}
             badges={mockTabBadges}
+            dots={{ studio: studioDot }}
             onPress={(tab) => {
               const route = state.routes.find((r) => r.name === ROUTE_OF[tab]);
               if (route) navigateToTab(route.key);
@@ -72,7 +77,14 @@ function TabToast({ hidden }: { hidden: boolean }) {
   const toast = useUI((s) => s.toast);
   const insets = useSafeAreaInsets();
   const bottom = (hidden ? 0 : 1 + 65 + Math.max(size.tabBarPadBottom, insets.bottom)) + 16;
-  return <AppSnackbar visible={!!toast} message={toast?.message ?? ''} style={{ position: 'absolute', left: 12, right: 12, bottom }} />;
+  const action = toast?.action && {
+    label: toast.action.label,
+    onPress: () => {
+      useUI.setState({ toast: null });
+      toast.action?.onPress();
+    },
+  };
+  return <AppSnackbar visible={!!toast} message={toast?.message ?? ''} action={action} style={{ position: 'absolute', left: 12, right: 12, bottom }} />;
 }
 
 /**

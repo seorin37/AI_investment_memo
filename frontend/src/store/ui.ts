@@ -14,11 +14,13 @@ export type ModalState =
   | { type: 'memoDetail'; stockCode: string; memoId: string; tab?: 'memo' | 'ai' }
   | null;
 
+export interface ToastAction { label: string; onPress: () => void }
+
 interface UIState {
   sidebarCollapsed: boolean;
   drawerOpen: boolean;
   modal: ModalState;
-  toast: { id: number; message: string } | null;
+  toast: { id: number; message: string; action?: ToastAction } | null;
   /** 앱 하단 탭바 숨김 (메모 고르기 중 — MemoBoard onSelectionChange) */
   tabBarHidden: boolean;
   setTabBarHidden(hidden: boolean): void;
@@ -26,7 +28,7 @@ interface UIState {
   setDrawer(open: boolean): void;
   openModal(m: NonNullable<ModalState>): void;
   closeModal(): void;
-  showToast(message: string): void;
+  showToast(message: string, action?: ToastAction): void;
 }
 
 export const useUI = create<UIState>()((set) => ({
@@ -40,9 +42,9 @@ export const useUI = create<UIState>()((set) => ({
   setDrawer: (open) => set({ drawerOpen: open }),
   openModal: (modal) => set({ modal, drawerOpen: false }),
   closeModal: () => set({ modal: null }),
-  showToast: (message) => {
+  showToast: (message, action) => {
     const id = Date.now();
-    set({ toast: { id, message } });
-    setTimeout(() => set((s) => (s.toast?.id === id ? { toast: null } : s)), 2400);
+    set({ toast: { id, message, action } });
+    setTimeout(() => set((s) => (s.toast?.id === id ? { toast: null } : s)), action ? 5000 : 2400);
   },
 }));

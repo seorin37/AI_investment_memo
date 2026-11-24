@@ -8,6 +8,8 @@ import { Reveal } from '@/ui/motion/Reveal';
 import { useCoachRef } from '@/ui/shared/Coach';
 import { Sheet } from '@/ui/shared/Sheet';
 import type { MadeItem, StudioHomeProps, StudioKind } from '../Studio.types';
+import type { AppGenJob } from '@/store/genJobs';
+import { Spin } from './Spin';
 import { useRemoveMade } from '../studioItems';
 
 /**
@@ -44,11 +46,11 @@ const Chev = ({ c = '#B7BBC3' }: { c?: string }) => <Svg width={18} height={18} 
 const Bolt = ({ c, s = 11 }: { c: string; s?: number }) => <Svg width={s} height={s * 13 / 11} viewBox="0 0 11 13"><Path d="M6.5 0 0 7.5h4.5L3.5 13 11 4.8H6.3z" fill={c} /></Svg>;
 const WAVE = [8, 14, 10, 18, 12, 20, 9, 16, 22, 13, 17, 10, 19, 12, 8, 15, 11, 18, 9, 14, 12, 7];
 
-export function AppStudioHome({ header, job, onJob, bottomPad = 0, ...p }: StudioHomeProps & {
+export function AppStudioHome({ header, jobs, onJob, bottomPad = 0, ...p }: StudioHomeProps & {
   header: React.ReactNode;
   /** 만드는 중 · 실패 줄 (원본 madeRow prog / fail) */
-  job?: { kind: Exclude<StudioKind, 'quiz'>; pct: number; status: 'run' | 'fail' | 'done' } | null;
-  onJob?: () => void;
+  jobs: AppGenJob[];
+  onJob?: (id: string) => void;
   /** 미니 플레이어가 떠 있으면 스크롤 끝 빈 자리 (원본 .withmini) */
   bottomPad?: number;
 }) {
@@ -91,28 +93,29 @@ export function AppStudioHome({ header, job, onJob, bottomPad = 0, ...p }: Studi
         </View>
         <View style={st.secr}><Text style={st.secrT}>만든 항목</Text><Text style={st.secrS}>30일 보관 · 다시 보기 무료</Text></View>
         {top ? <RadioCard m={top} onPress={() => p.onOpenMade(top)} /> : null}
-        {rest.length || job ? (
+        {rest.length || jobs.length ? (
           <View style={st.made}>
-            {job ? (
-              job.status === 'fail' ? (
-                <Pressable onPress={onJob} accessibilityRole="button" style={st.mi}>
+            {jobs.map((job, i) => {
+              const title = p.features.find((f) => f.key === job.kind)?.title ?? '';
+              return job.status === 'fail' ? (
+                <Pressable key={job.id} onPress={() => onJob?.(job.id)} accessibilityRole="button" style={[st.mi, i > 0 && st.miLine]}>
                   <View style={[st.failIc]}><Svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="#E5484D" strokeWidth={2} strokeLinecap="round"><Path d="M12 8v5M12 16.5h.01" /><Circle cx={12} cy={12} r={9} /></Svg></View>
-                  <View style={{ flex: 1 }}><Text style={st.miB}>만들지 못했어요</Text><Text style={st.miS}>사용량은 되돌렸어요</Text></View>
+                  <View style={{ flex: 1 }}><Text style={st.miB}>{title} · 만들지 못했어요</Text><Text style={st.miS}>사용량은 그대로 돌려드려요</Text></View>
                   <Text style={[st.miR, { color: C.a2, fontWeight: '700' }]}>다시 시도</Text>
                 </Pressable>
               ) : (
-                <Pressable onPress={onJob} accessibilityRole="button" style={st.mi}>
+                <Pressable key={job.id} onPress={() => onJob?.(job.id)} accessibilityRole="button" style={[st.mi, i > 0 && st.miLine]}>
                   <FeatIcon k={job.kind} size={38} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={st.miB}>{p.features.find((f) => f.key === job.kind)?.title} 만드는 중</Text>
-                    <View style={st.pbar}><View style={[st.pbarI, { width: `${job.pct}%` }]} /></View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={st.miB} numberOfLines={1}>{title} 만드는 중</Text>
+                    <Text style={st.miS} numberOfLines={1}>{job.sub}</Text>
                   </View>
-                  <Text style={st.miR}>{job.pct}%</Text>
+                  <View style={st.spin}><Spin /></View>
                 </Pressable>
-              )
-            ) : null}
+              );
+            })}
             {rest.map((m, i) => (
-              <View key={m.id} style={[st.mrow, (i > 0 || !!job) && st.miLine]}>
+              <View key={m.id} style={[st.mrow, (i > 0 || jobs.length > 0) && st.miLine]}>
                 <Pressable onPress={() => p.onOpenMade(m)} accessibilityRole="button" style={[st.mi, st.miMain]}>
                   <FeatIcon k={m.kind} size={38} />
                   <View style={{ flex: 1, minWidth: 0 }}>
@@ -128,7 +131,7 @@ export function AppStudioHome({ header, job, onJob, bottomPad = 0, ...p }: Studi
             ))}
           </View>
         ) : null}
-        {!p.made.length && !job ? <View style={st.made}><Text style={st.empty}>{'아직 만든 항목이 없어요\n위에서 오디오·보고서·실험을 만들어 보세요'}</Text></View> : null}
+        {!p.made.length && !jobs.length ? <View style={st.made}><Text style={st.empty}>{'아직 만든 항목이 없어요\n위에서 오디오·보고서·실험을 만들어 보세요'}</Text></View> : null}
         <Text style={st.sdisc}>스튜디오는 투자 권유나 주가 예측을 하지 않아요.</Text>
       </ScrollView>
       <Sheet open={sheet} onClose={() => setSheet(false)} label="AI 사용량">
@@ -200,8 +203,7 @@ const st = StyleSheet.create({
   miR: { fontSize: 12, lineHeight: 17, color: C.ink3 },
   del: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   failIc: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#FFE4E4', alignItems: 'center', justifyContent: 'center' },
-  pbar: { height: 6, borderRadius: 3, backgroundColor: '#ECEDF1', marginTop: 7, overflow: 'hidden', width: 180 },
-  pbarI: { height: '100%', borderRadius: 3, backgroundColor: C.a },
+  spin: { width: 20, height: 20 },
   empty: { fontSize: 13, lineHeight: 20, color: C.ink3, textAlign: 'center', paddingVertical: 20 },
   mfeat: { backgroundColor: '#FFFFFF', borderRadius: 20, marginHorizontal: 16, marginBottom: 10, padding: 16 },
   mh: { flexDirection: 'row', alignItems: 'center', gap: 6 },

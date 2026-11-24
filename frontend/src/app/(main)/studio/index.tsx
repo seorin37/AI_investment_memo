@@ -1,13 +1,15 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Platform, View } from 'react-native';
-import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useGenJobs } from '@/store/genJobs';
 import { useStudioPlayer } from '@/store/studioPlayer';
 import { useUI } from '@/store/ui';
 import { TopBar } from '@/ui/layout/app/TopBar';
 import { useUsageView } from '@/ui/screens/my/useUsageView';
 import { useMyProfile } from '@/ui/screens/my/useMyProfile';
 import { mockAudioPeriods, mockAudioStocks, mockReport, mockStudioCounts, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
-import { useCreateReport, useReportPickStocks } from '@/ui/screens/studio/reportView';
+import { startAudio, startReport } from '@/ui/screens/studio/genRuns';
+import { useReportPickStocks } from '@/ui/screens/studio/reportView';
 import { env } from '@/config/env';
 import { AppAudioSheet } from '@/ui/screens/studio/app/AudioSheet';
 import { AppReportSheet } from '@/ui/screens/studio/app/ReportSheet';
@@ -32,7 +34,15 @@ export default function StudioTab() {
   const p = useStudioPlayer();
   /* 주간보고서: 실제 모드면 내 종목 · POST /studio/reports (2026-11-23) */
   const reportPick = useReportPickStocks();
-  const createReport = useCreateReport();
+  const jobs = useGenJobs((s) => s.jobs);
+  const retry = useGenJobs((s) => s.retry);
+  const setStudioOpen = useGenJobs((s) => s.setStudioOpen);
+  useFocusEffect(
+    useCallback(() => {
+      setStudioOpen(true);
+      return () => setStudioOpen(false);
+    }, [setStudioOpen]),
+  );
   const [sheet, setSheet] = useState(false);
   const [rsheet, setRSheet] = useState(false);
   const [mk, setMk] = useState(make);
@@ -54,11 +64,11 @@ export default function StudioTab() {
         }
         features={mockStudioFeatures}
         made={p.made}
-        job={p.job}
+        jobs={jobs}
         bottomPad={p.mini ? 72 : 0}
-        onJob={() => {
-          if (p.job?.status === 'fail') p.retry();
-          router.push('/studio-gen');
+        onJob={(id) => {
+          retry(id);
+          router.push({ pathname: '/studio-gen', params: { id } });
         }}
         usage_pct={usage.usage_pct}
         usage_refill={usage.usage_refill}
@@ -87,8 +97,8 @@ export default function StudioTab() {
         onClose={() => setSheet(false)}
         onMake={({ codes, period, market }) => {
           setSheet(false);
-          p.startAudio({ sub: `${codes.length}종목 · ${period} · ${market ? '증시 요약 포함' : '증시 요약 없음'}`, n: codes.length }, __DEV__ && fail === '1');
-          setTimeout(() => router.push('/studio-gen'), 220);
+          const id = startAudio({ key: `${[...codes].sort().join(',')}:${period}:${market}`, sub: `${codes.length}종목 · ${period} · ${market ? '증시 요약 포함' : '증시 요약 없음'}`, n: codes.length, fail: __DEV__ && fail === '1' });
+          setTimeout(() => router.push({ pathname: '/studio-gen', params: { id } }), 220);
         }}
       />
       <AppReportSheet
@@ -99,9 +109,8 @@ export default function StudioTab() {
         onClose={() => setRSheet(false)}
         onMake={({ codes, market }) => {
           setRSheet(false);
-          p.startReport({ sub: `${codes.length}종목${market ? ' · 국내 증시 흐름 포함' : ''}${env.useMock ? ` · ${mockReport.gen_range}` : ' · 지난주'}`, codes, market },
-            __DEV__ && fail === '1', env.useMock ? undefined : () => createReport(codes, market));
-          setTimeout(() => router.push('/studio-gen'), 220);
+          const id = startReport({ sub: `${codes.length}종목${market ? ' · 국내 증시 흐름 포함' : ''}${env.useMock ? ` · ${mockReport.gen_range}` : ' · 지난주'}`, codes, market, fail: __DEV__ && fail === '1' });
+          setTimeout(() => router.push({ pathname: '/studio-gen', params: { id } }), 220);
         }}
       />
     </View>
