@@ -67,6 +67,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--brief", choices=["sample", "fewshot"], default="sample",
                     help="sample: 예시와 다른 가상 브리프(기본) / fewshot: 프롬프트 예시와 같은 브리프")
     ap.add_argument("--no-emotion", action="store_true", help="감정 태그 없이 보낸다 (같은 --script로 비교 듣기)")
+    ap.add_argument("--made-at", help="브리프 만든 시각 (예: 2026-11-24T14:00:10+09:00). 같게 주면 오프닝 소재도 같다 (모델 비교용)")
     ap.add_argument("--out-dir", help="결과 폴더 (기본: results/studio_audio)")
     args = ap.parse_args(argv)
 
@@ -95,7 +96,9 @@ def main(argv: list[str] | None = None) -> int:
     out = (Path(args.out_dir) if args.out_dir else REPO_ROOT / "results/studio_audio") / f"smoke_{now:%Y%m%d_%H%M%S}"
     out.mkdir(parents=True)
     brief = sample_brief() if args.brief == "sample" else FEWSHOT_BRIEF
-    if args.brief == "sample" and not args.script:              # 만든 시각 = 지금 → 오프닝 소재가 방송마다 바뀐다
+    if args.made_at:
+        brief.made_at = args.made_at
+    elif args.brief == "sample" and not args.script:            # 만든 시각 = 지금 → 오프닝 소재가 방송마다 바뀐다
         brief.made_at = now.isoformat(timespec="seconds")
     (out / "brief.txt").write_text(build_user(brief, cfg) + "\n", encoding="utf-8")
 
@@ -130,7 +133,9 @@ def main(argv: list[str] | None = None) -> int:
         voices = {sp: synth.voice(sp) for sp in ("A", "B")}
         tts_info = {"provider": synth.provider, "model": synth.model, "path": res["path"], "duration_sec": duration,
                     "calls": synth.calls, "text_hash": text_hash(lines, voices, synth.model),
-                    "speech_chars": sum(len(ln.speech) for ln in lines), "emotion": any(ln.tag for ln in lines)}
+                    "speech_chars": sum(len(ln.speech) for ln in lines), "emotion": any(ln.tag for ln in lines),
+                    "speech_bytes": sum(len(ln.tts_text.encode("utf-8")) for ln in lines),
+                    "speed": {sp: float(synth._opt(sp, "speed", 1.0)) for sp in ("A", "B")}}
         print(f"[2] {synth.provider} {synth.model} · 새 합성 {synth.calls['api']}줄 · 캐시 {synth.calls['cached']}줄 · "
               f"읽기 {tts_info['speech_chars']}자 · {duration:.1f}초 → {res['path']}")
     else:

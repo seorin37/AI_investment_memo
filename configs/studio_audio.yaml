@@ -21,6 +21,15 @@ script:
   max_same_speaker: 2        # 같은 진행자 연속 줄 수 상한 (audio-v3: 주고받는 느낌이 나게 3 → 2)
   opening_max_lines: 6
   host_a_share: [0.20, 0.50] # A(진행) 글자 비중 허용 범위 (참고 라디오 진행:해설 = 1:2)
+# 비용 비교(pipelines.studio_audio.cost_compare)용 가격. 모르는 값은 null로 두면 비용 칸이 '-'로 나온다.
+# gpt-6.1-sol·terra는 pipelines/updates/relevance_compare.PRICES와 같은 값. 나머지는 요금표를 보고 채운다.
+costs:
+  llm_per_1m:                # 1M 토큰당 [입력, 출력] USD
+    gpt-6.1-sol: [2.0, 10.0]
+    gpt-6.1-terra: [1.0, 5.0]
+    gpt-4.1-mini: null
+    gpt-5.6-sol: null
+  fish_per_1m_bytes: null    # Fish Audio 1M UTF-8 바이트당 USD (요금제 확인 후)
 # 오프닝 수다 소재. 방송마다 하나를 골라 [오늘의 오프닝 소재]로 준다 (만든 시각으로 고름 → 같은 날도 방송마다 바뀐다)
 opening_topics:
   - 요일 이야기 (월요일이면 한 주 시작, 금요일이면 주말 앞)
@@ -39,7 +48,7 @@ tts:
   # 목소리: Fish Audio 음성 모델 id (https://fish.audio/m/<id> 의 id). 비밀값은 아니지만 .env 로 바꿔 끼우게 환경변수 우선
   voices:
     A: {env: FISH_VOICE_A, id: ""}
-    B: {env: FISH_VOICE_B, id: ""}
+    B: {env: FISH_VOICE_B, id: "",speed: 1.0}
   format: wav                # 줄마다 받아 길이를 재고 이어 붙인다 (마지막에 ffmpeg가 있으면 mp3로)
   sample_rate: 44100
   latency: normal
