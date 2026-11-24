@@ -11,6 +11,7 @@ export interface UsageWire {
   renews_at: string;
   paused: boolean;
   ai_memo_count?: number;
+  auto_off_count?: number;
 }
 
 export interface UsageView {
@@ -20,10 +21,12 @@ export interface UsageView {
   paused: boolean;
   /** 지금 AI 연결이 켜진 메모 수 (선택 창 N) */
   ai_count: number;
+  /** 갱신일에 자동으로 꺼진 메모 수 (안내 N) */
+  auto_off: number;
 }
 
 /** 불러오지 못했을 때 (확인용 읽기 전용 서버에서 GET 이 쓰기를 못 해 실패 등) — 숫자를 지어내지 않음 */
-export const USAGE_UNKNOWN: UsageView = { usage_pct: 0, usage_renew: '—', usage_refill: '—', paused: false, ai_count: 0 };
+export const USAGE_UNKNOWN: UsageView = { usage_pct: 0, usage_renew: '—', usage_refill: '—', paused: false, ai_count: 0, auto_off: 0 };
 
 const KST_MS = 9 * 60 * 60 * 1000;
 
@@ -41,9 +44,10 @@ export function toUsageView(u: UsageWire): UsageView {
   const pct = clampPct(u.usage_percent);
   const md = kstMonthDay(u.renews_at);
   const ai_count = Math.max(0, Number(u.ai_memo_count) || 0);
-  if (!md) return { ...USAGE_UNKNOWN, usage_pct: pct, paused: !!u.paused, ai_count };
+  const auto_off = Math.max(0, Number(u.auto_off_count) || 0);
+  if (!md) return { ...USAGE_UNKNOWN, usage_pct: pct, paused: !!u.paused, ai_count, auto_off };
   const [m, d] = md;
-  return { usage_pct: pct, usage_renew: `${String(m).padStart(2, '0')}.${String(d).padStart(2, '0')}`, usage_refill: `${m}월 ${d}일`, paused: !!u.paused, ai_count };
+  return { usage_pct: pct, usage_renew: `${String(m).padStart(2, '0')}.${String(d).padStart(2, '0')}`, usage_refill: `${m}월 ${d}일`, paused: !!u.paused, ai_count, auto_off };
 }
 
 function clampPct(n: number): number {

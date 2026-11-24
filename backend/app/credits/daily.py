@@ -32,20 +32,26 @@ def _engine(dsn: str, allow_shared: bool):
 
 
 def eligible_item_ids(dsn: str, symbols, allow_shared: bool = False) -> tuple[list[str], dict]:
-    """(처리할 항목 id, {"paused_users": [...], "skipped_items": n}). 기본량 지급·만료도 여기서 한다."""
+    """(처리할 항목 id, {"paused_users": [...], "skipped_items": n, "auto_off": {사용자: 끈 메모 수}}).
+    기본량 지급·만료도 여기서 한다. 2026-11-24: 사용자마다 refresh(갱신일 자동 끄기 포함)를 먼저 하고 항목을 다시 뽑는다
+    — 갱신일 아침에 방금 꺼진 메모가 그날 확인에 섞이지 않게."""
     engine = _engine(dsn, allow_shared)
+    params = {"all": symbols is None, "symbols": list(symbols or [])}
     try:
         with engine.begin() as db:
-            rows = db.execute(text(ITEMS_SQL), {"all": symbols is None, "symbols": list(symbols or [])}).all()
-            balances = {}
-            for uid in sorted({u for _, _, u in rows}):
-                ledger.refresh(db, uid)
+            users = sorted({u for _, _, u in db.execute(text(ITEMS_SQL), params).all()})
+            balances, auto_off = {}, {}
+            for uid in users:
+                n = ledger.refresh(db, uid)
+                if n:
+                    auto_off[uid] = n
                 balances[uid] = ledger.balance(db, uid)
+            rows = db.execute(text(ITEMS_SQL), params).all()      # 자동으로 꺼진 메모는 여기서 빠진다
     finally:
         engine.dispose()
     keep = [str(i) for i, _typ, u in rows if balances.get(u, 0) > 0]
     paused = sorted(u for u, b in balances.items() if b <= 0)
-    return keep, {"paused_users": paused, "skipped_items": len(rows) - len(keep), "users": len(balances)}
+    return keep, {"paused_users": paused, "skipped_items": len(rows) - len(keep), "users": len(balances), "auto_off": auto_off}
 
 
 def charge_run(dsn: str, update_ids: list[int], allow_shared: bool = False) -> dict:

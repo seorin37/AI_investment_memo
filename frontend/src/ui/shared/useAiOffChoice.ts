@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { env } from '@/config/env';
-import { useAiOffAll } from '@/hooks/queries';
+import { useAiOffAll, useAiOffNoticeSeen } from '@/hooks/queries';
 import { useUI } from '@/store/ui';
 import { useUsageView } from '@/ui/screens/my/useUsageView';
 
@@ -40,15 +40,28 @@ export function useAiOffChoice() {
   }, [router, off, toast, count]);
 }
 
-/** 앱을 연 뒤 끄기 대기면 한 번 묻는다 (앱 탭 레이아웃에서 부름) */
+/** 앱을 연 뒤 끄기 대기면 한 번 묻고, 갱신일에 자동으로 꺼진 메모가 있으면 한 번 알린다 (앱 탭 레이아웃에서 부름) */
 export function useAiOffPrompt() {
   const usage = useUsageView();
   const ask = useAiOffChoice();
+  const seen = useAiOffNoticeSeen();
   const asked = useRef(false);
+  const told = useRef(false);
   const pending = !env.useMock && (usage.paused || usage.usage_pct >= 100) && usage.ai_count > 0;
+  const autoOff = env.useMock ? 0 : usage.auto_off;
   useEffect(() => {
     if (!pending || asked.current) return;
     asked.current = true;
     ask();
   }, [pending, ask]);
+  useEffect(() => {
+    if (pending || autoOff <= 0 || told.current) return;
+    told.current = true;
+    Alert.alert(
+      'AI 연결이 꺼졌어요',
+      `지난 기간 AI 사용량을 다 써서 AI 연결 메모 ${autoOff}개가 꺼졌어요.\n메모는 그대로 남아 있어요. 다시 켤 메모를 골라 AI 연결을 켜 주세요.`,
+      [{ text: '확인', onPress: () => seen.mutate() }],
+      { cancelable: true, onDismiss: () => seen.mutate() },
+    );
+  }, [pending, autoOff, seen]);
 }

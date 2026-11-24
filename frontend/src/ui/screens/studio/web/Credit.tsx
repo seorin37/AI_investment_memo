@@ -81,6 +81,20 @@ export function WebAiOffChoice({ open, count, busy, onClose, onCharge, onPlan, o
   );
 }
 
+/** 웹 '지난 기간 사용량을 다 써서 꺼졌어요' 안내 (0026 memos.ai_auto_off_at). 확인하거나 닫으면 다시 뜨지 않는다 */
+export function WebAiOffNotice({ open, count, onClose }: { open: boolean; count: number; onClose: () => void }) {
+  return (
+    <Sheet open={open} onClose={onClose} width={400} scrim={SCRIM} label="AI 연결이 꺼졌어요">
+      <View style={[st.pop, { width: 400, gap: 14 }]}>
+        <View style={[st.ic, { width: 52, height: 52, borderRadius: 16 }]}><Bolt s={26} c="#FFFFFF" /></View>
+        <Text style={st.popH}>AI 연결이 꺼졌어요</Text>
+        <Text keepAll style={st.popP}>{`지난 기간 AI 사용량을 다 써서 AI 연결 메모 ${count}개가 꺼졌어요.\n메모는 그대로 남아 있어요. 다시 켤 메모를 골라 AI 연결을 켜 주세요.`}</Text>
+        <View style={st.btns}><GBtn h={48} flex dark onPress={onClose}>확인</GBtn></View>
+      </View>
+    </Sheet>
+  );
+}
+
 /**
  * 웹 크레딧 충전 창 = 원본 studio.tsx ChargePopup (468 · 라운드 28 · 24/22)
  * 상품 고르기 · 결제 수단 · 약관 동의 · [N 크레딧 결제하기] · 'Google Play' 안내

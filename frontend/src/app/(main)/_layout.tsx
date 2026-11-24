@@ -17,7 +17,7 @@ import { useMyProfile } from '@/ui/screens/my/useMyProfile';
 import { planKey, withCurrentPlan } from '@/ui/screens/my/planLabel';
 import { useUsageView } from '@/ui/screens/my/useUsageView';
 import { useTrackedView } from '@/ui/screens/my/useTrackedView';
-import { useAiOffAll, useAiStats, useMyStocks } from '@/hooks/queries';
+import { useAiOffAll, useAiOffNoticeSeen, useAiStats, useMyStocks } from '@/hooks/queries';
 import Constants from 'expo-constants';
 import { legalDocument } from '@/ui/screens/auth/Auth.mock';
 import { mockCreditDefault, mockCreditPacks, mockPayMethods, mockDataSources, mockOss, mockPlanCompare, mockPlanDefault, mockPlanNotes, mockPlans, mockReportKinds, mockWithdrawCounts } from '@/ui/screens/my/My.mock';
@@ -43,7 +43,7 @@ import { labWatchDraft, labWatchItems, labWatchKey } from '@/ui/screens/studio/u
 import { useLabVars } from '@/ui/screens/studio/useLabVars';
 import { WebAudioPopup } from '@/ui/screens/studio/web/AudioPopup';
 import type { StudioKind } from '@/ui/screens/studio/Studio.types';
-import { WebAiOffChoice, WebChargePopup, WebCreditPopup, WebUsageSheet } from '@/ui/screens/studio/web/Credit';
+import { WebAiOffChoice, WebAiOffNotice, WebChargePopup, WebCreditPopup, WebUsageSheet } from '@/ui/screens/studio/web/Credit';
 import { WebStudioHome } from '@/ui/screens/studio/web/StudioHome';
 import { useUI } from '@/store/ui';
 import { ConfirmDialog } from '@/ui/shared/ConfirmDialog';
@@ -173,6 +173,9 @@ export default function MainLayout() {
     setAiChoice(true);
   }
   const aiOff = useAiOffAll();
+  /* 갱신일에 자동으로 꺼진 메모가 있으면 '지난 기간 사용량을 다 써서 N개가 꺼졌어요' 한 번 (닫거나 확인하면 서버 표시를 지움) */
+  const aiNoticeSeen = useAiOffNoticeSeen();
+  const [aiNoticeClosed, setAiNoticeClosed] = useState(false);
   /* 보고서·오디오 창에서 미리 고를 종목 (넛지에서 열 때만 · 다른 길로 열면 비워서 전체) */
   const [popPreset, setPopPreset] = useState<string[] | undefined>(undefined);
   const studioFeat = (k: StudioKind, codes?: string[]) => {
@@ -573,6 +576,11 @@ export default function MainLayout() {
       }}
     />
     <WebUsageSheet open={studioPop === 'usage'} pct={usage.usage_pct} refill={usage.usage_refill} onClose={() => setStudioPop(null)} onBuyCredit={() => setStudioPop('charge')} onChangePlan={() => setSettings('사용량')} />
+    <WebAiOffNotice
+      open={usage.auto_off > 0 && !aiNoticeClosed && !aiPending}
+      count={usage.auto_off}
+      onClose={() => { setAiNoticeClosed(true); aiNoticeSeen.mutate(); }}
+    />
     <WebAiOffChoice
       open={aiChoice && aiPending}
       count={usage.ai_count}

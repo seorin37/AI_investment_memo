@@ -421,6 +421,11 @@ export function useAiOffAll() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: () => api.aiOffAll(), onSuccess: () => qc.invalidateQueries() });
 }
+/** '지난 기간 사용량을 다 써서 N개가 꺼졌어요' 안내 확인 (2026-11-24) */
+export function useAiOffNoticeSeen() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: () => api.aiOffNoticeSeen(), onSuccess: () => qc.invalidateQueries({ queryKey: qk.usage }) });
+}
 export const useDataStats = () => useQuery({ queryKey: qk.dataStats, queryFn: api.getDataStats });
 
 export function useUpdateMe() {

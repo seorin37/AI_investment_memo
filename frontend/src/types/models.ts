@@ -610,6 +610,8 @@ export interface CreditUsage {
   paused: boolean; // 남은 크레딧 0 → AI 업데이트 멈춤
   /** 지금 AI 연결이 켜진 메모 수 (2026-11-24 '충전하지 않으면 N개가 모두 꺼져요' 선택 창) */
   ai_memo_count?: number;
+  /** 크레딧을 다 쓴 채 갱신일이 지나 자동으로 꺼진 메모 수 (0026, 안내 한 번) */
+  auto_off_count?: number;
 }
 
 /** 오늘의 퀴즈 (GET /quiz/today, backend/app/quiz, 문제 표 quiz_questions 0023) */
