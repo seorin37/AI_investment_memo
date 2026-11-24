@@ -6,8 +6,6 @@ import { TopBar } from '@/ui/layout/app/TopBar';
 import { useMyProfile } from '@/ui/screens/my/useMyProfile';
 import { AppJournal } from '@/ui/screens/journal/app/Journal';
 
-const NOT_YET = '아직 연결되지 않았어요 · 데이터는 그대로예요';
-
 /**
  * 앱 투자 기록 탭 = UI v2 (ui/screens/journal/app · ⑦). 웹은 journal.tsx.
  * 기록은 store/journal (실제 모드는 서버 · mock 모드는 앱을 켜 둔 동안) — 기록 화면(/journal/[id])과 같이 씀.
@@ -19,8 +17,6 @@ export default function JournalTab() {
   const setTabBarHidden = useUI((s) => s.setTabBarHidden);
   const j = useJournal();
   const [viewSig, setViewSig] = useState(0);
-  const [notice, setNotice] = useState<{ key: number; message: string }>();
-  const toast = (message: string) => setNotice((n) => ({ key: (n?.key ?? 0) + 1, message }));
   /* 기록 화면 열기 — 빠르게 두 번 눌러도 한 번만 */
   const busy = useRef(false);
   const go = (id: string) => {
@@ -49,14 +45,13 @@ export default function JournalTab() {
           title="투자 기록"
           actions={[
             { icon: 'moreHPurple', label: '더 보기', size: 34, iconSize: 18, color: '#16171A', onPress: () => setViewSig((n) => n + 1) },
-            { icon: 'bell', label: '알림', onPress: () => toast(NOT_YET) },
+            { icon: 'bell', label: '알림', onPress: () => router.push('/my-inbox') },
           ]}
           avatar={{ name: myName, onPress: () => router.push('/my') }}
         />
       }
       viewSheetSignal={viewSig}
       onSelectionChange={onSelectionChange}
-      notice={notice}
       flash={j.flash}
       onFlashDone={() => j.setFlash(null)}
       onOpen={(id) => go(id)}

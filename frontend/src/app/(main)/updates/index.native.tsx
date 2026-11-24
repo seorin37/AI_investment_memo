@@ -29,7 +29,7 @@ export default function UpdatesTab() {
           actions={[
             ...(onReadAll ? [{ icon: 'checkAll' as const, label: '모두 읽음', onPress: onReadAll, color: readAllOff ? '#C9CBD1' : undefined }] : []),
             { icon: 'search', label: '검색', onPress: onSearch },
-            { icon: 'bell', label: '알림', onPress: () => notice('알림') },
+            { icon: 'bell', label: '알림', onPress: () => router.push('/my-inbox') },
           ]}
           avatar={{ name: myName, onPress: () => router.push('/my') }}
         />
