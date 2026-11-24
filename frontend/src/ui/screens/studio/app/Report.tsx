@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
 import { Head } from '../../my/app/parts';
+import { AddMemoButton } from './AddMemoButton';
 import type { mockReport, ReportStock } from '../Studio.mock';
 import { Spark, SparkWide, WeekChart, issueParas, marketParas, quarterLine, reportSummary, sign, stripRefs, valuationCells, won } from '../reportParts';
 import { Keep } from '@/ui/shared/Dark';
@@ -17,9 +18,9 @@ type Rep = typeof mockReport;
 const C = { a2: '#6A42AB', ink: '#16171A', ink2: '#575B63', ink3: '#9A9EA7' };
 const up = (v: number) => (v >= 0 ? '#E5323B' : '#2F6BDB');
 
-export function AppReport({ rep, stocks, market, allDefault, onBack, onOpenMemo, onWatch }: {
+export function AppReport({ rep, stocks, market, allDefault, onBack, onOpenMemo, onWatch, isAdded }: {
   rep: Rep; stocks: ReportStock[]; market: boolean; allDefault: boolean;
-  onBack: () => void; onOpenMemo: (code: string) => void; onWatch: (s: ReportStock, i: number) => void;
+  onBack: () => void; onOpenMemo: (code: string) => void; onWatch: (s: ReportStock, i: number) => void; isAdded: (s: ReportStock, i: number) => boolean;
 }) {
   const insets = useSafeAreaInsets();
   const g = stocks.reduce((a, r) => a + r.counts.공시, 0), nw = stocks.reduce((a, r) => a + r.counts.뉴스, 0), mc = stocks.filter((r) => r.memo).length;
@@ -168,7 +169,7 @@ export function AppReport({ rep, stocks, market, allDefault, onBack, onOpenMemo,
                 {r.watch.map((w, i) => (
                   <View key={w.text} style={st.it}>
                     <View style={{ flex: 1, minWidth: 0 }}><Text keepAll style={st.itB}>{w.text}</Text><Text style={st.itS}>근거 · {w.why}</Text></View>
-                    <Pressable onPress={() => onWatch(r, i)} accessibilityRole="button" style={st.itBtn}><Text style={st.itBtnT}>메모에 추가</Text></Pressable>
+                    <AddMemoButton added={isAdded(r, i)} onPress={() => onWatch(r, i)} />
                   </View>
                 ))}
               </View>
@@ -294,8 +295,6 @@ const st = StyleSheet.create({
   it: { flexDirection: 'row', gap: 10, alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginTop: 8 },
   itB: { fontSize: 13.5, lineHeight: 20, fontWeight: '700', color: C.ink },
   itS: { fontSize: 12, lineHeight: 17, color: C.ink3 },
-  itBtn: { height: 32, paddingHorizontal: 12, borderRadius: 10, backgroundColor: C.ink, justifyContent: 'center' },
-  itBtnT: { fontSize: 12.5, lineHeight: 17, fontWeight: '700', color: '#FFFFFF' },
   src: { fontSize: 12.5, lineHeight: 24, color: '#3F434A' },
   srcS: { fontSize: 12.5, lineHeight: 20, color: C.ink3, marginTop: 8 },
   ft: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 18, marginHorizontal: 4 },

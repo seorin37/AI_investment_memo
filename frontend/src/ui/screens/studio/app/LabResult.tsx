@@ -6,6 +6,7 @@ import { Text } from '@/components/ui/AppText';
 import { PressScale } from '@/ui/motion/PressScale';
 import { Head } from '../../my/app/parts';
 import type { mockLabStocks, mockLabVars } from '../Studio.mock';
+import { AddMemoButton } from './AddMemoButton';
 import type { LabGroup } from '../labParts';
 import { Keep } from '@/ui/shared/Dark';
 
@@ -18,9 +19,10 @@ type Stock = (typeof mockLabStocks)[number];
 type Vars = typeof mockLabVars;
 const C = { ink: '#16171A', ink2: '#575B63', ink3: '#9A9EA7' };
 
-export function AppLabResult({ stock, vars, groups, disclaimer, onBack, onOpenMemo, onAgain }: {
+export function AppLabResult({ stock, vars, groups, disclaimer, onBack, onOpenMemo, onAgain, onAdd, isAdded }: {
   stock: Stock; vars: Vars; groups: LabGroup[]; disclaimer: string;
   onBack: () => void; onOpenMemo: () => void; onAgain: () => void;
+  onAdd: (title: string, why: string) => void; isAdded: (title: string) => boolean;
 }) {
   const insets = useSafeAreaInsets();
   const all = groups.flatMap((g) => g.leaves);
@@ -81,7 +83,12 @@ export function AppLabResult({ stock, vars, groups, disclaimer, onBack, onOpenMe
               <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#5B3BD1" strokeWidth={2}><Path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><Circle cx={12} cy={12} r={3} /></Svg>
               <Text style={st.chkHT}>추가로 확인할 것</Text>
             </View>
-            {chk.map((l) => <View key={l.no} style={st.it}><Text style={st.itB}>{l.check}</Text><Text style={st.itS}>근거 · {l.no} {l.check_why}</Text></View>)}
+            {chk.map((l) => (
+              <View key={l.no} style={st.it}>
+                <View style={{ flex: 1, minWidth: 0 }}><Text keepAll style={st.itB}>{l.check}</Text><Text style={st.itS}>근거 · {l.no} {l.check_why}</Text></View>
+                <AddMemoButton added={isAdded(l.check ?? '')} onPress={() => onAdd(l.check ?? '', l.check_why ?? '')} />
+              </View>
+            ))}
           </View>
         ) : null}
         <Text keepAll style={st.disc}>{disclaimer}</Text>
@@ -136,7 +143,7 @@ const st = StyleSheet.create({
   yP: { fontSize: 13, lineHeight: 21, color: '#3F3A2A', marginTop: 6 },
   chkH: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
   chkHT: { fontSize: 14, lineHeight: 20, fontWeight: '800', color: '#5B3BD1' },
-  it: { backgroundColor: '#FFFFFF', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginTop: 6 },
+  it: { flexDirection: 'row', gap: 10, alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginTop: 6 },
   itB: { fontSize: 13.5, lineHeight: 19, fontWeight: '700', color: C.ink },
   itS: { fontSize: 12, lineHeight: 17, color: C.ink3 },
   disc: { fontSize: 12, lineHeight: 17, color: C.ink3, textAlign: 'center', marginTop: 4 },
