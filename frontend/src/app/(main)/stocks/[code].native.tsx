@@ -1,6 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useMockNotice } from '@/components/layout/MobileScreen';
+import { copyText, memoText } from '@/lib/copyText';
 import { useUI } from '@/store/ui';
 import type { Memo } from '@/types/models';
 import { AppCompanyInfo } from '@/ui/screens/company/app/CompanyInfo';
@@ -86,7 +87,7 @@ export default function StockDetail() {
       }}
       onDelete={board.remove}
       onUndoDelete={board.undoRemove}
-      onCopy={() => {}}
+      onCopy={(ids) => copyText(memos.filter((m) => ids.includes(m.id)).map(memoText).join('\n\n'))}
       onChangeColor={(ids, color) => {
         bd.ops.color(ids, color);
         board.update((b) => ({ ...b, memos: b.memos.map((m) => (ids.includes(m.id) ? { ...m, color } : m)) }));

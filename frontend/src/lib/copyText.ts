@@ -16,3 +16,6 @@ export async function shareText(text: string): Promise<boolean> {
   await Share.share({ message: text }).catch(() => undefined);
   return false;
 }
+
+/** 메모 글: 제목 다음 줄부터 본문 */
+export const memoText = (m: { title: string; body: string }) => [m.title, m.body].filter(Boolean).join('\n');

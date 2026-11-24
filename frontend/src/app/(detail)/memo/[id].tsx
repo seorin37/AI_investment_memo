@@ -6,6 +6,7 @@ import type { MemoVersion } from '@/types/models';
 import { AppMemoDetail } from '@/ui/screens/memo/app/MemoDetail';
 import { useMockBoard } from '@/store/mockBoard';
 import { mockToday } from '@/ui/screens/memo/MemoDetail.mock';
+import { copyText, memoText } from '@/lib/copyText';
 import { useMemoScreen } from '@/ui/screens/memo/useMemoScreen';
 
 /**
@@ -54,7 +55,7 @@ export default function MemoDetailScreen() {
           router.back();
         }
       }}
-      onCopy={() => {}}
+      onCopy={() => copyText(memoText(memo))}
       onConnectAi={() => router.push({ pathname: '/memo/link', params: { id: memo.id } })}
       onDisconnectAi={() => (ops ? void ops.aiOff() : patch({ ai_linked: false }))}
       onSeenUpdates={() => (ops ? ops.seenUpdates() : setTimeout(() => setMockSeen(true), 4000))}
