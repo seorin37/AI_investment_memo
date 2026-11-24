@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
@@ -10,7 +10,6 @@ import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { NudgePill } from '@/ui/shared/NudgePill';
 import { PillSeg } from '@/ui/shared/PillSeg';
 import { Sheet } from '@/ui/shared/Sheet';
-import { AppStockCard } from '@/ui/shared/StockHead';
 import { appColor, curve, ft } from '@/ui/theme';
 import type { CompanyInfoProps } from '../CompanyInfo.types';
 import { FINANCIAL_HEALTH_NOTE, HEALTH_KEYS, TERM_TIP, TERMS, appQuoteRows, healthScore, healthVal, mdOf, mmddOf, won, yoyAt, type FinKey, type TermKey } from '../companyFormat';
@@ -45,7 +44,18 @@ const PROF: { name: string; color: string; key: 'op_margin' | 'net_margin' | 'ro
  * 기업 개요 · 재무 [분기] · 성장성 (막대 + 전년 동기 대비 선 · 칸 누르기) · 수익성 (범례 켜고 끄기) · 기업 건전성 (레이더 + 목록) · 출처
  * 카드는 화면에 들어올 때 아래 14에서 올라오고 그때 차트가 그려짐. ? 를 누르면 용어 시트.
  */
-export function AppCompanyInfo(p: CompanyInfoProps) {
+export function AppCompanyInfo(p: CompanyInfoProps & {
+  /** 메모 보드와 같은 카드 */
+  topCard: React.ReactNode;
+  /** 시세가 없거나 받는 중: 줄어든 머리에 숫자를 쓰지 않음 */
+  noPrice?: boolean;
+  /** 데이터를 받는 중: 카드 · 탭은 그대로 두고 아래만 뼈대 */
+  loading?: boolean;
+  startY?: number;
+  onScrollY?: (y: number) => void;
+}) {
+  const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const placed = useRef(false);
   const insets = useSafeAreaInsets();
   const { width: W, height: VH } = useWindowDimensions();
   const k = useMotionK();
@@ -108,20 +118,28 @@ export function AppCompanyInfo(p: CompanyInfoProps) {
 
   return (
     <View style={[st.root, { paddingTop: insets.top }]}>
-      <Header name={p.stock.name} price={p.stock.price} pct={p.stock.change_pct} compact={compact} line={y > 8} onBack={p.onBack} onMore={p.onMore} />
+      <Header name={p.stock.name} price={p.noPrice ? null : p.stock.price} pct={p.stock.change_pct} compact={compact} line={y > 8} onBack={p.onBack} onMore={p.onMore} />
       <ScrollView
         style={st.flex}
         contentContainerStyle={st.content}
         scrollEnabled={!locked}
-        onScroll={(e) => setY(e.nativeEvent.contentOffset.y)}
+        onScroll={(e) => {
+          setY(e.nativeEvent.contentOffset.y);
+          p.onScrollY?.(e.nativeEvent.contentOffset.y);
+        }}
+        ref={scroll}
+        onContentSizeChange={() => {
+          if (!placed.current && p.startY) scroll.current?.scrollTo({ y: p.startY, animated: false });
+          placed.current = true;
+        }}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
       >
-        <View style={st.sum} onLayout={(e) => setSumH(e.nativeEvent.layout.height)}>
-          <AppStockCard {...p.stock} />
+        <View onLayout={(e) => setSumH(e.nativeEvent.layout.height)}>
+          {p.topCard}
         </View>
         {tab}
-        {!ready ? (
+        {!ready || p.loading ? (
           <View>
             {[230, 300, 110].map((h) => (
               <View key={h} style={st.cd}>
@@ -329,7 +347,7 @@ export function AppCompanyInfo(p: CompanyInfoProps) {
         )}
         <View style={{ height: nudge && p.onNudge ? 76 : 0 }} />
       </ScrollView>
-      {nudge && p.onNudge && ready && !p.preparing ? (
+      {nudge && p.onNudge && ready && !p.loading && !p.preparing ? (
         <View style={st.nudgeWrap} pointerEvents="box-none">
           <NudgePill text="공시·재무 읽기 어려우셨죠? 핵심만 정리해 드려요" onGo={p.onNudge} onClose={() => setNudge(false)} />
         </View>
@@ -340,7 +358,7 @@ export function AppCompanyInfo(p: CompanyInfoProps) {
 }
 
 /** 머리 (원본 .ph2: 56 · 이름 18px ↔ 이름 15px + 가격 12px 600 · .28s 위아래로 바뀜) */
-function Header({ name, price, pct, compact, line, onBack, onMore }: { name: string; price: number; pct: number; compact: boolean; line: boolean; onBack: () => void; onMore?: () => void }) {
+function Header({ name, price, pct, compact, line, onBack, onMore }: { name: string; price: number | null; pct: number; compact: boolean; line: boolean; onBack: () => void; onMore?: () => void }) {
   const k = useMotionK();
   const [v] = useState(() => new Animated.Value(0));
   useEffect(() => {
@@ -364,10 +382,12 @@ function Header({ name, price, pct, compact, line, onBack, onMore }: { name: str
           <Text style={st.miniB} numberOfLines={1}>
             {name}
           </Text>
-          <Text style={[st.miniS, { color: up ? appColor.up : appColor.down }]}>
-            {won(price)}원 {up ? '+' : ''}
-            {pct.toFixed(2)}%
-          </Text>
+          {price === null ? null : (
+            <Text style={[st.miniS, { color: up ? appColor.up : appColor.down }]}>
+              {won(price)}원 {up ? '+' : ''}
+              {pct.toFixed(2)}%
+            </Text>
+          )}
         </Animated.View>
       </View>
       <Pressable onPress={onMore} accessibilityRole="button" accessibilityLabel="종목 메뉴" style={st.ib}>
@@ -509,8 +529,7 @@ const st = StyleSheet.create({
   mini: { alignItems: 'flex-start' },
   miniB: { ...ft(15, 1.2), fontWeight: '700', color: appColor.ink },
   miniS: { ...ft(12), fontWeight: '600' },
-  sum: { marginTop: 4, marginHorizontal: 16, marginBottom: 14 },
-  seg2: { marginHorizontal: 16, marginBottom: 14 },
+  seg2: { marginTop: 16, marginHorizontal: 16, marginBottom: 14 },
   cd: { backgroundColor: '#FFFFFF', borderRadius: 22, marginHorizontal: 16, marginBottom: 14, paddingTop: 18, paddingHorizontal: 16, paddingBottom: 16 },
   h3row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   h3: { ...ft(17), fontWeight: '700', color: appColor.ink },

@@ -15,8 +15,6 @@ import { AppSelectBar, AppSelectHeader, type AppSelAction } from '@/ui/shared/Se
 import { Sheet } from '@/ui/shared/Sheet';
 import { AppSnackbar } from '@/ui/shared/Snackbar';
 import { SpentBox } from '@/ui/shared/SpentBox';
-import { AppStockCard } from '@/ui/shared/StockHead';
-import { PriceNoteHead } from '../PriceNoteHead';
 import { SwipeRow } from '@/ui/shared/SwipeRow';
 import { AppViewToggle, type BoardView } from '@/ui/shared/ViewToggle';
 import { appColor, ft } from '@/ui/theme';
@@ -42,7 +40,7 @@ const EXAMPLES = ['실적 나오면 다시 보기', '많이 빠지면 다시 생
  * 순서: 고정 먼저(맨 위 고정 구역) → 저장된 순서. 일반 카드는 꾹 눌러 끌어서 바꿈 (전체 보기에서, SortCards). 웹과 같은 순서.
  * header: 평소 상단 바 (라우트가 줌). 고르는 동안은 'N개 선택' 머리로 바꿔 끼움.
  */
-export function AppMemoBoard(p: MemoBoardProps & { header: React.ReactNode }) {
+export function AppMemoBoard(p: MemoBoardProps & { header: React.ReactNode; topCard: React.ReactNode; startY?: number; onScrollY?: (y: number) => void }) {
   const paper = usePaper();
   const { width: W } = useWindowDimensions();
   const cw = (W - 44) / 2;
@@ -67,6 +65,7 @@ export function AppMemoBoard(p: MemoBoardProps & { header: React.ReactNode }) {
   const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const viewport = useRef<React.ComponentRef<typeof View>>(null);
   const scrollY = useRef(0);
+  const placed = useRef(false);
 
   const memoCount = p.memos.length;
   const newTotal = p.memos.reduce((n, m) => n + m.unread_updates, 0);
@@ -183,10 +182,8 @@ export function AppMemoBoard(p: MemoBoardProps & { header: React.ReactNode }) {
     <View ref={rootRef} collapsable={false} style={st.root}>
       {sel ? <AppSelectHeader count={sel.length} allSelected={sel.length === items.length} onClose={() => setSel(null)} onToggleAll={() => setSel(sel.length === items.length ? null : items.map((i) => i.key))} /> : p.header}
       <View ref={viewport} collapsable={false} style={st.flex}>
-      <ScrollView ref={scroll} style={st.flex} scrollEnabled={!locked} onScroll={(e) => { scrollY.current = e.nativeEvent.contentOffset.y; }} scrollEventThrottle={16} contentContainerStyle={st.content} showsVerticalScrollIndicator={false} onScrollBeginDrag={() => openRow && setOpenRow(null)}>
-        <View style={st.cardWrap}>
-          {p.priceNote ? <PriceNoteHead stock={p.stock} note={p.priceNote} variant="app" /> : <AppStockCard {...p.stock} />}
-        </View>
+      <ScrollView ref={scroll} style={st.flex} scrollEnabled={!locked} onScroll={(e) => { scrollY.current = e.nativeEvent.contentOffset.y; p.onScrollY?.(scrollY.current); }} onContentSizeChange={() => { if (!placed.current && p.startY) scroll.current?.scrollTo({ y: p.startY, animated: false }); placed.current = true; }} scrollEventThrottle={16} contentContainerStyle={st.content} showsVerticalScrollIndicator={false} onScrollBeginDrag={() => openRow && setOpenRow(null)}>
+        {p.topCard}
         <View style={st.seg}>
           <Seg variant="appBoard" value="board" onChange={(k) => k === 'company' && p.onChangeTab('company')} options={[{ key: 'board', label: '메모 보드' }, { key: 'company', label: '기업정보' }]} />
         </View>
@@ -350,7 +347,6 @@ const st = StyleSheet.create({
   root: { flex: 1, backgroundColor: appColor.surface },
   flex: { flex: 1 },
   content: { paddingBottom: 0 },
-  cardWrap: { marginTop: 6, marginHorizontal: 16, shadowColor: '#000000', shadowOpacity: 0.25, shadowRadius: 10, shadowOffset: { width: 0, height: 8 }, elevation: 3, borderRadius: 24, backgroundColor: '#ECEDF1' },
   seg: { marginTop: 16, marginHorizontal: 16 },
   mh: { ...ft(19), fontWeight: '800', color: appColor.ink, marginTop: 20, marginHorizontal: 16, marginBottom: 10 },
   spb: { marginTop: 2, marginHorizontal: 16, marginBottom: 12 },
