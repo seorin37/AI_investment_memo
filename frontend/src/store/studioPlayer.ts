@@ -160,6 +160,12 @@ export const useStudioPlayer = create<StudioPlayerState>((set, get) => {
         genT = [];
         const s = get();
         if (!s.job) return;
+        /* 기다리는 시간을 넘겼을 뿐 서버는 계속 만든다 → 실패 화면 대신 스튜디오로 돌아가 안내 (2026-11-24) */
+        if (err instanceof Error && err.name === 'ReportPending') {
+          set({ job: null, webView: s.webView === 'gen' ? 'home' : s.webView });
+          useUI.getState().showToast(err.message);
+          return;
+        }
         const at = s.job.steps.findIndex((x) => x !== 'done');
         step(at < 0 ? 2 : at, 'bad');
         set({ job: get().job && { ...get().job!, status: 'fail' }, webView: s.webView === 'gen' ? 'fail' : s.webView });

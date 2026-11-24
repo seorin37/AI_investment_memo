@@ -18,6 +18,12 @@ export default function StudioGenScreen() {
     if (openSig === first.current) return;
     router.replace(useStudioPlayer.getState().openKind === 'report' ? '/studio-report' : '/studio-player');
   }, [openSig, router]);
+  /* 보고서가 기다리는 시간을 넘기면 job 이 비워진다 (안내 토스트) → 스튜디오로 돌아감 (2026-11-24) */
+  const hadJob = useRef(!!job);
+  useEffect(() => {
+    if (job) hadJob.current = true;
+    else if (hadJob.current && Platform.OS !== 'web') router.back();
+  }, [job, router]);
   if (Platform.OS === 'web') return <Redirect href="/" />;
   if (!job) return null;
   return <AppGen job={job} steps={job.kind === 'report' ? mockReport.steps : mockAudioGen.steps} onBack={() => router.back()} onAway={() => router.back()} onRetry={retry} />;

@@ -193,6 +193,7 @@ class BoardRepository:
                 UPDATE memos
                 SET ai_linked = :enabled,
                     ai_linked_at = CASE WHEN :enabled THEN COALESCE(ai_linked_at, now()) ELSE NULL END,
+                    ai_auto_off_at = NULL,   -- 0026: 직접 켜거나 끄면 '자동으로 꺼짐' 표시는 지운다
                     updated_at = now()
                 WHERE id = :memo_id AND user_id = :user_id
                   AND kind = 'note' AND deleted_at IS NULL

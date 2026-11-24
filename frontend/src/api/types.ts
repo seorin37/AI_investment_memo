@@ -210,6 +210,10 @@ export interface Api {
   getAiTracking(): Promise<AiTrackingStock[]>;
   /** 이번 기간 AI 크레딧 사용량. 이번 달 기본량을 아직 안 받았으면 서버가 이 호출에서 지급한다 */
   getUsage(): Promise<CreditUsage>;
+  /** 크레딧을 다 쓴 뒤 'AI 연결 모두 끄기' (POST /me/ai-off, 2026-11-24). 끈 메모 수 */
+  aiOffAll(): Promise<{ turned_off: number }>;
+  /** 자동 꺼짐 안내 확인 (POST /me/ai-off/notice-seen). 메모는 꺼진 채 표시만 지운다 */
+  aiOffNoticeSeen(): Promise<{ cleared: number }>;
   /** 오늘의 퀴즈 1문제 (한국 시간 오전 10시마다 다음 문제). 문제가 없으면 404 */
   getTodayQuiz(): Promise<TodayQuiz>;
   getDataStats(): Promise<DataStats>;

@@ -77,6 +77,9 @@ export function WebMemoDialog(p: MemoDetailProps & { open: boolean }) {
   ];
   const view = { ...m, ai_linked: ai, color };
   const tracks = p.trackItems.map((t) => t.label).join(' · ');
+  /* 2026-11-24 크레딧을 다 쓰면(끄기 대기) 이 메모의 매일 확인은 가격 조건까지 멈춤. 스위치는 꺼진 모양, 누르면 '모두 끄기' 선택 창 */
+  const paused = !!p.aiSpent && m.ai_linked;
+  const aiCount = p.aiCount || 1;
   return (
     <Sheet open={p.open} onClose={close} width={680} label="내 메모" scrim="rgba(14,15,20,0.32)">
       <View style={[panel.box, { maxHeight: H - 32 }]}>
@@ -156,7 +159,7 @@ export function WebMemoDialog(p: MemoDetailProps & { open: boolean }) {
         ) : (
           <ScrollView style={st.aiArea} contentContainerStyle={st.aiIn}>
             <FadeIn style={st.aiGap}>
-              {p.aiSpent && m.ai_linked ? <SpentBox variant="web" title="AI 연결이 잠시 멈췄어요" body={'이번 달 AI 사용량을 다 썼어요. 다음 달 1일에 다시 찾아요.\n메모는 계속 쓸 수 있어요.'} onCredit={() => p.onSpentAction?.('credit')} onPlan={() => p.onSpentAction?.('plan')} /> : null}
+              {paused ? <SpentBox variant="web" title="AI 사용량을 다 썼어요" body={`충전하거나 플랜을 업그레이드하지 않으면 AI 연결 메모 ${aiCount}개가 모두 꺼져요.\n그때까지 이 메모의 AI 확인은 멈춰 있어요.`} onCredit={() => p.onSpentAction?.('credit')} onPlan={() => p.onSpentAction?.('plan')} onOff={() => p.onSpentAction?.('choice')} /> : null}
               <WebFeed memo={view} versions={p.versions} feed={p.feed} trackItems={p.trackItems} onOpenSource={p.onOpenSource} onOpenEvidence={(item) => setSub({ k: 'ev', item })} onNudge={p.onNudge} />
             </FadeIn>
           </ScrollView>
@@ -164,13 +167,15 @@ export function WebMemoDialog(p: MemoDetailProps & { open: boolean }) {
         {sub ? null : (
           <>
         <AiFooter
-          on={ai}
+          on={ai && !paused}
           set={(v) => {
+            /* 크레딧을 다 쓴 동안(끄기 대기)은 스위치가 꺼진 모양: 누르면 '충전 · 업그레이드 · 모두 끄기' 선택 창 (2026-11-24) */
+            if (paused) return p.onSpentAction?.('choice');
             /* 꺼진 메모를 켜면 AI 연결 창 (원본 onConnect) */
             if (v && !m.ai_linked) return p.onConnectAi();
             setAi(v);
           }}
-          sub={ai ? (tab === 1 ? `이 메모를 AI가 지켜보고 있어요${tracks ? ` · ${tracks}` : ''}` : `이 메모에서 ${p.trackItems.length || 1}개 항목을 지켜봐요.`) : AI_OFF}
+          sub={ai && paused ? 'AI 사용량을 다 써서 멈췄어요 · 충전하지 않으면 꺼져요' : ai ? (tab === 1 ? `이 메모를 AI가 지켜보고 있어요${tracks ? ` · ${tracks}` : ''}` : `이 메모에서 ${p.trackItems.length || 1}개 항목을 지켜봐요.`) : AI_OFF}
         />
         <Actions note="연결하지 않아도 메모는 그대로 남아요" ok="메모 저장" onCancel={close} onOk={save} />
           </>

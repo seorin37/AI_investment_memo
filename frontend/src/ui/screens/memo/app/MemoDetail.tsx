@@ -34,6 +34,9 @@ export function AppMemoDetail(p: MemoDetailProps) {
   const paper = usePaper();
   const insets = useSafeAreaInsets();
   const m = p.memo;
+  /* 2026-11-24 크레딧을 다 쓰면(끄기 대기) 이 메모의 매일 확인은 가격 조건까지 멈춤. 스위치는 꺼진 모양, 누르면 '모두 끄기' 선택 */
+  const paused = !!p.aiSpent && m.ai_linked;
+  const aiCount = p.aiCount || 1;
   const pc = paper[m.color];
   const joined = joinMemo(m.title, m.body);
   const [tab, setTab] = useState<'memo' | 'ai'>(p.initialTab ?? 'memo');
@@ -144,10 +147,10 @@ export function AppMemoDetail(p: MemoDetailProps) {
     } else if (a === 'pin') {
       p.onTogglePin(!m.pinned);
       setTimeout(() => toast(m.pinned ? '고정을 풀었어요' : '메모를 고정했어요'), 200);
-    } else if (a === 'ai') setTimeout(() => (m.ai_linked ? setOff(true) : p.onConnectAi()), 200);
+    } else if (a === 'ai') setTimeout(() => (paused ? p.onSpentAction?.('choice') : m.ai_linked ? setOff(true) : p.onConnectAi()), 200);
     else p.onDelete();
   };
-  const toggleAi = () => (m.ai_linked ? setOff(true) : p.onConnectAi());
+  const toggleAi = () => (paused ? p.onSpentAction?.('choice') : m.ai_linked ? setOff(true) : p.onConnectAi());
   const changed = m.updated_at.slice(0, 10) !== m.created_at.slice(0, 10);
 
   return (
@@ -194,9 +197,9 @@ export function AppMemoDetail(p: MemoDetailProps) {
           />
         </View>
       ) : null}
-      {p.aiSpent && !editing ? (
+      {paused && !editing ? (
         <View style={st.spb}>
-          <SpentBox variant="app" title="AI 연결이 잠시 멈췄어요" body={'이번 달 AI 사용량을 다 썼어요.\n12월 1일에 다시 찾아요. 메모는 계속 쓸 수 있어요.'} onCredit={() => p.onSpentAction?.('credit')} onPlan={() => p.onSpentAction?.('plan')} />
+          <SpentBox variant="app" title="AI 사용량을 다 썼어요" body={`충전하거나 플랜을 업그레이드하지 않으면 AI 연결 메모 ${aiCount}개가 모두 꺼져요.\n그때까지 이 메모의 AI 확인은 멈춰 있어요.`} onCredit={() => p.onSpentAction?.('credit')} onPlan={() => p.onSpentAction?.('plan')} onOff={() => p.onSpentAction?.('choice')} />
         </View>
       ) : null}
       <KeyboardAvoidingView style={st.flex} behavior="padding">
@@ -216,7 +219,7 @@ export function AppMemoDetail(p: MemoDetailProps) {
           ) : (
             <FadeIn key={aiReady ? 'ai' : 'sk'}>
               {aiReady ? (
-                <AppAiTab memo={m} versions={p.versions} feed={p.feed} trackItems={p.trackItems} lastChecked={p.lastChecked} openLatestRev={histSignal} onToggleAi={toggleAi} onOpenSource={p.onOpenSource} onOpenEvidence={p.onOpenEvidence} onNudge={p.onNudge} />
+                <AppAiTab memo={m} versions={p.versions} feed={p.feed} trackItems={p.trackItems} lastChecked={p.lastChecked} openLatestRev={histSignal} aiPaused={paused} onToggleAi={toggleAi} onOpenSource={p.onOpenSource} onOpenEvidence={p.onOpenEvidence} onNudge={p.onNudge} />
               ) : (
                 <AiTabSkeleton />
               )}

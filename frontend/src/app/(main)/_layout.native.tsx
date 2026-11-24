@@ -14,6 +14,7 @@ import { BottomTabBar } from '@/ui/layout/app/BottomTabBar';
 import { AppSnackbar } from '@/ui/shared/Snackbar';
 import { mockTabBadges } from '@/ui/layout/app/BottomTabBar.mock';
 import type { AppTab } from '@/ui/layout/app/BottomTabBar.types';
+import { useAiOffPrompt } from '@/ui/shared/useAiOffChoice';
 
 /**
  * 앱(안드로이드·iOS) 로그인 후 영역: UI v2 아래 탭 5개. 웹은 같은 폴더의 _layout.tsx(WebShell).
@@ -26,6 +27,8 @@ export default function MainTabsLayout() {
   const status = useAuth((s) => s.status);
   /* 스튜디오 만든 항목: 실제 모드면 서버 목록으로 (2026-11-23) */
   useStudioItemsSync();
+  /* 크레딧을 다 썼고 AI 연결 메모가 남아 있으면 '충전 · 업그레이드 · 모두 끄기' 한 번 묻기 (2026-11-24) */
+  useAiOffPrompt();
   /* 로그인한 채 다른 사용자로 바뀌면(A → B) 커짐 → 탭을 다시 마운트해 열린 화면을 새 사용자 값으로 (store/auth sessionKey) */
   const sessionKey = useAuth((s) => s.sessionKey);
   /* 메모 고르기 중 탭바 숨김 (옛 보드가 store/ui 로 알려 줌) */

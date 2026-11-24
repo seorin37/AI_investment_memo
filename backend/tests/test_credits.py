@@ -95,7 +95,7 @@ def _seed_items(c):
     return uid, ids
 
 
-def test_daily_skips_paused_users_but_keeps_price_and_charges_cards():
+def test_daily_skips_paused_users_and_charges_cards():
     from app.credits.daily import charge_run, eligible_item_ids
     engine = _engine()
     url = _url()
@@ -116,7 +116,7 @@ def test_daily_skips_paused_users_but_keeps_price_and_charges_cards():
         assert out == {"cards": 2, "charged": 1, "short": 1}       # 잔액까지만 빼고 모자란 양 기록
         assert charge_run(url, ups) == {"cards": 1, "charged": 0, "short": 1}   # 다시 돌려도 이미 뺀 카드는 안 뺌 (못 뺀 카드만 다시 시도)
         keep, info = eligible_item_ids(url, (SYMBOL,))
-        assert keep == [str(ids["price_below"])] and info["paused_users"] == [uid]   # 멈춰도 가격 조건은 돈다
+        assert keep == [] and info["paused_users"] == [uid]       # 2026-11-24: 잔액 0이면 가격 조건까지 전부 멈춘다
     finally:
         with engine.begin() as c:
             _cleanup(c)
@@ -149,7 +149,77 @@ def test_usage_api():
         app.dependency_overrides[get_current_user] = lambda: {"id": str(uid)}
         body = TestClient(app).get("/api/v1/me/usage").json()
         assert body["balance"] == 30 and body["usage_percent"] == 0 and body["paused"] is False and "갱신" in body["renew_label"]
+        assert body["ai_memo_count"] == 0
+        assert TestClient(app).post("/api/v1/me/ai-off").json() == {"turned_off": 0}
     finally:
         with engine.begin() as c:
             _cleanup(c)
         engine.dispose()
+
+
+def test_turn_off_all_pauses_items_and_keeps_memo():
+    """2026-11-24 선택 창 '모두 끄기': 메모는 남고 AI 연결만 꺼짐, 활성 항목은 멈춤(지우지 않음)."""
+    from app.credits import ai_off
+    engine = _engine()
+    try:
+        with engine.begin() as c:
+            if c.execute(text("SELECT to_regclass('credit_grants')")).scalar() is None:
+                pytest.skip("0019 전 DB")
+            _cleanup(c)
+            uid, ids = _seed_items(c)
+            assert ai_off.active_ai_count(c, uid) == 1
+            assert ai_off.turn_off_all(c, uid) == 1
+            assert ai_off.active_ai_count(c, uid) == 0
+            memo = c.execute(text("SELECT ai_linked, ai_linked_at, deleted_at FROM memos WHERE user_id = :u"), {"u": uid}).one()
+            assert memo == (False, None, None)
+            st = {r[0] for r in c.execute(text("SELECT status::text FROM tracking_items WHERE id = ANY(:i)"), {"i": list(ids.values())})}
+            assert st == {"paused"}
+            assert ai_off.turn_off_all(c, uid) == 0                  # 다시 불러도 그대로
+    finally:
+        with engine.begin() as c:
+            _cleanup(c)
+        engine.dispose()
+
+
+def test_should_auto_off_rule():
+    """갱신일 자동 끄기 조건 (2026-11-24): 새 기간을 처음 줬고 · 지난 기간이 있었고 · 지난 기간을 0으로 끝냄."""
+    from app.credits.ai_off import should_auto_off
+    assert should_auto_off(30, True, 0) is True
+    assert should_auto_off(0, True, 0) is False          # 이미 이번 기간을 받음 (같은 기간 두 번째 호출)
+    assert should_auto_off(30, False, 0) is False        # 첫 지급 (가입 직후)
+    assert should_auto_off(30, True, 5) is False         # 월 크레딧이 남아 만료되거나 산 크레딧이 남음
+
+
+def _seed_memo(c, uid):
+    c.execute(text("INSERT INTO stocks (symbol, name, market) VALUES (:s, '크레딧전자', 'KOSPI') ON CONFLICT DO NOTHING"), {"s": SYMBOL})
+    mid = c.execute(text("""INSERT INTO memos (user_id, symbol, kind, title, content, ai_linked)
+        VALUES (:u, :s, 'note', 't', 'b', true) RETURNING id"""), {"u": uid, "s": SYMBOL}).scalar()
+    c.execute(text("""INSERT INTO tracking_items (memo_id, type, description) VALUES (:m, 'topic', '소식')"""), {"m": mid})
+    return mid
+
+
+def test_renewal_turns_off_ai_when_period_ended_at_zero(db):
+    """지난 기간을 0으로 끝낸 채 갱신 → AI 연결 메모 모두 끔 + ai_auto_off_at. 두 번 불러도 한 번만. 안내 확인하면 표시만 지움."""
+    from app.credits import ai_off
+    c, uid = db
+    if c.execute(text("SELECT 1 FROM information_schema.columns WHERE table_name = 'memos' AND column_name = 'ai_auto_off_at'")).first() is None:
+        pytest.skip("0026 전 DB")
+    assert ledger.refresh(c, uid, NOV) == 0                           # 첫 지급: 끄지 않음
+    mid = _seed_memo(c, uid)
+    ledger.spend(c, uid, 30, "card", "tracking_update", 1, NOV)        # 다 씀
+    assert ledger.refresh(c, uid, DEC) == 1                           # 갱신일: 자동으로 끔
+    assert ledger.refresh(c, uid, DEC) == 0                           # 같은 기간 두 번째: 그대로
+    linked, auto = c.execute(text("SELECT ai_linked, ai_auto_off_at FROM memos WHERE id = :m"), {"m": mid}).one()
+    assert linked is False and auto is not None
+    assert ai_off.auto_off_count(c, uid) == 1
+    assert ai_off.clear_notice(c, uid) == 1 and ai_off.auto_off_count(c, uid) == 0
+    assert c.execute(text("SELECT ai_linked FROM memos WHERE id = :m"), {"m": mid}).scalar() is False   # 메모는 꺼진 채
+
+
+def test_renewal_keeps_ai_when_credits_left(db):
+    c, uid = db
+    ledger.refresh(c, uid, NOV)
+    mid = _seed_memo(c, uid)
+    ledger.spend(c, uid, 10, "card", "tracking_update", 1, NOV)        # 20 남은 채 끝남 → 만료돼도 다 쓴 게 아님
+    assert ledger.refresh(c, uid, DEC) == 0
+    assert c.execute(text("SELECT ai_linked FROM memos WHERE id = :m"), {"m": mid}).scalar() is True

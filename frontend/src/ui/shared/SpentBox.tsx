@@ -13,7 +13,8 @@ type HoverState = { pressed: boolean; hovered?: boolean };
  * web: 원본 x.tsx SpentBox (라운드 16 · #FFF4E5 · 20/16 · 제목 15/23 bold #7A4A00 · 본문 14/21 #8A5A00
  *      버튼 36 라운드 10 14 bold — 크레딧 구매 #15171A / 플랜 변경 흰 + 안쪽 1 #F1D9B3)
  */
-export function SpentBox({ variant, title, body, onCredit, onPlan }: { variant: 'app' | 'web'; title: string; body: string; onCredit: () => void; onPlan: () => void }) {
+/** onOff(2026-11-24): 'AI 연결 모두 끄기' 링크 (크레딧 0 · AI 연결 메모가 남아 있을 때 = 끄기 대기) */
+export function SpentBox({ variant, title, body, onCredit, onPlan, onOff }: { variant: 'app' | 'web'; title: string; body: string; onCredit: () => void; onPlan: () => void; onOff?: () => void }) {
   if (variant === 'app')
     return (
       <View style={st.app}>
@@ -32,6 +33,11 @@ export function SpentBox({ variant, title, body, onCredit, onPlan }: { variant: 
             <Text style={[st.appBT, { color: '#7A4B00' }]}>플랜 변경</Text>
           </Pressable>
         </View>
+        {onOff ? (
+          <Pressable onPress={onOff} accessibilityRole="button" style={st.off}>
+            <Text style={st.offT}>AI 연결 모두 끄기</Text>
+          </Pressable>
+        ) : null}
       </View>
     );
   return (
@@ -45,12 +51,20 @@ export function SpentBox({ variant, title, body, onCredit, onPlan }: { variant: 
         <Pressable onPress={onPlan} accessibilityRole="button" style={({ hovered }: HoverState) => [st.webB, st.webPln, hovered && { backgroundColor: '#FFFAF2' }]}>
           <Text style={[st.webBT, { color: '#7A4A00' }]}>플랜 변경</Text>
         </Pressable>
+        {onOff ? (
+          <Pressable onPress={onOff} accessibilityRole="button" style={st.offW}>
+            <Text style={st.offT}>AI 연결 모두 끄기</Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
 }
 
 const st = StyleSheet.create({
+  off: { alignSelf: 'center', paddingTop: 10, paddingHorizontal: 8 },
+  offW: { justifyContent: 'center', paddingHorizontal: 8 },
+  offT: { ...ft(13), fontWeight: '700', color: '#8A5A00', textDecorationLine: 'underline' },
   app: { borderRadius: 16, backgroundColor: '#FFF6E5', borderWidth: 1, borderColor: '#F6E2B8', paddingTop: 14, paddingHorizontal: 14, paddingBottom: 12 },
   appT: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   appTT: { ...ft(15), fontWeight: '800', color: '#5C3800' },
