@@ -70,19 +70,18 @@ export function AppTrash({ items, onBack, onRestore, onUndo, onPurge }: TrashPro
             <View style={st.empt}>
               <View style={st.ok}><OkIcon size={28} /></View>
               <Text style={st.emptB}>{items.length ? '찾는 항목이 없어요' : '휴지통이 비어 있어요'}</Text>
-              <Text keepAll style={st.emptS}>{items.length ? '다른 말로 찾아보세요' : '삭제한 메모·기록·종목이 여기에 30일 동안 보관돼요'}</Text>
+              <Text keepAll style={st.emptS}>{items.length ? '다른 말로 찾아보세요' : '지운 메모·기록·종목이 여기에 모여요'}</Text>
             </View>
           )}
         </Rv>
-        <Rv i={3}><Foot>영구 삭제하기 전까지 복원할 수 있어요.</Foot></Rv>
+        <Rv i={3}><Foot>휴지통 항목은 직접 지우기 전까지 보관돼요.</Foot></Rv>
       </Page>
       <AppSnackbar visible={!!snack} message="원래 자리로 복원했어요" onUndo={() => { if (snack) onUndo(snack); setSnack(null); }} style={st.snack} />
       <ConfirmSheet
         open={!!ask}
         red
         title="영구 삭제할까요?"
-        /* 종목: 원본 웹에 종목용 문구가 없어 새로 씀 */
-        body={ask?.kind === '종목' ? '이 종목과 메모를 영구 삭제할까요? 되돌릴 수 없어요.' : ask?.kind === '스튜디오' ? '삭제하면 되돌릴 수 없어요. 다시 보려면 새로 만들어야 해요.' : '삭제하면 되돌릴 수 없어요. 이 메모의 수정 이력과 받은 소식도 함께 지워져요.'}
+        body={ask ? `'${ask.title}'을(를) 영구 삭제하면 되돌릴 수 없어요.` : ''}
         ok="영구 삭제"
         onCancel={() => setAsk(null)}
         onOk={() => { const t = ask; setAsk(null); onPurge(t); }}
