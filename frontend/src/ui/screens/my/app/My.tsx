@@ -6,7 +6,7 @@ import { Text } from '@/components/ui/AppText';
 import { Avatar } from '@/ui/shared/Avatar';
 import { SkySwitch } from '@/ui/shared/SkySwitch';
 import type { AppMyProps } from '../My.types';
-import { Chev, Grp, Head, Item, Lb, MC, Rv, UsageBar } from './parts';
+import { Chev, Grp, Head, Item, MC, Rv, UsageBar } from './parts';
 import { DARK_SUPPORTED } from '@/ui/shared/Dark';
 
 /**
@@ -28,7 +28,7 @@ export function AppMy(p: AppMyProps) {
   return (
     <View style={[st.root, { paddingTop: insets.top }]}>
       <Head title="MY" onBack={p.onBack} />
-      <ScrollView contentContainerStyle={[st.w, { paddingBottom: 28 + insets.bottom }]} showsVerticalScrollIndicator={false}>
+      <ScrollView style={st.sc} contentContainerStyle={st.w} showsVerticalScrollIndicator={false}>
         <Rv i={0}>
           <Pressable onPress={p.onProfile} style={({ pressed }) => [st.prof, pressed && { backgroundColor: '#F7F7F9' }]} accessibilityRole="button" accessibilityLabel={`${p.profile.name} 내 프로필`}>
             <Avatar name={p.profile.name} photoUrl={p.profile.photoUrl} size={50} variant="app" boxStyle={st.avb} textStyle={st.avbT} />
@@ -52,9 +52,9 @@ export function AppMy(p: AppMyProps) {
             </View>
           </Pressable>
         </Rv>
-        <Rv i={2}><Lb>계정</Lb></Rv>
+        <Rv i={2}><Sec>계정</Sec></Rv>
         <Rv i={3}><Grp><Item title="알림" last onPress={() => p.onOpen('noti')} /></Grp></Rv>
-        <Rv i={4}><Lb>화면</Lb></Rv>
+        <Rv i={4}><Sec>화면</Sec></Rv>
         <Rv i={4}>
           <Grp>
             {DARK_SUPPORTED ? (
@@ -66,9 +66,9 @@ export function AppMy(p: AppMyProps) {
             ) : null}
           </Grp>
         </Rv>
-        <Rv i={4}><Lb>서비스</Lb></Rv>
+        <Rv i={4}><Sec>서비스</Sec></Rv>
         <Rv i={5}><Grp><Item title="사용량" value={`${p.usage_pct}%`} last onPress={() => p.onOpen('usage')} /></Grp></Rv>
-        <Rv i={6}><Lb>기타</Lb></Rv>
+        <Rv i={6}><Sec>기타</Sec></Rv>
         <Rv i={7}>
           <Grp>
             <Item title="데이터" onPress={() => p.onOpen('data')} />
@@ -76,7 +76,7 @@ export function AppMy(p: AppMyProps) {
             <Item title="정보" last onPress={() => p.onOpen('info')} />
           </Grp>
         </Rv>
-        <Rv i={8}><Lb>지원</Lb></Rv>
+        <Rv i={8}><Sec>지원</Sec></Rv>
         <Rv i={9}>
           <Grp>
             <Item title="피드백 보내기" onPress={() => p.onOpen('fb')} />
@@ -87,6 +87,11 @@ export function AppMy(p: AppMyProps) {
       </ScrollView>
     </View>
   );
+}
+
+/* 구역 이름: 줄 15 → 앞 카드 끝에서 다음 카드까지 16 + 15 + 7 = 38 */
+function Sec({ children }: { children: string }) {
+  return <View style={st.sec}><Text keepAll style={st.secT}>{children}</Text></View>;
 }
 
 function SunIcon() {
@@ -104,19 +109,24 @@ function MoonIcon() {
 const st = StyleSheet.create({
   root: { flex: 1, backgroundColor: MC.bg },
   flex: { flex: 1, minWidth: 0 },
-  w: { paddingHorizontal: 16 },
+  /* 머리 58 중 4 만큼 올려 프로필 카드를 원본 위치로 */
+  sc: { marginTop: -4 },
+  w: { paddingHorizontal: 16, paddingBottom: 28 },
+  sec: { paddingTop: 16, paddingLeft: 4, paddingBottom: 7 },
+  secT: { fontSize: 12.5, lineHeight: 15, color: MC.ink3 },
   prof: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, backgroundColor: '#FFFFFF', borderRadius: 18 },
   avb: { width: 50, height: 50, borderRadius: 25, backgroundColor: MC.aSoft, alignItems: 'center', justifyContent: 'center' },
   avbT: { fontSize: 20, lineHeight: 26, fontWeight: '800', color: MC.a2 },
   profB: { fontSize: 18, lineHeight: 26, fontWeight: '700', color: MC.ink },
   profS: { fontSize: 12.5, lineHeight: 18, color: MC.ink3, flexShrink: 1 },
+  /* 높이 84 = 14 + 18 + 막대 26 + 14 + 12 */
   use: { marginTop: 10, paddingTop: 14, paddingHorizontal: 16, paddingBottom: 12, backgroundColor: '#FFFFFF', borderRadius: 18 },
   useT: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  useTT: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: MC.ink },
+  useTT: { fontSize: 14, lineHeight: 18, fontWeight: '700', color: MC.ink },
   more: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center' },
-  moreT: { fontSize: 13, lineHeight: 19, fontWeight: '700', color: MC.a2 },
+  moreT: { fontSize: 13, lineHeight: 18, fontWeight: '700', color: MC.a2 },
   useM: { flexDirection: 'row', justifyContent: 'space-between' },
-  useMT: { fontSize: 12, lineHeight: 17, color: MC.ink2 },
+  useMT: { fontSize: 12, lineHeight: 14, color: MC.ink2 },
   dk: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 52, paddingHorizontal: 16 },
   dki: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center' },
   dkT: { fontSize: 15, lineHeight: 22, color: MC.ink },

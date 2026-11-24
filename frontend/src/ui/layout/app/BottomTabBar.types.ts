@@ -2,7 +2,8 @@
 export type AppTab = 'home' | 'updates' | 'stocks' | 'journal' | 'studio';
 
 export interface BottomTabBarProps {
-  current: AppTab;
+  /** 고른 탭. null 이면 선택 없음 (MY) */
+  current: AppTab | null;
   onPress: (tab: AppTab) => void;
   /** 탭 아이콘 위 빨간 숫자 (원본: 업데이트 = 고른 종목의 읽지 않은 소식 수) */
   badges?: Partial<Record<AppTab, number>>;
