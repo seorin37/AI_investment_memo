@@ -10,7 +10,7 @@ export const mockBase = (code: string, first = false): BoardCards => (first || c
 export const mockKey = (code: string, first = false) => (first ? `first:${code}` : code);
 
 /**
- * 메모 보드 카드 상태 (앱·웹 같이 씀): 화면을 먼저 바꾸고, 실제 모드면 서버(useBoardData), mock 이면 기기 저장(store/mockBoard).
+ * 메모 보드 카드 상태 (앱. 웹 보드는 자기 상태): 화면을 먼저 바꾸고, 실제 모드면 서버(useBoardData), mock 이면 기기 저장(store/mockBoard).
  */
 export function useBoardCards(code: string, openId: string | null, first = false) {
   const real = !env.useMock;

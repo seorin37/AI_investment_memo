@@ -34,7 +34,7 @@ export interface MadeItem {
   /** 주간보고서: 서버가 만든 보고서 (없으면 mock 예시) — reportView.fromServerReport (2026-11-23) */
   report?: { rep: typeof mockReport; stocks: ReportStock[] };
   /** 투자 실험실: 종목 · 조건 4칸 (상승/유지/하락) */
-  lab?: { code: string; dirs: ('상승' | '유지' | '하락')[]; name?: string; groups?: LabRunGroup[] };
+  lab?: { code: string; dirs: ('상승' | '유지' | '하락')[]; name?: string; groups?: LabRunGroup[]; added?: Record<string, string> };
 }
 
 export interface StudioHomeProps {

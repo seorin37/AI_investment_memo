@@ -3,6 +3,7 @@ import { Linking } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useUpdatesData } from '@/ui/screens/updates/useUpdatesData';
 import { WebUpdates } from '@/ui/screens/updates/web/Updates';
+import { useStudioPlayer } from '@/store/studioPlayer';
 
 /** 웹 종목 업데이트 = UI v2 (⑥ · 원본 3.2). 같은 화면에서 그 종목 칩이 골라진 상태. 데이터: useUpdatesData */
 export default function StockUpdatesPage() {
@@ -20,7 +21,8 @@ export default function StockUpdatesPage() {
       onOpenBoard={(c) => router.navigate({ pathname: '/stocks/[code]', params: { code: c } })}
       onOpenSource={(u) => u.url && Linking.openURL(u.url)}
       onMarkRead={onMarkRead}
-      onNudge={() => {}}
+      /* 넛지: AI 오디오 만들기 창 · 이 종목만 미리 골라 둠 */
+      onNudge={() => useStudioPlayer.getState().askStudio('audio', code ? [code] : undefined)}
     />
   );
 }

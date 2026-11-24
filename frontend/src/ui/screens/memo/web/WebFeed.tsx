@@ -176,7 +176,7 @@ export function WebFeed({ memo, versions, feed, trackItems, onOpenSource, onOpen
       </View>
       {memo.ai_linked && n >= 2 && nudge && onNudge ? (
         <View style={st.nudge}>
-          <Pressable onPress={onNudge} accessibilityRole="button" style={st.nGo}>
+          <Pressable onPress={() => { setNudge(false); onNudge(); }} accessibilityRole="button" style={st.nGo}>
             <NudgeSpark />
             <Text style={st.nGoT} numberOfLines={1}>
               이 메모에 붙은 소식, 한 번에 정리해 드릴까요?

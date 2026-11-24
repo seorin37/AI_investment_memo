@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Animated, Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
+import { Animated, Pressable, StyleSheet, View } from 'react-native';
 import Svg, { ClipPath, Defs, Path } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
 import type { Memo } from '@/types/models';
@@ -130,12 +130,7 @@ export function AppMemoCard({ memo: m, width, height, selecting, selected, aiSpe
   );
 }
 
-/** 웹: 끌 수 있는 카드의 커서 (RN 타입에 없는 웹 값) */
-export const GRAB = { cursor: 'grab' } as unknown as ViewStyle;
-
 export interface WebMemoCardProps {
-  /** 끌 수 있는 카드 (고정 아님) */
-  grab?: boolean;
   memo: Memo;
   selecting: boolean;
   selected: boolean;
@@ -162,7 +157,7 @@ function Tip({ children, style }: { children: string; style: object }) {
  * 테이프 84×34 (위 -16): 고정이면 붙은 테이프 (hover 시 떼려는 모양) · 아니면 hover 시 점선 · 배지 24 (위 -10 · 오른쪽 -10) · ⋯ 메뉴 hover (아래 8 · 왼쪽 12)
  * hover: 종이가 위로 3 · -.3° 기울고 그림자
  */
-export function WebMemoCard({ memo: m, grab, selecting, selected, onOpen, onPin, onToggleAi, onMenu, onPick }: WebMemoCardProps) {
+export function WebMemoCard({ memo: m, selecting, selected, onOpen, onPin, onToggleAi, onMenu, onPick }: WebMemoCardProps) {
   const paper = usePaper();
   const p = paper[m.color];
   const [hov, setHov] = useState(false);
@@ -179,7 +174,7 @@ export function WebMemoCard({ memo: m, grab, selecting, selected, onOpen, onPin,
       }}
     >
       {/* 원본도 카드 바깥은 div (안에 플러그 버튼이 있어 button 으로 두면 웹에서 button 이 겹침) */}
-      <Pressable onPress={selecting ? onPick : onOpen} accessibilityLabel={m.title} style={[st.webPaperWrap, hov && !selecting && st.webHover, grab && GRAB]}>
+      <Pressable onPress={selecting ? onPick : onOpen} accessibilityLabel={m.title} style={[st.webPaperWrap, hov && !selecting && st.webHover]}>
         <PaperFace width={276} height={200} bg={p.bg} accent={p.accent} variant="web" />
         <View style={st.webIn}>
           <View style={st.webTop}>

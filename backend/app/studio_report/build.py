@@ -106,6 +106,7 @@ def price_block(rows: list[dict], monday: date, friday: date) -> dict[str, Any] 
         "pct": round((close - prev) / prev * 100, 1),
         "hi": won(max(float(r["high"] or r["close"]) for r in week)),
         "lo": won(min(float(r["low"] or r["close"]) for r in week)),
+        "lo_num": min(float(r["low"] or r["close"]) for r in week),   # 메모 제안(이번 주 저가)용 숫자
         "vol": (f"{(vol_now - vol_before) / vol_before * 100:+.0f}%" if vol_before else ""),
         "yr": [math.floor(lo_all - pad), math.ceil(hi_all + pad)],
     }
@@ -237,6 +238,66 @@ class MemoLink:
     linked_topics: list[str] = field(default_factory=list)
 
 
+CARD_KIND = {"news": "카드", "disclosure": "카드", "answer": "답", "price_condition": "가격"}
+ANSWER_TAIL = re.compile(r"\s*사고파는 결정은 정해 드리지 않아요\.?\s*위 자료로 판단해 보세요\.?\s*$")
+NO_ANSWER = "확인되지 않았어요"
+
+
+def memo_digest_rows(rows: list[dict], numbers: dict[str, int], close: float | None = None, as_of: date | None = None,
+                     max_memos: int = 5, max_cards: int = 3) -> list[dict]:
+    """메모별 그 주 카드·답·가격 카드 목록 (코드, 카드 문장 그대로). numbers: 보고서 출처 ref → 번호.
+    카드가 붙은 메모가 먼저(최근 카드 순), 그다음 최근 작성 순. '확인되지 않았어요' 답은 뺀다."""
+    memos: dict[int, dict] = {}
+    for r in rows:
+        m = memos.get(r["memo_id"])
+        if m is None:
+            title = (r["title"] or "").strip() or next((ln.strip() for ln in (r["content"] or "").splitlines() if ln.strip()), "")[:40]
+            made = r["created_at"].astimezone(SEOUL)
+            m = memos[r["memo_id"]] = {"memo_id": str(r["memo_id"]), "title": title or "제목 없는 메모", "_made": made,
+                                      "meta": f"{made.month}.{made.day} 작성", "cards": [], "_seen": set(), "prices": []}
+        if r.get("item_type") in ("price_below", "price_above") and r.get("price_threshold") is not None:
+            th = float(r["price_threshold"])
+            if (r["item_type"], th) not in m["prices"]:
+                m["prices"].append((r["item_type"], th))
+        if r.get("upd_id") is None or r["upd_id"] in m["_seen"]:
+            continue
+        m["_seen"].add(r["upd_id"])
+        text = ANSWER_TAIL.sub("", (r["summary"] or "").strip())
+        if r["upd_type"] == "answer" and NO_ANSWER in text:
+            continue
+        at = r["upd_at"].astimezone(SEOUL)
+        refs = sorted({numbers[x] for x in (r.get("refs") or []) if x in numbers})
+        m["cards"].append({"id": str(r["upd_id"]), "date": f"{at.month}.{at.day:02d}", "kind": CARD_KIND.get(r["upd_type"], "카드"),
+                           "title": (r["upd_title"] or "").strip(), "text": text[:160], "refs": refs, "_at": at})
+    out = []
+    for m in memos.values():
+        m["cards"].sort(key=lambda c: c["_at"], reverse=True)
+        more = max(0, len(m["cards"]) - max_cards)
+        cards = [{k: v for k, v in c.items() if not k.startswith("_")} for c in m["cards"][:max_cards]]
+        status = []
+        for kind, th in m["prices"]:
+            if close is not None:
+                hit = close <= th if kind == "price_below" else close >= th
+                cond, day = f"가격 조건 {won_short(th)} {'아래' if kind == 'price_below' else '위'}", f"{md(as_of)} " if as_of else ""
+                status.append(f"{cond}는 {day}종가 {won(close)}원으로 도달했어요" if hit
+                              else f"{cond}는 {day}종가 {won(close)}원 기준으로 아직이에요")
+        out.append({"memo_id": m["memo_id"], "title": m["title"], "meta": m["meta"], "cards": cards, "more": more,
+                    "status": status, "_last": m["cards"][0]["_at"] if m["cards"] else None, "_made": m["_made"]})
+    out.sort(key=lambda m: (m["_last"] is not None, m["_last"] or m["_made"]), reverse=True)
+    return [{k: v for k, v in m.items() if not k.startswith("_")} for m in out[:max_memos]]
+
+
+def digest_code_line(memos: list[dict]) -> str:
+    """카드가 없을 때 쓰는 코드 문장 (+ 가격 조건 상태). LLM이 실패해도 이 문장."""
+    n, k = len(memos), sum(1 for m in memos if m["cards"])
+    head = f"이번 주 내 메모 {n}개 중 {k}개에 새 소식이 붙었어요." if k else f"이번 주 내 메모 {n}개에 새로 붙은 소식은 없었어요."
+    for m in memos:
+        for st in m.get("status") or []:
+            head += f" '{m['title']}' 메모의 {st}."
+            break
+    return head
+
+
 def memo_section(links: list[MemoLink]) -> dict | None:
     """화면 칸이 하나라 카드가 붙은 메모 → 가장 최근 메모 순으로 하나만."""
     if not links:
@@ -252,15 +313,72 @@ def memo_section(links: list[MemoLink]) -> dict | None:
     return {"memo_id": str(m.memo_id), "title": m.title, "meta": meta, "body": body, "linked_count": len(m.linked)}
 
 
-def watch_lines(links: list[MemoLink], close: float, as_of: date, has_items: bool) -> list[dict]:
-    out = []
-    for m in links:
-        for kind, th in m.prices:
-            diff = (close - th) / th * 100
-            out.append({"text": f"메모의 가격 조건 {won_short(th)}과 {md(as_of)} 종가의 차이 ({abs(diff):.1f}% {'위' if diff >= 0 else '아래'})",
-                        "why": "내 메모 가격 조건"})
-    if not has_items:
-        out.append({"text": "다음 주 새 공시·뉴스가 나오는지", "why": "이번 주 소식 0건"})
+# 정기 공시 마감 (12월 결산 기준): 분기 끝 + 45일, 사업보고서는 결산 + 90일
+PERIODIC_DUE = [(5, 15, "1분기 보고서"), (8, 14, "반기보고서"), (11, 14, "3분기 보고서"), (3, 31, "사업보고서")]
+TRACKED_REPORT = re.compile(r"보고서|실적")
+
+
+def next_periodic(as_of: date) -> tuple[date, str]:
+    """as_of 다음에 오는 정기 공시 마감과 이름."""
+    cands = []
+    for y in (as_of.year, as_of.year + 1):
+        for m, d, name in PERIODIC_DUE:
+            due = date(y, m, d)
+            if due > as_of:
+                cands.append((due, name))
+    return min(cands)
+
+
+def periodic_suggestion(as_of: date, name: str = "", quarter: dict | None = None) -> dict:
+    """다음 정기 공시 제안 — 종목 이름과 최근 분기 실적 숫자를 넣어 종목마다 다른 문장으로 (2026-11-24).
+    숫자는 quarter_block 값 그대로 (예측 없이 '최근 분기는 얼마였다'만)."""
+    due, rep = next_periodic(as_of)
+    who = f"{name} " if name else ""
+    if quarter and (quarter.get("operating_income") or quarter.get("net_income")):
+        key, val = ("영업이익", quarter["operating_income"]) if quarter.get("operating_income") else ("순이익", quarter["net_income"])
+        yoy = quarter.get("op_yoy") if key == "영업이익" else None
+        q = quarter.get("label", "최근 분기").split(" ")[-1]                       # '2026년 3분기' → '3분기'
+        yoy_txt = f", 전년 대비 {yoy:+.1f}%" if isinstance(yoy, (int, float)) else ""
+        return {"sid": "periodic", "kind": "schedule",
+                "text": f"{due.month}월 {rep}에 {q} 이후 {key}이 어떻게 나오는지 ({q} {val}{yoy_txt})",
+                "memo_title": f"{who}{rep} 실적".strip()[:20],
+                "memo_body": f"{who}{rep}({due.month}월 {due.day}일까지) 나오면 매출이랑 {key} 알려줘. {q} {key}은 {val}{yoy_txt}였어",
+                "why": f"정기 공시 일정 · {quarter.get('label', '최근 분기')} 실적"}
+    return {"sid": "periodic", "kind": "schedule", "text": f"{who}{due.year}년 {due.month}월 {rep}에 실적이 어떻게 나오는지",
+            "memo_title": f"{who}{rep} 실적".strip()[:20],
+            "memo_body": f"{who}{rep}({due.month}월 {due.day}일까지) 나오면 매출이랑 영업이익 알려줘", "why": "정기 공시 일정"}
+
+
+def watch_lines(links: list[MemoLink], close: float, as_of: date, has_items: bool, *, code: str = "",
+                items: list | None = None, lo: float | None = None, suggest: list[dict] | None = None,
+                name: str = "", quarter: dict | None = None) -> list[dict]:
+    """앞으로 지켜볼 것 = 다음에 추적해 볼 메모 제안 (2026-11-24: 칸이 비지 않게 종목마다 최소 1개).
+    제안(kind follow·schedule·price)은 '메모에 추가'로 종목 메모 창에 memo_title·memo_body를 채워 연다.
+    이미 추적 중인 가격 조건은 kind tracking(버튼 없이 '추적 중')으로 뒤에 둔다. sid는 보고서 안 종목별 고유값."""
+    items = items or []
+    topics = [t for m in links for _, t in m.topics]
+    has_price = any(m.prices for m in links)
+    out: list[dict] = []
+    for k, s in enumerate(suggest or []):                                   # 1) LLM: 이번 주 소식의 후속
+        out.append({"sid": f"f{k}", "kind": "follow", "text": s["text"], "memo_title": s["memo_title"],
+                    "memo_body": s["memo_body"], "why": "이번 주 소식 " + "".join(f"[{r}]" for r in s["refs"])})
+    ir = next((i for i in items if i.kind == "공시" and "기업설명회" in (i.title or "")), None)
+    if ir is not None:                                                     # 2) 코드: 이번 주 IR 안내 공시
+        out.append({"sid": "ir", "kind": "schedule", "text": "IR(기업설명회)에서 어떤 내용이 나오는지",
+                    "memo_title": "IR 내용 확인", "memo_body": f"IR 안내 공시[{ir.no}]의 기업설명회 결과나 자료 나오면 알려줘",
+                    "why": f"이번 주 공시 [{ir.no}]"})
+    if not any(TRACKED_REPORT.search(t) for t in topics):                  # 3) 코드: 다음 정기 공시
+        out.append(periodic_suggestion(as_of, name, quarter))
+    if not has_price and lo:                                               # 4) 코드: 이번 주 저가 (사실 숫자)
+        out.append({"sid": "low", "kind": "price", "text": f"이번 주 저가 {won(lo)}원 아래로 내려가는지",
+                    "memo_title": f"{won_short(lo)} 아래면 다시 보기", "memo_body": f"{won(lo)}원 아래로 내려가면 알려줘. 이번 주 저가였어",
+                    "why": "이번 주 저가"})
+    out = out[:3]
+    for k, (m, (kind, th)) in enumerate((m, pr) for m in links for pr in m.prices):   # 5) 이미 추적 중인 가격 조건
+        diff = (close - th) / th * 100
+        out.append({"sid": f"t{k}", "kind": "tracking", "tracked": True,
+                    "text": f"메모의 가격 조건 {won_short(th)}과 {md(as_of)} 종가의 차이 ({abs(diff):.1f}% {'위' if diff >= 0 else '아래'})",
+                    "why": "내 메모 가격 조건"})
     return out
 
 
@@ -308,6 +426,17 @@ LEFT JOIN news_articles a ON a.id = us.news_id LEFT JOIN news_sources src ON src
 LEFT JOIN disclosures d ON d.rcept_no = us.disclosure_rcept_no
 WHERE tu.tracking_item_id = ANY(:ids)
   AND ((a.published_at >= :start AND a.published_at < :end) OR d.rcept_dt BETWEEN :mon AND :fri)"""
+# 이번 주 내 메모 정리 (2026-11-24): 그 종목의 AI 연결 메모와, 그 주 소식으로 만들어진 카드(다음 날 아침 생성)
+DIGEST_SQL = """SELECT m.id AS memo_id, m.title, m.content, m.created_at, ti.type::text AS item_type, ti.price_threshold,
+       tu.id AS upd_id, tu.type::text AS upd_type, tu.title AS upd_title, tu.summary, tu.created_at AS upd_at,
+       (SELECT array_agg(coalesce('news:' || us.news_id::text, 'disc:' || us.disclosure_rcept_no))
+          FROM update_sources us WHERE us.update_id = tu.id) AS refs
+FROM memos m
+LEFT JOIN tracking_items ti ON ti.memo_id = m.id
+LEFT JOIN tracking_updates tu ON tu.tracking_item_id = ti.id AND tu.created_at >= :cs AND tu.created_at < :ce
+WHERE m.user_id = :u AND m.symbol = :s AND m.deleted_at IS NULL AND m.ai_linked AND m.kind = 'note'
+  AND m.created_at < :me                                   -- 그 주가 끝나기 전에 쓴 메모만
+ORDER BY m.id, tu.created_at"""
 NEWS_SNIP_SQL = """SELECT a.id, a.summary,
        (SELECT l.lead_text FROM news_article_leads l WHERE l.news_id = a.id) AS lead,
        (SELECT nc.chunk_text FROM news_chunks nc WHERE nc.news_id = a.id ORDER BY nc.chunk_index LIMIT 1) AS chunk
@@ -503,9 +632,13 @@ def build_report(db, user_id: int, codes: list[str] | None = None, today: date |
         s, p, items, links = sec["s"], sec["p"], sec["items"], sec["links"]
         shown_items = [i for i in items if i.show]
         story, issues, source = code_story(p, shown_items), "", "code"
+        suggest: list[dict] = []
         if llm is not None:
             from .story import llm_stock
-            story, issues, meta = llm_stock(s["name"], p, items, llm, story)
+            tracked = [t for m in links for _, t in m.topics] + [f"{won_short(th)} {'아래' if k == 'price_below' else '위'}" for m in links for k, th in m.prices]
+            extra = ["[이미 추적 중인 메모] " + " / ".join(tracked)] if tracked else None
+            story, issues, meta = llm_stock(s["name"], p, items, llm, story, extra=extra)
+            suggest = meta.get("suggest") or []
             source = meta["source"]
             story_meta["llm_calls"] += meta["tries"]
             for k in story_meta["usage"]:
@@ -517,6 +650,18 @@ def build_report(db, user_id: int, codes: list[str] | None = None, today: date |
         for m in links:                                    # 번호가 붙은 뒤 같은 객체로 맞춘다
             m.linked = {ref: next(i for i in items if i.ref == ref) for ref in m.linked}
         dates = p["trade_dates"]
+        numbers = {i.ref: i.no for i in items}
+        memos = memo_digest_rows(_rows(db, DIGEST_SQL, u=user_id, s=s["code"], cs=start, ce=end + timedelta(days=1), me=end),
+                                 numbers, p["close"], dates[-1])
+        digest = digest_code_line(memos) if memos else ""
+        if memos and llm is not None:
+            from .story import llm_memo_digest
+            digest, dmeta = llm_memo_digest(s["name"], memos, llm, digest)
+            story_meta["llm_calls"] += dmeta["tries"]
+            for k in story_meta["usage"]:
+                story_meta["usage"][k] += dmeta["usage"][k]
+            if dmeta["problems"]:
+                story_meta["fallbacks"].append({"name": s["name"] + " 메모 정리", "problems": dmeta["problems"]})
         out_stocks.append({
             "stock_code": s["code"], "name": s["name"], "own": "보유" if s["status"] == "holding" else "관심",
             "pct": p["pct"], "close": p["close"], "prev": p["prev"], "closes": p["closes"], "yr": p["yr"],
@@ -528,9 +673,11 @@ def build_report(db, user_id: int, codes: list[str] | None = None, today: date |
                        "url": i.url, "linked": i.linked} for i in shown_items],
             "issue_refs": [i.no for i in items if not i.show],
             "valuation": valuation(db, s["code"], dates[-1], p["close"]),
-            "quarter": quarter_block(db, s["code"], dates[-1]),
+            "quarter": (qb := quarter_block(db, s["code"], dates[-1])),
             "memo": memo_section(links),
-            "watch": watch_lines(links, p["close"], dates[-1], bool(shown_items)),
+            "memos": memos, "memo_digest": digest,          # 이번 주 내 메모 정리 (2026-11-24, 메모 없으면 빈 목록)
+            "watch": watch_lines(links, p["close"], dates[-1], bool(shown_items), code=s["code"], items=items,
+                                 lo=p.get("lo_num"), suggest=suggest, name=s["name"], quarter=qb),
         })
     week, title = week_label(monday)
     last_day = max((date.fromisoformat(x["trade_dates"][-1]) for x in out_stocks), default=friday)

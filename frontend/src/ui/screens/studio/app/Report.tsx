@@ -4,7 +4,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
 import { Head } from '../../my/app/parts';
-import { AddMemoButton } from './AddMemoButton';
 import type { mockReport, ReportStock } from '../Studio.mock';
 import { Spark, SparkWide, WeekChart, issueParas, marketParas, quarterLine, reportSummary, sign, stripRefs, valuationCells, won } from '../reportParts';
 import { Keep } from '@/ui/shared/Dark';
@@ -18,12 +17,12 @@ type Rep = typeof mockReport;
 const C = { a2: '#6A42AB', ink: '#16171A', ink2: '#575B63', ink3: '#9A9EA7' };
 const up = (v: number) => (v >= 0 ? '#E5323B' : '#2F6BDB');
 
-export function AppReport({ rep, stocks, market, allDefault, onBack, onOpenMemo, onWatch, isAdded }: {
+export function AppReport({ rep, stocks, market, allDefault, onBack, onOpenMemo, onWatch }: {
   rep: Rep; stocks: ReportStock[]; market: boolean; allDefault: boolean;
-  onBack: () => void; onOpenMemo: (code: string) => void; onWatch: (s: ReportStock, i: number) => void; isAdded: (s: ReportStock, i: number) => boolean;
+  onBack: () => void; onOpenMemo: (code: string) => void; onWatch: (s: ReportStock, i: number) => void;
 }) {
   const insets = useSafeAreaInsets();
-  const g = stocks.reduce((a, r) => a + r.counts.공시, 0), nw = stocks.reduce((a, r) => a + r.counts.뉴스, 0), mc = stocks.filter((r) => r.memo).length;
+  const g = stocks.reduce((a, r) => a + r.counts.공시, 0), nw = stocks.reduce((a, r) => a + r.counts.뉴스, 0), mc = stocks.reduce((a, r) => a + (r.memos ? r.memos.length : r.memo ? 1 : 0), 0);
   const one = stocks.length === 1 ? stocks[0] : null;
   const last = rep.days[rep.days.length - 1]?.split(' ')[0] ?? rep.range;
   const sum = reportSummary(stocks, allDefault, rep.summary_default, last);
@@ -124,6 +123,27 @@ export function AppReport({ rep, stocks, market, allDefault, onBack, onOpenMemo,
                 ) : null}
               </View>
               {quarterLine(r) ? <View style={st.quarterBox}><View style={st.blockHead}><Text style={st.blockLabel}>최근 분기 실적</Text><Text style={st.blockMeta}>{r.quarter?.label} · {r.quarter?.basis}</Text></View><Text keepAll style={st.quarterText}>{quarterLine(r)}</Text></View> : null}
+              {r.memos?.length ? (
+                <View style={st.dg}>
+                  <Text style={st.dgH}>이번 주 내 메모 정리</Text>
+                  {r.memo_digest ? <Text keepAll style={st.dgLead}>{stripRefs(r.memo_digest)}</Text> : null}
+                  {r.memos.map((m) => (
+                    <View key={m.memo_id} style={st.dgM}>
+                      <Pressable onPress={() => onOpenMemo(r.stock_code)} accessibilityRole="link"><Text style={st.dgT}>{m.title}  <Text style={st.dgS}>{m.meta} ›</Text></Text></Pressable>
+                      {m.cards.map((c) => (
+                        <View key={c.id} style={st.dgC}>
+                          <Text style={st.dgS}>{c.date} · {c.kind}</Text>
+                          <Text keepAll style={st.dgCT}>{c.title}</Text>
+                          <Text keepAll style={st.dgCB} numberOfLines={2}>{c.text}</Text>
+                        </View>
+                      ))}
+                      {m.status.map((x) => <Text key={x} keepAll style={st.dgSt}>· {x}</Text>)}
+                      {!m.cards.length && !m.status.length ? <Text style={st.dgS}>이번 주 새 소식 없음 · 추적 중</Text> : null}
+                      {m.more ? <Text style={st.dgS}>그 밖에 {m.more}건 · 메모에서 보기</Text> : null}
+                    </View>
+                  ))}
+                </View>
+              ) : null}
               <Text style={st.sub}>이번 주 흐름</Text>
               <View style={{ marginTop: 4 }}><WeekChart r={r} days={rep.days} id={r.stock_code} /></View>
               <View style={st.lg}>
@@ -153,7 +173,7 @@ export function AppReport({ rep, stocks, market, allDefault, onBack, onOpenMemo,
                   ))}
                 </>
               ) : <Text style={st.empty}>새로 나온 소식이 없어요</Text>}
-              {r.memo ? (
+              {r.memos ? null : r.memo ? (
                 <View style={[st.mc, { backgroundColor: r.memo.bg }]}>
                   <View style={st.mcH}><Text style={[st.mcHT, { color: r.memo.ink }]}>내 메모와의 연결</Text><Pressable onPress={() => onOpenMemo(r.stock_code)} accessibilityRole="link"><Text style={[st.mcHT, { color: r.memo.ink, fontWeight: '700', opacity: 1 }]}>원본 메모 보기 ›</Text></Pressable></View>
                   <Text style={[st.mcB, { color: r.memo.ink }]}>{r.memo.title}  <Text style={st.mcS}>{r.memo.meta}</Text></Text>
@@ -167,9 +187,13 @@ export function AppReport({ rep, stocks, market, allDefault, onBack, onOpenMemo,
                   <Text style={st.wtHT}>앞으로 지켜볼 것</Text>
                 </View>
                 {r.watch.map((w, i) => (
-                  <View key={w.text} style={st.it}>
+                  <View key={w.sid ?? w.text} style={st.it}>
                     <View style={{ flex: 1, minWidth: 0 }}><Text keepAll style={st.itB}>{w.text}</Text><Text style={st.itS}>근거 · {w.why}</Text></View>
-                    <AddMemoButton added={isAdded(r, i)} onPress={() => onWatch(r, i)} />
+                    {w.tracked || w.added ? (
+                      <View style={st.itDone}><Text style={st.itDoneT}>{w.tracked ? '✓ 추적 중' : '✓ 추가됨'}</Text></View>
+                    ) : (
+                      <Pressable onPress={() => onWatch(r, i)} accessibilityRole="button" style={st.itBtn}><Text style={st.itBtnT}>메모에 추가</Text></Pressable>
+                    )}
                   </View>
                 ))}
               </View>
@@ -281,6 +305,16 @@ const st = StyleSheet.create({
   evD: { fontSize: 12, lineHeight: 17, color: C.ink3 },
   evB: { flex: 1, minWidth: 0, fontSize: 13.5, lineHeight: 19, fontWeight: '600', color: C.ink },
   mc: { borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, marginTop: 12 },
+  dg: { gap: 8, borderRadius: 14, backgroundColor: '#FFF9E6', paddingVertical: 12, paddingHorizontal: 14, marginTop: 12 },
+  dgH: { fontSize: 13, lineHeight: 18, fontWeight: '800', color: C.ink },
+  dgLead: { fontSize: 13, lineHeight: 20, color: '#3F3A2A' },
+  dgM: { gap: 4, borderRadius: 10, backgroundColor: '#FFFFFF', padding: 10 },
+  dgT: { fontSize: 13.5, lineHeight: 19, fontWeight: '700', color: C.ink },
+  dgS: { fontSize: 11.5, lineHeight: 16, color: '#8B95A1' },
+  dgC: { gap: 1, marginTop: 2 },
+  dgCT: { fontSize: 12.5, lineHeight: 18, fontWeight: '600', color: '#2B2F36' },
+  dgCB: { fontSize: 12, lineHeight: 17, color: '#5B6270' },
+  dgSt: { fontSize: 12, lineHeight: 17, color: '#A35A00' },
   mcH: { flexDirection: 'row', justifyContent: 'space-between' },
   mcHT: { fontSize: 12, lineHeight: 17, opacity: 0.8 },
   mcB: { fontSize: 14.5, lineHeight: 20, fontWeight: '700', marginTop: 4 },
@@ -295,6 +329,10 @@ const st = StyleSheet.create({
   it: { flexDirection: 'row', gap: 10, alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginTop: 8 },
   itB: { fontSize: 13.5, lineHeight: 20, fontWeight: '700', color: C.ink },
   itS: { fontSize: 12, lineHeight: 17, color: C.ink3 },
+  itBtn: { height: 32, paddingHorizontal: 12, borderRadius: 10, backgroundColor: C.ink, justifyContent: 'center' },
+  itBtnT: { fontSize: 12.5, lineHeight: 17, fontWeight: '700', color: '#FFFFFF' },
+  itDone: { height: 32, paddingHorizontal: 10, borderRadius: 10, borderWidth: 1, borderColor: '#E6E3F3', justifyContent: 'center' },
+  itDoneT: { fontSize: 12.5, lineHeight: 17, fontWeight: '600', color: '#8B95A1' },
   src: { fontSize: 12.5, lineHeight: 24, color: '#3F434A' },
   srcS: { fontSize: 12.5, lineHeight: 20, color: C.ink3, marginTop: 8 },
   ft: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 18, marginHorizontal: 4 },

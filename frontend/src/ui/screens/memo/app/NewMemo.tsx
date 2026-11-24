@@ -17,11 +17,11 @@ import { usePaper } from '@/ui/shared/Dark';
  * 노란 종이 (최소 250) + 예시 글(비면 보임: 제목 21px · 본문 15.5px 줄 1.8 · 점선 아래 안내 12.5px) · 안내 12.5px #9A9EA7
  * AI 연결 칸 (#F6F6F8 라운드 16 · 안쪽 14·16 · 위 14). 저장: 첫 줄 = 제목 (splitMemo)
  */
-export function AppNewMemo({ stockName, initialText, onCancel, onEmpty, onSave }: NewMemoProps) {
+export function AppNewMemo({ stockName, initialText, initialAi, onCancel, onEmpty, onSave }: NewMemoProps) {
   const paper = usePaper();
   const insets = useSafeAreaInsets();
   const [text, setText] = useState(initialText ? `${initialText}\n` : '');
-  const [ai, setAi] = useState(false);
+  const [ai, setAi] = useState(!!initialAi);
   const ed = useRef<{ focus: () => void; blur: () => void }>(null);
   const pc = paper.yellow;
   const empty = !text.trim();

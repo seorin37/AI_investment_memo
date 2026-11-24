@@ -6,7 +6,6 @@ import { Text } from '@/components/ui/AppText';
 import { PressScale } from '@/ui/motion/PressScale';
 import { Head } from '../../my/app/parts';
 import type { mockLabStocks, mockLabVars } from '../Studio.mock';
-import { AddMemoButton } from './AddMemoButton';
 import type { LabGroup } from '../labParts';
 import { Keep } from '@/ui/shared/Dark';
 
@@ -19,10 +18,11 @@ type Stock = (typeof mockLabStocks)[number];
 type Vars = typeof mockLabVars;
 const C = { ink: '#16171A', ink2: '#575B63', ink3: '#9A9EA7' };
 
-export function AppLabResult({ stock, vars, groups, disclaimer, onBack, onOpenMemo, onAgain, onAdd, isAdded }: {
+export function AppLabResult({ stock, vars, groups, disclaimer, onBack, onOpenMemo, onAgain, onWatch, isAdded }: {
   stock: Stock; vars: Vars; groups: LabGroup[]; disclaimer: string;
   onBack: () => void; onOpenMemo: () => void; onAgain: () => void;
-  onAdd: (title: string, why: string) => void; isAdded: (title: string) => boolean;
+  /** '메모에 추가' (2026-11-24, 주간보고서와 같게): i = 추가로 확인할 것 순번 */
+  onWatch?: (check: string, why: string, i: number) => void; isAdded?: (i: number) => boolean;
 }) {
   const insets = useSafeAreaInsets();
   const all = groups.flatMap((g) => g.leaves);
@@ -83,10 +83,14 @@ export function AppLabResult({ stock, vars, groups, disclaimer, onBack, onOpenMe
               <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#5B3BD1" strokeWidth={2}><Path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><Circle cx={12} cy={12} r={3} /></Svg>
               <Text style={st.chkHT}>추가로 확인할 것</Text>
             </View>
-            {chk.map((l) => (
-              <View key={l.no} style={st.it}>
-                <View style={{ flex: 1, minWidth: 0 }}><Text keepAll style={st.itB}>{l.check}</Text><Text style={st.itS}>근거 · {l.no} {l.check_why}</Text></View>
-                <AddMemoButton added={isAdded(l.check ?? '')} onPress={() => onAdd(l.check ?? '', l.check_why ?? '')} />
+            {chk.map((l, i) => (
+              <View key={l.no} style={[st.it, { flexDirection: 'row', alignItems: 'center', gap: 10 }]}>
+                <View style={{ flex: 1, minWidth: 0 }}><Text style={st.itB}>{l.check}</Text><Text style={st.itS}>근거 · {l.no} {l.check_why}</Text></View>
+                {isAdded?.(i) ? (
+                  <View style={st.wDone}><Text style={st.wDoneT}>✓ 추가됨</Text></View>
+                ) : onWatch ? (
+                  <Pressable onPress={() => onWatch(l.check ?? '', l.check_why ?? '', i)} accessibilityRole="button" style={st.wBtn}><Text style={st.wBtnT}>메모에 추가</Text></Pressable>
+                ) : null}
               </View>
             ))}
           </View>
@@ -143,10 +147,14 @@ const st = StyleSheet.create({
   yP: { fontSize: 13, lineHeight: 21, color: '#3F3A2A', marginTop: 6 },
   chkH: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
   chkHT: { fontSize: 14, lineHeight: 20, fontWeight: '800', color: '#5B3BD1' },
-  it: { flexDirection: 'row', gap: 10, alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginTop: 6 },
+  it: { backgroundColor: '#FFFFFF', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginTop: 6 },
   itB: { fontSize: 13.5, lineHeight: 19, fontWeight: '700', color: C.ink },
   itS: { fontSize: 12, lineHeight: 17, color: C.ink3 },
   disc: { fontSize: 12, lineHeight: 17, color: C.ink3, textAlign: 'center', marginTop: 4 },
+  wBtn: { height: 32, paddingHorizontal: 12, borderRadius: 10, backgroundColor: C.ink, justifyContent: 'center' },
+  wBtnT: { fontSize: 12.5, lineHeight: 17, fontWeight: '700', color: '#FFFFFF' },
+  wDone: { height: 32, paddingHorizontal: 10, borderRadius: 10, borderWidth: 1, borderColor: '#E6E3F3', justifyContent: 'center' },
+  wDoneT: { fontSize: 12.5, lineHeight: 17, fontWeight: '600', color: '#8B95A1' },
   bar: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: 12, paddingHorizontal: 16, backgroundColor: 'rgba(243,244,246,0.96)' },
   barB: { height: 54, borderRadius: 16, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center' },
   barT: { fontSize: 16, lineHeight: 22, fontWeight: '800', color: '#FFFFFF' },

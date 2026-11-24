@@ -19,6 +19,7 @@ import requests
 from pipelines.common.config import resolve_path
 
 STOCK_PROMPT = "configs/report_stock_prompt.md"
+MEMO_PROMPT = "configs/report_memo_prompt.md"
 VERIFY_PROMPT = "configs/report_verify_prompt.md"
 # 정기보고서는 '공시가 나왔다'는 말 말고 쓸 내용이 없어 LLM 입력에서 뺀다 (화면 소식 목록에는 남는다)
 PERIODIC = re.compile(r"(분기|반기|사업)보고서")
@@ -26,10 +27,18 @@ URL = "https://api.openai.com/v1/chat/completions"
 WEEKDAYS = "월화수목금토일"
 SNIPPET_CHARS = 300
 
+SUGGEST_ITEM = {"type": "object", "additionalProperties": False,
+                "properties": {"text": {"type": "string"}, "memo_title": {"type": "string"}, "memo_body": {"type": "string"},
+                               "refs": {"type": "array", "items": {"type": "integer"}}},
+                "required": ["text", "memo_title", "memo_body", "refs"]}
 SCHEMA_STOCK = {"name": "report_stock", "strict": True,
                 "schema": {"type": "object", "additionalProperties": False,
-                           "properties": {"story": {"type": "string"}, "issues": {"type": "string"}},
-                           "required": ["story", "issues"]}}
+                           "properties": {"story": {"type": "string"}, "issues": {"type": "string"},
+                                          "suggest": {"type": "array", "items": SUGGEST_ITEM}},
+                           "required": ["story", "issues", "suggest"]}}
+# 다음에 추적해 볼 메모 제안 (2026-11-24): 예측·권유처럼 읽히는 말은 제안에서도 뺀다
+SUGGEST_BANNED = re.compile(r"전망|오를|내릴|반등|상승할|하락할|기대|목표가|목표주가|매수|매도|사야|팔아|사도|담아|손절|익절|추천")
+SUGGEST_ASK = re.compile(r"알려|챙겨|나오면|확인")
 
 BANNED = ["사세요", "파세요", "매수 기회", "매도 기회", "담을 때", "손절하", "호재", "악재", "긍정적", "부정적", "저평가", "고평가",
           "유망", "유리", "불리", "확실히", "반드시", "틀림없이", "추천", "수혜"]
@@ -157,6 +166,38 @@ def check_issues(issues: str, source: str, nos: set[int]) -> list[str]:
     return check_text(issues, source, nos, 3, 9, 1000, "issues")
 
 
+def check_suggestion(s: dict, nos: set[int]) -> list[str]:
+    """제안 하나의 문제 목록 (비어 있으면 통과). 걸린 제안만 빼고 보고서는 그대로 둔다."""
+    text, title, body = (s.get("text") or "").strip(), (s.get("memo_title") or "").strip(), (s.get("memo_body") or "").strip()
+    refs = [r for r in (s.get("refs") or []) if isinstance(r, int)]
+    probs = []
+    if not 6 <= len(text) <= 60:
+        probs.append("text 길이")
+    if not 2 <= len(title) <= 20:
+        probs.append("memo_title 길이")
+    if not 8 <= len(body) <= 140:
+        probs.append("memo_body 길이")
+    if not refs or any(r not in nos for r in refs):
+        probs.append("refs")
+    joined = " ".join((text, title, body))
+    if SUGGEST_BANNED.search(joined) or any(w in joined for w in BANNED):
+        probs.append("금지 표현")
+    if not SUGGEST_ASK.search(body):
+        probs.append("memo_body가 추적 요청으로 끝나지 않음")
+    return probs
+
+
+def clean_suggestions(raw, nos: set[int], limit: int = 2) -> list[dict]:
+    out = []
+    for s in raw or []:
+        if isinstance(s, dict) and not check_suggestion(s, nos):
+            out.append({"text": s["text"].strip(), "memo_title": s["memo_title"].strip(), "memo_body": s["memo_body"].strip(),
+                        "refs": sorted({r for r in s["refs"] if isinstance(r, int)})})
+        if len(out) >= limit:
+            break
+    return out
+
+
 def openai_call(messages: list[dict], schema: dict = SCHEMA_STOCK, model: str | None = None) -> dict:
     key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
     if not key:
@@ -261,6 +302,7 @@ def llm_stock(name: str, p: dict, items: list, call: LLMCall, fallback: str, ext
     if out is None:
         return fallback, "", {"source": "code", **meta, "removed": []}
     story, issues = out["story"].strip(), out["issues"].strip()
+    meta["suggest"] = clean_suggestions(out.get("suggest"), nos)
     removed: list[dict] = []
     if verify:
         cleaned, removed, vu = verify_texts(call, source, {"story": story, "issues": issues})
@@ -269,6 +311,38 @@ def llm_stock(name: str, p: dict, items: list, call: LLMCall, fallback: str, ext
         story = cleaned["story"] or fallback
         issues = cleaned["issues"] if len(sentences(cleaned["issues"].replace("\n\n", " "))) >= 2 else ""
     return story, issues, {"source": "llm", **meta, "removed": removed}
+
+
+SCHEMA_MEMO = {"name": "report_memo", "strict": True,
+               "schema": {"type": "object", "additionalProperties": False,
+                          "properties": {"digest": {"type": "string"}}, "required": ["digest"]}}
+
+
+def memo_input(name: str, memos: list[dict]) -> str:
+    k = sum(1 for m in memos if m["cards"])
+    lines = [f"종목: {name}", f"메모 {len(memos)}개, 그중 이번 주 새 소식이 붙은 메모 {k}개:"]
+    for m in memos:
+        lines.append(f"- 메모 '{m['title']}' ({m['meta']})")
+        for c in m["cards"]:
+            refs = "".join(f"[{r}]" for r in c["refs"])
+            lines.append(f"    {c['date']} {c['kind']} · {c['title']} · {c['text']} {refs}".rstrip())
+        lines += [f"    {s}" for s in m.get("status") or []]
+        if not m["cards"] and not m.get("status"):
+            lines.append("    이번 주 새 소식 없음")
+    return "\n".join(lines)
+
+
+def llm_memo_digest(name: str, memos: list[dict], call: LLMCall, fallback: str):
+    """(정리 2~3문장, 메타). 카드도 가격 상태도 없으면 LLM 없이 코드 문장 (2026-11-24)."""
+    if not any(m["cards"] for m in memos):                    # 카드가 없으면 코드 문장 (가격 상태는 코드가 붙임)
+        return fallback, {"source": "code", "tries": 0, "problems": [], "usage": {"input": 0, "output": 0}}
+    source = memo_input(name, memos)
+    nos = {r for m in memos for c in m["cards"] for r in c["refs"]}
+    out, meta = ask(call, MEMO_PROMPT, source, SCHEMA_MEMO,
+                    lambda o: check_text(o.get("digest", ""), source, nos, 1, 3, 340, "digest", need_refs=bool(nos)))
+    if out is None:
+        return fallback, {"source": "code", **meta}
+    return out["digest"].strip(), {"source": "llm", **meta}
 
 
 def llm_story(name: str, p: dict, items: list, call: LLMCall, fallback: str, tries: int = 2):

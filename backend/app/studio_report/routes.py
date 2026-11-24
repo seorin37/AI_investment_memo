@@ -13,7 +13,7 @@ import json
 import logging
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -113,3 +113,26 @@ def post_report(body: ReportRequest, tasks: BackgroundTasks, current: dict = Dep
                                                  "codes": codes, "content": json.dumps({"market_on": body.market})}).scalar()
     tasks.add_task(generate, int(item_id), user_id, codes, body.market)
     return {"item_id": str(item_id), "status": "generating", "reused": False}
+
+
+# ─── 앞으로 지켜볼 것 → 메모에 추가 (2026-11-24) ───────────
+# 보고서·실험실의 제안으로 새 메모를 저장하면 content.added["{종목코드}:{sid}"] = 메모 id 를 남긴다. 화면은 이 값으로 '추가됨'을 보여 준다
+WATCH_ADDED_SQL = """UPDATE studio_items
+SET content = jsonb_set(coalesce(content, '{}'::jsonb), '{added}',
+                        coalesce(content->'added', '{}'::jsonb) || jsonb_build_object(:key, :memo))
+WHERE id = :id AND user_id = :u AND kind IN ('report', 'lab')   -- 실험실 '앞으로 지켜볼 것'도 (2026-11-24)
+  AND deleted_at IS NULL AND expires_at > now()"""
+
+
+class WatchAdded(BaseModel):
+    key: str = Field(min_length=3, max_length=40, pattern=r"^[0-9A-Z]{6}:[a-z0-9]{1,12}$")   # "000660:f0"
+    memo_id: str = Field(min_length=1, max_length=20, pattern=r"^\d+$")
+
+
+@router.post("/items/{item_id}/watch", status_code=204)
+def mark_watch_added(item_id: int, body: WatchAdded, current: dict = Depends(get_current_user)):
+    with get_session() as db:
+        n = db.execute(text(WATCH_ADDED_SQL), {"id": item_id, "u": _uid(current), "key": body.key, "memo": body.memo_id}).rowcount
+    if not n:
+        raise HTTPException(404, detail="보고서를 찾을 수 없어요.")
+    return Response(status_code=204)

@@ -22,7 +22,7 @@ export function fromServerItem(s: StudioItem): MadeItem {
     const dirs = (s.content.dirs ?? ['유지', '유지', '유지', '유지']) as LabDir[];
     const name = s.content.name;
     const t = labTitle(code, dirs, name);
-    return { id: s.id, server: true, kind: 'lab', title: t.title, sub: t.sub, meta: t.sub, left, lab: { code, dirs, name, groups: s.content.groups } };
+    return { id: s.id, server: true, kind: 'lab', title: t.title, sub: t.sub, meta: t.sub, left, lab: { code, dirs, name, groups: s.content.groups, added: (s.content as { added?: Record<string, string> }).added } };
   }
   if (s.kind === 'report') return fromServerReportItem(s);
   const meta = `${KIND_LABEL[s.kind]} · ${s.symbols.length}종목`;

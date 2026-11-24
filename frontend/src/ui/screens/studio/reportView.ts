@@ -1,10 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query';
+import { Platform } from 'react-native';
+import { useRouter } from 'expo-router';
 import { ApiError, api } from '@/api';
 import { env } from '@/config/env';
 import { qk, useMyStocks } from '@/hooks/queries';
 import { BRAND_LOGOS } from '@/lib/brandLogos';
 import type { StudioItem } from '@/types/models';
-import { mockReport, mockReportStocks, type ReportStock } from './Studio.mock';
+import { mockReport, mockReportStocks, type ReportStock, type ReportWatch } from './Studio.mock';
 import type { MadeItem } from './Studio.types';
 
 /** 주간보고서 머리 (화면 Rep 모양 = mockReport). 서버 보고서는 이 모양으로 바꿔 쓴다 */
@@ -31,7 +33,7 @@ type ServerReport = {
 };
 
 /** 서버 보고서(studio_items.content, backend/app/studio_report/build.py) → 화면 (2026-11-23). 로고 색은 프론트 표(brandLogos) */
-export function fromServerReport(c: ServerReport): { rep: ReportRep; stocks: ReportStock[] } {
+export function fromServerReport(c: ServerReport, added?: Record<string, string>): { rep: ReportRep; stocks: ReportStock[] } {
   const first = c.stocks[0];
   const days = (first?.trade_dates ?? []).map(dayLabel);
   const rep: ReportRep = {
@@ -60,6 +62,7 @@ export function fromServerReport(c: ServerReport): { rep: ReportRep; stocks: Rep
       sc: bg,
       st: '#F5F6F8',
       memo: s.memo ? { bg: '#FCEAAA', ink: '#3F3A2A', ...s.memo } : undefined,
+      watch: (s.watch ?? []).map((w) => ({ ...w, added: !!(added && w.sid && added[`${s.stock_code}:${w.sid}`]) })),
     } as ReportStock;
   });
   return { rep, stocks };
@@ -67,7 +70,7 @@ export function fromServerReport(c: ServerReport): { rep: ReportRep; stocks: Rep
 
 /** 서버 만든 항목(kind=report) → 화면 MadeItem */
 export function fromServerReportItem(s: StudioItem): MadeItem {
-  const view = fromServerReport(s.content as unknown as ServerReport);
+  const view = fromServerReport(s.content as unknown as ServerReport, (s.content as { added?: Record<string, string> }).added);
   const market = !!(s.content as { market_on?: boolean }).market_on;
   const sub = `주간보고서 · ${view.stocks.length}종목 · ${view.rep.made_at.split(' ')[0]}`;
   return { id: s.id, server: true, kind: 'report', title: s.title, sub, meta: sub, left: `${s.days_left}일 뒤 삭제`,
@@ -121,5 +124,44 @@ export function useCreateReport() {
       await sleep(2000);
     }
     throw new Error('보고서가 아직 만들어지는 중이에요. 잠시 뒤 만든 항목에서 확인해 주세요');
+  };
+}
+
+/**
+ * 앞으로 지켜볼 것 → '메모에 추가' (2026-11-24). 웹은 종목 보드로 가서 새 메모 창을, 앱은 메모 쓰기 화면을
+ * 제안의 memo_title·memo_body로 채워 연다 (AI 연결 켬). 서버 보고서면 저장 뒤 '추가됨'을 남기도록 보고서 id·키를 같이 넘긴다.
+ */
+export function useWatchToMemo() {
+  const open = useOpenMemoDraft();
+  return (stock: ReportStock, w: ReportWatch, reportId?: string) =>
+    open({ code: stock.stock_code, name: stock.name, title: w.memo_title ?? w.text, body: w.memo_body ?? '',
+      itemId: reportId, key: w.sid ? `${stock.stock_code}:${w.sid}` : undefined });
+}
+
+/**
+ * 제안 → 메모 창 열기 (주간보고서·투자 실험실 공통, 2026-11-24). 웹은 종목 보드 새 메모 창, 앱은 메모 쓰기 화면을
+ * 제목·본문을 채우고 AI 연결을 켠 채로 연다. itemId·key가 있으면 저장 뒤 그 만든 항목에 '추가됨'을 남긴다.
+ */
+export function useOpenMemoDraft() {
+  const router = useRouter();
+  return (p: { code: string; name?: string; title: string; body: string; itemId?: string; key?: string }) => {
+    const mark = p.itemId && p.key ? { wr: p.itemId, wk: p.key } : {};
+    if (Platform.OS === 'web') {
+      router.navigate({ pathname: '/stocks/[code]', params: { code: p.code, new: '1', nt: p.title, nb: p.body, ...mark } });
+      return;
+    }
+    router.push({ pathname: '/memo/new', params: { code: p.code, name: p.name ?? '', first_line: p.title, body: p.body, ai: '1', ...mark } });
+  };
+}
+
+/** 제안으로 만든 메모를 저장한 뒤 호출: 보고서에 '추가됨'을 남기고 만든 항목을 다시 받는다 (실패해도 메모는 그대로) */
+export function useMarkWatchAdded() {
+  const qc = useQueryClient();
+  return (reportId: string | undefined, key: string | undefined, memoId: string) => {
+    if (!reportId || !key || env.useMock) return;
+    void api.markReportWatch(reportId, key, memoId).then(
+      () => qc.invalidateQueries({ queryKey: qk.studioItems }),
+      () => undefined,
+    );
   };
 }

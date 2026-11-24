@@ -20,7 +20,7 @@ import { AppViewToggle, type BoardView } from '@/ui/shared/ViewToggle';
 import { appColor, ft } from '@/ui/theme';
 import { arrange } from '../boardCards';
 import { SortCards } from './SortCards';
-import type { BoardFilter, MemoBoardProps } from '../MemoBoard.types';
+import type { BoardFilter, AppMemoBoardProps } from '../MemoBoard.types';
 import { usePaper } from '@/ui/shared/Dark';
 
 type Item = { key: string; memo?: Memo; checklist?: Checklist; pinned: boolean };
@@ -40,7 +40,7 @@ const EXAMPLES = ['실적 나오면 다시 보기', '많이 빠지면 다시 생
  * 순서: 고정 먼저(맨 위 고정 구역) → 저장된 순서. 일반 카드는 꾹 눌러 끌어서 바꿈 (전체 보기에서, SortCards). 웹과 같은 순서.
  * header: 평소 상단 바 (라우트가 줌). 고르는 동안은 'N개 선택' 머리로 바꿔 끼움.
  */
-export function AppMemoBoard(p: MemoBoardProps & { header: React.ReactNode; topCard: React.ReactNode; startY?: number; onScrollY?: (y: number) => void }) {
+export function AppMemoBoard(p: AppMemoBoardProps & { header: React.ReactNode; topCard: React.ReactNode; startY?: number; onScrollY?: (y: number) => void }) {
   const paper = usePaper();
   const { width: W } = useWindowDimensions();
   const cw = (W - 44) / 2;

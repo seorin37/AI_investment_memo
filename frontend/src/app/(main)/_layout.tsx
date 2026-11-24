@@ -26,19 +26,21 @@ import { WebInbox } from '@/ui/screens/my/web/Inbox';
 import { useInboxData } from '@/ui/screens/my/useInboxData';
 import { WebSettings, type SettingsTab } from '@/ui/screens/my/web/Settings';
 import { useTodayQuizView } from '@/ui/screens/studio/useTodayQuiz';
+import { useQuizAnswer } from '@/ui/screens/studio/useQuizAnswer';
 import { useTrashData } from '@/ui/screens/my/useTrashData';
 import { WebTrash } from '@/ui/screens/my/web/Trash';
 import { chapterAt, fmt, useStudioPlayer } from '@/store/studioPlayer';
 import { mockAudioEpisode, mockAudioGen, mockAudioPeriods, mockAudioStocks, mockLabDisclaimer, mockLabNote, mockLabVars, mockLastClose, mockReport, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
-import { WebFail, WebGen, WebMini, WebPlayer } from '@/ui/screens/studio/web/Audio';
+import { WebFail, WebGen, WebLabGen, WebMini, WebPlayer } from '@/ui/screens/studio/web/Audio';
 import { shellSizeFor } from '@/ui/layout/web/shellSize';
 import { WebReportPopup, WebReportSum } from '@/ui/screens/studio/web/Report';
 import { WebLab, WebLabResult, WebQuiz } from '@/ui/screens/studio/web/QuizLab';
 import { labResultGroups } from '@/ui/screens/studio/labParts';
 import { labStockFor, useLabStocks, useRunLab } from '@/ui/screens/studio/useLabRun';
 import { useStudioItemsSync } from '@/ui/screens/studio/studioItems';
-import { reportView, useCreateReport, useReportPickStocks } from '@/ui/screens/studio/reportView';
+import { reportView, useCreateReport, useOpenMemoDraft, useReportPickStocks } from '@/ui/screens/studio/reportView';
 import { useLabMemo } from '@/ui/screens/studio/useLabMemo';
+import { labWatchDraft, labWatchItems, labWatchKey } from '@/ui/screens/studio/useLabWatch';
 import { useLabVars } from '@/ui/screens/studio/useLabVars';
 import { WebAudioPopup } from '@/ui/screens/studio/web/AudioPopup';
 import type { StudioKind } from '@/ui/screens/studio/Studio.types';
@@ -123,7 +125,7 @@ export default function MainLayout() {
   const [smenu, setSmenu] = useState<{ code: string; at: { x: number; y: number } } | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [ask, setAsk] = useState<string | null>(null);
-  const [snack, setSnack] = useState<{ msg: string; undo?: () => void; check?: boolean } | null>(null);
+  const [snack, setSnack] = useState<{ msg: string; undo?: () => void; check?: boolean; action?: { label: string; onPress: () => void } } | null>(null);
   /* ⑨-3a 설정 창(내 프로필) · 사이드바 로그아웃 확인 (mock: 프로필은 화면 상태만) */
   const [settings, setSettings] = useState<SettingsTab | null>(null);
   const [logoutAsk, setLogoutAsk] = useState(false);
@@ -153,7 +155,10 @@ export default function MainLayout() {
   /* ⑧-8a 스튜디오: 사용량 창 · PLUS 창(다 쓴 뒤 만들기) · 충전 창. 결제·만들기는 연결 안 됨 */
   const [studioPop, setStudioPop] = useState<'usage' | 'credit' | 'charge' | 'audio' | 'report' | null>(null);
   const usageSpent = usage.paused || usage.usage_pct >= 100;
-  const studioFeat = (k: StudioKind) => {
+  /* 보고서·오디오 창에서 미리 고를 종목 (넛지에서 열 때만 · 다른 길로 열면 비워서 전체) */
+  const [popPreset, setPopPreset] = useState<string[] | undefined>(undefined);
+  const studioFeat = (k: StudioKind, codes?: string[]) => {
+    setPopPreset(codes);
     if (k !== 'quiz' && usageSpent) return setStudioPop('credit');
     if (k === 'audio') return setStudioPop('audio');
     if (k === 'report') return setStudioPop('report');
@@ -161,8 +166,28 @@ export default function MainLayout() {
   };
   /* ⑧-8b 오디오: 만들기 · 재생 mock 상태 (store/studioPlayer). 개발 빌드(__DEV__)에서만 ?studio_fail=1 이면 다음 만들기가 실패 (확인용 · 배포 빌드는 무시) */
   const sp = useStudioPlayer();
+  /* 넛지 → 스튜디오 (원본 nudge.tsx useStudioOpen): 스튜디오 펼치기 + 기능 버튼과 같은 처리 (사용량 다 쓰면 충전 안내).
+     실험실 넛지('환율이 바뀌면…')는 원/달러 환율만 '상승'으로 미리 (원본 labVars: { '원/달러 환율': '상승' }) */
+  const featRef = useRef(studioFeat);
+  useEffect(() => {
+    featRef.current = studioFeat;
+  });
+  useEffect(
+    () =>
+      useStudioPlayer.subscribe((s) => {
+        const a = s.ask;
+        if (!a) return;
+        s.clearAsk();
+        setStudioOpen(true);
+        if (a.kind === 'lab') s.setLab({ dirs: mockLabVars.map((v) => (v.name === '원/달러 환율' ? '상승' : '유지')) });
+        featRef.current(a.kind, a.codes);
+      }),
+    [],
+  );
   /* 오늘의 퀴즈: 실제 모드면 DB 문제 (퀴즈 화면을 열었을 때만 읽음) */
   const quiz = useTodayQuizView(sp.webView === 'quiz');
+  /* 오늘 푼 답 (기기 저장 · 사용자 + 날짜 + 문제) — 새로고침·재로그인해도 하루 한 번 */
+  const quizAns = useQuizAnswer(quiz.slug, quiz.ready);
   const labStock = labStocks.find((s) => s.stock_code === sp.labCode) ?? labStocks[0];
   const spItem = sp.made.find((m) => m.id === sp.cur);
   /* ⑧-8c 주간보고서: 스튜디오 열 요약 · 가운데 /report 자세히 */
@@ -170,15 +195,43 @@ export default function MainLayout() {
   const labItem = sp.made.find((m) => m.id === sp.curLab && m.kind === 'lab');
   /* 실험 결과 '내 메모와 연결': 그 종목의 내 메모 1개 (실험 결과 화면일 때만 읽음 · 엑셀 웹 #11) */
   const labMemo = useLabMemo(labItem?.lab?.code, sp.webView === 'labResult');
+  /* 실험 결과 '앞으로 지켜볼 것' → 종목 메모 창을 채워 열기 (주간보고서와 같은 방식, 2026-11-24) */
+  const openDraft = useOpenMemoDraft();
+  /* 실험 중 화면 (원본 studio.tsx Gen · lab). 요청이 한 번뿐이라 단계는 시간으로:
+     누르자마자 '조건 읽기' 완료 → '영향 경로 찾기'에서 응답을 기다림(막대는 90% 까지만) → 응답 오면 전부 완료 후 결과.
+     실패하면 실험 조건 화면 그대로 (고른 조건 유지 · 안내 토스트는 useRunLab) */
+  const [labGen, setLabGen] = useState<{ pct: number; at: number } | null>(null);
+  const labBusy = useRef(false);
+  const runLabWithGen = async () => {
+    if (labBusy.current) return;
+    labBusy.current = true;
+    setLabGen({ pct: 33, at: 1 });
+    const tick = setInterval(() => setLabGen((g) => (g && g.at === 1 ? { ...g, pct: Math.min(90, g.pct + 3) } : g)), 500);
+    const ok = await runLab(labStock, sp.labDirs);
+    clearInterval(tick);
+    if (!ok) {
+      setLabGen(null);
+      labBusy.current = false;
+      return;
+    }
+    setLabGen({ pct: 100, at: 3 });
+    setTimeout(() => {
+      setLabGen(null);
+      labBusy.current = false;
+      /* 기다리는 사이 스튜디오에서 다른 화면으로 갔으면 그 화면 그대로 (결과는 만든 항목에 있음) */
+      if (useStudioPlayer.getState().webView === 'lab') sp.setWebView('labResult');
+    }, 400);
+  };
   /* 서버 보고서면 그 내용, 아니면 mock 예시 (reportView, 2026-11-23) */
   const repView = reportView(repItem);
   const reportPick = useReportPickStocks();
   const createReport = useCreateReport();
   const { studio_fail } = useGlobalSearchParams<{ studio_fail?: string }>();
   const unreadShown = inbox.items.filter((n) => unread.includes(n.id) && (n.kind === 'ai' ? myNoti.ai : myNoti.studio)).length;
-  const say = (x: { msg: string; undo?: () => void; check?: boolean }) => {
+  /* action(오른쪽 버튼)이 있을 때만 5초, 나머지는 그대로 4초 */
+  const say = (x: { msg: string; undo?: () => void; check?: boolean; action?: { label: string; onPress: () => void } }) => {
     setSnack(x);
-    setTimeout(() => setSnack((c) => (c === x ? null : c)), 4000);
+    setTimeout(() => setSnack((c) => (c === x ? null : c)), x.action ? 5000 : 4000);
   };
   const nameOf = (c: string) => sideStocks.find((x) => x.stock_code === c)?.name ?? '';
   const jo = (w: string) => {
@@ -262,7 +315,8 @@ export default function MainLayout() {
             <View style={{ flex: 1, minHeight: 0, paddingBottom: sp.mini && spItem && sp.webView !== 'player' ? 84 : 0 }}>
             {sp.webView === 'gen' && sp.job ? <WebGen job={sp.job} steps={sp.job.kind === 'report' ? mockReport.web_steps : mockAudioGen.steps} />
               : sp.webView === 'fail' ? <WebFail kind={sp.job?.kind ?? 'audio'} onHome={() => { sp.dropFailed(); sp.setWebView('home'); }} onRetry={() => { sp.retry(); sp.setWebView('gen'); }} />
-              : sp.webView === 'quiz' ? <WebQuiz q={quiz} done={sp.quizPick} onBack={() => sp.setWebView('home')} onSubmit={sp.submitQuiz} />
+              : sp.webView === 'quiz' ? <WebQuiz q={quiz} done={quizAns.done} locked={!quizAns.canSubmit} onBack={() => sp.setWebView('home')} onSubmit={quizAns.submit} />
+              : sp.webView === 'lab' && labGen ? <WebLabGen pct={labGen.pct} at={labGen.at} />
               : sp.webView === 'lab' ? (
                 <WebLab
                   vars={labVars}
@@ -274,9 +328,7 @@ export default function MainLayout() {
                   onPick={(c) => sp.setLab({ code: c })}
                   onDir={(i, d) => sp.setLab({ dirs: sp.labDirs.map((x, j) => (j === i ? d : x)) })}
                   onReset={() => sp.setLab({ dirs: mockLabVars.map(() => '유지') })}
-                  onRun={async () => {
-                    if (await runLab(labStock, sp.labDirs)) sp.setWebView('labResult');
-                  }}
+                  onRun={runLabWithGen}
                 />
               )
               : sp.webView === 'labResult' && labItem?.lab ? (
@@ -286,6 +338,13 @@ export default function MainLayout() {
                   vars={labVars}
                   groups={labResultGroups(labItem.lab)}
                   disclaimer={mockLabDisclaimer}
+                  watch={labWatchItems(labResultGroups(labItem.lab))}
+                  watchState={(_w, i) => (labItem.lab?.added?.[labWatchKey(labItem.lab.code, i)] ? 'added' : 'idle')}
+                  onWatch={labItem.lab.code ? (w, i) => {
+                    const code = labItem.lab?.code ?? '';
+                    const name = labStockFor(labStocks, { code, name: labItem.lab?.name }).name;
+                    openDraft({ code, name, ...labWatchDraft(w, labItem.title), itemId: labItem.server ? labItem.id : undefined, key: labWatchKey(code, i) });
+                  } : undefined}
                   onBack={() => sp.setWebView('home')}
                   onMemo={(id) => router.navigate({ pathname: '/stocks/[code]', params: id ? { code: labItem.lab?.code ?? '', memo: id } : { code: labItem.lab?.code ?? '', new: '1' } })}
                   onAgain={() => { sp.setLab({ code: labItem.lab?.code, dirs: labItem.lab?.dirs }); sp.setWebView('lab'); }}
@@ -312,7 +371,7 @@ export default function MainLayout() {
                   onToggle={sp.toggle}
                   onSeek={sp.seek}
                   onSpeed={() => sp.nextSpeed([1, 1.5, 2])}
-                  onRemake={() => setStudioPop('audio')}
+                  onRemake={() => { setPopPreset(undefined); setStudioPop('audio'); }}
                 />
               ) : (
                 <WebStudioHome
@@ -473,6 +532,7 @@ export default function MainLayout() {
       stocks={mockAudioStocks}
       periods={mockAudioPeriods}
       lastClose={mockLastClose}
+      preset={popPreset}
       onClose={() => setStudioPop(null)}
       onMake={({ codes, period, market }) => {
         setStudioPop(null);
@@ -485,6 +545,7 @@ export default function MainLayout() {
       open={studioPop === 'report'}
       stocks={reportPick.stocks}
       counts={reportPick.counts}
+      preset={popPreset}
       sub={env.useMock ? mockReport.web_period : '지난주(월~금) 보고서에 넣을 종목'}
       onClose={() => setStudioPop(null)}
       onMake={({ codes, market }) => {
@@ -527,7 +588,7 @@ export default function MainLayout() {
       onCancel={() => setLogoutAsk(false)}
       onConfirm={() => { setLogoutAsk(false); logout(); }}
     />
-    <WebSnackbar visible={!!snack || !!uiToast} message={snack?.msg ?? uiToast?.message ?? ''} onUndo={snack?.undo} check={snack?.check} style={{ position: 'absolute', bottom: 30, alignSelf: 'center' }} />
+    <WebSnackbar visible={!!snack || !!uiToast} message={snack?.msg ?? uiToast?.message ?? ''} onUndo={snack?.undo} action={snack?.action} check={snack?.check} style={{ position: 'absolute', bottom: 30, alignSelf: 'center' }} />
     </View>
   );
 }

@@ -170,6 +170,8 @@ export interface Api {
   /** 스튜디오 만든 항목 (studio_items, 내 것·만료 전) */
   listStudioItems(): Promise<StudioItem[]>;
   deleteStudioItem(id: string): Promise<void>;
+  /** 주간보고서 제안으로 메모를 저장했음을 기록 (key = '종목코드:sid', 2026-11-24) */
+  markReportWatch(itemId: string, key: string, memoId: string): Promise<void>;
   /** 주간보고서 만들기 (백그라운드, 완성은 listStudioItems로 확인) */
   createReport(input: { codes: string[]; market: boolean }): Promise<ReportCreateResult>;
   listCalendar(month: string): Promise<CalendarEvent[]>;

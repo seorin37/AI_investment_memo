@@ -182,7 +182,7 @@ export function WebUpdates(p: WebUpdatesProps) {
       </ScrollView>
       {nudge && nN ? (
         <View style={st.nudge} pointerEvents="box-none">
-          <NudgePill text={`오늘 소식 ${nN}건, 라디오로 들을까요?`} onGo={p.onNudge} onClose={() => setNudge(false)} />
+          <NudgePill text={`오늘 소식 ${nN}건, 라디오로 들을까요?`} onGo={() => { setNudge(false); p.onNudge(); }} onClose={() => setNudge(false)} />
         </View>
       ) : null}
     </View>

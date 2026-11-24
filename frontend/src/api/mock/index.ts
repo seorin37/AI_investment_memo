@@ -444,6 +444,7 @@ export const mockApi: Api = {
   /* mock 모드의 만든 항목은 store 초기값(mockMade)이 보여 준다 — 서버 목록과 합치지 않게 비워 둔다 */
   listStudioItems: async () => wait([]),
   deleteStudioItem: async () => wait(undefined),
+  markReportWatch: async () => wait(undefined),
   /* mock 모드 보고서는 store 타이머(startReport)가 만든다 — 부르지 않는다 */
   createReport: async () => wait({ item_id: 'mock', status: 'ready' as const, reused: false }),
   listCalendar: async (month) => wait(db.calendar.filter((e) => e.date.startsWith(month))),

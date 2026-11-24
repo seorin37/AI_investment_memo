@@ -62,6 +62,7 @@ export const realApi: Api = {
   runLab: (input, opts) => http.post('/studio/lab', input, { timeoutMs: opts?.timeoutMs ?? 70_000 }),
   listStudioItems: () => http.get('/studio/items'),
   deleteStudioItem: (id) => http.del(`/studio/items/${id}`),
+  markReportWatch: (itemId, key, memoId) => http.post(`/studio/items/${itemId}/watch`, { key, memo_id: memoId }),
   createReport: (input) => http.post('/studio/reports', input),
   listCalendar: (month) => http.get('/calendar', { month }),
   createCalendarEvent: (input) => http.post('/calendar', input),

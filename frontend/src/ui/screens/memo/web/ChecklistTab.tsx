@@ -15,7 +15,7 @@ export type ChecklistDraft = { title: string; items: { id?: string; text: string
  * 웹 새 메모 창의 [체크리스트] 탭 (원본 web/src/screens/board.tsx NewDialog 6.2, 2026-11-22 연결)
  * 제목 칸 '체크리스트 제목 · 보드 카드 제목으로 보여요' · '확인할 항목 N / M 완료' + 고리
  * 항목 줄 44 (동그라미 · 글 · ×) · 아래 '항목 추가 · Enter로 바로 추가' · 'AI 연결 없음' 안내 · [취소] [체크리스트 저장]
- * 저장: 빈 글 항목은 빼고, 입력칸에 남은 글도 항목으로. 항목이 하나도 없으면 onEmpty (새 체크리스트면 버림 · 있던 체크리스트면 휴지통). 이름은 최대 20자.
+ * 저장: 빈 글 항목은 빼고, 입력칸에 남은 글도 항목으로. 항목이 하나도 없으면 onEmpty (있던 체크리스트면 휴지통).
  * 2026-11-24: 만든 항목도 글을 바로 고칠 수 있게 (입력칸).
  */
 export function ChecklistTab({ initial, onCancel, onSave, onEmpty }: {
@@ -50,7 +50,7 @@ export function ChecklistTab({ initial, onCancel, onSave, onEmpty }: {
           <Text style={st.label}>체크리스트 제목</Text>
           <Text style={st.hint}>보드 카드 제목으로 보여요</Text>
         </View>
-        <TextInput value={title} onChangeText={setTitle} maxLength={20} accessibilityLabel="체크리스트 제목" style={st.titleIn} />
+        <TextInput value={title} onChangeText={setTitle} accessibilityLabel="체크리스트 제목" style={st.titleIn} />
         <View style={st.row}>
           <Text style={st.label}>확인할 항목</Text>
           <View style={st.count}>

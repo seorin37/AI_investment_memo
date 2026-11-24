@@ -135,6 +135,8 @@ export interface NewMemoProps {
   stockName: string;
   /** 빈 보드 예시 칩에서 오면 그 문장이 첫 줄 */
   initialText?: string;
+  /** AI 연결 스위치 처음 값 (주간보고서 '메모에 추가'로 열면 켬, 2026-11-24) */
+  initialAi?: boolean;
   onCancel: () => void;
   /** 빈 채로 완료 (원본: 닫고 '빈 메모는 저장하지 않았어요' 스낵바) */
   onEmpty?: () => void;

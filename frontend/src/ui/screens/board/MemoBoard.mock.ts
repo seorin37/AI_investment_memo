@@ -63,7 +63,7 @@ export const mockBoardChecklist: Checklist = {
 };
 
 /** 웹 카드 순서 — 원본 예시 계정의 3칸 배치(체크리스트·노랑 | 보라·파랑 | 초록·분홍)를 왼쪽 → 오른쪽으로 읽은 것 */
-export const mockBoardOrder = ['cl-000660', 'm4', 'm3', 'm1', 'm2', 'm5'];
+export const mockBoardOrder = ['cl', 'm4', 'm3', 'm1', 'm2', 'm5'];
 
 /** 메모가 없는 종목 (빈 보드) */
 /* ⑤: 웹 예시 계정 시세(11.18 종가 78,300 · 전일 78,700)와 맞춤 — 기업정보 탭과 같은 값 */

@@ -80,7 +80,7 @@ export function WebCompanyInfo(p: CompanyInfoProps) {
       </ScrollView>
       {nudge && p.onNudge && !p.preparing ? (
         <View style={st.nudge} pointerEvents="box-none">
-          <NudgePill text="공시·재무 읽기 어려우셨죠? 핵심만 정리해 드려요" onGo={p.onNudge} onClose={() => setNudge(false)} />
+          <NudgePill text="공시·재무 읽기 어려우셨죠? 핵심만 정리해 드려요" onGo={() => { setNudge(false); p.onNudge?.(); }} onClose={() => setNudge(false)} />
         </View>
       ) : null}
     </View>

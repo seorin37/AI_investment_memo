@@ -10,7 +10,7 @@ import { mockBoardChecklist, mockBoardMemos, mockBoardOrder } from '@/ui/screens
  * mock 모드 메모 보드 (종목별 메모 · 체크리스트 · 순서). 실제 모드에서는 쓰지 않음(서버가 저장).
  * 서버처럼 새로고침 · 다시 로그인해도 남도록 기기에 저장 — 그래서 로그아웃 때 비우지 않음 (mock 사용자는 한 명).
  */
-export const SEED_CARDS: BoardCards = { memos: mockBoardMemos, checklists: [mockBoardChecklist], order: mockBoardOrder };
+export const SEED_CARDS: BoardCards = { memos: mockBoardMemos, checklists: [mockBoardChecklist], order: mockBoardOrder.map((k) => (k === 'cl' ? mockBoardChecklist.id : k)) };
 const HOME_CODE = '000660';
 /** 예시 '오늘' (MemoDetail.mock mockToday 와 같은 날) */
 const TODAY = '2026-11-19T09:00:00+09:00';

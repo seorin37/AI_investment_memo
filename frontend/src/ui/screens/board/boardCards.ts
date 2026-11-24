@@ -1,7 +1,7 @@
 import type { Checklist, Memo } from '@/types/models';
 
 /**
- * 메모 보드 카드 묶음 (앱·웹 · mock·실제 공통 규칙, 순수 함수 — tests/board-cards.test.mjs)
+ * 메모 보드 카드 묶음 (앱 · mock·실제 공통 규칙, 순수 함수 — tests/board-cards.test.mjs)
  * order = 메모 id + 체크리스트 id 순서. 고정한 카드는 늘 앞(고정 구역), 나머지는 그 뒤(일반 구역).
  * 서버 규칙(be/app/board/service.py _place)과 같음: 새 카드 · 고정을 푼 카드는 일반 구역 맨 위, 고정한 카드는 고정 구역 맨 위.
  */

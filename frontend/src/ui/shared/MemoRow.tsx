@@ -6,7 +6,7 @@ import type { Memo } from '@/types/models';
 import { AppPin, AppPlug, CheckMark, Dots } from '@/ui/icons/BoardGlyphs';
 import { useMotionK } from '@/ui/motion/useMotion';
 import { appColor, curve, fpx, ft, webColor } from '@/ui/theme';
-import { GRAB, Pick } from './MemoCard';
+import { Pick } from './MemoCard';
 import { mmdd, oneLine } from './memoFormat';
 import { usePaper } from '@/ui/shared/Dark';
 
@@ -106,8 +106,6 @@ export function AppMemoRow({ memo: m, width, selecting, selected, onPress, onLon
 export interface WebMemoRowProps {
   memo: Memo;
   first: boolean;
-  /** 끌 수 있는 줄 (고정 아님) */
-  grab?: boolean;
   selecting: boolean;
   selected: boolean;
   onOpen: () => void;
@@ -122,10 +120,10 @@ type HoverState = { pressed: boolean; hovered?: boolean };
  * 메모지 40 (라운드 10 10 0 10) · 제목 17/26 bold + '고정' 태그 · 둘째 줄 14/21 #747D8D 'MM.DD 작성 · 본문'
  * 'AI 연결' 칩 (28 · #F2F3F4 · 13 bold) · 배지 24 · ⋯ 32)
  */
-export function WebMemoRow({ memo: m, first, grab, selecting, selected, onOpen, onPick, onMenu }: WebMemoRowProps) {
+export function WebMemoRow({ memo: m, first, selecting, selected, onOpen, onPick, onMenu }: WebMemoRowProps) {
   const paper = usePaper();
   return (
-    <Pressable onPress={selecting ? onPick : onOpen} accessibilityLabel={m.title} style={({ hovered }: HoverState) => [st.wrow, !first && st.wline, hovered && { backgroundColor: webColor.hover }, grab && GRAB]}>
+    <Pressable onPress={selecting ? onPick : onOpen} accessibilityLabel={m.title} style={({ hovered }: HoverState) => [st.wrow, !first && st.wline, hovered && { backgroundColor: webColor.hover }]}>
       {selecting ? <Pick on={selected} /> : null}
       <View style={[st.wsw, { backgroundColor: paper[m.color].bg }]} />
       <View style={st.wmid}>

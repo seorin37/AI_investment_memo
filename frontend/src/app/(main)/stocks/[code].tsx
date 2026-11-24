@@ -3,15 +3,14 @@ import { Linking, Platform } from 'react-native';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { env } from '@/config/env';
 import { useCoach } from '@/store/coach';
+import { useStudioPlayer } from '@/store/studioPlayer';
 import { useUI } from '@/store/ui';
-import type { Memo, MemoColor, MemoVersion } from '@/types/models';
+import type { Checklist, Memo, MemoColor, MemoVersion } from '@/types/models';
 import { mockCompanyByCode } from '@/ui/screens/company/CompanyInfo.mock';
 import { WebCompanyInfo } from '@/ui/screens/company/web/CompanyInfo';
 import { useCompanyInfo } from '@/ui/screens/company/useCompanyInfo';
-import { mockItems } from '@/store/mockBoard';
-import { addChecklist, addMemo, patchChecklist, patchMemo } from '@/ui/screens/board/boardCards';
-import { mockBoardStock, mockEmptyStock } from '@/ui/screens/board/MemoBoard.mock';
-import { useBoardCards } from '@/ui/screens/board/useBoardCards';
+import { mockBoardChecklist, mockBoardMemos, mockBoardOrder, mockBoardStock, mockEmptyStock } from '@/ui/screens/board/MemoBoard.mock';
+import { useBoardData } from '@/ui/screens/board/useBoardData';
 import { useBoardStock } from '@/ui/screens/board/useBoardStock';
 import { WebMemoBoard } from '@/ui/screens/board/web/MemoBoard';
 import { mockExtract, mockFeed, mockToday, mockTrackItems, mockVersions } from '@/ui/screens/memo/MemoDetail.mock';
@@ -20,33 +19,41 @@ import { WebConnectDialog } from '@/ui/screens/memo/web/ConnectDialog';
 import { WebMemoDialog } from '@/ui/screens/memo/web/MemoDialog';
 import type { ChecklistDraft } from '@/ui/screens/memo/web/ChecklistTab';
 import { WebNewMemoDialog } from '@/ui/screens/memo/web/NewMemoDialog';
+import { useMarkWatchAdded } from '@/ui/screens/studio/reportView';
 import { feedOf, findMemo, versionsOf } from '@/ui/screens/updates/Updates.mock';
 
 /**
  * 웹 종목: 보드 = UI v2 (ui/screens/board/web) · 기업 정보 = UI v2 (ui/screens/company/web · ⑤) — /stocks/000660?tab=info
- * mock 모드: 000660 은 예시 메모, 105560(KB금융) 은 빈 보드. 바꾼 카드와 순서는 기기에 저장 (store/mockBoard).
+ * mock 모드: 000660 은 예시 메모, 105560(KB금융) 은 빈 보드. 변화는 이 화면 안에서만.
  * 실제 모드(2026-11-22): 보드·메모 창 데이터와 저장은 useBoardData (GET board · timeline, 쓰기 API).
  * 메모 창 · 새 메모 · AI 연결 창 = UI v2 (④ ui/screens/memo/web).
  */
 export default function StockScreen() {
   /* memo · ev: 업데이트(⑥)의 '근거 자세히 보기' → 메모 창을 그 소식 근거로 열기 */
   /* new=1: 스튜디오 실험 결과 '메모 쓰기' → 새 메모 창 바로 열기 (엑셀 웹 #11) */
-  const { code, tab, memo, ev, first, new: newParam, stock_name, onboarding_selected, onboarding_home_mode } = useLocalSearchParams<{ code: string; tab?: 'board' | 'info'; memo?: string; ev?: string; first?: string; new?: string; stock_name?: string; onboarding_selected?: string; onboarding_home_mode?: string }>();
+  const { code, tab, memo, ev, first, new: newParam, nt, nb, wr, wk, stock_name, onboarding_selected, onboarding_home_mode } = useLocalSearchParams<{ code: string; tab?: 'board' | 'info'; memo?: string; ev?: string; first?: string; new?: string; nt?: string; nb?: string; wr?: string; wk?: string; stock_name?: string; onboarding_selected?: string; onboarding_home_mode?: string }>();
   const active = tab === 'info' ? 'info' : 'board';
-  if (active === 'board') return <BoardTab key={memo ?? 'board'} code={code} memoParam={memo} ev={ev} firstFlow={first === '1'} newParam={newParam} stockName={stock_name} onboardingSelected={onboarding_selected} onboardingHomeMode={onboarding_home_mode} />;
+  if (active === 'board') return <BoardTab key={memo ?? 'board'} code={code} memoParam={memo} ev={ev} firstFlow={first === '1'} newParam={newParam} pre={nt ? { text: nb ? `${nt}\n${nb}` : nt, wr, wk } : undefined} stockName={stock_name} onboardingSelected={onboarding_selected} onboardingHomeMode={onboarding_home_mode} />;
   return <InfoTab code={code} />;
 }
 
 type Connect = { id: string | null; title: string; body: string; color: MemoColor; fromNew: boolean };
 
-function BoardTab({ code, memoParam, ev, firstFlow, newParam, stockName, onboardingSelected, onboardingHomeMode }: { code: string; memoParam?: string; ev?: string; firstFlow: boolean; newParam?: string; stockName?: string; onboardingSelected?: string; onboardingHomeMode?: string }) {
+/** pre: 주간보고서 '메모에 추가'로 왔을 때 새 메모 창에 채울 글과 '추가됨'을 남길 보고서 id·키 (2026-11-24) */
+type Pre = { text: string; wr?: string; wk?: string };
+
+function BoardTab({ code, memoParam, ev, firstFlow, newParam, pre, stockName, onboardingSelected, onboardingHomeMode }: { code: string; memoParam?: string; ev?: string; firstFlow: boolean; newParam?: string; pre?: Pre; stockName?: string; onboardingSelected?: string; onboardingHomeMode?: string }) {
   const router = useRouter();
   const empty = firstFlow || code === mockEmptyStock.stock_code;
   const baseStock = firstFlow && stockName ? { ...mockEmptyStock, stock_code: code, name: stockName } : empty ? mockEmptyStock : mockBoardStock;
   /* 종목 머리 시세: 실제 모드면 GET /stocks/{code}/quote (2026-11-21), mock 모드면 위 mock 그대로 */
   const { stock, priceNote } = useBoardStock(code, baseStock);
   const real = !env.useMock;
+  const [memos, setMemos] = useState<Memo[]>(real || empty ? [] : mockBoardMemos);
+  const [checklist, setChecklist] = useState<Checklist | null>(real || empty ? null : mockBoardChecklist);
+  const [order, setOrder] = useState<string[]>(real ? [] : mockBoardOrder);
   const [customized, setCustomized] = useState(false);
+  const removed = useRef<Memo[]>([]);
   /* ④ 메모 창 · 새 메모 · AI 연결 창 (mock: 바꾼 내용은 이 화면 안에서만) */
   const [versions, setVersions] = useState<Record<string, MemoVersion[]>>(mockVersions);
   const [feed, setFeed] = useState(mockFeed);
@@ -55,20 +62,19 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, stockName, onboard
   const [dlg, setDlg] = useState(!!memoParam);
   const [newOpen, setNewOpen] = useState(firstFlow);
   const [newKey, setNewKey] = useState(0);
+  const [preNew, setPreNew] = useState<Pre | null>(null);
+  const markWatch = useMarkWatchAdded();
   /* 새 메모 창의 처음 탭 (0 메모 · 1 체크리스트 — '체크리스트 만들기' · 체크리스트 카드 열기) */
   const [newTab, setNewTab] = useState<0 | 1>(0);
-  /* 새 메모 창에서 고칠 체크리스트 id (null 이면 새로 만들기) */
-  const [clId, setClId] = useState<string | null>(null);
-  const [notice, setNotice] = useState<{ message: string; key: string; undo?: string[] } | undefined>(undefined);
   /* ?new=1 이 들어오면 새 메모 창(메모 탭)을 열고, 주소에서 new 를 지움 — 닫은 뒤 새로고침·뒤로가기로 다시 열리지 않게.
      온보딩(?first=1)은 위 firstFlow 그대로 · 이미 이 보드에 있을 때 다시 들어와도 열림 (2026-11-24, 엑셀 웹 #11) */
   const [seenNew, setSeenNew] = useState<string | undefined>(undefined);
   if (newParam !== seenNew) {
     setSeenNew(newParam);
     if (newParam === '1' && !firstFlow) {
+      setPreNew(pre ?? null);
       setDlg(false);
       setNewTab(0);
-      setClId(null);
       setNewKey((n) => n + 1);
       setNewOpen(true);
     }
@@ -78,13 +84,13 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, stockName, onboard
   const navigation = useNavigation();
   useEffect(() => {
     if (newParam !== '1') return;
-    navigation.setParams({ new: undefined } as never);
+    navigation.setParams({ new: undefined, nt: undefined, nb: undefined, wr: undefined, wk: undefined } as never);
     if (Platform.OS !== 'web') return;
     /* 다음 틈에 (라우터가 주소를 먼저 쓴 뒤) · 위 setParams 로 값이 바뀌어도 취소하지 않음 */
     setTimeout(() => {
       const u = new URL(window.location.href);
       if (!u.searchParams.has('new')) return;
-      u.searchParams.delete('new');
+      for (const k of ['new', 'nt', 'nb', 'wr', 'wk']) u.searchParams.delete(k);
       window.history.replaceState(window.history.state, '', u.pathname + u.search + u.hash);
     }, 0);
   }, [newParam, navigation]);
@@ -93,10 +99,15 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, stockName, onboard
   const [connect, setConnect] = useState<Connect | null>(null);
   const [cState, setCState] = useState<AiLinkState>('loading');
   /* 실제 모드: 서버 보드가 오면(또는 저장 뒤 다시 받으면) 화면 상태를 서버 값으로 */
-  const board = useBoardCards(code, openId, firstFlow);
-  const { bd } = board;
-  const { memos, checklists, order } = board.cards;
+  const bd = useBoardData(code, openId);
   const [cItems, setCItems] = useState<AiTrackItem[]>([]);
+  const [seenVersion, setSeenVersion] = useState(0);
+  if (bd.data && bd.version !== seenVersion) {
+    setSeenVersion(bd.version);
+    setMemos(bd.data.memos);
+    setChecklist(bd.data.checklist);
+    setOrder(bd.data.order);
+  }
   /* ?fail=1: AI 연결 창 첫 분석을 실패로 (분석 실패 화면 확인용) */
   const { fail } = useLocalSearchParams<{ fail?: string }>();
   const [failOnce, setFailOnce] = useState(__DEV__ && fail === '1');
@@ -107,7 +118,6 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, stockName, onboard
     setCoachSeen(coachStep);
     if (coachStep === 1) {
       setDlg(false);
-      setClId(null);
       setNewKey((n) => n + 1);
       setNewOpen(true);
     } else if (coachStep === 2) {
@@ -121,7 +131,7 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, stockName, onboard
     }
   }
   const opened = memos.find((m) => m.id === openId) ?? (!real && openId && openId === memoParam ? findMemo(openId) : undefined);
-  const patch = (id: string, f: (m: Memo) => Memo) => board.update((b) => patchMemo(b, id, f));
+  const patch = (id: string, f: (m: Memo) => Memo) => setMemos((all) => all.map((m) => (m.id === id ? f(m) : m)));
   const items = real ? cItems : connect ? (connect.id && mockTrackItems[connect.id]?.length ? mockTrackItems[connect.id] : mockExtract(connect.title, connect.body)) : [];
   /* 분석 중 0.7초 (원본 웹 ConnectDialog) → 항목 있음 / 없음 */
   useEffect(() => {
@@ -153,36 +163,43 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, stockName, onboard
     /* 실제 모드: 연결 창이 열릴 때 AI 켜기 → 분석 결과 (결정 7 임시안) */
     if (real && c.id) analyze(c.id);
   };
-  /** id 를 주면 그 체크리스트 고치기, 없으면 빈 새 체크리스트 */
-  const openChecklist = (id: string | null) => {
-    setClId(id);
+  const openChecklist = () => {
     setFirst(undefined);
     setNewTab(1);
     setNewKey((n) => n + 1);
     setNewOpen(true);
   };
-  const editing = clId ? checklists.find((c) => c.id === clId) ?? null : null;
-  /** 체크리스트 저장 (고치기면 그 카드, 아니면 새 카드) */
+  /** 체크리스트 저장 (종목당 하나: 있으면 고치고 없으면 만들기). mock 모드는 화면 안에서만.
+   *  보드 순서는 체크리스트를 'cl' 칸으로 따로 두고, 순서에 없으면 맨 앞이라 순서는 건드리지 않음 */
   const saveChecklist = (d: ChecklistDraft) => {
     setNewOpen(false);
-    const ok = editing ? '체크리스트를 저장했어요' : '체크리스트를 만들었어요';
+    const had = checklist;
+    const ok = had ? '체크리스트를 저장했어요' : '체크리스트를 만들었어요';
     if (!real) {
-      if (editing) board.update((b) => patchChecklist(b, editing.id, (c) => ({ ...c, title: d.title, items: mockItems(d.items) })));
-      else board.mockAddChecklist(d);
+      const items = d.items.map((i, n) => ({ id: i.id ?? `c${Date.now()}${n}`, text: i.text, done: i.done }));
+      const next: Checklist = had ? { ...had, title: d.title, items } : { ...mockBoardChecklist, id: `cl${Date.now()}`, stock_code: code, title: d.title, items, pinned: false };
+      setChecklist(next);
       return toast(ok);
     }
-    void bd.ops.saveChecklist(editing?.id ?? null, d).then((saved) => {
+    void bd.ops.saveChecklist(had?.id ?? null, d).then((saved) => {
       if (!saved) return toast('체크리스트를 저장하지 못했어요 · 잠시 뒤 다시 해 주세요');
-      board.update((b) => (b.checklists.some((c) => c.id === saved.id) ? patchChecklist(b, saved.id, () => saved) : addChecklist(b, saved)));
+      setChecklist(saved);
       toast(ok);
     });
   };
-  /** 항목이 하나도 없이 저장 → 새 체크리스트면 버림, 있던 체크리스트면 휴지통 (되돌리기) */
+  /** 항목을 모두 지우고 저장 → 있던 체크리스트는 휴지통으로 (원본 6.2) */
   const emptyChecklist = () => {
     setNewOpen(false);
-    if (!editing) return toast('빈 체크리스트는 저장하지 않았어요');
-    board.remove([editing.id]);
-    setNotice({ message: '체크리스트를 휴지통으로 옮겼어요', key: String(Date.now()), undo: [editing.id] });
+    if (!checklist) return toast('빈 체크리스트는 저장하지 않았어요');
+    const id = checklist.id;
+    bd.ops.remove([id]);
+    setChecklist(null);
+    toast('체크리스트를 휴지통으로 옮겼어요');
+  };
+  const remove = (ids: string[]) => {
+    bd.ops.remove(ids);
+    removed.current = [...removed.current, ...memos.filter((m) => ids.includes(m.id))];
+    setMemos((all) => all.filter((m) => !ids.includes(m.id)));
   };
   return (
     <>
@@ -190,9 +207,8 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, stockName, onboard
       stock={stock}
       priceNote={priceNote}
       memos={memos}
-      checklists={checklists}
+      checklist={checklist}
       order={order}
-      notice={notice}
       orderCustomized={customized}
       onOpenMemo={(id, t) => {
         setOpenId(id);
@@ -202,14 +218,24 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, stockName, onboard
       onOpenChecklist={openChecklist}
       onNewMemo={(line) => {
         setNewTab(0);
-        setClId(null);
         setFirst(line);
         setNewKey((n) => n + 1);
         setNewOpen(true);
       }}
-      onNewChecklist={() => openChecklist(null)}
-      onToggleChecklistItem={board.toggleItem}
-      onPin={board.pin}
+      onNewChecklist={openChecklist}
+      onToggleChecklistItem={(iid) => {
+        const it = checklist?.items.find((i) => i.id === iid);
+        if (checklist && it) bd.ops.checkItem(checklist.id, iid, !it.done);
+        setChecklist((c) => (c ? { ...c, items: c.items.map((i) => (i.id === iid ? { ...i, done: !i.done } : i)) } : c));
+      }}
+      onPin={(ids, pinned) => {
+        bd.ops.pin(ids, pinned);
+        setMemos((all) => all.map((m) => (ids.includes(m.id) ? { ...m, pinned } : m)));
+      }}
+      onTogglePin={(pinned) => {
+        if (checklist) bd.ops.pin([checklist.id], pinned);
+        setChecklist((c) => (c ? { ...c, pinned } : c));
+      }}
       onToggleAi={(id) => {
         const m = memos.find((x) => x.id === id);
         if (!m) return;
@@ -218,15 +244,23 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, stockName, onboard
           patch(id, (x) => ({ ...x, ai_linked: false }));
         } else startConnect({ id, title: m.title, body: m.body, color: m.color, fromNew: false });
       }}
-      onDelete={board.remove}
-      onUndoDelete={board.undoRemove}
+      onDelete={remove}
+      onUndoDelete={(ids) => {
+        bd.ops.undoRemove(ids);
+        const back = removed.current.filter((m) => ids.includes(m.id));
+        removed.current = removed.current.filter((m) => !ids.includes(m.id));
+        setMemos((all) => [...all.filter((m) => !ids.includes(m.id)), ...back]);
+        /* 실제 모드는 삭제 뒤 서버 보드를 다시 받아 순서에서 빠져 있음 → 되살린 메모를 순서 끝에 */
+        setOrder((o) => [...o, ...ids.filter((id) => !o.includes(id))]);
+      }}
       onCopy={() => {}}
       onChangeColor={(ids, color) => {
         bd.ops.color(ids, color);
-        board.update((b) => ({ ...b, memos: b.memos.map((m) => (ids.includes(m.id) ? { ...m, color } : m)) }));
+        setMemos((all) => all.map((m) => (ids.includes(m.id) ? { ...m, color } : m)));
       }}
       onReorder={(o) => {
-        board.reorder(o);
+        bd.ops.reorder(o);
+        setOrder(o);
         setCustomized(true);
       }}
       onChangeTab={(t) => router.setParams({ tab: t === 'company' ? 'info' : 'board' })}
@@ -243,6 +277,11 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, stockName, onboard
         trackItems={real ? bd.detail?.trackItems ?? [] : mockTrackItems[opened.id] ?? []}
         initialTab={openTab}
         onBack={() => setDlg(false)}
+        /* 메모 창 넛지: 메모 창을 닫고 주간보고서 만들기 창 · 이 메모의 종목만 (원본 board.tsx setDlg(null) 후 report) */
+        onNudge={() => {
+          setDlg(false);
+          useStudioPlayer.getState().askStudio('report', [opened.stock_code]);
+        }}
         onSave={({ title, body }) => {
           bd.ops.save(opened.id, { title, body });
           setVersions((v) => ({ ...v, [opened.id]: [{ version: (v[opened.id]?.[0]?.version ?? 0) + 1, title, body, saved_at: mockToday }, ...(v[opened.id] ?? [])] }));
@@ -253,11 +292,12 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, stockName, onboard
           patch(opened.id, (m) => ({ ...m, color }));
         }}
         onTogglePin={(pinned) => {
-          board.pin([opened.id], pinned);
+          bd.ops.pin([opened.id], pinned);
+          patch(opened.id, (m) => ({ ...m, pinned }));
         }}
         onDelete={() => {
           setDlg(false);
-          board.remove([opened.id]);
+          remove([opened.id]);
         }}
         onCopy={() => {}}
         onConnectAi={() => startConnect({ id: opened.id, title: opened.title, body: opened.body, color: opened.color, fromNew: false })}
@@ -279,13 +319,19 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, stockName, onboard
       key={newKey}
       open={newOpen}
       stockName={stock.name}
-      initialText={first}
+      initialText={preNew?.text ?? first}
+      initialAi={!!preNew}
       tab0={newTab}
-      checklist={editing}
+      checklist={checklist}
       onSaveChecklist={saveChecklist}
       onEmptyChecklist={emptyChecklist}
-      onCancel={() => setNewOpen(false)}
+      onCancel={() => {
+        setNewOpen(false);
+        setPreNew(null);
+      }}
       onSave={({ title, body, color, ai }) => {
+        const fromReport = preNew;
+        setPreNew(null);
         if (real) {
           /* 실제 모드: 일반 메모로 먼저 저장(빠름) → AI 를 켰으면 연결 창을 바로 '분석 중'으로 띄우고 그 메모로 분석 */
           setNewOpen(false);
@@ -300,7 +346,9 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, stockName, onboard
               if (ai) setCState('error');
               return;
             }
-            board.update((b) => addMemo(b, r.memo));
+            setMemos((all) => [...all, r.memo]);
+            setOrder((o) => [...o, r.memo.id]);
+            if (fromReport) markWatch(fromReport.wr, fromReport.wk, r.memo.id);
             if (ai) {
               setConnect((c) => (c && !c.id ? { ...c, id: r.memo.id } : c));
               analyze(r.memo.id);
@@ -308,8 +356,10 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, stockName, onboard
           });
           return;
         }
-        const id = board.mockAddMemo({ title, body, color });
+        const id = `n${Date.now()}`;
+        setMemos((all) => [...all, { ...mockBoardMemos[0], id, title, body, color, pinned: false, ai_linked: false, ai_linked_at: null, unread_updates: 0, created_at: mockToday, updated_at: mockToday }]);
         setVersions((v) => ({ ...v, [id]: [{ version: 1, title, body, saved_at: mockToday }] }));
+        setOrder((o) => [...o, id]);
         setNewOpen(false);
         if (ai) startConnect({ id, title, body, color, fromNew: true });
         else if (firstFlow) router.replace({ pathname: '/', params: { onboarding: 'first_saved', selected: onboardingSelected ?? '', home_mode: onboardingHomeMode ?? 'template' } });
@@ -350,7 +400,8 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, stockName, onboard
         setCState('loading');
         void bd.ops.create({ title: connect.title, body: connect.body, color: connect.color, ai: false }).then((r) => {
           if (!r) return setCState('error');
-          board.update((b) => addMemo(b, r.memo));
+          setMemos((all) => [...all, r.memo]);
+          setOrder((o) => [...o, r.memo.id]);
           setConnect((c) => (c ? { ...c, id: r.memo.id } : c));
           analyze(r.memo.id);
         });
@@ -368,5 +419,5 @@ function InfoTab({ code }: { code: string }) {
   /* 주가 데이터도 없는 종목: 예시 값을 지어내지 않고 '준비 중' (머리는 예시 틀에 종목코드만) */
   if (error) return <WebCompanyInfo {...mockCompanyByCode(code)} stock={{ ...mockCompanyByCode(code).stock, stock_code: code }} preparing onBack={() => router.back()} onChangeTab={onChangeTab} />;
   if (!data) return null;
-  return <WebCompanyInfo {...data} onBack={() => router.back()} onChangeTab={onChangeTab} onNudge={() => {}} />;
+  return <WebCompanyInfo {...data} onBack={() => router.back()} onChangeTab={onChangeTab} onNudge={() => useStudioPlayer.getState().askStudio('report', [code])} />;
 }

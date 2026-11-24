@@ -5,6 +5,7 @@ import { Text } from '@/components/ui/AppText';
 import { FeatIcon } from '@/ui/layout/web/StudioColumnFrame';
 import type { LabDir, mockLabStocks, mockLabVars, mockQuiz } from '../Studio.mock';
 import { dirColor, type LabGroup } from '../labParts';
+import type { LabWatch } from '../useLabWatch';
 import { GBtn } from './Credit';
 import { Keep } from '@/ui/shared/Dark';
 
@@ -36,7 +37,7 @@ function FeatHead({ f, title, sub, chips }: { f: 'quiz' | 'lab'; title: string; 
  * 웹 오늘의 퀴즈 = 원본 studio.tsx Quiz (4지선다 · 스튜디오 열 안)
  * 원본 웹의 '크레딧 +2 · 참여 +1' 보상 표기는 크레딧 연결 전이라 뺌 (크레딧 숫자는 My.mock 그대로)
  */
-export function WebQuiz({ q, done, onBack, onSubmit }: { q: typeof mockQuiz; done: number | null; onBack: () => void; onSubmit: (i: number) => void }) {
+export function WebQuiz({ q, done, locked = false, onBack, onSubmit }: { q: typeof mockQuiz; done: number | null; /** 문제·기록을 읽는 중이면 보기·제출 막음 */ locked?: boolean; onBack: () => void; onSubmit: (i: number) => void }) {
   const [pick, setPick] = useState<number | null>(null);
   const shown = done != null;
   const p = shown ? done : pick;
@@ -51,7 +52,7 @@ export function WebQuiz({ q, done, onBack, onSubmit }: { q: typeof mockQuiz; don
         {q.options.map((o, i) => {
           const isAns = i === q.answer, mine = p === i;
           return (
-            <Pressable key={o} disabled={shown} onPress={() => setPick(i)} accessibilityRole="radio" accessibilityState={{ selected: mine }}
+            <Pressable key={o} disabled={shown || locked} onPress={() => setPick(i)} accessibilityRole="radio" accessibilityState={{ selected: mine }}
               style={({ hovered }: Hover) => [st.opt, shown ? (isAns ? st.optAns : mine ? st.optNo : { opacity: 0.5 }) : mine ? st.optMine : hovered && { backgroundColor: '#F9F9F9' }]}>
               <View style={st.optN}><Text style={st.optNT}>{i + 1}</Text></View>
               <Text style={[st.optT, shown && isAns && { fontWeight: '700' }]}>{o}</Text>
@@ -63,7 +64,7 @@ export function WebQuiz({ q, done, onBack, onSubmit }: { q: typeof mockQuiz; don
       </View>
       {!shown ? (
         <>
-          <GBtn dark disabled={pick == null} onPress={() => pick != null && onSubmit(pick)}>제출하기</GBtn>
+          <GBtn dark disabled={pick == null || locked} onPress={() => pick != null && !locked && onSubmit(pick)}>제출하기</GBtn>
           <Text style={st.cap}>하루 한 번, 처음 제출한 답만 인정돼요</Text>
         </>
       ) : (
@@ -155,9 +156,12 @@ export function WebLab({ vars, stocks, code, dirs, note, onBack, onPick, onDir, 
  * 웹 실험 결과 = 원본 studio.tsx LabResult + gen/LabResultBody
  * 원본의 '종합 방향 · 긍정/부정'(해석)은 넣지 않고, 경로 색도 방향 판단 없이 회색으로
  */
-export function WebLabResult({ stock, memo, vars, groups, disclaimer, onBack, onMemo, onAgain }: {
+export function WebLabResult({ stock, memo, vars, groups, disclaimer, watch, watchState, onWatch, onBack, onMemo, onAgain }: {
   /* memo: 그 종목의 내 메모 1개 (useLabMemo · 엑셀 웹 #11). 없으면 '메모 쓰기' */
   stock: (typeof mockLabStocks)[number]; memo: { id: string; title: string } | null; vars: typeof mockLabVars; groups: LabGroup[]; disclaimer: string;
+  /* 앞으로 지켜볼 것 (useLabWatch · check 그대로). onWatch 가 없으면(종목 코드 없음) '메모에 추가' 버튼만 숨김.
+     2026-11-24: 주간보고서와 같게 — 누르면 종목 메모 창이 채워져 열림(AI 연결 켬), 저장하면 '추가됨' */
+  watch: LabWatch[]; watchState: (w: LabWatch, i: number) => 'idle' | 'added'; onWatch?: (w: LabWatch, i: number) => void;
   onBack: () => void; onMemo: (id?: string) => void; onAgain: () => void;
 }) {
   const all = groups.flatMap((g) => g.leaves.map((l) => ({ ...l, g })));
@@ -204,6 +208,31 @@ export function WebLabResult({ stock, memo, vars, groups, disclaimer, onBack, on
               </View>
             </View>
           ))}
+          {/* 앞으로 지켜볼 것 — 주간보고서(web/Report.tsx watchBox) 와 같은 모양 · 행 오른쪽 '메모에 추가' */}
+          {watch.length ? (
+            <View style={st.watchBox}>
+              <Text style={st.watchH}>앞으로 지켜볼 것</Text>
+              {watch.map((w, i) => {
+                const state = watchState(w, i);
+                return (
+                  <View key={w.check} style={st.watchRow}>
+                    <View style={st.watchDot} />
+                    <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                      <Text keepAll style={st.watchText}>{w.check}</Text>
+                      {w.why ? <Text keepAll style={st.watchWhy}>{w.why}</Text> : null}
+                    </View>
+                    {state === 'added' ? (
+                      <View style={st.watchDone}><Text style={st.watchDoneT}>✓ 추가됨</Text></View>
+                    ) : onWatch ? (
+                      <Pressable onPress={() => onWatch(w, i)} accessibilityRole="button" accessibilityLabel={`${w.check} 메모에 추가`} style={({ hovered }: Hover) => [st.watchBtn, hovered && { opacity: 0.85 }]}>
+                        <Text style={st.watchBtnT}>메모에 추가</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                );
+              })}
+            </View>
+          ) : null}
           <View style={st.memo}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={st.memoH}>내 메모와 연결</Text>
@@ -289,8 +318,19 @@ const st = StyleSheet.create({
   exT: { fontSize: 15, lineHeight: 22, fontWeight: '700', color: '#15171A' },
   exP: { fontSize: 14, lineHeight: 21, color: '#575B63' },
   memo: { gap: 8, borderRadius: 12, backgroundColor: '#F7F8FA', padding: 16 },
+  /* 앞으로 지켜볼 것: web/Report.tsx 392·403~407줄 값 그대로 */
+  watchBox: { gap: 10, borderRadius: 14, borderWidth: 1, borderColor: '#EEE7FB', backgroundColor: '#FBF8FF', padding: 16 },
+  watchH: { fontSize: 17, lineHeight: 24, fontWeight: '700', color: '#15171A' },
+  watchRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', borderRadius: 10, backgroundColor: '#FFFFFF', padding: 12 },
+  watchText: { fontSize: 15, lineHeight: 22, fontWeight: '600', color: '#2B2F36' },
+  watchWhy: { fontSize: 13, lineHeight: 19, color: '#8B95A1' },
+  watchDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#15171A', marginTop: 9 },
   memoH: { fontSize: 15, lineHeight: 22, fontWeight: '700', color: '#15171A' },
   memoL: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: '#575B63' },
+  watchBtn: { alignSelf: 'center', height: 34, paddingHorizontal: 14, borderRadius: 10, backgroundColor: '#15171A', justifyContent: 'center' },
+  watchBtnT: { fontSize: 13.5, lineHeight: 19, fontWeight: '700', color: '#FFFFFF' },
+  watchDone: { alignSelf: 'center', height: 34, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: '#E8EAED', backgroundColor: '#FFFFFF', justifyContent: 'center' },
+  watchDoneT: { fontSize: 13.5, lineHeight: 19, fontWeight: '600', color: '#8B95A1' },
   foot: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#E5E7EB', backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingVertical: 12 },
   again: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: '#16171A', paddingVertical: 14 },
   againT: { fontSize: 17, lineHeight: 22, fontWeight: '700', color: '#FFFFFF' },
