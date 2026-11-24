@@ -159,8 +159,9 @@ export function WebLab({ vars, stocks, code, dirs, note, onBack, onPick, onDir, 
 export function WebLabResult({ stock, memo, vars, groups, disclaimer, watch, watchState, onWatch, onBack, onMemo, onAgain }: {
   /* memo: 그 종목의 내 메모 1개 (useLabMemo · 엑셀 웹 #11). 없으면 '메모 쓰기' */
   stock: (typeof mockLabStocks)[number]; memo: { id: string; title: string } | null; vars: typeof mockLabVars; groups: LabGroup[]; disclaimer: string;
-  /* 앞으로 지켜볼 것 (useLabWatch · check 그대로). onWatch 가 없으면(종목 코드 없음) '+ 메모로' 버튼만 숨김 */
-  watch: LabWatch[]; watchState: (w: LabWatch) => 'idle' | 'busy' | 'added'; onWatch?: (w: LabWatch) => void;
+  /* 앞으로 지켜볼 것 (useLabWatch · check 그대로). onWatch 가 없으면(종목 코드 없음) '메모에 추가' 버튼만 숨김.
+     2026-11-24: 주간보고서와 같게 — 누르면 종목 메모 창이 채워져 열림(AI 연결 켬), 저장하면 '추가됨' */
+  watch: LabWatch[]; watchState: (w: LabWatch, i: number) => 'idle' | 'added'; onWatch?: (w: LabWatch, i: number) => void;
   onBack: () => void; onMemo: (id?: string) => void; onAgain: () => void;
 }) {
   const all = groups.flatMap((g) => g.leaves.map((l) => ({ ...l, g })));
@@ -207,12 +208,12 @@ export function WebLabResult({ stock, memo, vars, groups, disclaimer, watch, wat
               </View>
             </View>
           ))}
-          {/* 앞으로 지켜볼 것 — 주간보고서(web/Report.tsx watchBox) 와 같은 모양 · 행 오른쪽 '+ 메모로' */}
+          {/* 앞으로 지켜볼 것 — 주간보고서(web/Report.tsx watchBox) 와 같은 모양 · 행 오른쪽 '메모에 추가' */}
           {watch.length ? (
             <View style={st.watchBox}>
               <Text style={st.watchH}>앞으로 지켜볼 것</Text>
-              {watch.map((w) => {
-                const state = watchState(w);
+              {watch.map((w, i) => {
+                const state = watchState(w, i);
                 return (
                   <View key={w.check} style={st.watchRow}>
                     <View style={st.watchDot} />
@@ -220,9 +221,11 @@ export function WebLabResult({ stock, memo, vars, groups, disclaimer, watch, wat
                       <Text keepAll style={st.watchText}>{w.check}</Text>
                       {w.why ? <Text keepAll style={st.watchWhy}>{w.why}</Text> : null}
                     </View>
-                    {onWatch ? (
-                      <Pressable onPress={() => onWatch(w)} disabled={state !== 'idle'} accessibilityRole="button" accessibilityLabel={state === 'added' ? `${w.check} 추가됨` : `${w.check} 메모로 남기기`} accessibilityState={{ disabled: state !== 'idle' }}>
-                        {({ hovered }: Hover) => <Text style={[st.memoL, state === 'idle' && hovered && { color: '#15171A' }, state !== 'idle' && { color: '#A9AFBA' }]}>{state === 'added' ? '추가됨 ✓' : '+ 메모로'}</Text>}
+                    {state === 'added' ? (
+                      <View style={st.watchDone}><Text style={st.watchDoneT}>✓ 추가됨</Text></View>
+                    ) : onWatch ? (
+                      <Pressable onPress={() => onWatch(w, i)} accessibilityRole="button" accessibilityLabel={`${w.check} 메모에 추가`} style={({ hovered }: Hover) => [st.watchBtn, hovered && { opacity: 0.85 }]}>
+                        <Text style={st.watchBtnT}>메모에 추가</Text>
                       </Pressable>
                     ) : null}
                   </View>
@@ -324,6 +327,10 @@ const st = StyleSheet.create({
   watchDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#15171A', marginTop: 9 },
   memoH: { fontSize: 15, lineHeight: 22, fontWeight: '700', color: '#15171A' },
   memoL: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: '#575B63' },
+  watchBtn: { alignSelf: 'center', height: 34, paddingHorizontal: 14, borderRadius: 10, backgroundColor: '#15171A', justifyContent: 'center' },
+  watchBtnT: { fontSize: 13.5, lineHeight: 19, fontWeight: '700', color: '#FFFFFF' },
+  watchDone: { alignSelf: 'center', height: 34, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: '#E8EAED', backgroundColor: '#FFFFFF', justifyContent: 'center' },
+  watchDoneT: { fontSize: 13.5, lineHeight: 19, fontWeight: '600', color: '#8B95A1' },
   foot: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#E5E7EB', backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingVertical: 12 },
   again: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: '#16171A', paddingVertical: 14 },
   againT: { fontSize: 17, lineHeight: 22, fontWeight: '700', color: '#FFFFFF' },
