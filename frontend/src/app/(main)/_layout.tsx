@@ -39,6 +39,7 @@ import { labStockFor, useLabStocks, useRunLab } from '@/ui/screens/studio/useLab
 import { useStudioItemsSync } from '@/ui/screens/studio/studioItems';
 import { reportView, useCreateReport, useReportPickStocks } from '@/ui/screens/studio/reportView';
 import { useLabMemo } from '@/ui/screens/studio/useLabMemo';
+import { labWatchItems, useLabWatchMemo } from '@/ui/screens/studio/useLabWatch';
 import { useLabVars } from '@/ui/screens/studio/useLabVars';
 import { WebAudioPopup } from '@/ui/screens/studio/web/AudioPopup';
 import type { StudioKind } from '@/ui/screens/studio/Studio.types';
@@ -123,7 +124,7 @@ export default function MainLayout() {
   const [smenu, setSmenu] = useState<{ code: string; at: { x: number; y: number } } | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [ask, setAsk] = useState<string | null>(null);
-  const [snack, setSnack] = useState<{ msg: string; undo?: () => void; check?: boolean } | null>(null);
+  const [snack, setSnack] = useState<{ msg: string; undo?: () => void; check?: boolean; action?: { label: string; onPress: () => void } } | null>(null);
   /* ⑨-3a 설정 창(내 프로필) · 사이드바 로그아웃 확인 (mock: 프로필은 화면 상태만) */
   const [settings, setSettings] = useState<SettingsTab | null>(null);
   const [logoutAsk, setLogoutAsk] = useState(false);
@@ -170,6 +171,9 @@ export default function MainLayout() {
   const labItem = sp.made.find((m) => m.id === sp.curLab && m.kind === 'lab');
   /* 실험 결과 '내 메모와 연결': 그 종목의 내 메모 1개 (실험 결과 화면일 때만 읽음 · 엑셀 웹 #11) */
   const labMemo = useLabMemo(labItem?.lab?.code, sp.webView === 'labResult');
+  /* 실험 결과 '앞으로 지켜볼 것' → 그 종목 보드에 메모 (중복 키: 저장된 결과 id, 없으면 실험 제목 + check) */
+  const toast = useUI((s) => s.showToast);
+  const labWatch = useLabWatchMemo({ key: labItem ? (labItem.server ? `id:${labItem.id}` : `t:${labItem.title}`) : '', title: labItem?.title ?? '', code: labItem?.lab?.code ?? '' });
   /* 실험 중 화면 (원본 studio.tsx Gen · lab). 요청이 한 번뿐이라 단계는 시간으로:
      누르자마자 '조건 읽기' 완료 → '영향 경로 찾기'에서 응답을 기다림(막대는 90% 까지만) → 응답 오면 전부 완료 후 결과.
      실패하면 실험 조건 화면 그대로 (고른 조건 유지 · 안내 토스트는 useRunLab) */
@@ -201,9 +205,10 @@ export default function MainLayout() {
   const createReport = useCreateReport();
   const { studio_fail } = useGlobalSearchParams<{ studio_fail?: string }>();
   const unreadShown = inbox.items.filter((n) => unread.includes(n.id) && (n.kind === 'ai' ? myNoti.ai : myNoti.studio)).length;
-  const say = (x: { msg: string; undo?: () => void; check?: boolean }) => {
+  /* action(오른쪽 버튼)이 있을 때만 5초, 나머지는 그대로 4초 */
+  const say = (x: { msg: string; undo?: () => void; check?: boolean; action?: { label: string; onPress: () => void } }) => {
     setSnack(x);
-    setTimeout(() => setSnack((c) => (c === x ? null : c)), 4000);
+    setTimeout(() => setSnack((c) => (c === x ? null : c)), x.action ? 5000 : 4000);
   };
   const nameOf = (c: string) => sideStocks.find((x) => x.stock_code === c)?.name ?? '';
   const jo = (w: string) => {
@@ -310,6 +315,17 @@ export default function MainLayout() {
                   vars={labVars}
                   groups={labResultGroups(labItem.lab)}
                   disclaimer={mockLabDisclaimer}
+                  watch={labWatchItems(labResultGroups(labItem.lab))}
+                  watchState={(w) => (labWatch.isAdded(w) ? 'added' : labWatch.isBusy() ? 'busy' : 'idle')}
+                  onWatch={labItem.lab.code ? async (w) => {
+                    const code = labItem.lab?.code ?? '';
+                    const m = await labWatch.add(w);
+                    if (m === 'skip') return;
+                    if (m === 'fail') return toast('메모를 남기지 못했어요. 잠시 뒤 다시 시도해 주세요.');
+                    const name = labStockFor(labStocks, { code, name: labItem.lab?.name }).name;
+                    /* mock 보드는 고정 예시 메모만 보여 줘서 '보드에서 보기' 를 빼고 문구만 */
+                    say({ msg: `${name} 보드에 메모로 남겼어요`, check: true, action: env.useMock ? undefined : { label: '보드에서 보기', onPress: () => { setSnack(null); router.navigate({ pathname: '/stocks/[code]', params: { code, memo: m.id } }); } } });
+                  } : undefined}
                   onBack={() => sp.setWebView('home')}
                   onMemo={(id) => router.navigate({ pathname: '/stocks/[code]', params: id ? { code: labItem.lab?.code ?? '', memo: id } : { code: labItem.lab?.code ?? '', new: '1' } })}
                   onAgain={() => { sp.setLab({ code: labItem.lab?.code, dirs: labItem.lab?.dirs }); sp.setWebView('lab'); }}
@@ -551,7 +567,7 @@ export default function MainLayout() {
       onCancel={() => setLogoutAsk(false)}
       onConfirm={() => { setLogoutAsk(false); logout(); }}
     />
-    <WebSnackbar visible={!!snack || !!uiToast} message={snack?.msg ?? uiToast?.message ?? ''} onUndo={snack?.undo} check={snack?.check} style={{ position: 'absolute', bottom: 30, alignSelf: 'center' }} />
+    <WebSnackbar visible={!!snack || !!uiToast} message={snack?.msg ?? uiToast?.message ?? ''} onUndo={snack?.undo} action={snack?.action} check={snack?.check} style={{ position: 'absolute', bottom: 30, alignSelf: 'center' }} />
     </View>
   );
 }
