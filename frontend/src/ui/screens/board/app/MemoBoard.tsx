@@ -10,7 +10,7 @@ import { AppChips } from '@/ui/shared/Chips';
 import { FabFan } from '@/ui/shared/FabFan';
 import { AppMemoCard } from '@/ui/shared/MemoCard';
 import { AppMemoRow } from '@/ui/shared/MemoRow';
-import { Seg } from '@/ui/shared/Seg';
+import { PillSeg } from '@/ui/shared/PillSeg';
 import { AppSelectBar, AppSelectHeader, type AppSelAction } from '@/ui/shared/SelectBar';
 import { Sheet } from '@/ui/shared/Sheet';
 import { AppSnackbar } from '@/ui/shared/Snackbar';
@@ -185,7 +185,8 @@ export function AppMemoBoard(p: AppMemoBoardProps & { header: React.ReactNode; t
       <ScrollView ref={scroll} style={st.flex} scrollEnabled={!locked} onScroll={(e) => { scrollY.current = e.nativeEvent.contentOffset.y; p.onScrollY?.(scrollY.current); }} onContentSizeChange={() => { if (!placed.current && p.startY) scroll.current?.scrollTo({ y: p.startY, animated: false }); placed.current = true; }} scrollEventThrottle={16} contentContainerStyle={st.content} showsVerticalScrollIndicator={false} onScrollBeginDrag={() => openRow && setOpenRow(null)}>
         {p.topCard}
         <View style={st.seg}>
-          <Seg variant="appBoard" value="board" onChange={(k) => k === 'company' && p.onChangeTab('company')} options={[{ key: 'board', label: '메모 보드' }, { key: 'company', label: '기업정보' }]} />
+          {/* 기업정보 탭과 같은 탭 버튼 */}
+          <PillSeg value="board" onChange={(k) => k === 'company' && p.onChangeTab('company')} options={[{ key: 'board', label: '메모 보드' }, { key: 'company', label: '기업정보' }]} bg="#E3E5EA" pad={4} radius={14} pillRadius={11} height={40} fontSize={14.5} />
         </View>
         <Text style={st.mh}>내 메모 {memoCount}</Text>
         {p.aiSpent ? (
@@ -267,7 +268,7 @@ export function AppMemoBoard(p: AppMemoBoardProps & { header: React.ReactNode; t
                 }}
               />
               {view === 'grid' && filter === 'all' && !p.checklists.length && !selecting ? (
-                <Pressable onPress={p.onNewChecklist} accessibilityRole="button" style={({ pressed }) => [st.newCl, { width: cw }, pressed && { backgroundColor: '#F6F7F9' }]}>
+                <Pressable onPress={p.onNewChecklist} accessibilityRole="button" style={({ pressed }) => [st.newCl, { width: cw }, pressed && { backgroundColor: '#E9EAEE' }]}>
                   <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
                     <Path d="M8 3V13M3 8H13" stroke="#6B7684" strokeWidth={1.6} strokeLinecap="round" />
                   </Svg>
@@ -355,7 +356,7 @@ function EmptyBoard({ onExample, onFirst, onChecklist }: { onExample: (t: string
 }
 
 const st = StyleSheet.create({
-  root: { flex: 1, backgroundColor: appColor.surface },
+  root: { flex: 1, backgroundColor: appColor.bg },
   flex: { flex: 1 },
   content: { paddingBottom: 0 },
   seg: { marginTop: 16, marginHorizontal: 16 },
@@ -379,7 +380,7 @@ const st = StyleSheet.create({
   ex: { minHeight: 38, borderRadius: 19, paddingHorizontal: 13, paddingVertical: 9, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E7EB', justifyContent: 'center' },
   exT: { ...ft(13.5), fontWeight: '500', color: appColor.ink },
   go: { minHeight: 48, borderRadius: 14, paddingHorizontal: 24, paddingVertical: 13, backgroundColor: appColor.ink, justifyContent: 'center' },
-  goCl: { backgroundColor: '#F2F3F4', marginTop: 8 },
+  goCl: { backgroundColor: '#E3E5EA', marginTop: 8 },
   newCl: { height: 72, marginTop: 16, borderRadius: 16, borderWidth: 1, borderStyle: 'dashed', borderColor: '#D8DBE0', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   newClT: { ...ft(14), fontWeight: '500', color: '#6B7684' },
   goT: { ...ft(15.5), fontWeight: '800', color: '#FFFFFF' },
