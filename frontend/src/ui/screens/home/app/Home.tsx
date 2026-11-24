@@ -234,10 +234,21 @@ export function AppHome(p: AppHomeProps) {
             <Text style={[st.einfo, st.ereset]}>기본 구성으로 되돌리기</Text>
           </Pressable>
         </Animated.View>
+        {/* 상단 줄 (웹 홈 제목 줄과 같은 정보): 내 종목 N · AI 연결 메모 N · 홈 편집 */}
+        {!editing && !p.firstStart ? (
+          <View style={st.hr}>
+            <View style={st.pill}><Text style={st.pillT}>내 종목 <Text style={st.pillB}>{p.counts.holding + p.counts.watching}</Text></Text></View>
+            <View style={st.pill}><Text style={st.pillT}>AI 연결 메모 <Text style={st.pillB}>{p.counts.ai_memos}</Text></Text></View>
+            <Pressable onPress={enterEdit} accessibilityRole="button" style={({ pressed }) => [st.pill, st.pillEdit, pressed && { transform: [{ scale: 0.94 }] }]}>
+              <SlidersGlyph />
+              <Text style={[st.pillT, { color: appColor.ink }]}>홈 편집</Text>
+            </Pressable>
+          </View>
+        ) : null}
         <View style={st.wl}>
           {/* 첫 홈(원본 start.html)은 위젯 없이 고른 종목만 있는 빈 홈 → firstStart 가 있으면 그것만 */}
           {p.firstStart}
-          {!p.firstStart ? <HeroCard name={p.user_name} total={total} counts={p.counts} editing={editing} ready={ready} onCta={() => !editing && p.onOpenUpdates()} /> : null}
+          {!p.firstStart ? <HeroCard name={p.user_name} total={total} editing={editing} ready={ready} onCta={() => !editing && p.onOpenUpdates()} /> : null}
           {!p.firstStart && order.map((id, i) => (
             <WidgetItem
               key={id}
@@ -273,12 +284,6 @@ export function AppHome(p: AppHomeProps) {
               <Text style={st.addwT}>눌러서 위젯을 골라 보세요</Text>
             </Pressable>
           </Reveal>
-        ) : null}
-        {!editing && !p.firstStart ? (
-          <Pressable onPress={enterEdit} accessibilityRole="button" style={({ pressed }) => [st.editbtn, pressed && { transform: [{ scale: 0.94 }] }]}>
-            <SlidersGlyph />
-            <Text style={st.editbtnT}>홈 편집</Text>
-          </Pressable>
         ) : null}
         <View style={{ height: !editing && nudge && !p.firstStart ? 64 : 0 }} />
       </ScrollView>
@@ -501,8 +506,11 @@ const st = StyleSheet.create({
   addwPlT: { fontSize: 24, lineHeight: 28, color: appColor.deepPurple },
   addwB: { ...ft(16), fontWeight: '700', color: appColor.ink },
   addwT: { ...ft(13), color: appColor.ink2 },
-  editbtn: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 22, minHeight: 40, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: appColor.surface, shadowColor: '#000000', shadowOpacity: 0.06, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
-  editbtnT: { ...ft(14), fontWeight: '600', color: appColor.ink },
+  hr: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingBottom: 10 },
+  pill: { minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, borderRadius: 16, backgroundColor: appColor.surface },
+  pillEdit: { marginLeft: 'auto' },
+  pillT: { ...ft(13), color: appColor.ink2 },
+  pillB: { fontWeight: '700', color: appColor.ink },
   nudge: { position: 'absolute', left: 16, right: 16, alignItems: 'center' },
   snack: { position: 'absolute', left: 14, right: 14 },
   wr: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 22, minHeight: 68 },

@@ -4,7 +4,7 @@ import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-nativ
 import { AnimatedText, Text, TextInput } from '@/components/ui/AppText';
 import type { Checklist } from '@/types/models';
 import { CheckGlyph, CtaChevron, PlugGlyph, WIDGET_META, WidgetGlyph } from '@/ui/icons/HomeGlyphs';
-import { CountUp, Odometer } from '@/ui/motion/Numbers';
+import { Odometer } from '@/ui/motion/Numbers';
 import { Skeleton } from '@/ui/motion/Skeleton';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { useProgress } from '@/ui/motion/useProgress';
@@ -33,7 +33,7 @@ export function WidgetTitle({ id, title, right }: { id: HomeWidget; title: strin
 }
 
 /* ───────── 인사 카드 (원본 .w.fixed: 165deg #EFF0F3 → #E3E5EA · 고정) ───────── */
-export function HeroCard({ name, total, counts, editing, ready, onCta }: { name: string; total: number; counts: { holding: number; watching: number; ai_memos: number }; editing: boolean; ready: boolean; onCta: () => void }) {
+export function HeroCard({ name, total, editing, ready, onCta }: { name: string; total: number; editing: boolean; ready: boolean; onCta: () => void }) {
   const [sz, setSz] = useState({ w: 0, h: 0 });
   return (
     <View style={[st.hero, editing && { opacity: 0.6 }]} onLayout={(e) => setSz({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
@@ -72,20 +72,6 @@ export function HeroCard({ name, total, counts, editing, ready, onCta }: { name:
                 <Text keepAll style={st.htSub}>AI가 매일 확인하고 있어요. 새 소식이 오면 알려 드릴게요.</Text>
               </View>
             )}
-            <View style={st.stats}>
-              {(
-                [
-                  ['보유', counts.holding],
-                  ['관심', counts.watching],
-                  ['AI 메모', counts.ai_memos],
-                ] as const
-              ).map(([l, n]) => (
-                <View key={l} style={st.st}>
-                  <Text style={st.stS}>{l}</Text>
-                  <CountUp to={n} style={st.stB} duration={600} />
-                </View>
-              ))}
-            </View>
             <Pressable onPress={onCta} accessibilityRole="button" style={({ pressed }) => [st.cta2, pressed && { opacity: 0.85 }]}>
               <Text style={st.cta2T}>업데이트 확인하기</Text>
               <CtaChevron />
@@ -436,10 +422,6 @@ const st = StyleSheet.create({
   htSub: { ...ft(13), color: appColor.ink2, marginTop: 4 },
   htRow: { flexDirection: 'row', alignItems: 'center' },
   htOdo: { fontSize: 21, fontWeight: '800', color: appColor.ink },
-  stats: { flexDirection: 'row', gap: 8 },
-  st: { flex: 1, backgroundColor: appColor.surface, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12 },
-  stS: { ...ft(12), color: appColor.ink3 },
-  stB: { ...ft(20), fontWeight: '700', color: appColor.ink, marginTop: 2 },
   cta2: { alignSelf: 'flex-start', marginTop: 14, minHeight: 38, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 19, backgroundColor: appColor.ink, flexDirection: 'row', alignItems: 'center', gap: 4 },
   cta2T: { ...ft(13.5), fontWeight: '700', color: '#FFFFFF' },
   /* 시장 */
