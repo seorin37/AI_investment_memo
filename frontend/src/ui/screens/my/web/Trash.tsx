@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useCallback, useRef, useState, type RefObject } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { ConfirmDialog } from '@/ui/shared/ConfirmDialog';
+import { FloatTip, type TipTarget } from '@/ui/shared/FloatTip';
 import { Sheet } from '@/ui/shared/Sheet';
 import type { TrashItem } from '../My.mock';
 import type { TrashProps } from '../My.types';
@@ -22,11 +23,12 @@ export function WebTrash({ open, items, onClose, onRestore, onPurge }: TrashProp
   const [type, setType] = useState<Ty | null>(null);
   const [menu, setMenu] = useState(false);
   const [ask, setAsk] = useState<TrashItem | 'all' | null>(null);
+  const panel = useRef<TipTarget>(null);
   const t0 = type ?? '전체';
   const list = items.filter((t) => (t0 === '전체' || t.kind === t0) && (!q.trim() || t.title.includes(q.trim()) || t.sub.includes(q.trim())));
   return (
     <Sheet open={open} onClose={onClose} width={680} scrim="rgba(0,0,0,0.32)" label="휴지통">
-      <View style={[st.box, { height: Math.min(660, height - 32) }]}>
+      <View ref={panel} style={[st.box, { height: Math.min(660, height - 32) }]}>
         <View style={st.head}>
           <View style={{ flex: 1, gap: 4 }}>
             <Text style={st.title}>휴지통</Text>
@@ -71,10 +73,10 @@ export function WebTrash({ open, items, onClose, onRestore, onPurge }: TrashProp
                     <Text style={st.rowS} numberOfLines={1}>{t.sub} · {t.ago} 삭제</Text>
                   </View>
                   <View style={st.acts}>
-                    <TipBtn tip="복원" onPress={() => onRestore(t)}>
+                    <TipBtn tip="복원" open={open} bounds={panel} onPress={() => onRestore(t)}>
                       {(c) => <Svg width={22} height={22} viewBox="0 0 20 20" fill="none"><Path d="M7.22226 5L3.33337 8.88889L7.22226 12.7778" stroke={c} strokeWidth={1.77778} strokeLinecap="round" strokeLinejoin="round" /><Path d="M3.33337 8.89062H11.6667C15 8.89062 16.6667 10.5573 16.6667 13.8906V15.0017" stroke={c} strokeWidth={1.77778} strokeLinecap="round" strokeLinejoin="round" /></Svg>}
                     </TipBtn>
-                    <TipBtn tip="영구 삭제" danger onPress={() => setAsk(t)}>
+                    <TipBtn tip="영구 삭제" danger open={open} bounds={panel} onPress={() => setAsk(t)}>
                       {(c) => <Svg width={22} height={22} viewBox="0 0 20 20" fill="none" stroke={c} strokeWidth={1.77778} strokeLinecap="round" strokeLinejoin="round"><Path d="M3.33337 5H16.6667" /><Path d="M7.77783 4.9987V3.33203H12.2223V4.9987" /><Path d="M5 5L5.88889 17.2222H14.1111L15 5" /><Path d="M8.33337 8.89062V13.8906" /><Path d="M11.6666 8.89062V13.8906" /></Svg>}
                     </TipBtn>
                   </View>
@@ -104,14 +106,34 @@ export function WebTrash({ open, items, onClose, onRestore, onPurge }: TrashProp
   );
 }
 
-/* TipBtn: 40 · 라운드 8 · hover #F8F7F5 (위험은 #FBEFEF · 아이콘 빨강) · 위에 검정 말풍선 */
-function TipBtn({ tip, danger, onPress, children }: { tip: string; danger?: boolean; onPress: () => void; children: (c: string) => React.ReactNode }) {
+/* TipBtn: 40 · 라운드 8 · hover #F8F7F5 (위험은 #FBEFEF · 아이콘 빨강) · 검정 말풍선은 목록에 잘리지 않게 body에 (FloatTip) */
+function TipBtn({ tip, danger, open, bounds, onPress, children }: { tip: string; danger?: boolean; open: boolean; bounds: RefObject<TipTarget | null>; onPress: () => void; children: (c: string) => React.ReactNode }) {
   const [h, setH] = useState(false);
+  const btn = useRef<TipTarget>(null);
+  const hide = useCallback(() => setH(false), []);
   return (
-    <Pressable onPress={onPress} onHoverIn={() => setH(true)} onHoverOut={() => setH(false)} accessibilityRole="button" accessibilityLabel={tip} style={[st.tip, h && { backgroundColor: danger ? '#FBEFEF' : '#F8F7F5' }]}>
-      {children(h && danger ? '#E45D6A' : '#333333')}
-      {h ? <View pointerEvents="none" style={st.tipBox}><Text style={st.tipT}>{tip}</Text></View> : null}
-    </Pressable>
+    <>
+      <Pressable
+        ref={btn}
+        onPress={() => {
+          hide();
+          onPress();
+        }}
+        onHoverIn={() => setH(true)}
+        onHoverOut={hide}
+        /* 마우스로 누를 때의 focus로 다시 뜨지 않게 키보드 focus만 */
+        onFocus={(e) => {
+          if ((e.target as unknown as Element).matches?.(':focus-visible')) setH(true);
+        }}
+        onBlur={hide}
+        accessibilityRole="button"
+        accessibilityLabel={tip}
+        style={[st.tip, h && { backgroundColor: danger ? '#FBEFEF' : '#F8F7F5' }]}
+      >
+        {children(h && danger ? '#E45D6A' : '#333333')}
+      </Pressable>
+      {h && open ? <FloatTip text={tip} anchor={btn} bounds={bounds} onDismiss={hide} /> : null}
+    </>
   );
 }
 
@@ -154,8 +176,6 @@ const st = StyleSheet.create({
   rowS: { fontSize: 14, lineHeight: 21, color: '#747D8D' },
   acts: { width: 88, height: 40, flexDirection: 'row', alignItems: 'center', gap: 8 },
   tip: { width: 40, height: 40, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  tipBox: { position: 'absolute', bottom: 44, borderRadius: 6, backgroundColor: '#111111', paddingHorizontal: 8, paddingVertical: 5 },
-  tipT: { fontSize: 13, lineHeight: 20, fontWeight: '500', color: '#FFFFFF' },
   foot: { height: 36, flexDirection: 'row', alignItems: 'center', gap: 8 },
   emptyAll: { height: 36, borderRadius: 10, paddingHorizontal: 12, justifyContent: 'center' },
   emptyAllT: { fontSize: 14, lineHeight: 21, fontWeight: '700', color: '#E45D6A' },
