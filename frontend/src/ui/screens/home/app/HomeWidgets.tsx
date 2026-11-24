@@ -8,6 +8,7 @@ import { Odometer } from '@/ui/motion/Numbers';
 import { Skeleton } from '@/ui/motion/Skeleton';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { useProgress } from '@/ui/motion/useProgress';
+import { usePaper } from '@/ui/shared/Dark';
 import { StockLogo } from '@/ui/shared/StockLogo';
 import { appColor, curve, ft } from '@/ui/theme';
 import type { HomeNewsItem, HomeUpdateRow, HomeWidget, MarketIndex } from '../Home.types';
@@ -210,6 +211,7 @@ function NewBadge({ n, bye }: { n: number; bye: boolean }) {
 
 export function UpdatesWidget({ rows, ready, editing, onAll, onRow }: { rows: HomeUpdateRow[]; ready: boolean; editing: boolean; onAll: () => void; onRow: (code: string) => void }) {
   const [bye, setBye] = useState<string[]>([]);
+  const paper = usePaper();
   if (!ready)
     return (
       <View style={st.wb}>
@@ -238,8 +240,9 @@ export function UpdatesWidget({ rows, ready, editing, onAll, onRow }: { rows: Ho
             onRow(u.stock_code);
           }}
           accessibilityRole="button"
-          style={({ pressed }) => [st.ur, i === 0 && { marginTop: 0 }, pressed && { transform: [{ scale: 0.98 }] }]}
+          style={({ pressed }) => [st.urCol, i === 0 && { marginTop: 0 }, pressed && { transform: [{ scale: 0.98 }] }]}
         >
+          <View style={st.ur}>
           <StockLogo logo={u.logo} bg={u.logo_bg} ink={u.logo_ink} size={40} variant="app" />
           <View style={st.urMid}>
             <Text style={st.urB} numberOfLines={1}>
@@ -250,6 +253,23 @@ export function UpdatesWidget({ rows, ready, editing, onAll, onRow }: { rows: Ho
             </Text>
           </View>
           {u.new_count ? <NewBadge n={u.new_count} bye={bye.includes(u.stock_code)} /> : <Text style={st.urChev}>›</Text>}
+          </View>
+          {/* 가장 새 소식 1건 · 연결된 내 메모 (웹 업데이트 위젯) */}
+          {u.latest ? (
+            <View style={st.urBox}>
+              <View style={st.urLine}>
+                <View style={st.urKind}><Text style={st.urKindT}>{u.latest.kind}</Text></View>
+                <Text style={st.urT} numberOfLines={1}>{u.latest.title}</Text>
+              </View>
+              {u.latest.memo_title ? (
+                <View style={st.urLine}>
+                  <Text style={st.urM}>↳</Text>
+                  <View style={[st.urDot, { backgroundColor: paper[u.latest.memo_color].bg }]} />
+                  <Text style={[st.urM, st.urMT]} numberOfLines={1}>{u.latest.memo_title}</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
         </Pressable>
       ))}
     </View>
@@ -455,7 +475,16 @@ const st = StyleSheet.create({
   retry: { marginTop: 10, minHeight: 36, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18, backgroundColor: appColor.accentSoft, flexDirection: 'row', alignItems: 'center', gap: 8 },
   retryT: { ...ft(13.5), fontWeight: '700', color: appColor.deepPurple },
   /* 업데이트 */
-  ur: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: appColor.row, borderRadius: 16, padding: 12, marginTop: 8 },
+  urCol: { backgroundColor: appColor.row, borderRadius: 16, padding: 12, marginTop: 8 },
+  ur: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  urBox: { marginTop: 10, borderRadius: 12, backgroundColor: appColor.surface, paddingVertical: 8, paddingHorizontal: 10, gap: 5 },
+  urLine: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  urKind: { borderRadius: 6, backgroundColor: '#F1F2F4', paddingHorizontal: 6, paddingVertical: 1 },
+  urKindT: { ...ft(11), fontWeight: '700', color: appColor.ink2 },
+  urT: { flex: 1, minWidth: 0, ...ft(13), fontWeight: '600', color: appColor.ink },
+  urDot: { width: 10, height: 10, borderRadius: 3 },
+  urM: { ...ft(12), color: appColor.ink3 },
+  urMT: { flex: 1, minWidth: 0, color: appColor.ink2 },
   urMid: { flex: 1, minWidth: 0 },
   urB: { ...ft(15), fontWeight: '700', color: appColor.ink },
   urS: { ...ft(12.5), color: appColor.ink3 },
