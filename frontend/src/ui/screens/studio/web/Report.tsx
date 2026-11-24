@@ -6,7 +6,7 @@ import { FeatIcon } from '@/ui/layout/web/StudioColumnFrame';
 import { FixedFrame } from '@/ui/layout/web/FixedFrame';
 import { Sheet } from '@/ui/shared/Sheet';
 import { CloseX } from '../../my/web/parts';
-import type { mockReport, ReportStock } from '../Studio.mock';
+import type { mockReport, ReportStock, ReportWatch } from '../Studio.mock';
 import type { MadeItem } from '../Studio.types';
 import { issueParas, marketParas, quarterLine, reportSummary, sign, stripRefs, valuationCells, won } from '../reportParts';
 import { Check } from './AudioPopup';
@@ -170,7 +170,7 @@ const KCH = { 공시: { bg: '#FBEDED', c: '#E5484D' }, 뉴스: { bg: '#E8EDF5', 
  * 웹 주간보고서 자세히 보기 (가운데 860) = 원본 screens/report.tsx + gen/ReportDetail
  * 보라 표지(종목 카드 · 공시/뉴스/메모 수) · 이번 주 한눈에 · (01 국내 증시 주간 요약) · 종목 섹션 · 안내
  */
-export function WebReportDetail({ rep, item, stocks, market, allDefault, onMemo }: { rep: Rep; item: MadeItem | undefined; stocks: ReportStock[]; market: boolean; allDefault: boolean; onMemo: (code: string) => void }) {
+export function WebReportDetail({ rep, item, stocks, market, allDefault, onMemo, onWatch }: { rep: Rep; item: MadeItem | undefined; stocks: ReportStock[]; market: boolean; allDefault: boolean; onMemo: (code: string) => void; onWatch?: (s: ReportStock, w: ReportWatch) => void }) {
   if (!item) {
     return (
       <FixedFrame>
@@ -284,7 +284,21 @@ export function WebReportDetail({ rep, item, stocks, market, allDefault, onMemo 
               </View>
               <View style={st.watchBox}>
                 <Text style={st.subH}>앞으로 지켜볼 것</Text>
-                {s.watch.map((w) => <View key={w.text} style={st.watchRow}><View style={st.dot} /><View style={{ flex: 1, gap: 2 }}><Text keepAll style={st.watchText}>{w.text}</Text><Text keepAll style={st.watchWhy}>근거 · {w.why}</Text></View></View>)}
+                {s.watch.map((w) => (
+                  <View key={w.sid ?? w.text} style={st.watchRow}>
+                    <View style={st.dot} />
+                    <View style={{ flex: 1, minWidth: 0, gap: 2 }}><Text keepAll style={st.watchText}>{w.text}</Text><Text keepAll style={st.watchWhy}>근거 · {w.why}</Text></View>
+                    {w.tracked ? (
+                      <View style={st.watchDone}><Text style={st.watchDoneT}>✓ 추적 중</Text></View>
+                    ) : w.added ? (
+                      <View style={st.watchDone}><Text style={st.watchDoneT}>✓ 추가됨</Text></View>
+                    ) : onWatch ? (
+                      <Pressable onPress={() => onWatch(s, w)} accessibilityRole="button" accessibilityLabel={`${w.text} 메모에 추가`} style={({ hovered }: Hover) => [st.watchBtn, hovered && { opacity: 0.85 }]}>
+                        <Text style={st.watchBtnT}>메모에 추가</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ))}
               </View>
             </View>
           ))}
@@ -404,5 +418,9 @@ const st = StyleSheet.create({
   watchRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', borderRadius: 10, backgroundColor: '#FFFFFF', padding: 12 },
   watchText: { fontSize: 15, lineHeight: 22, fontWeight: '600', color: '#2B2F36' },
   watchWhy: { fontSize: 13, lineHeight: 19, color: '#8B95A1' },
+  watchBtn: { alignSelf: 'center', height: 34, paddingHorizontal: 14, borderRadius: 10, backgroundColor: '#15171A', justifyContent: 'center' },
+  watchBtnT: { fontSize: 13.5, lineHeight: 19, fontWeight: '700', color: '#FFFFFF' },
+  watchDone: { alignSelf: 'center', height: 34, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: '#E8EAED', backgroundColor: '#FFFFFF', justifyContent: 'center' },
+  watchDoneT: { fontSize: 13.5, lineHeight: 19, fontWeight: '600', color: '#8B95A1' },
   dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#15171A', marginTop: 9 },
 });

@@ -18,6 +18,7 @@ import { WebConnectDialog } from '@/ui/screens/memo/web/ConnectDialog';
 import { WebMemoDialog } from '@/ui/screens/memo/web/MemoDialog';
 import type { ChecklistDraft } from '@/ui/screens/memo/web/ChecklistTab';
 import { WebNewMemoDialog } from '@/ui/screens/memo/web/NewMemoDialog';
+import { useMarkWatchAdded } from '@/ui/screens/studio/reportView';
 import { feedOf, findMemo, versionsOf } from '@/ui/screens/updates/Updates.mock';
 
 /**
@@ -29,15 +30,18 @@ import { feedOf, findMemo, versionsOf } from '@/ui/screens/updates/Updates.mock'
 export default function StockScreen() {
   /* memo · ev: 업데이트(⑥)의 '근거 자세히 보기' → 메모 창을 그 소식 근거로 열기 */
   /* new=1: 스튜디오 실험 결과 '메모 쓰기' → 새 메모 창 바로 열기 (엑셀 웹 #11) */
-  const { code, tab, memo, ev, first, new: newParam, stock_name, onboarding_selected, onboarding_home_mode } = useLocalSearchParams<{ code: string; tab?: 'board' | 'info'; memo?: string; ev?: string; first?: string; new?: string; stock_name?: string; onboarding_selected?: string; onboarding_home_mode?: string }>();
+  const { code, tab, memo, ev, first, new: newParam, nt, nb, wr, wk, stock_name, onboarding_selected, onboarding_home_mode } = useLocalSearchParams<{ code: string; tab?: 'board' | 'info'; memo?: string; ev?: string; first?: string; new?: string; nt?: string; nb?: string; wr?: string; wk?: string; stock_name?: string; onboarding_selected?: string; onboarding_home_mode?: string }>();
   const active = tab === 'info' ? 'info' : 'board';
-  if (active === 'board') return <BoardTab key={memo ?? 'board'} code={code} memoParam={memo} ev={ev} firstFlow={first === '1'} newParam={newParam} stockName={stock_name} onboardingSelected={onboarding_selected} onboardingHomeMode={onboarding_home_mode} />;
+  if (active === 'board') return <BoardTab key={memo ?? 'board'} code={code} memoParam={memo} ev={ev} firstFlow={first === '1'} newParam={newParam} pre={nt ? { text: nb ? `${nt}\n${nb}` : nt, wr, wk } : undefined} stockName={stock_name} onboardingSelected={onboarding_selected} onboardingHomeMode={onboarding_home_mode} />;
   return <InfoTab code={code} />;
 }
 
 type Connect = { id: string | null; title: string; body: string; color: MemoColor; fromNew: boolean };
 
-function BoardTab({ code, memoParam, ev, firstFlow, newParam, stockName, onboardingSelected, onboardingHomeMode }: { code: string; memoParam?: string; ev?: string; firstFlow: boolean; newParam?: string; stockName?: string; onboardingSelected?: string; onboardingHomeMode?: string }) {
+/** pre: 주간보고서 '메모에 추가'로 왔을 때 새 메모 창에 채울 글과 '추가됨'을 남길 보고서 id·키 (2026-11-24) */
+type Pre = { text: string; wr?: string; wk?: string };
+
+function BoardTab({ code, memoParam, ev, firstFlow, newParam, pre, stockName, onboardingSelected, onboardingHomeMode }: { code: string; memoParam?: string; ev?: string; firstFlow: boolean; newParam?: string; pre?: Pre; stockName?: string; onboardingSelected?: string; onboardingHomeMode?: string }) {
   const router = useRouter();
   const empty = firstFlow || code === mockEmptyStock.stock_code;
   const baseStock = firstFlow && stockName ? { ...mockEmptyStock, stock_code: code, name: stockName } : empty ? mockEmptyStock : mockBoardStock;
@@ -57,6 +61,8 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, stockName, onboard
   const [dlg, setDlg] = useState(!!memoParam);
   const [newOpen, setNewOpen] = useState(firstFlow);
   const [newKey, setNewKey] = useState(0);
+  const [preNew, setPreNew] = useState<Pre | null>(null);
+  const markWatch = useMarkWatchAdded();
   /* 새 메모 창의 처음 탭 (0 메모 · 1 체크리스트 — '체크리스트 만들기' · 체크리스트 카드 열기) */
   const [newTab, setNewTab] = useState<0 | 1>(0);
   /* ?new=1 이 들어오면 새 메모 창(메모 탭)을 열고, 주소에서 new 를 지움 — 닫은 뒤 새로고침·뒤로가기로 다시 열리지 않게.
@@ -65,6 +71,7 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, stockName, onboard
   if (newParam !== seenNew) {
     setSeenNew(newParam);
     if (newParam === '1' && !firstFlow) {
+      setPreNew(pre ?? null);
       setDlg(false);
       setNewTab(0);
       setNewKey((n) => n + 1);
@@ -76,13 +83,13 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, stockName, onboard
   const navigation = useNavigation();
   useEffect(() => {
     if (newParam !== '1') return;
-    navigation.setParams({ new: undefined } as never);
+    navigation.setParams({ new: undefined, nt: undefined, nb: undefined, wr: undefined, wk: undefined } as never);
     if (Platform.OS !== 'web') return;
     /* 다음 틈에 (라우터가 주소를 먼저 쓴 뒤) · 위 setParams 로 값이 바뀌어도 취소하지 않음 */
     setTimeout(() => {
       const u = new URL(window.location.href);
       if (!u.searchParams.has('new')) return;
-      u.searchParams.delete('new');
+      for (const k of ['new', 'nt', 'nb', 'wr', 'wk']) u.searchParams.delete(k);
       window.history.replaceState(window.history.state, '', u.pathname + u.search + u.hash);
     }, 0);
   }, [newParam, navigation]);
@@ -306,13 +313,19 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, stockName, onboard
       key={newKey}
       open={newOpen}
       stockName={stock.name}
-      initialText={first}
+      initialText={preNew?.text ?? first}
+      initialAi={!!preNew}
       tab0={newTab}
       checklist={checklist}
       onSaveChecklist={saveChecklist}
       onEmptyChecklist={emptyChecklist}
-      onCancel={() => setNewOpen(false)}
+      onCancel={() => {
+        setNewOpen(false);
+        setPreNew(null);
+      }}
       onSave={({ title, body, color, ai }) => {
+        const fromReport = preNew;
+        setPreNew(null);
         if (real) {
           /* 실제 모드: 일반 메모로 먼저 저장(빠름) → AI 를 켰으면 연결 창을 바로 '분석 중'으로 띄우고 그 메모로 분석 */
           setNewOpen(false);
@@ -329,6 +342,7 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, stockName, onboard
             }
             setMemos((all) => [...all, r.memo]);
             setOrder((o) => [...o, r.memo.id]);
+            if (fromReport) markWatch(fromReport.wr, fromReport.wk, r.memo.id);
             if (ai) {
               setConnect((c) => (c && !c.id ? { ...c, id: r.memo.id } : c));
               analyze(r.memo.id);

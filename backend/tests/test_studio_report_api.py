@@ -13,8 +13,8 @@ from app.studio_report import routes
 
 
 class _Res:
-    def __init__(self, rows=None, scalar=None):
-        self._rows, self._scalar = rows or [], scalar
+    def __init__(self, rows=None, scalar=None, rowcount=1):
+        self._rows, self._scalar, self.rowcount = rows or [], scalar, rowcount
 
     def all(self):
         return self._rows
@@ -119,3 +119,16 @@ def test_trashed_report_is_not_reused():
     from app.studio_report import routes as report_routes
 
     assert "deleted_at IS NULL" in report_routes.SAME_SQL
+
+
+
+def test_watch_added_records_memo_and_validates_key(monkeypatch):
+    """보고서 제안 → 메모 저장 뒤 '추가됨' 기록 (2026-11-24)."""
+    db = FakeDb()
+    api, _spent, _gen = client(monkeypatch, db)
+    assert api.post("/api/v1/studio/items/42/watch", json={"key": "000660:f0", "memo_id": "57"}).status_code == 204
+    verb, params = db.calls[-1]
+    assert verb == "UPDATE" and params == {"id": 42, "u": 2, "key": "000660:f0", "memo": "57"}
+    assert api.post("/api/v1/studio/items/42/watch", json={"key": "bad key", "memo_id": "57"}).status_code == 422
+    monkeypatch.setattr(db, "execute", lambda stmt, params=None: _Res(rowcount=0))
+    assert api.post("/api/v1/studio/items/9/watch", json={"key": "000660:f0", "memo_id": "57"}).status_code == 404

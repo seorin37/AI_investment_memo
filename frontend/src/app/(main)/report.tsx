@@ -2,13 +2,14 @@ import React from 'react';
 import { Platform } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
 import { useStudioPlayer } from '@/store/studioPlayer';
-import { reportView } from '@/ui/screens/studio/reportView';
+import { reportView, useWatchToMemo } from '@/ui/screens/studio/reportView';
 import { WebReportDetail } from '@/ui/screens/studio/web/Report';
 
 /** 웹 주간보고서 자세히 보기 (가운데 860 · 원본 screens/report.tsx). 앱은 스튜디오 › 주간보고서 화면 */
 export default function ReportScreen() {
   const router = useRouter();
   const made = useStudioPlayer((s) => s.made);
+  const toMemo = useWatchToMemo();
   const cur = useStudioPlayer((s) => s.curReport);
   if (Platform.OS !== 'web') return <Redirect href="/studio-report" />;
   const item = made.find((m) => m.id === cur && m.kind === 'report') ?? made.find((m) => m.kind === 'report');
@@ -22,6 +23,7 @@ export default function ReportScreen() {
       market={v.market}
       allDefault={v.allDefault}
       onMemo={(code) => router.navigate({ pathname: '/stocks/[code]', params: { code } })}
+      onWatch={(s, w) => toMemo(s, w, item?.server ? item.id : undefined)}
     />
   );
 }

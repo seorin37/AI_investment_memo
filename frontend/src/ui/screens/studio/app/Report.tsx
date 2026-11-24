@@ -166,9 +166,13 @@ export function AppReport({ rep, stocks, market, allDefault, onBack, onOpenMemo,
                   <Text style={st.wtHT}>앞으로 지켜볼 것</Text>
                 </View>
                 {r.watch.map((w, i) => (
-                  <View key={w.text} style={st.it}>
+                  <View key={w.sid ?? w.text} style={st.it}>
                     <View style={{ flex: 1, minWidth: 0 }}><Text keepAll style={st.itB}>{w.text}</Text><Text style={st.itS}>근거 · {w.why}</Text></View>
-                    <Pressable onPress={() => onWatch(r, i)} accessibilityRole="button" style={st.itBtn}><Text style={st.itBtnT}>메모에 추가</Text></Pressable>
+                    {w.tracked || w.added ? (
+                      <View style={st.itDone}><Text style={st.itDoneT}>{w.tracked ? '✓ 추적 중' : '✓ 추가됨'}</Text></View>
+                    ) : (
+                      <Pressable onPress={() => onWatch(r, i)} accessibilityRole="button" style={st.itBtn}><Text style={st.itBtnT}>메모에 추가</Text></Pressable>
+                    )}
                   </View>
                 ))}
               </View>
@@ -296,6 +300,8 @@ const st = StyleSheet.create({
   itS: { fontSize: 12, lineHeight: 17, color: C.ink3 },
   itBtn: { height: 32, paddingHorizontal: 12, borderRadius: 10, backgroundColor: C.ink, justifyContent: 'center' },
   itBtnT: { fontSize: 12.5, lineHeight: 17, fontWeight: '700', color: '#FFFFFF' },
+  itDone: { height: 32, paddingHorizontal: 10, borderRadius: 10, borderWidth: 1, borderColor: '#E6E3F3', justifyContent: 'center' },
+  itDoneT: { fontSize: 12.5, lineHeight: 17, fontWeight: '600', color: '#8B95A1' },
   src: { fontSize: 12.5, lineHeight: 24, color: '#3F434A' },
   srcS: { fontSize: 12.5, lineHeight: 20, color: C.ink3, marginTop: 8 },
   ft: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 18, marginHorizontal: 4 },

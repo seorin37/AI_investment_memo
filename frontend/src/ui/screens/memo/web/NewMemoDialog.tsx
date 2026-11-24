@@ -19,7 +19,7 @@ import { usePaper } from '@/ui/shared/Dark';
  * [체크리스트] 탭 (6.2, 2026-11-22): 종목당 체크리스트 하나 — 있으면 그걸 고치고, 없으면 새로 (ChecklistTab).
  *   onSaveChecklist 가 없으면 예전처럼 onSwitchToChecklist 만 부른다.
  */
-export function WebNewMemoDialog({ open, stockName, initialText, onCancel, onSave, onSwitchToChecklist, tab0 = 0, checklist, onSaveChecklist, onEmptyChecklist }: NewMemoProps & {
+export function WebNewMemoDialog({ open, stockName, initialText, initialAi, onCancel, onSave, onSwitchToChecklist, tab0 = 0, checklist, onSaveChecklist, onEmptyChecklist }: NewMemoProps & {
   open: boolean;
   /** 처음 열 탭 (0 메모 · 1 체크리스트) */
   tab0?: 0 | 1;
@@ -33,7 +33,7 @@ export function WebNewMemoDialog({ open, stockName, initialText, onCancel, onSav
   const { height: H } = useWindowDimensions();
   const [text, setText] = useState(initialText ?? '');
   const [color, setColor] = useState<MemoColor>('yellow');
-  const [ai, setAi] = useState(false);
+  const [ai, setAi] = useState(!!initialAi);
   const [tab, setTab] = useState<0 | 1>(onSaveChecklist ? tab0 : 0);
   const ed = useRef<{ focus: () => void; blur: () => void }>(null);
   const empty = !text.trim();
