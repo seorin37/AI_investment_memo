@@ -3,6 +3,7 @@ import { Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useUpdatesData } from '@/ui/screens/updates/useUpdatesData';
 import { WebUpdates } from '@/ui/screens/updates/web/Updates';
+import { useStudioPlayer } from '@/store/studioPlayer';
 
 /**
  * 웹 최신 업데이트 = UI v2 (ui/screens/updates/web · ⑥). 종목 칩 → /updates/[code].
@@ -21,7 +22,7 @@ export default function UpdatesPage() {
       onOpenBoard={(code) => router.navigate({ pathname: '/stocks/[code]', params: { code } })}
       onOpenSource={(u) => u.url && Linking.openURL(u.url)}
       onMarkRead={onMarkRead}
-      onNudge={() => {}}
+      onNudge={() => useStudioPlayer.getState().askStudio('audio')}
     />
   );
 }

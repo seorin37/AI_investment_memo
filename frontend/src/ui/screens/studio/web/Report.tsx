@@ -20,14 +20,18 @@ const pc = (v: number) => (v >= 0 ? UPC : DNC);
 const TR = { letterSpacing: -0.2 };
 
 /** 웹 주간보고서 만들기 창 = 원본 studio.tsx ReportPopup (468) */
-export function WebReportPopup({ open, stocks, sub, onClose, onMake, counts = true }: { open: boolean; stocks: ReportStock[]; sub: string; onClose: () => void; onMake: (p: { codes: string[]; market: boolean }) => void; /** 종목별 '공시·뉴스 N' 미리 보기 (실제 모드는 없음) */ counts?: boolean }) {
+export function WebReportPopup({ open, stocks, sub, onClose, onMake, counts = true, preset }: { open: boolean; stocks: ReportStock[]; sub: string; onClose: () => void; onMake: (p: { codes: string[]; market: boolean }) => void; /** 종목별 '공시·뉴스 N' 미리 보기 (실제 모드는 없음) */ counts?: boolean; /** 넛지에서 열 때 미리 고를 종목 (목록에 있는 것만 · 없거나 0개면 전체) */ preset?: string[] }) {
   const all = stocks.map((s) => s.stock_code);
   const [sel, setSel] = useState<string[]>(all);
   const [sum, setSum] = useState(false);
   const [prev, setPrev] = useState(open);
   if (open !== prev) {
     setPrev(open);
-    if (open) { setSel(all); setSum(false); }
+    if (open) {
+      const pick = preset?.filter((c) => all.includes(c)) ?? [];
+      setSel(pick.length ? pick : all);
+      setSum(false);
+    }
   }
   const want = (q: 'all' | 'own' | 'watch') => stocks.filter((s) => q === 'all' || (q === 'own' ? s.own === '보유' : s.own === '관심')).map((s) => s.stock_code);
   const eq = (a: string[]) => a.length > 0 && a.length === sel.length && a.every((x) => sel.includes(x));
