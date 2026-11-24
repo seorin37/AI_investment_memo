@@ -22,7 +22,7 @@ type Q = typeof mockQuiz;
 const C = { ink: '#16171A', ink2: '#575B63', ink3: '#9A9EA7' };
 const CHK = <Svg width={14} height={14} viewBox="0 0 14 14" fill="none"><Path d="M3 7.3l2.6 2.6L11 4.4" stroke="#fff" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" /></Svg>;
 
-export function AppQuiz({ q, done, onBack, onSubmit }: { q: Q; done: number | null; onBack: () => void; onSubmit: (i: number) => void }) {
+export function AppQuiz({ q, done, locked = false, onBack, onSubmit }: { q: Q; done: number | null; /** 문제·기록을 읽는 중이면 보기·제출 막음 */ locked?: boolean; onBack: () => void; onSubmit: (i: number) => void }) {
   const insets = useSafeAreaInsets();
   const [sel, setSel] = useState<number | null>(null);
   const shown = done != null;
@@ -44,7 +44,7 @@ export function AppQuiz({ q, done, onBack, onSubmit }: { q: Q; done: number | nu
             const wrong = shown && i === done && !ok;
             const on = !shown && sel === i;
             return (
-              <PressScale key={o} scaleTo={0.98} disabled={shown} onPress={() => setSel(sel === i ? null : i)} accessibilityRole="radio" accessibilityState={{ selected: on }} style={[st.opt, on && st.optSel, isAns && st.optOk, wrong && st.optNo]}>
+              <PressScale key={o} scaleTo={0.98} disabled={shown || locked} onPress={() => setSel(sel === i ? null : i)} accessibilityRole="radio" accessibilityState={{ selected: on }} style={[st.opt, on && st.optSel, isAns && st.optOk, wrong && st.optNo]}>
                 <Text style={st.optN}>{i + 1}.</Text>
                 <Text style={[st.optT, on && { color: '#4B2E9E' }, isAns && { color: '#14653A' }, wrong && { color: '#B42318' }]}>{o}</Text>
                 {isAns ? <Svg width={20} height={20} viewBox="0 0 20 20" style={{ marginLeft: 'auto' }}><Circle cx={10} cy={10} r={10} fill="#1F8A4C" /><Path d="M5.5 10.3l3 3L14.5 7" fill="none" stroke="#fff" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" /></Svg> : null}
@@ -69,7 +69,7 @@ export function AppQuiz({ q, done, onBack, onSubmit }: { q: Q; done: number | nu
         {!shown ? (
           <>
             <View style={{ marginTop: 12, marginHorizontal: 16 }}>
-              <PressScale disabled={sel == null} onPress={() => sel != null && onSubmit(sel)} accessibilityRole="button" style={[st.cta, sel == null && { backgroundColor: '#C9CDD4' }]}><Text style={st.ctaT}>제출하기</Text></PressScale>
+              <PressScale disabled={sel == null || locked} onPress={() => sel != null && !locked && onSubmit(sel)} accessibilityRole="button" style={[st.cta, (sel == null || locked) && { backgroundColor: '#C9CDD4' }]}><Text style={st.ctaT}>제출하기</Text></PressScale>
             </View>
             <Text style={st.qcap}>제출하면 바꿀 수 없어요 · 다시 누르면 고른 것이 풀려요</Text>
           </>

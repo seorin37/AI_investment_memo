@@ -66,8 +66,6 @@ interface StudioPlayerState {
   askStudio(kind: StudioKind, codes?: string[]): void;
   clearAsk(): void;
   /** 오늘의 퀴즈 제출 (화면 상태만) */
-  quizPick: number | null;
-  submitQuiz(i: number): void;
   retry(): void;
   dropFailed(): void;
   setGenVisible(v: boolean): void;
@@ -214,8 +212,6 @@ export const useStudioPlayer = create<StudioPlayerState>((set, get) => {
     ask: null,
     askStudio: (kind, codes) => set({ ask: { kind, codes } }),
     clearAsk: () => set({ ask: null }),
-    quizPick: null,
-    submitQuiz: (i) => set({ quizPick: i }),
     retry: () => {
       const j = get().job;
       if (!j) return;
