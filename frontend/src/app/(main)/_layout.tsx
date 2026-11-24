@@ -26,6 +26,7 @@ import { WebInbox } from '@/ui/screens/my/web/Inbox';
 import { useInboxData } from '@/ui/screens/my/useInboxData';
 import { WebSettings, type SettingsTab } from '@/ui/screens/my/web/Settings';
 import { useTodayQuizView } from '@/ui/screens/studio/useTodayQuiz';
+import { useQuizAnswer } from '@/ui/screens/studio/useQuizAnswer';
 import { useTrashData } from '@/ui/screens/my/useTrashData';
 import { WebTrash } from '@/ui/screens/my/web/Trash';
 import { chapterAt, fmt, useStudioPlayer } from '@/store/studioPlayer';
@@ -185,6 +186,8 @@ export default function MainLayout() {
   );
   /* 오늘의 퀴즈: 실제 모드면 DB 문제 (퀴즈 화면을 열었을 때만 읽음) */
   const quiz = useTodayQuizView(sp.webView === 'quiz');
+  /* 오늘 푼 답 (기기 저장 · 사용자 + 날짜 + 문제) — 새로고침·재로그인해도 하루 한 번 */
+  const quizAns = useQuizAnswer(quiz.slug, quiz.ready);
   const labStock = labStocks.find((s) => s.stock_code === sp.labCode) ?? labStocks[0];
   const spItem = sp.made.find((m) => m.id === sp.cur);
   /* ⑧-8c 주간보고서: 스튜디오 열 요약 · 가운데 /report 자세히 */
@@ -312,7 +315,7 @@ export default function MainLayout() {
             <View style={{ flex: 1, minHeight: 0, paddingBottom: sp.mini && spItem && sp.webView !== 'player' ? 84 : 0 }}>
             {sp.webView === 'gen' && sp.job ? <WebGen job={sp.job} steps={sp.job.kind === 'report' ? mockReport.web_steps : mockAudioGen.steps} />
               : sp.webView === 'fail' ? <WebFail kind={sp.job?.kind ?? 'audio'} onHome={() => { sp.dropFailed(); sp.setWebView('home'); }} onRetry={() => { sp.retry(); sp.setWebView('gen'); }} />
-              : sp.webView === 'quiz' ? <WebQuiz q={quiz} done={sp.quizPick} onBack={() => sp.setWebView('home')} onSubmit={sp.submitQuiz} />
+              : sp.webView === 'quiz' ? <WebQuiz q={quiz} done={quizAns.done} locked={!quizAns.canSubmit} onBack={() => sp.setWebView('home')} onSubmit={quizAns.submit} />
               : sp.webView === 'lab' && labGen ? <WebLabGen pct={labGen.pct} at={labGen.at} />
               : sp.webView === 'lab' ? (
                 <WebLab

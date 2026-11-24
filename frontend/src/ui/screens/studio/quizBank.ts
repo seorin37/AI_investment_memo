@@ -56,17 +56,24 @@ export const QUIZ_BANK: QuizItem[] = [
 /** 새 문제가 열리는 시각 (한국 시간, 화면 문구 '내일 오전 10시에 새 문제가 열려요') */
 const OPEN_HOUR = 10;
 
+/** 퀴즈 날짜 번호 — 한국 시간 오전 10시에 1씩 늘어남 (서버 quiz/routes.py quiz_index 의 day 와 같은 계산). 푼 기록 키에 씀 */
+export function quizDay(now: Date = new Date()): number {
+  return Math.floor((now.getTime() + 9 * 3600_000 - OPEN_HOUR * 3600_000) / 86400_000);
+}
+
 /** 오늘(한국 시간 오전 10시 기준)의 문제 번호 — 날마다 다음 문제, 30일마다 처음으로 */
 export function quizIndex(now: Date = new Date()): number {
-  const kst = now.getTime() + 9 * 3600_000 - OPEN_HOUR * 3600_000;
-  const day = Math.floor(kst / 86400_000);
+  const day = quizDay(now);
   return ((day % QUIZ_BANK.length) + QUIZ_BANK.length) % QUIZ_BANK.length;
 }
 
+/** 화면 props 모양 + 문제 slug (푼 기록 키) */
+export type QuizView = typeof mockQuiz & { slug: string };
+
 /** 화면 props 모양 (mockQuiz 와 같은 칸). 연속 참여 · 이번 주 표시는 기록 API 가 없어 base(예시 값) 그대로 */
-export function todayQuiz(base: typeof mockQuiz, now: Date = new Date()): typeof mockQuiz {
+export function todayQuiz(base: typeof mockQuiz, now: Date = new Date()): QuizView {
   const it = QUIZ_BANK[quizIndex(now)];
-  return { ...base, label: it.label, day: '', type: it.type, q: it.q, options: it.options, answer: it.answer, exp: it.exp, concept: it.concept, src: `출처 · ${it.src}` };
+  return { ...base, slug: it.slug, label: it.label, day: '', type: it.type, q: it.q, options: it.options, answer: it.answer, exp: it.exp, concept: it.concept, src: `출처 · ${it.src}` };
 }
 
 const CATEGORY: Record<string, TodayQuiz['category']> = { '차트 기초': 'chart', '거래 기초': 'trading', '재무 기초': 'financials', '공시 기초': 'disclosure' };
@@ -83,9 +90,9 @@ export function toServerQuiz(now: Date = new Date()): TodayQuiz {
 }
 
 /** 서버 문제 → 화면 props 모양 (todayQuiz 와 같은 칸) */
-export function fromServerQuiz(base: typeof mockQuiz, s: TodayQuiz): typeof mockQuiz {
+export function fromServerQuiz(base: typeof mockQuiz, s: TodayQuiz): QuizView {
   return {
-    ...base, label: s.label, day: '', type: s.quiz_type === 'ox' ? 'OX' : '4지선다', q: s.question, options: s.options,
+    ...base, slug: s.slug, label: s.label, day: '', type: s.quiz_type === 'ox' ? 'OX' : '4지선다', q: s.question, options: s.options,
     answer: s.answer_index, exp: s.explanation, concept: s.concept, src: `출처 · ${s.source}`,
   };
 }
