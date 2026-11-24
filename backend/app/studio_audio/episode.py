@@ -62,11 +62,11 @@ def write_script(brief: Brief, llm: LLMCall | None, cfg: dict | None = None) -> 
     if not brief.news_stocks and not brief.market:
         raise NoUpdatesError("고른 종목에 기간 안 새 업데이트가 없고 증시 요약도 꺼져 있어요")
     meta = {"prompt": PROMPT_VERSION, "tries": 0, "errors": [], "usage": [], "source": "rules"}
-    script, fix = None, None
+    script, fix, prev = None, None, None
     for attempt in range(1, int(cfg["script"].get("tries", 2)) + 1) if llm else []:
         meta["tries"] = attempt
         try:
-            raw = llm(messages(brief, fix, cfg))
+            raw = llm(messages(brief, fix, cfg, prev))
         except Exception as exc:
             meta["errors"].append(f"try{attempt}: {type(exc).__name__}: {str(exc)[:200]}")
             log.warning("audio llm error try=%s: %s", attempt, type(exc).__name__)
@@ -78,7 +78,7 @@ def write_script(brief: Brief, llm: LLMCall | None, cfg: dict | None = None) -> 
             break
         meta["errors"].append(f"try{attempt}: " + " | ".join(errors))
         meta.setdefault("rejected", []).append(raw)
-        fix = errors
+        fix, prev = errors, raw
     if script is None:
         script = fallback(brief)
         leftover = check(script, brief, cfg)
