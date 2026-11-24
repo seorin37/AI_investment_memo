@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, BackHandler, Keyboard, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent, type TextInputInstance, type TextStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text, TextInput } from '@/components/ui/AppText';
+import { copyText, shareText } from '@/lib/copyText';
 import { useMotionK } from '@/ui/motion/useMotion';
 import { ON_DOM } from '@/ui/shared/onDom';
 import { Sheet } from '@/ui/shared/Sheet';
@@ -64,6 +65,8 @@ export function AppNote(p: AppNoteProps) {
   const [canUndo, setCanUndo] = useState(false);
 
   const toast = (msg: string) => setToastV((s) => ({ id: (s?.id ?? 0) + 1, msg }));
+  const text = () => items.map((b) => b.text).join('\n');
+  const share = () => void shareText(text()).then((copied) => copied && toast('공유할 내용을 복사했어요'));
   useEffect(() => {
     if (!toastV) return;
     const t = setTimeout(() => setToastV((s) => (s && s.id === toastV.id ? null : s)), 2300 * k);
@@ -223,7 +226,7 @@ export function AppNote(p: AppNoteProps) {
               <Pressable onPress={undo} disabled={!canUndo} accessibilityRole="button" accessibilityLabel="실행 취소" style={[st.undo, !canUndo && { opacity: 0.4 }]}>
                 <JUndo color={A2} />
               </Pressable>
-              <Rb label="공유" onPress={() => toast(NOT_YET)}>
+              <Rb label="공유" onPress={share}>
                 <JShare color={A2} />
               </Rb>
               <Pressable onPress={exitEdit} accessibilityRole="button" style={st.done}>
@@ -232,7 +235,7 @@ export function AppNote(p: AppNoteProps) {
             </>
           ) : (
             <>
-              <Rb label="공유" onPress={() => toast(NOT_YET)}>
+              <Rb label="공유" onPress={share}>
                 <JShare color={A2} />
               </Rb>
               <Rb label="더 보기" onPress={() => setMore(true)}>
@@ -340,7 +343,14 @@ export function AppNote(p: AppNoteProps) {
             }}
           />
           <SRow label="기록 안에서 찾기" onPress={() => (setMore(false), toast(NOT_YET))} />
-          <SRow label="내용 복사" onPress={() => (setMore(false), toast(NOT_YET))} />
+          <SRow
+            label="내용 복사"
+            onPress={() => {
+              setMore(false);
+              copyText(text());
+              toast('내용을 복사했어요');
+            }}
+          />
           <SRow
             label="휴지통으로 이동"
             red

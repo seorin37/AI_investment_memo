@@ -10,6 +10,7 @@ import { AppSnackbar } from '@/ui/shared/Snackbar';
 import { SwipeRow } from '@/ui/shared/SwipeRow';
 import { Toggle } from '@/ui/shared/Toggle';
 import { appColor, curve, ft } from '@/ui/theme';
+import { shareText } from '@/lib/copyText';
 import { mockJournalLoadMs, mockJournalRecentCount } from '../Journal.mock';
 import type { JournalFlash } from '@/store/journal';
 import type { JournalEntry, JournalProps } from '../Journal.types';
@@ -361,7 +362,11 @@ export function AppJournal(p: AppJournalProps) {
           if (a === 'pin') {
             setSel(null);
             doPin(ids);
-          } else if (a === 'share') notYet();
+          } else if (a === 'share') {
+            const text = L.filter((j) => ids.includes(j.id)).map((j) => j.blocks.map((b) => b.text).join('\n')).join('\n\n');
+            setSel(null);
+            void shareText(text).then((copied) => copied && toast('공유할 내용을 복사했어요'));
+          }
           else {
             setSel(null);
             trash(ids);
