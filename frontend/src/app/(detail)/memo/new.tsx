@@ -4,6 +4,8 @@ import { api } from '@/api';
 import { env } from '@/config/env';
 import { useQueryClient } from '@tanstack/react-query';
 import { qk } from '@/hooks/queries';
+import { useMockBoard } from '@/store/mockBoard';
+import { mockBase, mockKey } from '@/ui/screens/board/useBoardCards';
 import { useUI } from '@/store/ui';
 import { AppNewMemo } from '@/ui/screens/memo/app/NewMemo';
 import { mockDetailStockName } from '@/ui/screens/memo/MemoDetail.mock';
@@ -65,8 +67,9 @@ export default function NewMemoScreen() {
           );
           return;
         }
+        const memoId = code ? useMockBoard.getState().addMemo(mockKey(code), mockBase(code), { title, body, color }) : undefined;
         if (ai) {
-          router.replace({ pathname: '/memo/link', params: { id: 'new', title, body, from: 'new' } });
+          router.replace({ pathname: '/memo/link', params: { id: 'new', title, body, from: 'new', memo_id: memoId ?? '' } });
           return;
         }
         if (code) router.dismissTo({ pathname: '/stocks/[code]', params: { code, notice: 'saved', t: String(Date.now()) } });

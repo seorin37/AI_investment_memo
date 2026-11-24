@@ -23,7 +23,6 @@ import { appColor, ft } from '@/ui/theme';
 import type { BoardFilter, MemoBoardProps } from '../MemoBoard.types';
 import { usePaper } from '@/ui/shared/Dark';
 
-const CL = 'cl';
 type Item = { key: string; memo?: Memo; checklist?: Checklist; pinned: boolean; at: string };
 type Snack = { id: number; msg: string; undo?: string[] };
 
@@ -57,13 +56,13 @@ export function AppMemoBoard(p: MemoBoardProps & { header: React.ReactNode }) {
     const ms: Item[] = p.memos
       .filter((m) => filter === 'all' || (filter === 'ai' ? m.ai_linked : m.unread_updates > 0))
       .map((m) => ({ key: m.id, memo: m, pinned: m.pinned, at: m.updated_at }));
-    const cl: Item[] = filter === 'all' && p.checklist ? [{ key: CL, checklist: p.checklist, pinned: !!p.checklist.pinned, at: p.checklist.updated_at }] : [];
+    const cl: Item[] = filter === 'all' ? p.checklists.map((c) => ({ key: c.id, checklist: c, pinned: !!c.pinned, at: c.updated_at })) : [];
     return [...ms, ...cl].sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.at.localeCompare(a.at));
-  }, [p.memos, p.checklist, filter]);
+  }, [p.memos, p.checklists, filter]);
 
   const memoCount = p.memos.length;
   const newTotal = p.memos.reduce((n, m) => n + m.unread_updates, 0);
-  const empty = memoCount === 0 && !p.checklist;
+  const empty = memoCount === 0 && p.checklists.length === 0;
   const selecting = sel !== null;
 
   /* 탭바 숨김을 부모에 알림 */
@@ -91,7 +90,7 @@ export function AppMemoBoard(p: MemoBoardProps & { header: React.ReactNode }) {
   const [noticeKey, setNoticeKey] = useState(p.notice?.key);
   if (p.notice && p.notice.key !== noticeKey) {
     setNoticeKey(p.notice.key);
-    toast(p.notice.message);
+    toast(p.notice.message, p.notice.undo);
   }
 
   /* 안드로이드 뒤로: 시트(모달이 먼저 받음) → 열린 줄 → 부채꼴 → 고르기 → 화면 */
@@ -115,6 +114,7 @@ export function AppMemoBoard(p: MemoBoardProps & { header: React.ReactNode }) {
   }, [openRow, fan, sel]);
 
   const byId = (id: string) => p.memos.find((m) => m.id === id);
+  const isCk = (id: string) => p.checklists.some((c) => c.id === id);
   const enterSel = (key: string) => {
     setOpenRow(null);
     setSel([key]);
@@ -128,23 +128,21 @@ export function AppMemoBoard(p: MemoBoardProps & { header: React.ReactNode }) {
   const tap = (it: Item) => {
     if (sel) return toggleSel(it.key);
     if (openRow) return setOpenRow(null);
-    if (it.checklist) return p.onOpenChecklist();
+    if (it.checklist) return p.onOpenChecklist(it.key);
     const m = it.memo!;
     p.onOpenMemo(m.id, m.unread_updates > 0 && m.ai_linked ? 'ai' : 'memo');
   };
 
   /* 고르기 막대 */
-  const selMemos = (sel ?? []).filter((k) => k !== CL);
   const one = sel?.length === 1;
-  const hasCk = (sel ?? []).includes(CL);
+  const hasCk = (sel ?? []).some(isCk);
   /* 원본 togglePin: 체크리스트도 메모처럼 고정 (③ 결정) */
-  const allPinned = (sel ?? []).length > 0 && (sel ?? []).every((k) => (k === CL ? !!p.checklist?.pinned : byId(k)?.pinned));
+  const allPinned = (sel ?? []).length > 0 && (sel ?? []).every((k) => (byId(k) ?? p.checklists.find((c) => c.id === k))?.pinned);
   const onAction = (a: AppSelAction) => {
-    const ids = selMemos;
+    const ids = sel ?? [];
     if (a === 'pin') {
-      if (ids.length) p.onPin(ids, !allPinned);
-      if (hasCk) p.onTogglePin?.(!allPinned);
-      const n = sel?.length ?? 0;
+      p.onPin(ids, !allPinned);
+      const n = ids.length;
       setSel(null);
       if (n === 1 && hasCk) toast(allPinned ? '고정을 풀었어요' : '체크리스트를 고정했어요');
       else toast(allPinned ? `${n}개 고정을 풀었어요` : `${n}개를 고정했어요`);
@@ -159,7 +157,8 @@ export function AppMemoBoard(p: MemoBoardProps & { header: React.ReactNode }) {
     } else {
       setSel(null);
       p.onDelete(ids);
-      toast(ids.length > 1 ? `메모 ${ids.length}개를 휴지통으로 옮겼어요` : '메모를 휴지통으로 옮겼어요', ids);
+      const what = ids.every(isCk) ? '체크리스트' : hasCk ? '' : '메모';
+      toast(ids.length > 1 ? `${what ? `${what} ` : ''}${ids.length}개를 휴지통으로 옮겼어요` : `${what || '메모'}를 휴지통으로 옮겼어요`, ids);
     }
   };
   const pickColor = (c: MemoColor) => {
@@ -216,7 +215,7 @@ export function AppMemoBoard(p: MemoBoardProps & { header: React.ReactNode }) {
               <View style={st.grid}>
                 {items.map((it) =>
                   it.checklist ? (
-                    <AppChecklistCard key={it.key} checklist={it.checklist} onAllDone={celebrate} width={cw} height={150} selecting={selecting} selected={!!sel?.includes(it.key)} onPress={() => tap(it)} onLongPress={() => enterSel(it.key)} onToggleItem={p.onToggleChecklistItem} />
+                    <AppChecklistCard key={it.key} checklist={it.checklist} onAllDone={celebrate} width={cw} height={150} selecting={selecting} selected={!!sel?.includes(it.key)} onPress={() => tap(it)} onLongPress={() => enterSel(it.key)} onToggleItem={(iid) => p.onToggleChecklistItem(it.key, iid)} />
                   ) : (
                     <AppMemoCard key={it.key} memo={it.memo!} width={cw} height={150} selecting={selecting} selected={!!sel?.includes(it.key)} aiSpent={p.aiSpent} onPress={() => tap(it)} onLongPress={() => enterSel(it.key)} />
                   ),

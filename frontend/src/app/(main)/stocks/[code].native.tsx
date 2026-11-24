@@ -1,8 +1,8 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useMockNotice } from '@/components/layout/MobileScreen';
 import { useUI } from '@/store/ui';
-import type { Checklist, Memo } from '@/types/models';
+import type { Memo } from '@/types/models';
 import { AppCompanyInfo } from '@/ui/screens/company/app/CompanyInfo';
 import type { CompanyInfoProps } from '@/ui/screens/company/CompanyInfo.types';
 import { useCompanyInfo } from '@/ui/screens/company/useCompanyInfo';
@@ -10,23 +10,24 @@ import { mockCompanyByCode } from '@/ui/screens/company/CompanyInfo.mock';
 import { TopBar } from '@/ui/layout/app/TopBar';
 import { AiOffSheet } from '@/ui/shared/AiOffSheet';
 import { AppMemoBoard } from '@/ui/screens/board/app/MemoBoard';
-import { useBoardData } from '@/ui/screens/board/useBoardData';
+import { patchMemo } from '@/ui/screens/board/boardCards';
+import { useBoardCards } from '@/ui/screens/board/useBoardCards';
 import { useMemoTimeline } from '@/hooks/queries';
 import { useBoardStock } from '@/ui/screens/board/useBoardStock';
 import { env } from '@/config/env';
-import { mockBoardChecklist, mockBoardMemos, mockBoardStock, mockEmptyStock } from '@/ui/screens/board/MemoBoard.mock';
+import { mockBoardStock, mockEmptyStock } from '@/ui/screens/board/MemoBoard.mock';
 
 /**
  * 앱 종목 상세: 메모 보드 = UI v2 (ui/screens/board/app) · 기업정보 = UI v2 (ui/screens/company/app · ⑤).
- * mock 모드: 000660 은 예시 메모, 105560(KB금융) 은 빈 보드. 변화는 이 화면 안에서만.
+ * mock 모드: 000660 은 예시 메모, 105560(KB금융) 은 빈 보드. 바꾼 내용은 기기에 저장 (store/mockBoard).
  * 실제 모드(2026-11-22): 보드 데이터와 저장은 useBoardData (웹 보드와 같음).
  * 메모 상세 · 새 메모 · AI 연결 = UI v2 (④ · app/(detail)/memo). 체크리스트 화면은 아직 옛 화면.
  */
 export default function StockDetail() {
-  const { code, tab: tabParam, notice: noticeParam, t: noticeKey } = useLocalSearchParams<{ code: string; tab?: string; notice?: string; t?: string }>();
+  const { code, tab: tabParam, notice: noticeParam, t: noticeKey, undo } = useLocalSearchParams<{ code: string; tab?: string; notice?: string; t?: string; undo?: string }>();
   /* 새 메모에서 돌아올 때 보드 스낵바 (원본 saveNew) */
-  const NOTICE: Record<string, string> = { empty: '빈 메모는 저장하지 않았어요', saved: '메모를 저장했어요' };
-  const boardNotice = noticeParam && noticeKey && NOTICE[noticeParam] ? { message: NOTICE[noticeParam], key: noticeKey } : undefined;
+  const NOTICE: Record<string, string> = { empty: '빈 메모는 저장하지 않았어요', saved: '메모를 저장했어요', cl_trash: '체크리스트를 휴지통으로 옮겼어요' };
+  const boardNotice = noticeParam && noticeKey && NOTICE[noticeParam] ? { message: NOTICE[noticeParam], key: noticeKey, undo: undo ? [undo] : undefined } : undefined;
   const router = useRouter();
   const notice = useMockNotice();
   const setTabBarHidden = useUI((s) => s.setTabBarHidden);
@@ -35,17 +36,9 @@ export default function StockDetail() {
   /* 종목 머리 시세: 실제 모드면 GET /stocks/{code}/quote (2026-11-21), mock 모드면 mock 그대로 */
   const { stock, priceNote } = useBoardStock(code, empty ? mockEmptyStock : mockBoardStock);
   const real = !env.useMock;
-  const [memos, setMemos] = useState<Memo[]>(real || empty ? [] : mockBoardMemos);
-  const [checklist, setChecklist] = useState<Checklist | null>(real || empty ? null : mockBoardChecklist);
-  /* 실제 모드: 서버 보드를 새로 받으면(메모 화면에서 돌아올 때 포함) 화면 상태를 서버 값으로 */
-  const bd = useBoardData(code, null);
-  const [seenVersion, setSeenVersion] = useState(0);
-  if (bd.data && bd.version !== seenVersion) {
-    setSeenVersion(bd.version);
-    setMemos(bd.data.memos);
-    setChecklist(bd.data.checklist);
-  }
-  const removed = useRef<Memo[]>([]);
+  const board = useBoardCards(code, null);
+  const { bd } = board;
+  const { memos, checklists, order } = board.cards;
   const [offFor, setOffFor] = useState<Memo | null>(null);
   /* AI 끄기 확인 창의 '추적 항목 N개': 실제 모드면 그 메모의 추적 항목 수 (질문 제외), mock 은 예시 2개 */
   const offTimeline = useMemoTimeline(offFor?.id ?? '', real && !!offFor);
@@ -64,48 +57,29 @@ export default function StockDetail() {
       stock={stock}
       priceNote={priceNote}
       memos={memos}
-      checklist={checklist}
+      checklists={checklists}
+      order={order}
       notice={boardNotice}
       onOpenMemo={(id, t) => router.push({ pathname: '/memo/[id]', params: { id, tab: t } })}
-      onOpenChecklist={() => router.push({ pathname: '/checklist/[id]', params: { id: checklist?.id ?? 'new' } })}
-      onNewMemo={(first) => router.push({ pathname: '/memo/new', params: { code: stock.stock_code, name: stock.name, first_line: first ?? '' } })}
-      onNewChecklist={() => router.push({ pathname: '/checklist/[id]', params: { id: 'new', code: stock.stock_code, name: stock.name } })}
-      onToggleChecklistItem={(iid) => {
-        const it = checklist?.items.find((i) => i.id === iid);
-        if (checklist && it) bd.ops.checkItem(checklist.id, iid, !it.done);
-        setChecklist((c) => (c ? { ...c, items: c.items.map((i) => (i.id === iid ? { ...i, done: !i.done } : i)) } : c));
-      }}
-      onPin={(ids, pinned) => {
-        bd.ops.pin(ids, pinned);
-        setMemos((all) => all.map((m) => (ids.includes(m.id) ? { ...m, pinned } : m)));
-      }}
-      onTogglePin={(pinned) => {
-        if (checklist) bd.ops.pin([checklist.id], pinned);
-        setChecklist((c) => (c ? { ...c, pinned } : c));
-      }}
+      onOpenChecklist={(id) => router.push({ pathname: '/checklist/[id]', params: { id, code, name: stock.name } })}
+      onNewMemo={(first) => router.push({ pathname: '/memo/new', params: { code, name: stock.name, first_line: first ?? '' } })}
+      onNewChecklist={() => router.push({ pathname: '/checklist/[id]', params: { id: 'new', code, name: stock.name } })}
+      onToggleChecklistItem={board.toggleItem}
+      onPin={board.pin}
       onToggleAi={(id) => {
         const m = memos.find((x) => x.id === id);
         /* 원본 aiToggle: 켜져 있으면 해제 확인 시트, 꺼져 있으면 AI 연결 창 */
         if (m?.ai_linked) setOffFor(m);
         else if (m) router.push({ pathname: '/memo/link', params: { id: m.id } });
       }}
-      onDelete={(ids) => {
-        bd.ops.remove(ids);
-        removed.current = [...removed.current, ...memos.filter((m) => ids.includes(m.id))];
-        setMemos((all) => all.filter((m) => !ids.includes(m.id)));
-      }}
-      onUndoDelete={(ids) => {
-        bd.ops.undoRemove(ids);
-        const back = removed.current.filter((m) => ids.includes(m.id));
-        removed.current = removed.current.filter((m) => !ids.includes(m.id));
-        setMemos((all) => [...all.filter((m) => !ids.includes(m.id)), ...back]);
-      }}
+      onDelete={board.remove}
+      onUndoDelete={board.undoRemove}
       onCopy={() => {}}
       onChangeColor={(ids, color) => {
         bd.ops.color(ids, color);
-        setMemos((all) => all.map((m) => (ids.includes(m.id) ? { ...m, color } : m)));
+        board.update((b) => ({ ...b, memos: b.memos.map((m) => (ids.includes(m.id) ? { ...m, color } : m)) }));
       }}
-      onReorder={() => {}}
+      onReorder={board.reorder}
       onChangeTab={setTab}
       onSelectionChange={onSelectionChange}
       onSpentAction={(a) => notice(a === 'credit' ? '크레딧 구매' : '플랜 변경')}
@@ -120,7 +94,7 @@ export default function StockDetail() {
         const id = offFor?.id;
         setOffFor(null);
         if (id) bd.ops.aiOff(id);
-        setMemos((all) => all.map((x) => (x.id === id ? { ...x, ai_linked: false } : x)));
+        if (id) board.update((b) => patchMemo(b, id, (x) => ({ ...x, ai_linked: false })));
       }}
     />
     </>

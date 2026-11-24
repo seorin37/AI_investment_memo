@@ -4,13 +4,14 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMockNotice } from '@/components/layout/MobileScreen';
 import type { MemoVersion } from '@/types/models';
 import { AppMemoDetail } from '@/ui/screens/memo/app/MemoDetail';
+import { useMockBoard } from '@/store/mockBoard';
 import { mockToday } from '@/ui/screens/memo/MemoDetail.mock';
 import { useMemoScreen } from '@/ui/screens/memo/useMemoScreen';
 
 /**
  * 앱 메모 상세 = UI v2 (ui/screens/memo/app).
  * 데이터: useMemoScreen — 실제 모드면 GET board-item · timeline, 저장 · 색 · 고정 · 삭제 · AI 끄기를 API 로 (2026-11-22).
- * mock 모드: 보드 예시 메모(m1~m5)를 id 로 찾아 보여 주고, 바꾼 내용은 이 화면 안에서만.
+ * mock 모드: 보드 예시 메모(m1~m5)를 id 로 찾아 보여 주고, 바꾼 내용은 기기에 저장 (store/mockBoard).
  * AI 연결 켜기 → AI 연결 창 (/memo/link).
  */
 export default function MemoDetailScreen() {
@@ -46,7 +47,12 @@ export default function MemoDetailScreen() {
       onTogglePin={(pinned) => (ops ? ops.pin(pinned) : patch({ pinned }))}
       onDelete={() => {
         if (ops) void ops.remove().finally(() => router.back());
-        else router.back();
+        else {
+          /* mock: 보드에서 빼기 (되돌리기는 보드에서 지웠을 때만) */
+          const { boards, remove } = useMockBoard.getState();
+          Object.keys(boards).forEach((key) => boards[key].memos.some((m) => m.id === memo.id) && remove(key, boards[key], [memo.id]));
+          router.back();
+        }
       }}
       onCopy={() => {}}
       onConnectAi={() => router.push({ pathname: '/memo/link', params: { id: memo.id } })}

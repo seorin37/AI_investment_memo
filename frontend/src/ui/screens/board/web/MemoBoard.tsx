@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
-import type { Memo } from '@/types/models';
+import type { Checklist, Memo } from '@/types/models';
 import { Grip6, PlusGlyph } from '@/ui/icons/BoardGlyphs';
 import { FixedFrame } from '@/ui/layout/web/FixedFrame';
 import { FadeIn } from '@/ui/motion/Reveal';
@@ -18,11 +18,11 @@ import { WebStockHead } from '@/ui/shared/StockHead';
 import { PriceNoteHead } from '../PriceNoteHead';
 import { WebViewToggle, type BoardView } from '@/ui/shared/ViewToggle';
 import { fpx, webColor } from '@/ui/theme';
+import { arrange } from '../boardCards';
 import type { BoardFilter, MemoBoardProps } from '../MemoBoard.types';
 import { useBoardDragWeb, useContextMenuWeb, useEscapeWeb } from './boardDom.web';
 import { useCoachRef } from '@/ui/shared/Coach';
 
-const CL = 'cl';
 const HOLE = '__hole';
 type Snack = { id: number; msg: string; undo?: string[]; check?: boolean };
 type HoverState = { pressed: boolean; hovered?: boolean };
@@ -48,23 +48,16 @@ export function WebMemoBoard(p: MemoBoardProps) {
   const grid = useRef<React.ComponentRef<typeof View>>(null);
 
   const byId = (id: string) => p.memos.find((m) => m.id === id);
-  const memoKeys = p.memos.map((m) => m.id);
-  const allKeys = [...(p.checklist ? [CL] : []), ...memoKeys];
-  /* 순서: 받은 순서 중 지금 있는 것 + 순서에 없는 새 것은 맨 앞 (원본 arrange) */
-  const order = (() => {
-    const has = new Set(allKeys);
-    const base = p.order ?? [...(p.checklist ? [CL] : []), ...[...p.memos].sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.created_at.localeCompare(a.created_at)).map((m) => m.id)];
-    const placed = base.filter((x) => has.has(x));
-    const inLay = new Set(placed);
-    return [...allKeys.filter((x) => !inLay.has(x)), ...placed];
-  })();
+  const ckById = (id: string) => p.checklists.find((c) => c.id === id);
+  /* 순서: 고정 먼저 · 순서에 없는 새 것은 자기 구역 맨 위 */
+  const order = arrange(p);
 
   const shownMemo = (m: Memo) => filter === 'all' || (filter === 'ai' ? m.ai_linked : m.unread_updates > 0);
-  const empty = p.memos.length === 0 && !p.checklist;
+  const empty = p.memos.length === 0 && p.checklists.length === 0;
   const canDrag = filter === 'all' && !sel && view === 'grid';
   const { drag, justDropped } = useBoardDragWeb(grid, !empty && view === 'grid', order, canDrag, k, p.onReorder);
   useContextMenuWeb(grid, !empty && view === 'grid', (key, at) => {
-    if (key !== CL && !sel) setMenu({ id: key, at });
+    if (!sel) setMenu({ id: key, at });
   });
   /* Esc: 메뉴 → 고르기 순으로 닫기 (원본 CtxMenu · SelectBar) */
   useEscapeWeb(!!sel || !!menu, () => {
@@ -79,9 +72,16 @@ export function WebMemoBoard(p: MemoBoardProps) {
   }, [snack]);
   const toast = (msg: string, o: { undo?: string[]; check?: boolean } = {}) => setSnack((s) => ({ id: (s?.id ?? 0) + 1, msg, ...o }));
 
+  /* 화면(라우트)에서 온 안내 — key 가 바뀔 때마다 */
+  const [noticeKey, setNoticeKey] = useState(p.notice?.key);
+  if (p.notice && p.notice.key !== noticeKey) {
+    setNoticeKey(p.notice.key);
+    toast(p.notice.message, { undo: p.notice.undo });
+  }
+
   /* 끄는 동안: 집은 카드는 빼고 놓일 자리에 빈칸 */
   const viewKeys = (() => {
-    const ks = order.filter((x) => (x === CL ? filter === 'all' : shownMemo(byId(x)!)));
+    const ks = order.filter((x) => (byId(x) ? shownMemo(byId(x)!) : filter === 'all'));
     if (!drag) return ks;
     const others = ks.filter((x) => x !== drag.key);
     others.splice(Math.min(drag.to, others.length), 0, HOLE);
@@ -96,11 +96,11 @@ export function WebMemoBoard(p: MemoBoardProps) {
     });
   const trash = (ids: string[]) => {
     p.onDelete(ids);
-    toast(ids.length > 1 ? `메모 ${ids.length}개를 휴지통으로 옮겼어요` : '메모를 휴지통으로 옮겼어요', { undo: ids });
+    toast(ids.length > 1 ? `메모 ${ids.length}개를 휴지통으로 옮겼어요` : `${ckById(ids[0]) ? '체크리스트' : '메모'}를 휴지통으로 옮겼어요`, { undo: ids });
   };
   const pin = (ids: string[], on: boolean) => {
     p.onPin(ids, on);
-    toast(on ? (ids.length > 1 ? `${ids.length}개를 고정했어요` : '메모를 고정했어요') : '고정을 풀었어요', { check: true });
+    toast(on ? (ids.length > 1 ? `${ids.length}개를 고정했어요` : `${ckById(ids[0]) ? '체크리스트' : '메모'}를 고정했어요`) : '고정을 풀었어요', { check: true });
   };
   const copy = (ids: string[]) => {
     p.onCopy(ids);
@@ -118,7 +118,14 @@ export function WebMemoBoard(p: MemoBoardProps) {
     '-',
     { label: '휴지통으로 이동', icon: 'trash', danger: true, run: () => trash([m.id]) },
   ];
-  const lifted = drag ? (drag.key === CL ? null : byId(drag.key)) : null;
+  const ckMenuItems = (c: Checklist): MenuItem[] => [
+    { label: '열기', icon: 'find', run: () => p.onOpenChecklist(c.id) },
+    { label: c.pinned ? '테이프 떼기' : '테이프 붙여 맨 위로', icon: 'pin', run: () => pin([c.id], !c.pinned) },
+    '-',
+    { label: '휴지통으로 이동', icon: 'trash', danger: true, run: () => trash([c.id]) },
+  ];
+  const lifted = drag ? byId(drag.key) : null;
+  const liftedCl = drag ? ckById(drag.key) : null;
 
   return (
     <View style={st.root}>
@@ -174,10 +181,11 @@ export function WebMemoBoard(p: MemoBoardProps) {
                   <View ref={grid} style={st.grid}>
                     {viewKeys.map((key) => {
                       if (key === HOLE) return <View key={HOLE} style={st.hole} />;
-                      if (key === CL)
+                      const cl = ckById(key);
+                      if (cl)
                         return (
-                          <View key={CL} {...data({ bkey: CL })} style={st.slot}>
-                            <WebChecklistCard checklist={p.checklist!} onOpen={() => !justDropped() && p.onOpenChecklist()} onToggleItem={p.onToggleChecklistItem} />
+                          <View key={key} {...data({ bkey: key })} style={st.slot}>
+                            <WebChecklistCard checklist={cl} onOpen={() => !justDropped() && p.onOpenChecklist(key)} onToggleItem={(iid) => p.onToggleChecklistItem(key, iid)} onPin={() => pin([key], !cl.pinned)} onMenu={(at) => setMenu({ id: key, at })} />
                           </View>
                         );
                       const m = byId(key)!;
@@ -187,7 +195,7 @@ export function WebMemoBoard(p: MemoBoardProps) {
                         </View>
                       );
                     })}
-                    {filter === 'all' && !p.checklist && !sel ? (
+                    {filter === 'all' && !p.checklists.length && !sel ? (
                       <Pressable onPress={p.onNewChecklist} accessibilityRole="button" style={({ hovered }: HoverState) => [st.newCl, hovered && { backgroundColor: '#FFFFFF' }]}>
                         <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
                           <Path d="M8 3V13M3 8H13" stroke="#6B7684" strokeWidth={1.6} strokeLinecap="round" />
@@ -200,8 +208,8 @@ export function WebMemoBoard(p: MemoBoardProps) {
                       <View pointerEvents="none" style={[st.lifted, { left: drag.left, top: drag.top }]}>
                         {lifted ? (
                           <WebMemoCard memo={lifted} selecting={false} selected={false} onOpen={() => {}} onPick={() => {}} onPin={() => {}} onToggleAi={() => {}} onMenu={() => {}} />
-                        ) : p.checklist ? (
-                          <WebChecklistCard checklist={p.checklist} onOpen={() => {}} onToggleItem={() => {}} />
+                        ) : liftedCl ? (
+                          <WebChecklistCard checklist={liftedCl} onOpen={() => {}} onToggleItem={() => {}} onPin={() => {}} onMenu={() => {}} />
                         ) : null}
                       </View>
                     ) : null}
@@ -256,7 +264,7 @@ export function WebMemoBoard(p: MemoBoardProps) {
           }
         />
       </View>
-      <ContextMenu at={menu?.at ?? null} items={menu && byId(menu.id) ? menuItems(byId(menu.id)!) : []} onClose={() => setMenu(null)} />
+      <ContextMenu at={menu?.at ?? null} items={menu ? (byId(menu.id) ? menuItems(byId(menu.id)!) : ckById(menu.id) ? ckMenuItems(ckById(menu.id)!) : []) : []} onClose={() => setMenu(null)} />
     </View>
   );
 }

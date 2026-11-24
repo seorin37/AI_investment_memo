@@ -3,12 +3,12 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
 import type { Checklist, ChecklistItem } from '@/types/models';
-import { AppPin, CheckMark, CkiMark } from '@/ui/icons/BoardGlyphs';
+import { AppPin, CheckMark, CkiMark, Dots } from '@/ui/icons/BoardGlyphs';
 import { appColor, checklistColor, fpx, ft } from '@/ui/theme';
 import { DotBurst } from '@/components/motion/Celebrate';
 import { useChecklistTone } from './Dark';
 import { SelCircle } from './MemoCard';
-import { AppTape } from './MemoPaper';
+import { AppTape, WebTape } from './MemoPaper';
 import { ListCheck } from './MemoRow';
 
 /**
@@ -149,12 +149,16 @@ function Ring({ done, n }: { done: number; n: number }) {
  * 이름 17/26 bold #191F28 · '하나씩 확인해 보세요' 13/20 #8A8592 · 고리 34
  * 항목 줄 40 (위 선 #F0EEF2 · 사이 10): 동그라미 18 (안쪽 1.4 #D8D4DE / 한 것 #ADA0C5) · 15/23 #3D3945 (한 것 #A29DA9 줄 긋기)
  * 4개 이상이면 2개 + '외 N개 더 있어요 · 눌러서 모두 보기' 14/21 500 #8A8592)
+ * 고정 테이프(위 -16 가운데)와 ⋯ 메뉴(hover)는 메모 카드와 같은 자리 · 같은 모양
  */
-export function WebChecklistCard({ checklist, onOpen, onToggleItem }: { checklist: Checklist; onOpen: () => void; onToggleItem: (id: string) => void }) {
+export function WebChecklistCard({ checklist, onOpen, onToggleItem, onPin, onMenu }: { checklist: Checklist; onOpen: () => void; onToggleItem: (id: string) => void; onPin: () => void; onMenu: (at: { x: number; y: number }) => void }) {
+  const [hov, setHov] = useState(false);
+  const [tape, setTape] = useState(false);
   const L = checklist.items.length;
   const d = checklist.items.filter((x) => x.done).length;
   const shown = L > 3 ? checklist.items.slice(0, 2) : checklist.items;
   return (
+    <View style={st.webWrap} onPointerEnter={() => setHov(true)} onPointerLeave={() => { setHov(false); setTape(false); }}>
     <Pressable onPress={onOpen} accessibilityLabel={checklist.title} style={st.web}>
       <View style={st.webHead}>
         <View style={st.webHeadT}>
@@ -175,6 +179,15 @@ export function WebChecklistCard({ checklist, onOpen, onToggleItem }: { checklis
       ))}
       {L > 3 ? <Text style={st.webMore}>외 {L - 2}개 더 있어요 · 눌러서 모두 보기</Text> : null}
     </Pressable>
+      <Pressable onPress={onPin} onHoverIn={() => setTape(true)} onHoverOut={() => setTape(false)} accessibilityRole="button" accessibilityLabel={checklist.pinned ? '테이프 떼기' : '테이프 붙이기 · 칸 맨 위로'} style={st.webTape}>
+        {checklist.pinned ? <WebTape color="#ADA0C5" state={tape ? 'lift' : 'on'} /> : hov ? <WebTape color="#ADA0C5" state="dash" /> : null}
+      </Pressable>
+      {hov ? (
+        <Pressable onPress={(e) => onMenu({ x: e.nativeEvent.pageX, y: e.nativeEvent.pageY + 6 })} accessibilityRole="button" accessibilityLabel="체크리스트 메뉴" style={({ hovered }: { pressed: boolean; hovered?: boolean }) => [st.webMenu, hovered && { backgroundColor: '#F2F3F4' }]}>
+          <Dots color="#8A8592" />
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -202,6 +215,9 @@ const st = StyleSheet.create({
   b: { ...ft(12.5), color: appColor.ink2, marginTop: 2 },
   ring: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
   ringT: { ...fpx(11, 16), fontWeight: '500', color: '#777080' },
+  webWrap: { width: 276, height: 200 },
+  webTape: { position: 'absolute', left: 96, top: -16, width: 84, height: 34, zIndex: 10 },
+  webMenu: { position: 'absolute', bottom: 8, right: 12, width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
   web: { width: 276, height: 200, overflow: 'hidden', borderRadius: 16, borderWidth: 1, borderColor: '#EBE9ED', backgroundColor: '#FFFFFF', paddingHorizontal: 20, paddingBottom: 8, paddingTop: 16 },
   webHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 8 },
   webHeadT: { gap: 1 },

@@ -16,14 +16,14 @@ import { usePaper } from '@/ui/shared/Dark';
  * 웹 새 메모 창 (원본 board.tsx NewDialog 6.1: 680 가운데 창)
  * 머리 96: '종목 · 나의 보드' 13/20 · '새 메모' 20/29 700 · × / [메모 | 체크리스트] / 종이 277 (비면 예시 글: 제목 22/31 · 본문 17 줄 1.6 · 점선 아래 안내 13)
  * 메모 색상 · AI 연결 칸 · [취소] [메모 저장]. 비어 있으면 저장 안 함.
- * [체크리스트] 탭 (6.2, 2026-11-22): 종목당 체크리스트 하나 — 있으면 그걸 고치고, 없으면 새로 (ChecklistTab).
+ * [체크리스트] 탭 (6.2, 2026-11-22): checklist 를 주면 그 체크리스트 고치기, 없으면 늘 빈 새 체크리스트 (ChecklistTab).
  *   onSaveChecklist 가 없으면 예전처럼 onSwitchToChecklist 만 부른다.
  */
 export function WebNewMemoDialog({ open, stockName, initialText, onCancel, onSave, onSwitchToChecklist, tab0 = 0, checklist, onSaveChecklist, onEmptyChecklist }: NewMemoProps & {
   open: boolean;
   /** 처음 열 탭 (0 메모 · 1 체크리스트) */
   tab0?: 0 | 1;
-  /** 이 종목의 지금 체크리스트 (없으면 새로 만들기) */
+  /** 고칠 체크리스트 (없으면 새로 만들기) */
   checklist?: { title: string; items: ChecklistItem[] } | null;
   onSaveChecklist?: (d: ChecklistDraft) => void;
   /** 항목을 모두 지우고 저장 (있던 체크리스트면 휴지통으로) */
