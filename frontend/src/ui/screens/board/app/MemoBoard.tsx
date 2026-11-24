@@ -214,7 +214,7 @@ export function AppMemoBoard(p: AppMemoBoardProps & { header: React.ReactNode; t
           </View>
         </View>
         {empty ? (
-          <EmptyBoard onExample={(t) => p.onNewMemo(t)} onFirst={() => p.onNewMemo()} />
+          <EmptyBoard onExample={(t) => p.onNewMemo(t)} onFirst={() => p.onNewMemo()} onChecklist={p.onNewChecklist} />
         ) : (
           <FadeIn key={`${view}-${filter}`}>
             <View style={view === 'grid' ? st.grid : st.list}>
@@ -266,6 +266,14 @@ export function AppMemoBoard(p: AppMemoBoardProps & { header: React.ReactNode; t
                   );
                 }}
               />
+              {view === 'grid' && filter === 'all' && !p.checklists.length && !selecting ? (
+                <Pressable onPress={p.onNewChecklist} accessibilityRole="button" style={({ pressed }) => [st.newCl, { width: cw }, pressed && { backgroundColor: '#F6F7F9' }]}>
+                  <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
+                    <Path d="M8 3V13M3 8H13" stroke="#6B7684" strokeWidth={1.6} strokeLinecap="round" />
+                  </Svg>
+                  <Text style={st.newClT}>체크리스트 만들기</Text>
+                </Pressable>
+              ) : null}
             </View>
           </FadeIn>
         )}
@@ -319,7 +327,7 @@ export function AppMemoBoard(p: AppMemoBoardProps & { header: React.ReactNode; t
  * 빈 보드 (원본 .bempty: 좌우 14 · 메모지 그림 56 (라운드 14 14 4 14 · 접힌 24) · '투자가 막연하세요?' 20px 800
  * 설명 14px 줄 1.65 #6B7684 (위 8 · 아래 16) · 예시 칩 38 라운드 19 13.5px 500 (사이 6 · 아래 18) · [첫 메모 쓰기] 48 라운드 14 15.5px 800)
  */
-function EmptyBoard({ onExample, onFirst }: { onExample: (t: string) => void; onFirst: () => void }) {
+function EmptyBoard({ onExample, onFirst, onChecklist }: { onExample: (t: string) => void; onFirst: () => void; onChecklist: () => void }) {
   return (
     <FadeIn style={st.empty}>
       <Svg width={56} height={56} viewBox="0 0 56 56" style={st.bic}>
@@ -338,6 +346,9 @@ function EmptyBoard({ onExample, onFirst }: { onExample: (t: string) => void; on
       </View>
       <Pressable onPress={onFirst} accessibilityRole="button" style={st.go}>
         <Text style={st.goT}>첫 메모 쓰기</Text>
+      </Pressable>
+      <Pressable onPress={onChecklist} accessibilityRole="button" style={[st.go, st.goCl]}>
+        <Text style={[st.goT, { color: appColor.ink }]}>체크리스트 만들기</Text>
       </Pressable>
     </FadeIn>
   );
@@ -368,5 +379,8 @@ const st = StyleSheet.create({
   ex: { minHeight: 38, borderRadius: 19, paddingHorizontal: 13, paddingVertical: 9, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E7EB', justifyContent: 'center' },
   exT: { ...ft(13.5), fontWeight: '500', color: appColor.ink },
   go: { minHeight: 48, borderRadius: 14, paddingHorizontal: 24, paddingVertical: 13, backgroundColor: appColor.ink, justifyContent: 'center' },
+  goCl: { backgroundColor: '#F2F3F4', marginTop: 8 },
+  newCl: { height: 72, marginTop: 16, borderRadius: 16, borderWidth: 1, borderStyle: 'dashed', borderColor: '#D8DBE0', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  newClT: { ...ft(14), fontWeight: '500', color: '#6B7684' },
   goT: { ...ft(15.5), fontWeight: '800', color: '#FFFFFF' },
 });
