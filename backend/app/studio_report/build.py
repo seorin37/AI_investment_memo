@@ -269,8 +269,29 @@ def next_periodic(as_of: date) -> tuple[date, str]:
     return min(cands)
 
 
+def periodic_suggestion(as_of: date, name: str = "", quarter: dict | None = None) -> dict:
+    """다음 정기 공시 제안 — 종목 이름과 최근 분기 실적 숫자를 넣어 종목마다 다른 문장으로 (2026-11-24).
+    숫자는 quarter_block 값 그대로 (예측 없이 '최근 분기는 얼마였다'만)."""
+    due, rep = next_periodic(as_of)
+    who = f"{name} " if name else ""
+    if quarter and (quarter.get("operating_income") or quarter.get("net_income")):
+        key, val = ("영업이익", quarter["operating_income"]) if quarter.get("operating_income") else ("순이익", quarter["net_income"])
+        yoy = quarter.get("op_yoy") if key == "영업이익" else None
+        q = quarter.get("label", "최근 분기").split(" ")[-1]                       # '2026년 3분기' → '3분기'
+        yoy_txt = f", 전년 대비 {yoy:+.1f}%" if isinstance(yoy, (int, float)) else ""
+        return {"sid": "periodic", "kind": "schedule",
+                "text": f"{due.month}월 {rep}에 {q} 이후 {key}이 어떻게 나오는지 ({q} {val}{yoy_txt})",
+                "memo_title": f"{who}{rep} 실적".strip()[:20],
+                "memo_body": f"{who}{rep}({due.month}월 {due.day}일까지) 나오면 매출이랑 {key} 알려줘. {q} {key}은 {val}{yoy_txt}였어",
+                "why": f"정기 공시 일정 · {quarter.get('label', '최근 분기')} 실적"}
+    return {"sid": "periodic", "kind": "schedule", "text": f"{who}{due.year}년 {due.month}월 {rep}에 실적이 어떻게 나오는지",
+            "memo_title": f"{who}{rep} 실적".strip()[:20],
+            "memo_body": f"{who}{rep}({due.month}월 {due.day}일까지) 나오면 매출이랑 영업이익 알려줘", "why": "정기 공시 일정"}
+
+
 def watch_lines(links: list[MemoLink], close: float, as_of: date, has_items: bool, *, code: str = "",
-                items: list | None = None, lo: float | None = None, suggest: list[dict] | None = None) -> list[dict]:
+                items: list | None = None, lo: float | None = None, suggest: list[dict] | None = None,
+                name: str = "", quarter: dict | None = None) -> list[dict]:
     """앞으로 지켜볼 것 = 다음에 추적해 볼 메모 제안 (2026-11-24: 칸이 비지 않게 종목마다 최소 1개).
     제안(kind follow·schedule·price)은 '메모에 추가'로 종목 메모 창에 memo_title·memo_body를 채워 연다.
     이미 추적 중인 가격 조건은 kind tracking(버튼 없이 '추적 중')으로 뒤에 둔다. sid는 보고서 안 종목별 고유값."""
@@ -287,10 +308,7 @@ def watch_lines(links: list[MemoLink], close: float, as_of: date, has_items: boo
                     "memo_title": "IR 내용 확인", "memo_body": f"IR 안내 공시[{ir.no}]의 기업설명회 결과나 자료 나오면 알려줘",
                     "why": f"이번 주 공시 [{ir.no}]"})
     if not any(TRACKED_REPORT.search(t) for t in topics):                  # 3) 코드: 다음 정기 공시
-        due, name = next_periodic(as_of)
-        out.append({"sid": "periodic", "kind": "schedule", "text": f"{due.year}년 {due.month}월 {name}에 실적이 어떻게 나오는지",
-                    "memo_title": f"{name} 실적", "memo_body": f"{name}({due.month}월 {due.day}일까지) 나오면 매출이랑 영업이익 알려줘",
-                    "why": "정기 공시 일정"})
+        out.append(periodic_suggestion(as_of, name, quarter))
     if not has_price and lo:                                               # 4) 코드: 이번 주 저가 (사실 숫자)
         out.append({"sid": "low", "kind": "price", "text": f"이번 주 저가 {won(lo)}원 아래로 내려가는지",
                     "memo_title": f"{won_short(lo)} 아래면 다시 보기", "memo_body": f"{won(lo)}원 아래로 내려가면 알려줘. 이번 주 저가였어",
@@ -572,10 +590,10 @@ def build_report(db, user_id: int, codes: list[str] | None = None, today: date |
                        "url": i.url, "linked": i.linked} for i in shown_items],
             "issue_refs": [i.no for i in items if not i.show],
             "valuation": valuation(db, s["code"], dates[-1], p["close"]),
-            "quarter": quarter_block(db, s["code"], dates[-1]),
+            "quarter": (qb := quarter_block(db, s["code"], dates[-1])),
             "memo": memo_section(links),
             "watch": watch_lines(links, p["close"], dates[-1], bool(shown_items), code=s["code"], items=items,
-                                 lo=p.get("lo_num"), suggest=suggest),
+                                 lo=p.get("lo_num"), suggest=suggest, name=s["name"], quarter=qb),
         })
     week, title = week_label(monday)
     last_day = max((date.fromisoformat(x["trade_dates"][-1]) for x in out_stocks), default=friday)
