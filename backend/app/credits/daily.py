@@ -1,7 +1,8 @@
 """매일 AI 업데이트(pipelines.updates.daily)와 크레딧 잇기 (2026-11-20).
 
-- eligible_item_ids: 실행 전. 잔액이 있는 사용자의 활성 항목 + 가격 조건 항목(무료)만 처리 대상으로 돌려준다.
-  잔액이 0인 사용자의 공시·뉴스·질문 항목은 건너뛴다 = 화면의 'AI 사용량을 다 써서 AI 업데이트가 멈췄어요'.
+- eligible_item_ids: 실행 전. 잔액이 있는 사용자의 활성 항목만 처리 대상으로 돌려준다.
+  잔액이 0인 사용자의 항목은 가격 조건까지 전부 건너뛴다 (2026-11-24: 가격 조건도 AI 추적 항목이라 '다 끄기'에 맞춤.
+  그전에는 가격 조건은 LLM이 없어 무료라 계속 확인했다) = 화면의 '충전하지 않으면 AI 연결이 모두 꺼져요' 끄기 대기.
 - charge_run: 실행 후. 이번 실행이 만든 카드(db_rows.json의 tracking_updates)마다 차감한다.
   answer → costs.answer, news·disclosure → costs.card, price_condition → costs.price_condition(기본 0).
   잔액이 모자라면 잔액까지만 (그날 카드는 이미 보였다). 같은 카드는 두 번 차감하지 않는다.
@@ -20,7 +21,6 @@ from . import ledger
 ITEMS_SQL = """SELECT ti.id, ti.type::text, m.user_id FROM tracking_items ti JOIN memos m ON m.id = ti.memo_id
 WHERE ti.status = 'active' AND m.deleted_at IS NULL AND m.ai_linked AND m.kind = 'note'
   AND (:all OR btrim(m.symbol) = ANY(:symbols))"""
-FREE_TYPES = {"price_below", "price_above"}
 REASON = {"answer": "answer", "news": "card", "disclosure": "card", "price_condition": "price_condition"}
 
 
@@ -43,7 +43,7 @@ def eligible_item_ids(dsn: str, symbols, allow_shared: bool = False) -> tuple[li
                 balances[uid] = ledger.balance(db, uid)
     finally:
         engine.dispose()
-    keep = [str(i) for i, typ, u in rows if typ in FREE_TYPES or balances.get(u, 0) > 0]
+    keep = [str(i) for i, _typ, u in rows if balances.get(u, 0) > 0]
     paused = sorted(u for u, b in balances.items() if b <= 0)
     return keep, {"paused_users": paused, "skipped_items": len(rows) - len(keep), "users": len(balances)}
 

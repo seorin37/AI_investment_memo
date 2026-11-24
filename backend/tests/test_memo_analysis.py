@@ -169,6 +169,26 @@ class ServiceTest(unittest.TestCase):
         self.assertEqual(off["analysis"]["status"], "skipped")
         self.assertGreaterEqual(self.repo.db.commits, 2)                       # 메모 저장을 먼저 확정한다
 
+    def test_no_credit_blocks_ai_memo(self):
+        """2026-11-24: 크레딧 0이면 AI 연결 메모를 만들 수 없다. 새 메모는 일반 메모로 저장, AI 켜기는 거절, 고쳐도 다시 분석 안 함."""
+        from app.board.service import NoCreditError
+        s = self.svc()
+        credit = {"ok": True}
+        s._credit_check = lambda uid: credit["ok"]
+        with mock.patch("app.board.service.analyze_memo", side_effect=fake_analyze) as a:
+            linked = s.create_memo(1, "005930", MemoCreate(title="t", body="HBM 소식", ai_linked=True))
+            credit["ok"] = False
+            new = s.create_memo(1, "005930", MemoCreate(title="t", body="HBM 소식", ai_linked=True))
+            self.assertEqual((new["analysis"]["status"], new["analysis"]["reason"]), ("skipped", "no_credit"))
+            self.assertFalse(self.repo.rows[int(new["id"])]["ai_linked"])                # 일반 메모로 저장됨
+            with self.assertRaises(NoCreditError):
+                s.set_ai_link(1, int(new["id"]), True)
+            self.assertFalse(self.repo.rows[int(new["id"])]["ai_linked"])
+            edited = s.update(1, int(linked["id"]), {"body": "파운드리 소식"})
+            self.assertEqual(edited["analysis"]["reason"], "no_credit")                   # 메모는 저장, 분석은 안 함
+            s.set_ai_link(1, int(linked["id"]), False)                                     # 끄기는 언제나 된다
+        self.assertEqual(a.call_count, 1)
+
     def test_analysis_failure_keeps_memo(self):
         s = self.svc()
         with mock.patch("app.board.service.analyze_memo", side_effect=AnalysisError("llm_failed", "x")):

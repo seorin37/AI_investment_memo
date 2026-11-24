@@ -95,7 +95,7 @@ def _seed_items(c):
     return uid, ids
 
 
-def test_daily_skips_paused_users_but_keeps_price_and_charges_cards():
+def test_daily_skips_paused_users_and_charges_cards():
     from app.credits.daily import charge_run, eligible_item_ids
     engine = _engine()
     url = _url()
@@ -116,7 +116,7 @@ def test_daily_skips_paused_users_but_keeps_price_and_charges_cards():
         assert out == {"cards": 2, "charged": 1, "short": 1}       # 잔액까지만 빼고 모자란 양 기록
         assert charge_run(url, ups) == {"cards": 1, "charged": 0, "short": 1}   # 다시 돌려도 이미 뺀 카드는 안 뺌 (못 뺀 카드만 다시 시도)
         keep, info = eligible_item_ids(url, (SYMBOL,))
-        assert keep == [str(ids["price_below"])] and info["paused_users"] == [uid]   # 멈춰도 가격 조건은 돈다
+        assert keep == [] and info["paused_users"] == [uid]       # 2026-11-24: 잔액 0이면 가격 조건까지 전부 멈춘다
     finally:
         with engine.begin() as c:
             _cleanup(c)
@@ -149,6 +149,32 @@ def test_usage_api():
         app.dependency_overrides[get_current_user] = lambda: {"id": str(uid)}
         body = TestClient(app).get("/api/v1/me/usage").json()
         assert body["balance"] == 30 and body["usage_percent"] == 0 and body["paused"] is False and "갱신" in body["renew_label"]
+        assert body["ai_memo_count"] == 0
+        assert TestClient(app).post("/api/v1/me/ai-off").json() == {"turned_off": 0}
+    finally:
+        with engine.begin() as c:
+            _cleanup(c)
+        engine.dispose()
+
+
+def test_turn_off_all_pauses_items_and_keeps_memo():
+    """2026-11-24 선택 창 '모두 끄기': 메모는 남고 AI 연결만 꺼짐, 활성 항목은 멈춤(지우지 않음)."""
+    from app.credits import ai_off
+    engine = _engine()
+    try:
+        with engine.begin() as c:
+            if c.execute(text("SELECT to_regclass('credit_grants')")).scalar() is None:
+                pytest.skip("0019 전 DB")
+            _cleanup(c)
+            uid, ids = _seed_items(c)
+            assert ai_off.active_ai_count(c, uid) == 1
+            assert ai_off.turn_off_all(c, uid) == 1
+            assert ai_off.active_ai_count(c, uid) == 0
+            memo = c.execute(text("SELECT ai_linked, ai_linked_at, deleted_at FROM memos WHERE user_id = :u"), {"u": uid}).one()
+            assert memo == (False, None, None)
+            st = {r[0] for r in c.execute(text("SELECT status::text FROM tracking_items WHERE id = ANY(:i)"), {"i": list(ids.values())})}
+            assert st == {"paused"}
+            assert ai_off.turn_off_all(c, uid) == 0                  # 다시 불러도 그대로
     finally:
         with engine.begin() as c:
             _cleanup(c)

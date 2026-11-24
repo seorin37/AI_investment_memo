@@ -3,6 +3,8 @@
 2026-11-11 메모 저장 시 분석: AI가 켜진 일반 메모(note)는 저장(커밋) 뒤 메모 분석 → 추적 항목 저장 (analysis.py · tracking.py).
 분석이 실패해도 메모 저장은 성공이고, 응답의 analysis.status=failed·error와 로그에 남는다. 재시도는 메모를 다시 저장할 때만.
 첫 카드는 매일 실행 때 만든다 (analysis.next_update_at).
+2026-11-24 크레딧: 잔액이 0이면 AI 연결 메모를 만들 수 없다 (일반 메모만). 새 메모는 AI를 끈 채 저장하고(analysis.reason=no_credit),
+AI 켜기는 NoCreditError(402), 이미 AI가 켜진 메모를 고쳐도 다시 분석하지 않는다 (메모 분석 LLM 비용).
 """
 
 from __future__ import annotations
@@ -32,6 +34,10 @@ class InvalidBoardPatchError(ValueError):
     pass
 
 
+class NoCreditError(Exception):
+    """크레딧이 0이라 AI 연결(메모 분석·매일 확인)을 켤 수 없음. 화면은 402로 받는다."""
+
+
 class StaleConfirmationError(ValueError):
     """확인 질문 선택지가 지금 메모 버전의 것이 아님 (메모가 바뀜). 화면은 메모를 다시 불러 새 질문을 보여 준다."""
 
@@ -40,8 +46,10 @@ class BoardService:
     _COLORS = {"yellow", "blue", "pink", "green", "purple"}
 
     def __init__(self, repository: BoardRepository, tracking: TrackingRepository | None = None,
-                 llm_factory: Callable[[], Callable[[str], str] | None] = default_llm) -> None:
+                 llm_factory: Callable[[], Callable[[str], str] | None] = default_llm,
+                 credit_check: Callable[[int], bool] | None = None) -> None:
         self.repository = repository
+        self._credit_check = credit_check
         self.tracking = tracking or TrackingRepository(repository.db)
         self._llm_factory, self._llm = llm_factory, None
 
@@ -61,6 +69,7 @@ class BoardService:
 
     def create_memo(self, user_id: int, symbol: str, payload: MemoCreate) -> dict[str, Any]:
         self._require_stock(user_id, symbol)
+        ai_on = bool(payload.ai_linked) and self._has_credit(user_id)   # 크레딧 0이면 일반 메모로 저장
         row = self.repository.create(
             user_id=user_id,
             symbol=symbol,
@@ -69,12 +78,12 @@ class BoardService:
             content=payload.body,
             color=payload.color,
             pinned=payload.pinned,
-            ai_linked=payload.ai_linked,
+            ai_linked=ai_on,
         )
         self.repository.replace_tags(user_id, int(row["id"]), payload.tags)
         self._place(user_id, symbol, int(row["id"]), front=payload.pinned)
         self._commit()                                          # 메모 저장을 먼저 확정한다 (분석 실패와 무관하게)
-        analysis = self._analyze(row) if payload.ai_linked else self._skipped("ai_off")
+        analysis = self._analyze(row) if ai_on else self._skipped("no_credit" if payload.ai_linked else "ai_off")
         return {**self.get(user_id, int(row["id"])), "analysis": analysis}
 
     def create_checklist(
@@ -192,6 +201,8 @@ class BoardService:
         fresh = self._require_item(user_id, memo_id)
         if not fresh.get("ai_linked"):
             analysis = self._skipped("ai_off")
+        elif text_changed and not self._has_credit(user_id):    # 크레딧 0: 메모는 저장, 다시 분석은 안 함
+            analysis = self._skipped("no_credit")
         elif text_changed:                                      # 제목 + 본문이 실제로 바뀐 경우만 다시 분석
             analysis = self._analyze(fresh)
         else:
@@ -214,6 +225,8 @@ class BoardService:
         row = self._require_item(user_id, memo_id)
         if str(row["kind"]) != "note":
             raise InvalidBoardPatchError("일반 메모만 AI 추적 대상으로 설정할 수 있습니다.")
+        if enabled and not self._has_credit(user_id):
+            raise NoCreditError("AI 사용량을 다 써서 AI 연결을 켤 수 없어요. 일반 메모로는 계속 쓸 수 있어요.")
         if not self.repository.set_ai_link(user_id, memo_id, enabled):
             raise BoardItemNotFoundError(memo_id)
         if not enabled:                                         # AI 끄기: 항목을 멈춘다 (지우지 않음)
@@ -251,6 +264,20 @@ class BoardService:
                                                     "next_update_at": next_update_at()}}
 
     # ---------------------------------------------------------------- 분석 (2026-11-11)
+    def _has_credit(self, user_id: int) -> bool:
+        """크레딧 잔액 > 0 (이번 달 기본량 지급·만료 반영). 크레딧 표가 없는 DB(테스트 가짜 저장소 등)는 막지 않는다."""
+        if self._credit_check is not None:
+            return self._credit_check(user_id)
+        from app.credits import ledger
+        db = self.repository.db
+        try:
+            with db.begin_nested():
+                ledger.refresh(db, user_id)
+                return ledger.balance(db, user_id) > 0
+        except Exception:                                       # noqa: BLE001 — 크레딧 확인 실패로 메모 저장을 막지 않는다
+            log.warning("credit check failed user=%s", user_id, exc_info=True)
+            return True
+
     def _commit(self) -> None:
         self.repository.db.commit()
 
