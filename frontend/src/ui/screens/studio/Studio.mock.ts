@@ -93,6 +93,9 @@ export interface ReportStock {
   /** linked_count: 메모 추적 항목에 그 주 붙은 소식 수 (서버 보고서, 없으면 종목 소식 전체 수) */
   memo?: { bg: string; ink: string; title: string; meta: string; body: string; memo_id?: string; linked_count?: number };
   watch: ReportWatch[];
+  /** 이번 주 내 메모 정리 — 메모가 없으면 빈 목록, 예전 보고서는 없음(그때는 memo 칸) */
+  memos?: ReportMemo[];
+  memo_digest?: string;
   /** 서버 보고서 (2026-11-23): 이번 주 이슈 정리 7~8문장 (문단은 빈 줄로 나뉨) */
   issues?: string;
   /** PER·PBR·EPS·시가총액·52주 위치 (stock_fundamentals_snapshot) */
@@ -141,6 +144,10 @@ export type ReportWatch = {
   text: string; why: string; sid?: string; kind?: 'follow' | 'schedule' | 'price' | 'tracking';
   memo_title?: string; memo_body?: string; tracked?: boolean; added?: boolean;
 };
+
+/** 이번 주 내 메모 정리 (2026-11-24): 메모별 그 주 카드·답·가격 상태 (카드 문장 그대로). 서버 보고서만 있음 */
+export type ReportMemoCard = { id: string; date: string; kind: '카드' | '답' | '가격'; title: string; text: string; refs: number[] };
+export type ReportMemo = { memo_id: string; title: string; meta: string; cards: ReportMemoCard[]; more: number; status: string[] };
 
 export const mockReport = {
   week: '2026년 11월 2주',

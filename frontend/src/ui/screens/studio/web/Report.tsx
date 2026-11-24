@@ -122,7 +122,7 @@ export function WebReportSum({ rep, item, stocks, allDefault, onBack, onDetail }
         <View style={st.list}>
           {stocks.map((s, i) => {
             const bits = counts(s);
-            const memo = s.memo ? '메모 1개와 연결' : '';
+            const memo = s.memos ? (s.memos.length ? `메모 ${s.memos.length}개` : '') : s.memo ? '메모 1개와 연결' : '';
             return (
               <View key={s.stock_code} style={[st.sr, i > 0 && { borderTopWidth: 1, borderTopColor: '#EEF0F3' }]}>
                 <Logo s={s} size={28} r={8.4} />
@@ -170,7 +170,7 @@ const KCH = { 공시: { bg: '#FBEDED', c: '#E5484D' }, 뉴스: { bg: '#E8EDF5', 
  * 웹 주간보고서 자세히 보기 (가운데 860) = 원본 screens/report.tsx + gen/ReportDetail
  * 보라 표지(종목 카드 · 공시/뉴스/메모 수) · 이번 주 한눈에 · (01 국내 증시 주간 요약) · 종목 섹션 · 안내
  */
-export function WebReportDetail({ rep, item, stocks, market, allDefault, onMemo, onWatch }: { rep: Rep; item: MadeItem | undefined; stocks: ReportStock[]; market: boolean; allDefault: boolean; onMemo: (code: string) => void; onWatch?: (s: ReportStock, w: ReportWatch) => void }) {
+export function WebReportDetail({ rep, item, stocks, market, allDefault, onMemo, onWatch, onOpenMemo }: { rep: Rep; item: MadeItem | undefined; stocks: ReportStock[]; market: boolean; allDefault: boolean; onMemo: (code: string) => void; onWatch?: (s: ReportStock, w: ReportWatch) => void; onOpenMemo?: (code: string, memoId: string) => void }) {
   if (!item) {
     return (
       <FixedFrame>
@@ -181,7 +181,7 @@ export function WebReportDetail({ rep, item, stocks, market, allDefault, onMemo,
       </FixedFrame>
     );
   }
-  const tot = stocks.reduce((a, s) => ({ d: a.d + s.counts.공시, n: a.n + s.counts.뉴스, m: a.m + (s.memo ? 1 : 0) }), { d: 0, n: 0, m: 0 });
+  const tot = stocks.reduce((a, s) => ({ d: a.d + s.counts.공시, n: a.n + s.counts.뉴스, m: a.m + (s.memos ? s.memos.length : s.memo ? 1 : 0) }), { d: 0, n: 0, m: 0 });
   const lastClose = rep.days[rep.days.length - 1]?.split(' ')[0] ?? rep.range;
   const marketText = marketParas(rep.market_summary);
   return (
@@ -255,6 +255,7 @@ export function WebReportDetail({ rep, item, stocks, market, allDefault, onMemo,
                 {valuationCells(s).length ? <View style={{ flexDirection: 'row', gap: 8 }}>{valuationCells(s).map(([l, x]) => <View key={l} style={st.metricCell}><Text style={st.cellL}>{l}</Text><Text style={st.cellV}>{x}</Text></View>)}</View> : null}
               </View>
               {quarterLine(s) ? <View style={st.quarterBox}><View style={st.blockHead}><Text style={st.blockLabel}>최근 분기 실적</Text><Text style={st.blockMeta}>{s.quarter?.label} · {s.quarter?.basis}</Text></View><Text keepAll style={st.quarterText}>{quarterLine(s)}</Text></View> : null}
+              {s.memos?.length ? <MemoDigest s={s} onOpen={(id) => (onOpenMemo ? onOpenMemo(s.stock_code, id) : onMemo(s.stock_code))} /> : null}
               <View style={st.contentBlock}><Text style={st.subH}>이번 주 흐름</Text><DetailChart s={s} days={rep.days} /><Text style={st.note}>검은 점은 공시·뉴스가 나온 날이에요</Text><Text keepAll style={st.story}>{stripRefs(s.story)}</Text></View>
               {issueParas(s).length ? (
                 <View style={st.issueBox}>
@@ -275,13 +276,13 @@ export function WebReportDetail({ rep, item, stocks, market, allDefault, onMemo,
                   </View>
                 ))}
               </View>
-              <View style={[st.memoBox, s.memo && { backgroundColor: s.memo.bg }]}>
+              {s.memos ? null : <View style={[st.memoBox, s.memo && { backgroundColor: s.memo.bg }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                   <Text style={[st.subH, s.memo && { color: s.memo.ink }]}>내 메모와의 연결</Text>
                   <Pressable onPress={() => onMemo(s.stock_code)} accessibilityRole="link">{({ hovered }: Hover) => <Text style={[st.memoL, s.memo && { color: s.memo.ink }, hovered && { color: '#15171A' }]}>{s.memo ? '원본 메모 보기 ›' : '메모 쓰기 ›'}</Text>}</Pressable>
                 </View>
                 {s.memo ? <><Text style={[st.memoTitle, { color: s.memo.ink }]}>{s.memo.title} <Text style={st.memoMeta}>{s.memo.meta}</Text></Text><Text keepAll style={[st.flow, { color: s.memo.ink }]}>{stripRefs(s.memo.body)}</Text><Text style={[st.memoMeta, { color: s.memo.ink }]}>이번 주 연결된 소식 {s.memo.linked_count ?? s.counts.공시 + s.counts.뉴스}건</Text></> : <Text keepAll style={[st.flow, { color: '#747D8D' }]}>이번 주 소식과 연결된 메모가 없어요.</Text>}
-              </View>
+              </View>}
               <View style={st.watchBox}>
                 <Text style={st.subH}>앞으로 지켜볼 것</Text>
                 {s.watch.map((w) => (
@@ -306,6 +307,36 @@ export function WebReportDetail({ rep, item, stocks, market, allDefault, onMemo,
         </View>
       </FixedFrame>
     </ScrollView>
+  );
+}
+
+/** 이번 주 내 메모 정리 (2026-11-24): 맨 위 종합 2~3문장 + 메모별 그 주 카드·답·가격 상태 (카드 문장 그대로) */
+function MemoDigest({ s, onOpen }: { s: ReportStock; onOpen: (memoId: string) => void }) {
+  return (
+    <View style={st.digestBox}>
+      <Text style={st.subH}>이번 주 내 메모 정리</Text>
+      {s.memo_digest ? <Text keepAll style={st.digestLead}>{stripRefs(s.memo_digest)}</Text> : null}
+      {(s.memos ?? []).map((m) => (
+        <View key={m.memo_id} style={st.digestMemo}>
+          <Pressable onPress={() => onOpen(m.memo_id)} accessibilityRole="link" accessibilityLabel={`${m.title} 메모 열기`}>
+            {({ hovered }: Hover) => <Text style={[st.digestTitle, hovered && { textDecorationLine: 'underline' }]}>{m.title} <Text style={st.digestMeta}>{m.meta} ›</Text></Text>}
+          </Pressable>
+          {m.cards.map((c) => (
+            <View key={c.id} style={st.digestCard}>
+              <Text style={st.digestDate}>{c.date}</Text>
+              <View style={[st.digestKind, c.kind === '답' && { backgroundColor: '#F1EEFB' }, c.kind === '가격' && { backgroundColor: '#FFF4E5' }]}><Text style={st.digestKindT}>{c.kind}</Text></View>
+              <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                <Text keepAll style={st.digestCardT}>{c.title}{c.refs.length ? <Text style={st.digestMeta}>{'  '}{c.refs.map((r) => `[${r}]`).join('')}</Text> : null}</Text>
+                <Text keepAll style={st.digestCardB} numberOfLines={2}>{c.text}</Text>
+              </View>
+            </View>
+          ))}
+          {m.status.map((x) => <Text key={x} keepAll style={st.digestStatus}>· {x}</Text>)}
+          {!m.cards.length && !m.status.length ? <Text style={st.digestNone}>이번 주 새 소식 없음 · 추적 중</Text> : null}
+          {m.more ? <Text style={st.digestNone}>그 밖에 {m.more}건 · 메모에서 보기</Text> : null}
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -411,6 +442,19 @@ const st = StyleSheet.create({
   kchT: { fontSize: 13, lineHeight: 18, fontWeight: '500' },
   itemT: { flex: 1, minWidth: 0, fontSize: 15, lineHeight: 21, fontWeight: '500', color: '#15171A' },
   memoBox: { gap: 8, borderRadius: 14, backgroundColor: '#F7F8FA', padding: 16 },
+  digestBox: { gap: 12, borderRadius: 14, backgroundColor: '#FFF9E6', borderWidth: 1, borderColor: '#F3E6B5', padding: 16 },
+  digestLead: { fontSize: 15, lineHeight: 23, color: '#3F3A2A' },
+  digestMemo: { gap: 6, borderRadius: 10, backgroundColor: '#FFFFFF', padding: 12 },
+  digestTitle: { fontSize: 15, lineHeight: 22, fontWeight: '700', color: '#15171A' },
+  digestMeta: { fontSize: 12.5, lineHeight: 18, fontWeight: '500', color: '#8B95A1' },
+  digestCard: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
+  digestDate: { width: 40, fontSize: 13, lineHeight: 20, color: '#8B95A1', fontVariant: ['tabular-nums'] },
+  digestKind: { paddingHorizontal: 6, borderRadius: 6, backgroundColor: '#EAF2FF', height: 20, justifyContent: 'center' },
+  digestKindT: { fontSize: 11.5, lineHeight: 16, fontWeight: '700', color: '#333D4B' },
+  digestCardT: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: '#2B2F36' },
+  digestCardB: { fontSize: 13, lineHeight: 19, color: '#5B6270' },
+  digestStatus: { fontSize: 13, lineHeight: 19, color: '#A35A00' },
+  digestNone: { fontSize: 13, lineHeight: 19, color: '#8B95A1' },
   memoL: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: '#575B63' },
   memoTitle: { fontSize: 16, lineHeight: 23, fontWeight: '700' },
   memoMeta: { fontSize: 12, lineHeight: 18, fontWeight: '500', opacity: 0.7 },

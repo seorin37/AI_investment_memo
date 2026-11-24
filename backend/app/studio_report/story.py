@@ -19,6 +19,7 @@ import requests
 from pipelines.common.config import resolve_path
 
 STOCK_PROMPT = "configs/report_stock_prompt.md"
+MEMO_PROMPT = "configs/report_memo_prompt.md"
 VERIFY_PROMPT = "configs/report_verify_prompt.md"
 # 정기보고서는 '공시가 나왔다'는 말 말고 쓸 내용이 없어 LLM 입력에서 뺀다 (화면 소식 목록에는 남는다)
 PERIODIC = re.compile(r"(분기|반기|사업)보고서")
@@ -310,6 +311,38 @@ def llm_stock(name: str, p: dict, items: list, call: LLMCall, fallback: str, ext
         story = cleaned["story"] or fallback
         issues = cleaned["issues"] if len(sentences(cleaned["issues"].replace("\n\n", " "))) >= 2 else ""
     return story, issues, {"source": "llm", **meta, "removed": removed}
+
+
+SCHEMA_MEMO = {"name": "report_memo", "strict": True,
+               "schema": {"type": "object", "additionalProperties": False,
+                          "properties": {"digest": {"type": "string"}}, "required": ["digest"]}}
+
+
+def memo_input(name: str, memos: list[dict]) -> str:
+    k = sum(1 for m in memos if m["cards"])
+    lines = [f"종목: {name}", f"메모 {len(memos)}개, 그중 이번 주 새 소식이 붙은 메모 {k}개:"]
+    for m in memos:
+        lines.append(f"- 메모 '{m['title']}' ({m['meta']})")
+        for c in m["cards"]:
+            refs = "".join(f"[{r}]" for r in c["refs"])
+            lines.append(f"    {c['date']} {c['kind']} · {c['title']} · {c['text']} {refs}".rstrip())
+        lines += [f"    {s}" for s in m.get("status") or []]
+        if not m["cards"] and not m.get("status"):
+            lines.append("    이번 주 새 소식 없음")
+    return "\n".join(lines)
+
+
+def llm_memo_digest(name: str, memos: list[dict], call: LLMCall, fallback: str):
+    """(정리 2~3문장, 메타). 카드도 가격 상태도 없으면 LLM 없이 코드 문장 (2026-11-24)."""
+    if not any(m["cards"] for m in memos):                    # 카드가 없으면 코드 문장 (가격 상태는 코드가 붙임)
+        return fallback, {"source": "code", "tries": 0, "problems": [], "usage": {"input": 0, "output": 0}}
+    source = memo_input(name, memos)
+    nos = {r for m in memos for c in m["cards"] for r in c["refs"]}
+    out, meta = ask(call, MEMO_PROMPT, source, SCHEMA_MEMO,
+                    lambda o: check_text(o.get("digest", ""), source, nos, 1, 3, 340, "digest", need_refs=bool(nos)))
+    if out is None:
+        return fallback, {"source": "code", **meta}
+    return out["digest"].strip(), {"source": "llm", **meta}
 
 
 def llm_story(name: str, p: dict, items: list, call: LLMCall, fallback: str, tries: int = 2):
