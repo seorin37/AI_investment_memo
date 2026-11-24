@@ -53,8 +53,8 @@ export function AppData({ counts, onBack, onWipe }: DataProps) {
 const st = StyleSheet.create({
   sm3: { flexDirection: 'row', gap: 6, marginBottom: 4 },
   sm: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 14, paddingVertical: 11, paddingHorizontal: 12 },
-  smL: { fontSize: 11.5, lineHeight: 16, color: MC.ink3 },
-  smB: { fontSize: 19, lineHeight: 26, fontWeight: '700', color: MC.ink, marginTop: 2 },
+  smL: { fontSize: 11.5, lineHeight: 14, color: MC.ink3 },
+  smB: { fontSize: 19, lineHeight: 22, fontWeight: '700', color: MC.ink, marginTop: 2 },
   del: { borderWidth: 1, borderColor: '#F3B9B9', borderRadius: 10, paddingVertical: 6, paddingHorizontal: 12, minHeight: 32, justifyContent: 'center' },
   delT: { fontSize: 12.5, lineHeight: 18, fontWeight: '700', color: MC.red },
 });
