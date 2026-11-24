@@ -4,7 +4,8 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from app.studio_report.build import (SEOUL, MemoLink, Item, code_story, last_week, memo_section, mentions,
-                                     pick_disclosures, pick_news, price_block, watch_lines, week_label, won_short)
+                                     pick_disclosures, pick_news, price_block, watch_lines, week_label, won_short,
+                                     next_periodic)
 
 
 def test_last_week():
@@ -73,8 +74,9 @@ def test_memo_and_watch_sentences():
     assert m["memo_id"] == "25" and m["linked_count"] == 1 and m["meta"] == "11.10 작성 · AI 연결 중"
     assert m["body"] == "메모의 추적 항목 'HBM4 공급'과 관련된 소식 1건([10])이 이번 주에 붙었어요."
     w = watch_lines([linked], 1_183_000, date(2026, 11, 19), True)
-    assert w == [{"text": "메모의 가격 조건 110만 원과 11.19 종가의 차이 (7.5% 위)", "why": "내 메모 가격 조건"}]
-    assert watch_lines([], 100, date(2026, 11, 19), False)[0]["text"] == "다음 주 새 공시·뉴스가 나오는지"
+    assert w[-1] == {"sid": "t0", "kind": "tracking", "tracked": True,
+                     "text": "메모의 가격 조건 110만 원과 11.19 종가의 차이 (7.5% 위)", "why": "내 메모 가격 조건"}
+    assert [x["kind"] for x in w] == ["schedule", "tracking"]                # 가격 메모가 있으면 가격 제안은 안 함
     assert won_short(152_900) == "152,900원"
 
 
@@ -184,3 +186,62 @@ def test_pick_news_per_day_cap_lets_weekend_in():
     rows = [_n(i, f"SK하이닉스 평일 기사 {i}번 제목입니다", 0.9 - i * 0.01, day=17) for i in range(1, 6)] + [_n(9, "SK하이닉스 주말 기사 제목입니다", 0.1, day=22)]
     out = pick_news(rows, ["SK하이닉스"], limit=10, per_day=2)
     assert [i.day.day for i in out] == [17, 17, 22]
+
+
+# ─── 앞으로 지켜볼 것 = 메모 제안 (2026-11-24) ───────────
+
+def test_watch_never_empty_and_gives_memo_text():
+    """메모·소식이 하나도 없어도 제안이 최소 1개 (다음 정기 공시), 가격 메모가 없으면 이번 주 저가 제안."""
+    w = watch_lines([], 1_085_000, date(2026, 11, 24), False, code="000660", items=[], lo=1_044_000, name="SK하이닉스")
+    assert [x["sid"] for x in w] == ["periodic", "low"]
+    assert w[0]["text"] == "SK하이닉스 2027년 3월 사업보고서에 실적이 어떻게 나오는지" and w[0]["memo_body"].endswith("알려줘")
+    assert w[1]["memo_body"] == "1,044,000원 아래로 내려가면 알려줘. 이번 주 저가였어"
+    assert all(x.get("memo_title") and x.get("memo_body") for x in w)
+
+
+def test_watch_orders_llm_follow_then_ir_then_schedule_and_caps_three():
+    ir = Item("공시", date(2026, 11, 13), "기업설명회(IR)개최(안내공시)", "DART", "disc:1", no=4)
+    sug = [{"text": "손정의 인수 검토 후속 공시가 나오는지", "memo_title": "인수 검토 후속", "memo_body": "회사 공식 입장이나 공시 나오면 알려줘", "refs": [3]}]
+    w = watch_lines([], 100, date(2026, 11, 24), True, code="000660", items=[ir], lo=90, suggest=sug)
+    assert [x["sid"] for x in w] == ["f0", "ir", "periodic"]                 # 제안은 최대 3개
+    assert w[0]["why"] == "이번 주 소식 [3]" and "[4]" in w[1]["memo_body"]
+
+
+def test_watch_skips_schedule_when_report_already_tracked():
+    m = MemoLink(9, "실적", datetime(2026, 11, 10, 9, tzinfo=SEOUL), topics=[(1, "3분기 실적 발표")])
+    w = watch_lines([m], 100, date(2026, 11, 24), True, code="005930", items=[], lo=95)
+    assert [x["sid"] for x in w] == ["low"]
+
+
+def test_next_periodic_rolls_to_next_year():
+    assert next_periodic(date(2026, 11, 24)) == (date(2027, 3, 31), "사업보고서")
+    assert next_periodic(date(2026, 4, 1)) == (date(2026, 5, 15), "1분기 보고서")
+
+
+def test_suggestion_checks_drop_bad_ones():
+    from app.studio_report.story import clean_suggestions
+    ok = {"text": "자사주 취득 결과 보고가 나오는지", "memo_title": "자사주 결과", "memo_body": "취득 기간 끝나고 결과 보고 나오면 알려줘", "refs": [2]}
+    bad_ref = {**ok, "refs": [99]}
+    advice = {**ok, "text": "주가가 반등할지 지켜보기"}
+    no_ask = {**ok, "memo_body": "자사주 취득 결과 보고서가 궁금함"}
+    assert clean_suggestions([bad_ref, advice, no_ask, ok], {2, 3}) == [ok]
+
+
+def test_llm_stock_passes_suggestions_through_meta():
+    from app.studio_report.story import llm_stock
+    good = lambda msgs: {"story": "화요일(11.17) HBM4 확대 보도[10]가 있었어요.",
+                         "issues": "서울경제는 HBM4 확대를 보도했어요[10].\n\n11.17 종가는 1,183,000원이에요. 지난주 마지막 종가는 1,215,000원이에요.",
+                         "suggest": [{"text": "HBM4 공급 계약 공시가 나오는지", "memo_title": "HBM4 계약", "memo_body": "공급 계약 공시 나오면 알려줘", "refs": [10]},
+                                     {"text": "주가가 반등할지 지켜보기", "memo_title": "반등", "memo_body": "반등하면 알려줘", "refs": [10]}]}
+    _story, _issues, meta = llm_stock("SK하이닉스", P, ITEMS, good, "코드 문장", verify=False)
+    assert [x["memo_title"] for x in meta["suggest"]] == ["HBM4 계약"]          # 예측 표현 제안은 빠짐
+
+
+def test_periodic_suggestion_uses_stock_quarter_numbers():
+    from app.studio_report.build import periodic_suggestion
+    q = {"label": "2026년 3분기", "operating_income": "11조 3,830억원", "net_income": "9조원", "op_yoy": 62.1}
+    s = periodic_suggestion(date(2026, 11, 24), "SK하이닉스", q)
+    assert s["text"] == "3월 사업보고서에 3분기 이후 영업이익이 어떻게 나오는지 (3분기 11조 3,830억원, 전년 대비 +62.1%)"
+    assert s["memo_title"] == "SK하이닉스 사업보고서 실적" and s["memo_body"].startswith("SK하이닉스 사업보고서(3월 31일까지) 나오면")
+    fin = periodic_suggestion(date(2026, 11, 24), "KB금융", {"label": "2026년 3분기", "operating_income": "", "net_income": "1조 6,000억원", "op_yoy": None})
+    assert "순이익" in fin["text"] and "전년 대비" not in fin["text"]
