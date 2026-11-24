@@ -24,6 +24,7 @@ export default function ReportScreen() {
       allDefault={v.allDefault}
       onMemo={(code) => router.navigate({ pathname: '/stocks/[code]', params: { code } })}
       onWatch={(s, w) => toMemo(s, w, item?.server ? item.id : undefined)}
+      onOpenMemo={(code, memoId) => router.navigate({ pathname: '/stocks/[code]', params: { code, memo: memoId } })}
     />
   );
 }
