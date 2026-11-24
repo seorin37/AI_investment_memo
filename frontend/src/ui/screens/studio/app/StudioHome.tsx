@@ -46,10 +46,13 @@ const Chev = ({ c = '#B7BBC3' }: { c?: string }) => <Svg width={18} height={18} 
 const Bolt = ({ c, s = 11 }: { c: string; s?: number }) => <Svg width={s} height={s * 13 / 11} viewBox="0 0 11 13"><Path d="M6.5 0 0 7.5h4.5L3.5 13 11 4.8H6.3z" fill={c} /></Svg>;
 const WAVE = [8, 14, 10, 18, 12, 20, 9, 16, 22, 13, 17, 10, 19, 12, 8, 15, 11, 18, 9, 14, 12, 7];
 
-export function AppStudioHome({ header, jobs, onJob, bottomPad = 0, ...p }: StudioHomeProps & {
+export function AppStudioHome({ header, jobs, onJob, playingId, onQuickPlay, bottomPad = 0, ...p }: StudioHomeProps & {
   header: React.ReactNode;
   /** 만드는 중 · 실패 줄 (원본 madeRow prog / fail) */
   jobs: AppGenJob[];
+  /** 지금 재생 중인 오디오 · 플레이어를 열지 않고 바로 재생 */
+  playingId: string | null;
+  onQuickPlay: (m: MadeItem) => void;
   onJob?: (id: string) => void;
   /** 미니 플레이어가 떠 있으면 스크롤 끝 빈 자리 (원본 .withmini) */
   bottomPad?: number;
@@ -92,7 +95,7 @@ export function AppStudioHome({ header, jobs, onJob, bottomPad = 0, ...p }: Stud
         ))}
         </View>
         <View style={st.secr}><Text style={st.secrT}>만든 항목</Text><Text style={st.secrS}>30일 보관 · 다시 보기 무료</Text></View>
-        {top ? <RadioCard m={top} onPress={() => p.onOpenMade(top)} /> : null}
+        {top ? <RadioCard m={top} playing={playingId === top.id} onPress={() => p.onOpenMade(top)} onPlay={() => onQuickPlay(top)} /> : null}
         {rest.length || jobs.length ? (
           <View style={st.made}>
             {jobs.map((job, i) => {
@@ -127,6 +130,9 @@ export function AppStudioHome({ header, jobs, onJob, bottomPad = 0, ...p }: Stud
                 <Pressable onPress={() => remove(m)} accessibilityRole="button" accessibilityLabel={`${m.title} 휴지통으로`} hitSlop={10} style={st.del}>
                   <Svg width={16} height={16} viewBox="0 0 16 16" fill="none"><Path d="M2.5 4h11M6 4V2.75h4V4M4 4l.6 9.25h6.8L12 4" stroke="#B0B5BD" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" /></Svg>
                 </Pressable>
+                {m.kind === 'audio' ? (
+                  <Pressable onPress={() => onQuickPlay(m)} accessibilityRole="button" accessibilityLabel={playingId === m.id ? '일시정지' : '바로 재생'} hitSlop={6} style={st.qp}>{playingId === m.id ? <PauseGlyph s={14} /> : <PlayGlyph s={14} />}</Pressable>
+                ) : null}
               </View>
             ))}
           </View>
@@ -160,24 +166,29 @@ function Choice({ bg, icon, title, sub, onPress }: { bg: string; icon: React.Rea
 }
 
 /* .mfeat 라디오 카드: 라운드 20 · 16 · 머리 12.5 파랑 · 제목 17 · 재생 44 · 파형 · 아래 줄 */
-function RadioCard({ m, onPress }: { m: MadeItem; onPress: () => void }) {
+function RadioCard({ m, playing, onPress, onPlay }: { m: MadeItem; playing: boolean; onPress: () => void; onPlay: () => void }) {
   return (
-    <PressScale scaleTo={0.98} onPress={onPress} accessibilityRole="button" accessibilityLabel={`${m.title} 듣기`} style={st.mfeat}>
-      <View style={st.mh}>
-        <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#3D73F0" strokeWidth={1.8} strokeLinecap="round"><Path d="M4 10V14M8 7V17M12 4V20M16 8V16M20 11V13" /></Svg>
-        <Text style={st.mhT}>AI 오디오 · 최신</Text>
-      </View>
-      <Text style={st.mfB}>{m.title}</Text>
-      <Text style={st.mfS}>{m.sub}</Text>
+    <View style={st.mfeat}>
+      <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${m.title} 열기`}>
+        <View style={st.mh}>
+          <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#3D73F0" strokeWidth={1.8} strokeLinecap="round"><Path d="M4 10V14M8 7V17M12 4V20M16 8V16M20 11V13" /></Svg>
+          <Text style={st.mhT}>AI 오디오 · 최신</Text>
+        </View>
+        <Text style={st.mfB}>{m.title}</Text>
+        <Text style={st.mfS}>{m.sub}</Text>
+      </Pressable>
       <View style={st.pl}>
-        <View style={st.pb}><Svg width={16} height={16} viewBox="0 0 24 24" fill="#fff"><Path d="M8 5v14l11-7z" /></Svg></View>
-        <View style={st.wv}>{WAVE.map((h, i) => <View key={i} style={[st.wvI, { height: h, backgroundColor: i < 5 ? '#3D73F0' : '#C9D7FB' }]} />)}</View>
+        <Pressable onPress={onPlay} accessibilityRole="button" accessibilityLabel={playing ? '일시정지' : '바로 재생'} style={st.pb}>{playing ? <PauseGlyph /> : <PlayGlyph />}</Pressable>
+        <Pressable onPress={onPress} accessible={false} style={st.wv}>{WAVE.map((h, i) => <View key={i} style={[st.wvI, { height: h, backgroundColor: i < 5 ? '#3D73F0' : '#C9D7FB' }]} />)}</Pressable>
         <Text style={st.du}>{m.dur}</Text>
       </View>
       <View style={st.mf}><Text style={st.mfT}>{m.foot}</Text><Text style={st.mfT}>{m.left}</Text></View>
-    </PressScale>
+    </View>
   );
 }
+
+const PlayGlyph = ({ s = 16 }: { s?: number }) => <Svg width={s} height={s} viewBox="0 0 24 24" fill="#fff"><Path d="M8 5v14l11-7z" /></Svg>;
+const PauseGlyph = ({ s = 16 }: { s?: number }) => <Svg width={s} height={s} viewBox="0 0 24 24" fill="#fff"><Path d="M7 5h4v14H7zM13 5h4v14h-4z" /></Svg>;
 
 const st = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
@@ -203,6 +214,7 @@ const st = StyleSheet.create({
   miR: { fontSize: 12, lineHeight: 17, color: C.ink3 },
   del: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   failIc: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#FFE4E4', alignItems: 'center', justifyContent: 'center' },
+  qp: { width: 32, height: 32, borderRadius: 16, marginRight: 14, backgroundColor: '#3D73F0', alignItems: 'center', justifyContent: 'center' },
   spin: { width: 20, height: 20 },
   empty: { fontSize: 13, lineHeight: 20, color: C.ink3, textAlign: 'center', paddingVertical: 20 },
   mfeat: { backgroundColor: '#FFFFFF', borderRadius: 20, marginHorizontal: 16, marginBottom: 10, padding: 16 },

@@ -65,6 +65,12 @@ export default function StudioTab() {
         features={mockStudioFeatures}
         made={p.made}
         jobs={jobs}
+        playingId={p.playing ? p.cur : null}
+        onQuickPlay={(m) => {
+          if (p.cur === m.id && p.mini) p.toggle();
+          else p.play(m.id);
+          p.setMini(true);
+        }}
         bottomPad={p.mini ? 72 : 0}
         onJob={(id) => {
           retry(id);
