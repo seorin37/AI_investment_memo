@@ -112,17 +112,19 @@ export function AppStudioHome({ header, job, onJob, bottomPad = 0, ...p }: Studi
               )
             ) : null}
             {rest.map((m, i) => (
-              <Pressable key={m.id} onPress={() => p.onOpenMade(m)} accessibilityRole="button" style={[st.mi, (i > 0 || !!job) && st.miLine]}>
-                <FeatIcon k={m.kind} size={38} />
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={st.miB} numberOfLines={1}>{m.title}</Text>
-                  <Text style={st.miS} numberOfLines={1}>{m.sub}</Text>
-                </View>
-                <Text style={st.miR}>{m.left}</Text>
+              <View key={m.id} style={[st.mrow, (i > 0 || !!job) && st.miLine]}>
+                <Pressable onPress={() => p.onOpenMade(m)} accessibilityRole="button" style={[st.mi, st.miMain]}>
+                  <FeatIcon k={m.kind} size={38} />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={st.miB} numberOfLines={1}>{m.title}</Text>
+                    <Text style={st.miS} numberOfLines={1}>{m.sub}</Text>
+                  </View>
+                  <Text style={st.miR}>{m.left}</Text>
+                </Pressable>
                 <Pressable onPress={() => remove(m)} accessibilityRole="button" accessibilityLabel={`${m.title} 휴지통으로`} hitSlop={10} style={st.del}>
                   <Svg width={16} height={16} viewBox="0 0 16 16" fill="none"><Path d="M2.5 4h11M6 4V2.75h4V4M4 4l.6 9.25h6.8L12 4" stroke="#B0B5BD" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" /></Svg>
                 </Pressable>
-              </Pressable>
+              </View>
             ))}
           </View>
         ) : null}
@@ -190,6 +192,8 @@ const st = StyleSheet.create({
   secrS: { fontSize: 12, lineHeight: 17, color: C.ink3 },
   made: { backgroundColor: '#FFFFFF', borderRadius: 20, marginHorizontal: 16, paddingVertical: 4, paddingHorizontal: 16 },
   mi: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  mrow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  miMain: { flex: 1, minWidth: 0 },
   miLine: { borderTopWidth: 1, borderTopColor: '#F0F1F4' },
   miB: { fontSize: 14.5, lineHeight: 20, fontWeight: '700', color: C.ink },
   miS: { fontSize: 12, lineHeight: 17, color: C.ink3 },

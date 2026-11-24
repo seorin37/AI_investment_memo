@@ -3,7 +3,11 @@ import type { UpdateItem } from './Updates.types';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
-const dayOf = (iso: string) => iso.slice(0, 10);
+/** 한국 날짜 'YYYY-MM-DD' (UTC 로 온 시각도 한국 기준) */
+const dayOf = (iso: string) => {
+  const t = Date.parse(iso);
+  return Number.isNaN(t) ? iso.slice(0, 10) : new Date(t + 9 * 3600_000).toISOString().slice(0, 10);
+};
 
 /** 원본 store.tsx ago: 방금 · N분 전 · N시간 전 · 어제 · N일 전 · MM.DD */
 export function ago(iso: string, now: string) {
@@ -25,6 +29,16 @@ export function dayGroup(iso: string, now: string) {
   if (diff <= 0) return '오늘';
   if (diff === 1) return `어제 · ${label}`;
   return label;
+}
+
+/** 한국 날짜 'MM.DD' */
+export const kstMd = (iso: string) => dayOf(iso).slice(5).replace('-', '.');
+
+/** 종목별 소식 줄 아래: '한국경제 · 08:40' · 'KIS · 종가' (시각이 없으면 출처만) */
+export function sourceLine(source: string) {
+  const [name, ...rest] = source.split(' · ');
+  const time = rest.join(' ').match(/(\d{1,2}:\d{2}|종가)\s*$/)?.[1];
+  return [name, time].filter(Boolean).join(' · ');
 }
 
 /** 원본 앱 종류 칩 (.t1 공시 · .t2 뉴스 · .t3 주가) */

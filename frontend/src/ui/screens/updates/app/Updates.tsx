@@ -3,18 +3,22 @@ import { Animated, BackHandler, PanResponder, Pressable, ScrollView, StyleSheet,
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { Text, TextInput } from '@/components/ui/AppText';
+import { ChevDown16 } from '@/ui/icons/MemoGlyphs';
+import { Collapse } from '@/ui/motion/Collapse';
 import { Odometer } from '@/ui/motion/Numbers';
 import { Reveal } from '@/ui/motion/Reveal';
 import { Skeleton } from '@/ui/motion/Skeleton';
-import { useMotionK } from '@/ui/motion/useMotion';
-import { FeedCard } from '@/ui/screens/memo/app/MemoFeed';
+import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
+import { Turn, splitMark } from '@/ui/screens/memo/app/MemoFeed';
+import { KindTag } from '@/ui/shared/KindTag';
+import { ON_DOM } from '@/ui/shared/onDom';
 import { NudgePill } from '@/ui/shared/NudgePill';
 import { AppSnackbar } from '@/ui/shared/Snackbar';
 import { StockLogo } from '@/ui/shared/StockLogo';
 import { appColor, curve, ft } from '@/ui/theme';
 import type { AppUpdatesProps, KindFilter, UpdateItem, UpdateStock } from '../Updates.types';
 import { versionsOf } from '../Updates.mock';
-import { APP_TAG, KINDS, ago, byStock, dayGroup, unreadOf } from '../updatesFormat';
+import { APP_TAG, KINDS, ago, byStock, dayGroup, kstMd, sourceLine, unreadOf } from '../updatesFormat';
 import { useNudge } from '@/store/nudge';
 
 let seq = 0;
@@ -22,7 +26,7 @@ const nextKey = () => ++seq;
 
 /**
  * 앱 업데이트 탭 (원본 update.html · 11.05 A안: 종목별 업데이트도 같은 화면에서 칩만 바뀜)
- * 큰 제목 · 읽지 않은 소식 · 종목 칩(검은 알약) · 종류 칩 · 종목 카드(최근 3건) / 종목을 고르면 종목 카드 + 날짜 묶음 + ④ 소식 카드
+ * 머리 한 줄 제목 · 읽지 않은 소식 · 종목 칩(검은 알약) · 종류 칩 · 종목 카드(최근 3건) / 종목을 고르면 종목 카드 + 날짜 묶음 + ④ 소식 카드
  * ✓ 모두 읽음(전체에서만 · 5초 되돌리기) · 내 종목에서 찾기 · 소식 줄 왼쪽으로 밀어 읽음/안 읽음 · 넛지.
  * 당겨서 새로고침은 API 단계(③ 결정).
  */
@@ -32,7 +36,7 @@ export function AppUpdates(p: AppUpdatesProps) {
   const [code, setCode] = useState<string | undefined>(p.code);
   const [kind, setKind] = useState<KindFilter>('전체');
   const [ready, setReady] = useState(false);
-  const [y, setY] = useState(0);
+  const [scrolled, setScrolled] = useState(false);
   const [search, setSearch] = useState(false);
   const [q, setQ] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
@@ -87,16 +91,13 @@ export function AppUpdates(p: AppUpdatesProps) {
     setOpenId((o) => (o === u.id ? null : u.id));
     if (u.unread) p.onMarkRead([u.id], true);
   };
-  const tScale = 1 - Math.min(1, y / 60) * 0.12;
-  const tOpacity = 1 - Math.min(1, y / 60) * 0.9;
   const nN = cur ? unreadOf(byStock(p.items, cur.stock_code)) : total;
 
   return (
     <View style={st.root}>
-      {p.header({ title: y > 44, line: y > 44, onSearch: () => (setQ(''), setSearch(true)), onReadAll: code ? undefined : readAll, readAllOff: !total })}
-      <ScrollView style={st.flex} contentContainerStyle={st.pw} stickyHeaderIndices={[1]} scrollEventThrottle={16} onScroll={(e) => setY(e.nativeEvent.contentOffset.y)} showsVerticalScrollIndicator={false}>
-        <View style={[st.lt, { opacity: tOpacity, transform: [{ scale: tScale }] }]}>
-          <Text style={st.ltH}>최신 업데이트</Text>
+      {p.header({ line: scrolled, onSearch: () => (setQ(''), setSearch(true)), onReadAll: code ? undefined : readAll, readAllOff: !total })}
+      <ScrollView style={st.flex} contentContainerStyle={st.pw} stickyHeaderIndices={[1]} scrollEventThrottle={16} onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > 0)} showsVerticalScrollIndicator={false}>
+        <View style={st.lt}>
           <Text style={st.ltP}>내 종목의 공시·뉴스·주가 변동을 모아봤어요</Text>
           <View style={st.unr}>
             <View style={st.unrDot} />
@@ -346,28 +347,160 @@ function StockView({ p, s, kind, setKind, openId, onOpen }: { p: AppUpdatesProps
       {groups.map(([g, list]) => (
         <View key={g}>
           <Text style={st.gh}>{g}</Text>
-          {list.map((u) => (
-            <ReadSwipe key={u.id} read={!u.unread} onToggle={() => p.onMarkRead([u.id], u.unread)}>
-              <FeedCard f={u} ver={versionsOf(u.memo_id).find((v) => v.version === u.memo_version)} open={openId === u.id} onToggle={() => onOpen(u)} onOpenSource={() => p.onOpenSource(u)} onOpenEvidence={() => p.onOpenEvidence(u)} />
-            </ReadSwipe>
-          ))}
+          <View style={st.gc}>
+            {list.map((u, i) => (
+              <ReadSwipe key={u.id} line={i > 0} open={openId === u.id} read={!u.unread} onToggle={() => p.onMarkRead([u.id], u.unread)}>
+                <NewsRow u={u} open={openId === u.id} onToggle={() => onOpen(u)} onOpenSource={() => p.onOpenSource(u)} onOpenBoard={() => p.onOpenBoard(s.stock_code)} />
+              </ReadSwipe>
+            ))}
+          </View>
         </View>
       ))}
     </View>
   );
 }
 
+/** 종목별 소식 한 줄: 태그 · 제목 · 안 읽음 점 · ⌄ / 내 메모 / 출처 · 시간 */
+function NewsRow({ u, open, onToggle, onOpenSource, onOpenBoard }: { u: UpdateItem; open: boolean; onToggle: () => void; onOpenSource: () => void; onOpenBoard: () => void }) {
+  return (
+    <View>
+      <Pressable onPress={onToggle} accessibilityRole="button" accessibilityState={{ expanded: open }} style={st.nr}>
+        <View style={st.nrTop}>
+          <View style={st.nrTag}>
+            <KindTag kind={u.kind} variant="app" />
+          </View>
+          <Text style={st.nrT}>{u.headline}</Text>
+          {u.unread ? <View style={st.nrDot} /> : null}
+          <View style={st.nrChev}>
+            <Turn on={open}>
+              <ChevDown16 />
+            </Turn>
+          </View>
+        </View>
+        {u.memo_title ? (
+          <View style={st.nrMemo}>
+            <MemoIcon size={14} color={appColor.deepPurple} />
+            <Text style={st.nrMemoT} numberOfLines={1}>
+              내 메모 · {u.memo_title}
+            </Text>
+          </View>
+        ) : null}
+        <Text style={st.nrSrc}>{sourceLine(u.source)}</Text>
+      </Pressable>
+      <Collapse open={open} duration={420}>
+        <NewsBody u={u} onOpenSource={onOpenSource} onOpenBoard={onOpenBoard} />
+      </Collapse>
+    </View>
+  );
+}
+
+function MemoIcon({ size, color }: { size: number; color: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round">
+      <Path d="M5 4h14v11l-5 5H5z" />
+      <Path d="M14 20v-5h5" />
+    </Svg>
+  );
+}
+
+/** 근거 칩 글자. 기기에서는 중첩 Text 의 좌우 여백이 안 먹어 빈칸으로 */
+const CITE = ON_DOM ? '1' : '\u00A01\u00A0';
+
+/** 펼친 내용: 공시 = AI 요약 · 원문 인용 / 뉴스 = 기사 상자 / 주가 = 요약. 공통: 내 메모 · 버튼 */
+function NewsBody({ u, onOpenSource, onOpenBoard }: { u: UpdateItem; onOpenSource: () => void; onOpenBoard: () => void }) {
+  const [cite, setCite] = useState(false);
+  const ver = versionsOf(u.memo_id).find((v) => v.version === u.memo_version);
+  const memo = ver?.title || u.memo_title;
+  const press = ({ pressed }: { pressed: boolean }) => [st.nbBtn, pressed && { opacity: 0.6 }];
+  return (
+    <View style={st.nbWrap}>
+      {u.kind === '공시' ? (
+        <>
+          <View style={st.aiBox}>
+            <Text style={st.aiH}>✦ AI 요약 · 원문 근거</Text>
+            <Text style={st.aiT}>
+              {u.summary}
+              {u.quote ? ' ' : null}
+              {u.quote ? (
+                <Text onPress={() => setCite((c) => !c)} accessibilityRole="button" accessibilityLabel="출처 1" style={st.citeChip}>
+                  {CITE}
+                </Text>
+              ) : null}
+            </Text>
+          </View>
+          {u.quote ? (
+            <View style={st.qBox}>
+              <Text style={st.qH}>[1] DART · 원문</Text>
+              <Text style={st.qT}>
+                {/* 짚을 문장이 따로 없으면 인용 전체 */}
+                {splitMark(u.quote, u.quote_mark || u.quote).map((x, i) => (
+                  <Text key={i} style={x.mark && cite ? st.qMark : null}>
+                    {x.t}
+                  </Text>
+                ))}
+              </Text>
+            </View>
+          ) : null}
+        </>
+      ) : u.kind === '뉴스' ? (
+        <>
+          <Text style={st.nbLead}>{u.summary.startsWith('메모에서 확인하려던') ? u.summary : `메모에서 확인하려던 "${u.memo_title}" 관련 뉴스예요.`}</Text>
+          <View style={st.artBox}>
+            <Text style={st.artS}>{[u.source.split(' · ')[0], kstMd(u.at)].filter(Boolean).join(' · ')}</Text>
+            <Text style={st.artT}>{u.article_title}</Text>
+          </View>
+          <Text style={st.artNote}>기사 내용은 원문 링크에서 볼 수 있어요</Text>
+        </>
+      ) : (
+        <Text style={st.nbLead}>
+          {u.summary}
+          <Text style={{ color: appColor.ink3 }}> (코드 계산)</Text>
+        </Text>
+      )}
+      {memo ? (
+        <View style={st.mmBox}>
+          <View style={st.mmTop}>
+            <MemoIcon size={12} color="#A0802A" />
+            <Text style={st.mmH}>연결된 내 메모{ver ? ` · ${kstMd(ver.saved_at)} 작성 당시` : ''}</Text>
+          </View>
+          <Text style={st.mmT}>{memo}</Text>
+        </View>
+      ) : null}
+      <View style={st.nbBtns}>
+        {u.url && u.kind !== '주가' ? (
+          <Pressable onPress={onOpenSource} accessibilityRole="link" style={press}>
+            <Text style={st.nbBtnT}>{u.kind === '뉴스' ? '원문 기사 열기 ↗' : '원문 보기'}</Text>
+          </Pressable>
+        ) : null}
+        <Pressable onPress={onOpenBoard} accessibilityRole="button" style={press}>
+          <Text style={st.nbBtnT}>메모 보드에서 보기</Text>
+        </Pressable>
+      </View>
+      {u.kind === '공시' ? <Text style={st.nbNote}>AI가 원문에 있는 내용만 골라 적었어요 · 판단은 직접 해 주세요</Text> : null}
+    </View>
+  );
+}
+
 /** 소식 줄 왼쪽으로 밀기 → 읽음/안 읽음 (원본 .dr .act 88 · 보라) */
-function ReadSwipe({ read, onToggle, children }: { read: boolean; onToggle: () => void; children: React.ReactNode }) {
+function ReadSwipe({ line, open, read, onToggle, children }: { line: boolean; open: boolean; read: boolean; onToggle: () => void; children: React.ReactNode }) {
   const k = useMotionK();
   const [x] = useState(() => new Animated.Value(0));
   const [opened, setOpened] = useState(false);
+  /* 펼치면 제자리로 · 버튼 숨김 */
+  if (open && opened) setOpened(false);
+  useEffect(() => {
+    if (!open) return;
+    const a = Animated.timing(x, { toValue: 0, duration: 320 * k, easing: curve.ease, useNativeDriver: NATIVE });
+    a.start();
+    return () => a.stop();
+  }, [open, x, k]);
   const pan = useMemo(() => {
     const s = { base: 0, cur: 0 };
     return PanResponder.create({
-      onMoveShouldSetPanResponderCapture: (_, g) => Math.abs(g.dx) > 8 && Math.abs(g.dx) > Math.abs(g.dy),
+      onMoveShouldSetPanResponderCapture: (_, g) => !open && Math.abs(g.dx) > 8 && Math.abs(g.dx) > Math.abs(g.dy),
       onPanResponderGrant: () => {
         s.base = opened ? -88 : 0;
+        s.cur = s.base;
       },
       onPanResponderMove: (_, g) => {
         let v = s.base + g.dx;
@@ -379,28 +512,32 @@ function ReadSwipe({ read, onToggle, children }: { read: boolean; onToggle: () =
       onPanResponderRelease: () => {
         const o = s.cur < -44;
         setOpened(o);
-        Animated.timing(x, { toValue: o ? -88 : 0, duration: 320 * k, easing: curve.ease, useNativeDriver: true }).start();
+        Animated.timing(x, { toValue: o ? -88 : 0, duration: 320 * k, easing: curve.ease, useNativeDriver: NATIVE }).start();
       },
       onPanResponderTerminationRequest: () => false,
     });
-  }, [opened, x, k]);
+  }, [open, opened, x, k]);
   return (
-    <View style={st.swWrap} {...pan.panHandlers}>
-      <Pressable
-        onPress={() => {
-          onToggle();
-          setOpened(false);
-          Animated.timing(x, { toValue: 0, duration: 320 * k, easing: curve.ease, useNativeDriver: true }).start();
-        }}
-        accessibilityRole="button"
-        style={st.act}
-      >
-        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-          <Path d="M4 12.5l5 5L20 7" />
-        </Svg>
-        <Text style={st.actT}>{read ? '안 읽음' : '읽음'}</Text>
-      </Pressable>
-      <Animated.View style={{ transform: [{ translateX: x }] }}>{children}</Animated.View>
+    <View style={[st.swWrap, line && st.swLine]} {...pan.panHandlers}>
+      {open ? null : (
+        <Animated.View style={[st.act, { opacity: x.interpolate({ inputRange: [-1, 0], outputRange: [1, 0], extrapolate: 'clamp' }) }]}>
+          <Pressable
+            onPress={() => {
+              onToggle();
+              setOpened(false);
+              Animated.timing(x, { toValue: 0, duration: 320 * k, easing: curve.ease, useNativeDriver: NATIVE }).start();
+            }}
+            accessibilityRole="button"
+            style={st.actIn}
+          >
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+              <Path d="M4 12.5l5 5L20 7" />
+            </Svg>
+            <Text style={st.actT}>{read ? '안 읽음' : '읽음'}</Text>
+          </Pressable>
+        </Animated.View>
+      )}
+      <Animated.View style={[st.swFace, { transform: [{ translateX: x }] }]}>{children}</Animated.View>
     </View>
   );
 }
@@ -501,8 +638,7 @@ const st = StyleSheet.create({
   flex: { flex: 1 },
   flexMin: { flex: 1, minWidth: 0 },
   pw: { paddingBottom: 30 },
-  lt: { paddingHorizontal: 18, paddingBottom: 10, transformOrigin: 'left top' },
-  ltH: { fontSize: 27, lineHeight: 34, fontWeight: '800', letterSpacing: -0.5, color: appColor.ink },
+  lt: { paddingHorizontal: 18, paddingBottom: 10 },
   ltP: { ...ft(13.5), color: appColor.ink2, marginTop: 6 },
   unr: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', marginTop: 10, minHeight: 30, paddingHorizontal: 12, borderRadius: 15, backgroundColor: '#EEE9FB' },
   unrDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#E5484D', marginRight: 6 },
@@ -541,8 +677,45 @@ const st = StyleSheet.create({
   sub2T: { ...ft(13), color: appColor.ink2 },
   sub2B: { fontSize: 13, lineHeight: 17, fontWeight: '700', color: appColor.deepPurple },
   gh: { ...ft(13), fontWeight: '700', color: appColor.ink2, paddingTop: 12, paddingHorizontal: 20, paddingBottom: 7 },
-  swWrap: { marginHorizontal: 16, marginBottom: 8, borderRadius: 18, overflow: 'hidden', backgroundColor: appColor.accent },
-  act: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 88, alignItems: 'center', justifyContent: 'center', gap: 3 },
+  /* 같은 날짜 소식 한 카드 */
+  gc: { backgroundColor: '#FFFFFF', borderRadius: 20, marginHorizontal: 16, overflow: 'hidden' },
+  swWrap: { position: 'relative', overflow: 'hidden' },
+  swLine: { borderTopWidth: 1, borderTopColor: '#F0F1F4' },
+  swFace: { backgroundColor: '#FFFFFF' },
+  nr: { paddingVertical: 14, paddingHorizontal: 16 },
+  nrTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  nrTag: { marginTop: 1 },
+  nrT: { flex: 1, minWidth: 0, fontSize: 15, lineHeight: 21, fontWeight: '700', color: appColor.ink },
+  nrDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: appColor.accent, marginTop: 7 },
+  nrChev: { marginTop: 3 },
+  nrMemo: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
+  nrMemoT: { flex: 1, minWidth: 0, ...ft(12.5), color: appColor.deepPurple },
+  nrSrc: { ...ft(12), color: appColor.ink3, marginTop: 4 },
+  /* 펼친 내용 */
+  nbWrap: { backgroundColor: '#FFFFFF', paddingTop: 2, paddingHorizontal: 16, paddingBottom: 16 },
+  aiBox: { backgroundColor: '#F7F5FF', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 13 },
+  aiH: { ...ft(11.5), fontWeight: '800', color: appColor.deepPurple, marginBottom: 3 },
+  aiT: { fontSize: 13.5, lineHeight: 23, color: appColor.ink },
+  citeChip: { fontSize: 11, fontWeight: '800', color: '#5B3BD1', backgroundColor: '#E3DBFF', borderRadius: 6, paddingHorizontal: 4 },
+  qBox: { marginTop: 8, backgroundColor: '#F6F7F9', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12 },
+  qH: { ...ft(11), fontWeight: '700', color: appColor.ink3, marginBottom: 2 },
+  qT: { fontSize: 12.5, lineHeight: 21, color: appColor.ink2 },
+  qMark: { backgroundColor: 'rgba(255,211,0,0.5)' },
+  nbLead: { fontSize: 13.5, lineHeight: 21.6, color: appColor.ink },
+  artBox: { marginTop: 10, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: appColor.line, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12 },
+  artS: { ...ft(11.5), color: '#8A8F98', marginBottom: 3 },
+  artT: { ...ft(14), fontWeight: '700', color: appColor.ink },
+  artNote: { ...ft(11.5), color: '#8A8F98', marginTop: 6 },
+  mmBox: { marginTop: 8, backgroundColor: '#FFF8E6', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12 },
+  mmTop: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 },
+  mmH: { ...ft(11), fontWeight: '700', color: '#A0802A' },
+  mmT: { ...ft(12.5), color: '#5B4A1A' },
+  nbBtns: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  nbBtn: { flex: 1, height: 38, backgroundColor: '#F2F2F5', borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  nbBtnT: { ...ft(13), fontWeight: '700', color: appColor.ink },
+  nbNote: { ...ft(11), color: appColor.ink3, marginTop: 8 },
+  act: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 88, backgroundColor: appColor.accent },
+  actIn: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3 },
   actT: { ...ft(12.5), fontWeight: '700', color: '#FFFFFF' },
   fin: { alignItems: 'center', gap: 8, paddingTop: 22, paddingBottom: 10 },
   finT: { ...ft(13), color: appColor.ink3 },

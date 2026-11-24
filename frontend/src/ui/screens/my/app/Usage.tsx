@@ -90,7 +90,7 @@ function Acc({ stock, first, last, onOpenMemo }: { stock: TrackedStock; first: b
         </View>
       </Pressable>
       <Animated.View style={{ height: h ? v.interpolate({ inputRange: [0, 1], outputRange: [0, h] }) : open ? undefined : 0, overflow: 'hidden' }}>
-        <View onLayout={(e) => setH(e.nativeEvent.layout.height)} style={{ position: h ? 'absolute' : 'relative', left: 0, right: 0 }}>
+        <View onLayout={(e) => setH(e.nativeEvent.layout.height)} style={{ paddingTop: 8, position: h ? 'absolute' : 'relative', left: 0, right: 0 }}>
           {stock.memos.map((m) => (
             <Pressable key={m.title} onPress={() => onOpenMemo(stock.stock_code, m.title)} style={({ pressed }) => [st.ti, pressed && { opacity: 0.85 }]} accessibilityRole="button" accessibilityLabel={`${m.title} 메모 열기`}>
               <View style={st.tiB}>
@@ -130,10 +130,11 @@ const st = StyleSheet.create({
   sk2T: { fontSize: 15, lineHeight: 22, fontWeight: '700', color: MC.ink },
   sk2V: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 4 },
   sk2VT: { fontSize: 12.5, lineHeight: 18, fontWeight: '500', color: MC.ink3 },
-  ti: { marginVertical: 8, marginHorizontal: 12, backgroundColor: '#F6F7F9', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14 },
+  /* 메모 간격 80 = 12 + 18 + 8 + 22 + 12 + 사이 8 (원본 CSS 는 위아래 여백 8 이 겹침) */
+  ti: { marginBottom: 8, marginHorizontal: 12, backgroundColor: '#F6F7F9', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14 },
   tiB: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  tiT: { flex: 1, fontSize: 14, lineHeight: 20, fontWeight: '700', color: MC.ink },
+  tiT: { flex: 1, fontSize: 14, lineHeight: 18, fontWeight: '700', color: MC.ink },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 8 },
   chip: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E6E8EC', borderRadius: 7, paddingVertical: 3, paddingHorizontal: 7 },
-  chipT: { fontSize: 11.5, lineHeight: 16, color: MC.ink2 },
+  chipT: { fontSize: 11.5, lineHeight: 14, color: MC.ink2 },
 });

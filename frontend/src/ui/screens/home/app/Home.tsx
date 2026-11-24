@@ -225,7 +225,7 @@ export function AppHome(p: AppHomeProps) {
         scrollEnabled={!lifted}
         showsVerticalScrollIndicator={false}
         scrollEventThrottle={16}
-        onScroll={(e) => setLine(e.nativeEvent.contentOffset.y > 4)}
+        onScroll={(e) => setLine(e.nativeEvent.contentOffset.y > 0)}
       >
         {/* 편집 안내 (원본 .einfo: 높이 0 → 52) */}
         <Animated.View style={{ height: editV.interpolate({ inputRange: [0, 1], outputRange: [0, 52] }), opacity: editV, overflow: 'hidden' }}>

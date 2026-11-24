@@ -21,10 +21,10 @@ export default function UpdatesTab() {
       stocks={stocks}
       items={items}
       now={now}
-      header={({ title, line, onSearch, onReadAll, readAllOff }) => (
+      header={({ line, onSearch, onReadAll, readAllOff }) => (
         <TopBar
           preset="updates"
-          title={title ? '최신 업데이트' : undefined}
+          title="최신 업데이트"
           showLine={line}
           actions={[
             ...(onReadAll ? [{ icon: 'checkAll' as const, label: '모두 읽음', onPress: onReadAll, color: readAllOff ? '#C9CBD1' : undefined }] : []),
