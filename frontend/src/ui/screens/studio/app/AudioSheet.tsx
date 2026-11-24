@@ -20,6 +20,17 @@ export function AppAudioSheet({ open, stocks, periods, onClose, onMake }: { open
   const [mkt, setMkt] = useState(true);
   const [per, setPer] = useState(0);
   const [lay, setLay] = useState<{ x: number; width: number }[]>([]);
+  /* 실제 모드는 종목 목록이 시트를 연 뒤에 도착한다 (GET /studio/audio/options) → 도착하거나 다시 열면 전체를 고른다 */
+  const key = stocks.map((s) => s.stock_code).join(',');
+  const [prev, setPrev] = useState({ key, open });
+  if (prev.key !== key || prev.open !== open) {
+    setPrev({ key, open });
+    if (open) {
+      setPick(stocks.map((s) => s.stock_code));
+      setMkt(true);
+      setPer(0);
+    }
+  }
   const want = (q: 'all' | 'own' | 'watch') => stocks.filter((s) => q === 'all' || (q === 'own' ? s.hold === '보유' : s.hold === '관심')).map((s) => s.stock_code);
   const same = (a: string[]) => a.length === pick.length && a.every((c) => pick.includes(c));
   const n = pick.length;

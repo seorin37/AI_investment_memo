@@ -2,13 +2,17 @@ import { create } from 'zustand';
 import { useUI } from '@/store/ui';
 import { mockAudioEpisode, mockAudioGen, mockLabStocks, mockLabVars, mockMade, mockReport, type LabDir } from '@/ui/screens/studio/Studio.mock';
 import type { MadeItem, StudioKind } from '@/ui/screens/studio/Studio.types';
+import { epOf, type AudioEp } from '@/ui/screens/studio/audioEp';
 import { registerUserReset } from '@/lib/sessionReset';
 import { env } from '@/config/env';
+import { audioEngine, canPlayFile } from './audioEngine';
 
 /**
- * 스튜디오 만들기 · 재생 mock 상태 (앱·웹 같이 씀, 메모리에만).
- * - 만들기: 크레딧 차감 없이 단계만 진행 (원본 runGen 시각) → 완료 / 실패
- * - 재생: 소리 없이 시간만 흐르는 타이머 (원본 tick). 미니 플레이어는 앱 탭 레이아웃 · 웹 스튜디오 열에서 이 상태를 읽음
+ * 스튜디오 만들기 · 재생 상태 (앱·웹 같이 씀, 메모리에만).
+ * - 만들기: mock은 크레딧 차감 없이 단계만 진행 (원본 runGen 시각) → 완료 / 실패.
+ *   실제 모드(server를 줌)는 단계 표시는 시간으로, 완성은 서버 결과를 기다린다 (보고서 2026-11-23 · 오디오 2026-11-24)
+ * - 재생: 서버 오디오(item.audio.fileUrl)면 웹에서 실제 소리(audioEngine), 아니면 소리 없이 시간만 흐르는 타이머 (원본 tick).
+ *   미니 플레이어는 앱 탭 레이아웃 · 웹 스튜디오 열에서 이 상태를 읽음
  */
 export type StepState = 'wait' | 'run' | 'done' | 'bad';
 export interface GenJob {
@@ -45,7 +49,8 @@ interface StudioPlayerState {
   curReport: string | null;
   /** 방금 완성된 결과 종류 (openPlayer 신호와 같이) */
   openKind: 'audio' | 'report';
-  startAudio(p: { sub: string; n: number; codes?: string[]; market?: boolean }, fail?: boolean): void;
+  /** server를 주면(실제 모드) 완성은 서버 결과(POST /studio/audio → 완성 확인)를 기다린다 (2026-11-24) */
+  startAudio(p: { sub: string; n: number; codes?: string[]; market?: boolean }, fail?: boolean, server?: () => Promise<MadeItem>): void;
   /** server를 주면(실제 모드) 단계 표시는 그대로 하고 완성은 서버 결과를 기다린다 (2026-11-23) */
   startReport(p: { sub: string; codes: string[]; market: boolean }, fail?: boolean, server?: () => Promise<MadeItem>): void;
   openReport(id: string): void;
@@ -84,44 +89,71 @@ interface StudioPlayerState {
   reset(): void;
 }
 
-const DUR = mockAudioEpisode.dur;
 let genT: ReturnType<typeof setTimeout>[] = [];
 let playT: ReturnType<typeof setInterval> | null = null;
-/* 실제 모드 보고서 다시 시도에 쓸 서버 호출 */
+/* 실제 모드 보고서·오디오 다시 시도에 쓸 서버 호출 */
 let lastServer: (() => Promise<MadeItem>) | null = null;
+/* 서버 오디오 단계 시각 (ms): 대본 쓰기(LLM)가 길고 목소리 입히기(줄마다 합성)가 더 길다. 완성은 서버를 기다린다 */
+const SERVER_STEPS = { report: [300, 2500, 9000], audio: [300, 3000, 40000] };
 
 export const useStudioPlayer = create<StudioPlayerState>((set, get) => {
   const step = (i: number, s: StepState, pct?: number) =>
     set((st) => (st.job ? { job: { ...st.job, steps: st.job.steps.map((x, j) => (j === i ? s : x)), pct: pct ?? st.job.pct } } : st));
+  const curItem = () => { const s = get(); return s.made.find((m) => m.id === s.cur); };
+  const durNow = () => epOf(curItem()).dur;
   const runPlay = (on: boolean) => {
     if (playT) clearInterval(playT);
     playT = null;
+    const url = curItem()?.audio?.fileUrl;
+    if (url && canPlayFile) {                       // 실제 소리 (웹): 시간은 오디오가 알려 준다
+      if (!on) return audioEngine.pause();
+      const { t, speed } = get();
+      audioEngine.play(url, t, speed, {
+        onTime: (nt) => set({ t: nt }),
+        onEnd: () => set({ playing: false, t: durNow() }),
+        onError: (blocked) => {
+          set({ playing: false });
+          if (!blocked) useUI.getState().showToast('오디오를 재생하지 못했어요 · 잠시 뒤 다시 해 주세요');
+        },
+      });
+      return;
+    }
+    audioEngine.pause();
     if (!on) return;
     playT = setInterval(() => {
       const { t, speed } = get();
-      const nt = Math.min(DUR, t + 0.25 * speed);
+      const dur = durNow();
+      const nt = Math.min(dur, t + 0.25 * speed);
       set({ t: nt });
-      if (nt >= DUR) { set({ playing: false }); runPlay(false); }
+      if (nt >= dur) { set({ playing: false }); runPlay(false); }
     }, 250);
   };
-  /* 실제 모드 주간보고서: 앞 단계는 시간으로 진행하고, 마지막 단계는 서버 완성(또는 실패)을 기다린다 */
-  const runServer = (server: () => Promise<MadeItem>) => {
+  /* 실제 모드: 앞 단계는 시간으로 진행하고, 마지막 단계는 서버 완성(또는 실패)을 기다린다 */
+  const runServer = (kind: 'audio' | 'report', server: () => Promise<MadeItem>) => {
     genT.forEach(clearTimeout);
     genT = [];
     const T = (fn: () => void, ms: number) => genT.push(setTimeout(fn, ms));
-    T(() => step(0, 'run', 8), 300);
-    T(() => { step(0, 'done'); step(1, 'run', 35); }, 2500);
-    T(() => { step(1, 'done'); step(2, 'run', 70); }, 9000);
+    const [a, b, c] = SERVER_STEPS[kind];
+    T(() => step(0, 'run', 8), a);
+    T(() => { step(0, 'done'); step(1, 'run', 35); }, b);
+    T(() => { step(1, 'done'); step(2, 'run', 70); }, c);
     server().then(
       (item) => {
         genT.forEach(clearTimeout);
         genT = [];
         const s = get();
-        if (s.job?.kind !== 'report') return;
+        if (s.job?.kind !== kind) return;
         const here = s.genVisible || s.webView === 'gen';
-        set({ made: [item, ...s.made.filter((m) => m.id !== item.id)], job: null, curReport: item.id, openKind: 'report',
-          webView: s.webView === 'gen' ? 'report' : s.webView, openPlayer: s.genVisible ? s.openPlayer + 1 : s.openPlayer });
-        if (!here) useUI.getState().showToast(KIND_T.report.done);
+        const made = [item, ...s.made.filter((m) => m.id !== item.id)];
+        if (kind === 'report') {
+          set({ made, job: null, curReport: item.id, openKind: 'report',
+            webView: s.webView === 'gen' ? 'report' : s.webView, openPlayer: s.genVisible ? s.openPlayer + 1 : s.openPlayer });
+        } else {
+          set({ made, job: null, cur: item.id, openKind: 'audio', t: 0, mini: !here, playing: here,
+            webView: s.webView === 'gen' ? 'player' : s.webView, openPlayer: s.genVisible ? s.openPlayer + 1 : s.openPlayer });
+          runPlay(here);
+        }
+        if (!here) useUI.getState().showToast(KIND_T[kind].done);
       },
       (err: unknown) => {
         genT.forEach(clearTimeout);
@@ -131,7 +163,7 @@ export const useStudioPlayer = create<StudioPlayerState>((set, get) => {
         const at = s.job.steps.findIndex((x) => x !== 'done');
         step(at < 0 ? 2 : at, 'bad');
         set({ job: get().job && { ...get().job!, status: 'fail' }, webView: s.webView === 'gen' ? 'fail' : s.webView });
-        useUI.getState().showToast(err instanceof Error ? err.message : KIND_T.report.bad);
+        useUI.getState().showToast(err instanceof Error ? err.message : KIND_T[kind].bad);
       },
     );
   };
@@ -166,6 +198,7 @@ export const useStudioPlayer = create<StudioPlayerState>((set, get) => {
         if (!here) useUI.getState().showToast(KIND_T.report.done);
         return;
       }
+      const DUR = mockAudioEpisode.dur;
       const item: MadeItem = { id, kind: 'audio', title: mockAudioGen.result_title, sub: `오디오 · ${s.job.n}종목 · ${fmt(DUR)}`, meta: `오디오 · ${s.job.n}종목 · ${fmt(DUR)}`, left: '30일 뒤 삭제', dur: fmt(DUR), foot: s.job.sub };
       set({ made: [item, ...s.made], job: null, cur: id, openKind: 'audio', t: 0, mini: !here, playing: here, webView: s.webView === 'gen' ? 'player' : s.webView, openPlayer: s.genVisible ? s.openPlayer + 1 : s.openPlayer });
       runPlay(here);
@@ -186,14 +219,16 @@ export const useStudioPlayer = create<StudioPlayerState>((set, get) => {
     openPlayer: 0,
     curReport: null,
     openKind: 'audio',
-    startAudio: (p, fail = false) => {
+    startAudio: (p, fail = false, server) => {
       set({ job: { kind: 'audio', sub: p.sub, n: p.n, codes: p.codes ?? [], market: !!p.market, pct: 0, steps: mockAudioGen.steps.map(() => 'wait'), status: 'run', fail } });
-      run(fail);
+      lastServer = server ?? null;
+      if (server) runServer('audio', server);
+      else run(fail);
     },
     startReport: (p, fail = false, server) => {
       set({ job: { kind: 'report', sub: p.sub, n: p.codes.length, codes: p.codes, market: p.market, pct: 0, steps: mockReport.steps.map(() => 'wait'), status: 'run', fail } });
       lastServer = server ?? null;
-      if (server) runServer(server);
+      if (server) runServer('report', server);
       else run(fail);
     },
     openReport: (id) => set({ curReport: id }),
@@ -216,34 +251,50 @@ export const useStudioPlayer = create<StudioPlayerState>((set, get) => {
       const j = get().job;
       if (!j) return;
       set({ job: { ...j, pct: 0, steps: j.steps.map(() => 'wait'), status: 'run', fail: false } });
-      if (j.kind === 'report' && lastServer) runServer(lastServer);
+      if (lastServer) runServer(j.kind, lastServer);
       else run(false);
     },
     dropFailed: () => set((s) => (s.job?.status === 'fail' ? { job: null } : s)),
     setGenVisible: (v) => set({ genVisible: v }),
     setWebView: (v) => set({ webView: v }),
-    select: (id) => set((s) => (s.cur === id ? { mini: true } : { cur: id, t: 0, playing: false, mini: true })),
+    select: (id) => {
+      if (get().cur === id) return set({ mini: true });
+      runPlay(false);                                   // 듣던 것을 멈추고 다른 편을 처음부터
+      audioEngine.stop();
+      set({ cur: id, t: 0, playing: false, mini: true });
+    },
     leavePlayer: () => set((s) => ({ mini: s.playing || s.t > 0 })),
     play: (id, from0 = false) => {
       const s = get();
       const same = s.cur === id && !from0;
+      if (!same) audioEngine.stop();
       set({ cur: id, t: same ? s.t : 0, playing: true });
       runPlay(true);
     },
     toggle: () => {
       const s = get();
       const on = !s.playing;
-      set({ playing: on, t: on && s.t >= DUR ? 0 : s.t });
+      set({ playing: on, t: on && s.t >= durNow() ? 0 : s.t });
       runPlay(on);
     },
-    seek: (t) => set({ t: Math.max(0, Math.min(DUR, t)) }),
-    nextSpeed: (steps) => set((s) => ({ speed: steps[(steps.indexOf(s.speed) + 1) % steps.length] })),
+    seek: (t) => {
+      const nt = Math.max(0, Math.min(durNow(), t));
+      set({ t: nt });
+      audioEngine.seek(nt);
+    },
+    nextSpeed: (steps) => {
+      const speed = steps[(steps.indexOf(get().speed) + 1) % steps.length];
+      set({ speed });
+      audioEngine.rate(speed);
+    },
     setMini: (v) => set({ mini: v }),
-    closeMini: () => { set({ mini: false, playing: false }); runPlay(false); },
+    closeMini: () => { set({ mini: false, playing: false }); runPlay(false); audioEngine.stop(); },
     reset: () => {
       genT.forEach(clearTimeout);
       genT = [];
       runPlay(false);
+      audioEngine.stop();
+      lastServer = null;
       set(useStudioPlayer.getInitialState(), true);
     },
   };
@@ -253,6 +304,6 @@ export const useStudioPlayer = create<StudioPlayerState>((set, get) => {
 registerUserReset('studioPlayer', () => useStudioPlayer.getState().reset());
 
 export const fmt = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
-/** 지금 챕터 · 대본 줄 */
-export const chapterAt = (t: number) => mockAudioEpisode.chapters.reduce((a, c, i) => (t >= c[0] ? i : a), 0);
-export const lineAt = (t: number) => mockAudioEpisode.script.reduce((a, c, i) => (t >= c[0] ? i : a), 0);
+/** 지금 챕터 · 대본 줄 (ep: 그 편의 내용, 없으면 mock 한 편) */
+export const chapterAt = (t: number, ep: AudioEp = mockAudioEpisode) => ep.chapters.reduce((a, c, i) => (t >= c[0] ? i : a), 0);
+export const lineAt = (t: number, ep: AudioEp = mockAudioEpisode) => ep.script.reduce((a, c, i) => (t >= c[0] ? i : a), 0);
