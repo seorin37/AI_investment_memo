@@ -155,9 +155,10 @@ export function WebLab({ vars, stocks, code, dirs, note, onBack, onPick, onDir, 
  * 웹 실험 결과 = 원본 studio.tsx LabResult + gen/LabResultBody
  * 원본의 '종합 방향 · 긍정/부정'(해석)은 넣지 않고, 경로 색도 방향 판단 없이 회색으로
  */
-export function WebLabResult({ stock, vars, groups, disclaimer, onBack, onMemo, onAgain }: {
-  stock: (typeof mockLabStocks)[number]; vars: typeof mockLabVars; groups: LabGroup[]; disclaimer: string;
-  onBack: () => void; onMemo: () => void; onAgain: () => void;
+export function WebLabResult({ stock, memo, vars, groups, disclaimer, onBack, onMemo, onAgain }: {
+  /* memo: 그 종목의 내 메모 1개 (useLabMemo · 엑셀 웹 #11). 없으면 '메모 쓰기' */
+  stock: (typeof mockLabStocks)[number]; memo: { id: string; title: string } | null; vars: typeof mockLabVars; groups: LabGroup[]; disclaimer: string;
+  onBack: () => void; onMemo: (id?: string) => void; onAgain: () => void;
 }) {
   const all = groups.flatMap((g) => g.leaves.map((l) => ({ ...l, g })));
   return (
@@ -206,9 +207,10 @@ export function WebLabResult({ stock, vars, groups, disclaimer, onBack, onMemo, 
           <View style={st.memo}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={st.memoH}>내 메모와 연결</Text>
-              <Pressable onPress={onMemo} accessibilityRole="link">{({ hovered }: Hover) => <Text style={[st.memoL, hovered && { color: '#15171A' }]}>{stock.memo ? '원본 메모 보기 ›' : '메모 쓰기 ›'}</Text>}</Pressable>
+              <Pressable onPress={() => onMemo(memo?.id)} accessibilityRole="link">{({ hovered }: Hover) => <Text style={[st.memoL, hovered && { color: '#15171A' }]}>{memo ? '원본 메모 보기 ›' : '메모 쓰기 ›'}</Text>}</Pressable>
             </View>
-            <Text keepAll style={st.exP}>{stock.memo ? `“${stock.memo}” — ${stock.memo_text}` : `${stock.name}에 남긴 메모가 없어요. 실험에서 본 경로를 메모로 남겨 두면 관련 소식을 모아 드려요.`}</Text>
+            {/* 원본 gen/LabResultBody.tsx 48줄 문구 그대로 */}
+            <Text keepAll style={st.exP}>{memo ? `“${memo.title}” — 이번 실험은 시장 환경 경로예요. 메모에서 지켜보는 항목과 나눠서 보면 좋아요.` : `${stock.name}에 남긴 메모가 없어요. 실험에서 본 경로를 메모로 남겨 두면 관련 소식을 모아 드려요.`}</Text>
           </View>
           <Text keepAll style={st.note}>· {disclaimer}</Text>
         </View>

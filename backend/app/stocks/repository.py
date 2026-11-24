@@ -137,10 +137,7 @@ class StockRepository:
                          WHERE m.user_id = us.user_id
                            AND m.symbol = us.symbol
                            AND m.deleted_at IS NULL
-                           AND tu.created_at > COALESCE(
-                             us.last_checked_at,
-                             CAST('-infinity' AS timestamptz)
-                           )
+                           AND NOT tu.is_read
                        ), 0)::integer AS unread_updates{MEMO_COUNTS_COLUMNS}
                 FROM user_stocks us
                 JOIN stocks s ON s.symbol = us.symbol{MEMO_COUNTS_JOIN}
@@ -201,10 +198,7 @@ class StockRepository:
                          WHERE m.user_id = us.user_id
                            AND m.symbol = us.symbol
                            AND m.deleted_at IS NULL
-                           AND tu.created_at > COALESCE(
-                             us.last_checked_at,
-                             CAST('-infinity' AS timestamptz)
-                           )
+                           AND NOT tu.is_read
                        ), 0)::integer AS unread_updates{MEMO_COUNTS_COLUMNS}
                 FROM user_stocks us
                 JOIN stocks s ON s.symbol = us.symbol{MEMO_COUNTS_JOIN}

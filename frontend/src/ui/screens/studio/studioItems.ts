@@ -1,8 +1,11 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
+import { api } from '@/api';
 import { env } from '@/config/env';
-import { useStudioItems } from '@/hooks/queries';
+import { qk, useStudioItems } from '@/hooks/queries';
 import { useAuth } from '@/store/auth';
 import { useStudioPlayer } from '@/store/studioPlayer';
+import { useUI } from '@/store/ui';
 import type { StudioItem } from '@/types/models';
 import type { LabDir } from './Studio.mock';
 import type { MadeItem } from './Studio.types';
@@ -34,4 +37,26 @@ export function useStudioItemsSync() {
   useEffect(() => {
     if (data) setServerMade(data.filter((s) => s.status === 'ready').map(fromServerItem));   // 만드는 중·실패는 목록에 안 보인다
   }, [data, setServerMade]);
+}
+
+/**
+ * 만든 항목 삭제 = 휴지통으로 (2026-11-24 팀장 결정, studio_items.deleted_at 0025).
+ * 화면 목록에서 먼저 빼고, 서버 항목이면 DELETE /studio/items/{id} (서버가 휴지통으로 옮김) 뒤 목록·휴지통을 다시 받는다.
+ * mock·이번 세션에서 만든 mock 항목은 화면에서만 뺀다. 복원은 설정 › 휴지통.
+ */
+export function useRemoveMade() {
+  const qc = useQueryClient();
+  const removeMade = useStudioPlayer((s) => s.removeMade);
+  const toast = useUI((s) => s.showToast);
+  return (m: MadeItem) => {
+    removeMade(m.id);
+    if (env.useMock || !m.server) return toast('휴지통으로 옮겼어요');
+    api.deleteStudioItem(m.id).then(
+      () => toast('휴지통으로 옮겼어요 · 설정 › 휴지통에서 되돌릴 수 있어요'),
+      () => toast('지우지 못했어요 · 잠시 뒤 다시 해 주세요'),
+    ).finally(() => {
+      void qc.invalidateQueries({ queryKey: qk.studioItems });
+      void qc.invalidateQueries({ queryKey: qk.trash });
+    });
+  };
 }

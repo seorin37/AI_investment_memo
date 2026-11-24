@@ -13,7 +13,7 @@ import { Sheet } from '@/ui/shared/Sheet';
 import { AppStockCard } from '@/ui/shared/StockHead';
 import { appColor, curve, ft } from '@/ui/theme';
 import type { CompanyInfoProps } from '../CompanyInfo.types';
-import { FINANCIAL_HEALTH_NOTE, HEALTH_KEYS, TERM_TIP, TERMS, appQuoteRows, financialHealthScore, healthScore, healthVal, mdOf, mmddOf, won, yoyAt, type FinKey, type TermKey } from '../companyFormat';
+import { FINANCIAL_HEALTH_NOTE, HEALTH_KEYS, TERM_TIP, TERMS, appQuoteRows, healthScore, healthVal, mdOf, mmddOf, won, yoyAt, type FinKey, type TermKey } from '../companyFormat';
 import { useProgress } from '@/ui/motion/useProgress';
 import { CANDLE_H, CandleChart, GrowthChart, ProfitChart, Radar } from './CompanyCharts';
 import { useNudge } from '@/store/nudge';
@@ -76,7 +76,8 @@ export function AppCompanyInfo(p: CompanyInfoProps) {
   const pr = p.profile;
   const candles = p.candles[range];
   const all = p.quarters;
-  const scoreOf = p.financial ? financialHealthScore : healthScore;
+  /* 다섯 지표를 늘 보여 준다 (11-23). 값이 없으면 가운데 점 · '—' */
+  const healthKeys = HEALTH_KEYS;
   const shown = all.slice(-8);
   const last = shown[shown.length - 1];
   const gkey = GTABS[gtab].key;
@@ -307,18 +308,15 @@ export function AppCompanyInfo(p: CompanyInfoProps) {
                       {p.health_as_of.slice(0, 4)}년 {Number(p.health_as_of.slice(5, 7))}월 기준
                     </Text>
                   </View>
-                  <Radar labels={HEALTH_KEYS.map((h) => h.k)} scores={HEALTH_KEYS.map((h) => scoreOf(h.key, p.health[h.key]))} missing={HEALTH_KEYS.map((h) => p.health[h.key] == null)} width={cw} visible={seen} />
+                  <Radar labels={healthKeys.map((h) => h.k)} scores={healthKeys.map((h) => healthScore(h.key, p.health[h.key]))} missing={healthKeys.map((h) => p.health[h.key] == null)} width={cw} visible={seen} />
                   <View style={st.hl}>
-                    {HEALTH_KEYS.map((h, i) => (
-                      <View key={h.k} style={[st.hli, i === HEALTH_KEYS.length - 1 && { borderBottomWidth: 0 }]}>
+                    {healthKeys.map((h, i) => (
+                      <View key={h.k} style={[st.hli, i === healthKeys.length - 1 && { borderBottomWidth: 0 }]}>
                         <View style={st.kvL}>
-                          <Text style={st.hliT}>{h.k}</Text>
+                          <Text style={[st.hliT, p.health[h.key] == null && st.hliOff]}>{h.k}</Text>
                           <Q onPress={() => setTerm(h.term)} label={h.k} />
                         </View>
-                        <View style={st.hliR}>
-                          {p.financial && h.key === 'interest' && (p.health.interest ?? 0) < 0 ? <Text style={st.hliN}>금융업은 참고용</Text> : null}
-                          <Text style={st.hliV}>{p.health[h.key] == null ? '-' : healthVal(h.key, p.health[h.key])}</Text>
-                        </View>
+                        <Text style={[st.hliV, p.health[h.key] == null && st.hliOff]}>{healthVal(h.key, p.health[h.key])}</Text>
                       </View>
                     ))}
                   </View>
@@ -557,9 +555,8 @@ const st = StyleSheet.create({
   hl: { marginTop: 10 },
   hli: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: '#F1F2F4' },
   hliT: { ...ft(13.5), color: appColor.ink },
-  hliR: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  hliN: { ...ft(11), color: appColor.ink3 },
   hliV: { ...ft(13.5), fontWeight: '700', color: appColor.ink, fontVariant: ['tabular-nums'] },
+  hliOff: { color: '#B0B8C1' },
   note: { backgroundColor: '#F4F5F7', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, ...ft(12, 1.6), color: appColor.ink3, marginTop: 10, overflow: 'hidden' },
   src: { textAlign: 'center', ...ft(11.5, 1.6), color: appColor.ink3, marginTop: 4, marginHorizontal: 16, marginBottom: 8 },
   nudgeWrap: { position: 'absolute', left: 16, right: 16, bottom: 16, alignItems: 'center' },

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useShellSize } from './shellSize';
 
 /**
  * 사이드바 종목 순서 바꾸기 (원본 shell.tsx SortList · Lucian #317 날아가는 정렬 목록)
@@ -6,8 +7,9 @@ import React, { useState } from 'react';
  * 끌기는 4px 넘게 움직였을 때만 (그냥 누르면 그 종목으로 이동). 우클릭 = 종목 메뉴. 키보드: Alt + ↑/↓.
  * window · DOM 은 이 .web.tsx 안에서만.
  */
-const ROW = 52;
 export function SortList({ codes, renderRow, onCommit, onMenu }: { codes: string[]; renderRow: (code: string, lifted: boolean) => React.ReactNode; onCommit: (codes: string[]) => void; onMenu: (code: string, at: { x: number; y: number }) => void }) {
+  const z = useShellSize();
+  const ROW = z.sortStep;
   const [drag, setDrag] = useState<{ code: string; from: number; dy: number } | null>(null);
   const [moved, setMoved] = useState<Record<string, 'up' | 'dn'>>({});
   const target = drag ? Math.max(0, Math.min(codes.length - 1, Math.round((drag.from * ROW + drag.dy) / ROW))) : -1;
@@ -65,7 +67,7 @@ export function SortList({ codes, renderRow, onCommit, onMenu }: { codes: string
   };
   return React.createElement(
     'div',
-    { 'data-sort-list': true, style: { position: 'relative', width: 170, height: codes.length * ROW - 12 } },
+    { 'data-sort-list': true, style: { position: 'relative', width: z.stockRow, height: codes.length * ROW - 12 } },
     codes.map((code, i) => {
       const pos = order.indexOf(code);
       const me = drag?.code === code;
@@ -92,7 +94,7 @@ export function SortList({ codes, renderRow, onCommit, onMenu }: { codes: string
             position: 'absolute',
             left: 0,
             top: 0,
-            width: 170,
+            width: z.stockRow,
             borderRadius: 8,
             touchAction: 'none',
             userSelect: 'none',

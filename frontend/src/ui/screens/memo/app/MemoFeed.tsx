@@ -19,7 +19,7 @@ import { useNudge } from '@/store/nudge';
 /* 원본 FK: 소식 종류별 [카드 바탕, 그림 색] */
 const FK = { 뉴스: ['#E4ECFF', '#3D73F0'], 공시: ['#EEE8FF', '#7046F5'], 주가: ['#FFF1D6', '#C98A00'] } as const;
 /* 원본 추적 항목 칩: 가격 조건 초록 · 공시·뉴스 파랑 */
-export const CHIP = { price: { bg: '#E3F5EA', ink: '#1B7A45', label: '가격 조건' }, fact: { bg: '#E4ECFF', ink: '#2F6BDB', label: '공시·뉴스' } } as const;
+export const CHIP = { price: { bg: '#E3F5EA', ink: '#1B7A45', label: '가격 조건' }, fact: { bg: '#E4ECFF', ink: '#2F6BDB', label: '공시·뉴스' }, ask: { bg: '#F1EEFB', ink: '#6B4FD8', label: '질문' } } as const;
 
 export interface AppAiTabProps {
   memo: Memo;

@@ -1,30 +1,31 @@
 import React, { useEffect, useState } from 'react';
 import { Animated, Image, Platform, Pressable, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
-import { AppIcon, WebIcon, type WebIconName } from '@/ui/icons/Icon';
+import { WebIcon, type WebIconName } from '@/ui/icons/Icon';
 import { Collapse } from '@/ui/motion/Collapse';
 import { useMotionK } from '@/ui/motion/useMotion';
 import { Avatar } from '@/ui/shared/Avatar';
 import { CountBadge } from '@/ui/shared/CountBadge';
-import { SkySwitch } from '@/ui/shared/SkySwitch';
 import { StockLogo } from '@/ui/shared/StockLogo';
 import { curve, fpx, shadow, size, webColor } from '@/ui/theme';
+import { useShellSize } from './shellSize';
 import { SortList } from './sidebarSort.web';
 import type { SideKey, SideSearchHit, SidebarProps, SideStock } from './WebShell.types';
 
-/* 원본 shell.tsx: Figma Main Sidebar (Expanded 250 / Collapsed 72) — 위치·크기 그대로 */
-const LABEL = { ...fpx(17, 26), color: webColor.label };
+/* 원본 shell.tsx: Figma Main Sidebar (Expanded 250 / Collapsed 72). 펼침 크기는 shellSize (1600 미만 224) */
+const LABEL = { color: webColor.label };
 /* 웹 전용 스타일 (RN 타입에 없는 값) */
 const FIXED = { position: 'fixed' } as unknown as ViewStyle;
 const NO_OUTLINE = { outlineStyle: 'none' } as unknown as ViewStyle;
 
 type HoverState = { pressed: boolean; hovered?: boolean };
 
-function Row({ icon, label, on, onPress, w = size.sideInner, children }: { icon?: WebIconName; label: string; on?: boolean; onPress?: () => void; w?: number; children?: React.ReactNode }) {
+function Row({ icon, label, on, onPress, w, children }: { icon?: WebIconName; label: string; on?: boolean; onPress?: () => void; w?: number; children?: React.ReactNode }) {
+  const z = useShellSize();
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={({ hovered }: HoverState) => [st.row, { width: w, backgroundColor: on ? webColor.selBg : hovered ? webColor.hover : webColor.surface }]}>
-      {icon ? <WebIcon name={icon} size={20} color={on ? webColor.selInk : webColor.icon} /> : null}
-      <Text style={[LABEL, on && st.on]} numberOfLines={1}>
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={({ hovered }: HoverState) => [st.row, { width: w ?? z.sideInner, height: z.rowH, backgroundColor: on ? webColor.selBg : hovered ? webColor.hover : webColor.surface }]}>
+      {icon ? <WebIcon name={icon} size={z.icon} color={on ? webColor.selInk : webColor.icon} /> : null}
+      <Text style={[LABEL, z.menuText, on && st.on]} numberOfLines={1}>
         {label}
       </Text>
       {children}
@@ -67,12 +68,13 @@ function Bell({ unread, rail, onPress }: { unread: number; rail?: boolean; onPre
 }
 
 function StockRow({ s, on, lifted, onOpen, onMenu }: { s: SideStock; on: boolean; lifted?: boolean; onOpen: () => void; onMenu: (at: { x: number; y: number }) => void }) {
+  const z = useShellSize();
   const [hover, setHover] = useState(false);
   return (
-    <View style={st.stockWrap} onPointerEnter={() => setHover(true)} onPointerLeave={() => setHover(false)}>
-      <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel={s.name} style={[st.stock, { backgroundColor: lifted ? '#FFFFFF' : on ? webColor.selBg : hover ? webColor.hover : 'transparent' }]}>
-        <StockLogo logo={s.logo} bg={s.logo_bg} ink={s.logo_ink} size={24} radius={7.2} variant="webSide" />
-        <Text style={[LABEL, st.shrink, on && st.on]} numberOfLines={1}>
+    <View style={[st.stockWrap, { width: z.stockRow }]} onPointerEnter={() => setHover(true)} onPointerLeave={() => setHover(false)}>
+      <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel={s.name} style={[st.stock, { width: z.stockRow, height: z.rowH, backgroundColor: lifted ? '#FFFFFF' : on ? webColor.selBg : hover ? webColor.hover : 'transparent' }]}>
+        <StockLogo logo={s.logo} bg={s.logo_bg} ink={s.logo_ink} size={z.logo} variant="webSide" />
+        <Text style={[LABEL, z.menuText, st.shrink, on && st.on]} numberOfLines={1}>
           {s.name}
         </Text>
       </Pressable>
@@ -80,7 +82,7 @@ function StockRow({ s, on, lifted, onOpen, onMenu }: { s: SideStock; on: boolean
         <Pressable onPress={(e) => {
           const ne = e.nativeEvent as unknown as { pageX: number; pageY: number };
           onMenu({ x: ne.pageX - 12, y: ne.pageY + 14 });
-        }} accessibilityRole="button" accessibilityLabel={`${s.name} 메뉴`} style={({ hovered }: HoverState) => [st.stockMenu, hovered && { backgroundColor: webColor.menuHover }]}>
+        }} accessibilityRole="button" accessibilityLabel={`${s.name} 메뉴`} style={({ hovered }: HoverState) => [st.stockMenu, { top: z.stockMenuTop }, hovered && { backgroundColor: webColor.menuHover }]}>
           <WebIcon name="dotsH" size={14} color={webColor.sub2} />
         </Pressable>
       ) : null}
@@ -92,6 +94,7 @@ const isStock = (cur: SideKey, code: string) => typeof cur === 'object' && cur !
 
 /** 웹 사이드바 (펼침 250 · 접힘 72). 종목 순서 끌기 · 우클릭 메뉴 = ⑥ (sidebarSort.web) */
 export function Sidebar(p: SidebarProps) {
+  const z = useShellSize();
   const [fly, setFly] = useState(false);
   const [q, setQ] = useState('');
   const [focus, setFocus] = useState(false);
@@ -105,7 +108,7 @@ export function Sidebar(p: SidebarProps) {
       {fly ? (
         <>
           <Pressable style={[StyleSheet.absoluteFill, FIXED, { zIndex: 30 }]} onPress={() => setFly(false)} accessibilityLabel="닫기" />
-          <View style={[st.fly, { left: p.open ? 234 : 56 }]}>
+          <View style={[st.fly, { left: p.open ? z.flyLeft : 56 }]}>
             {(
               [
                 ['settings', '설정', p.onSettings],
@@ -152,9 +155,6 @@ export function Sidebar(p: SidebarProps) {
         </View>
         <View style={st.gap20}>
           <View style={st.gap8}>
-            <Pressable onPress={p.onToggleDark} accessibilityRole="button" accessibilityLabel={p.dark ? '라이트 모드로 바꾸기' : '다크 모드로 바꾸기'} style={({ hovered }: HoverState) => [st.rail, { backgroundColor: hovered ? webColor.hover : webColor.surface }]}>
-              <AppIcon name={p.dark ? 'moon' : 'sun'} size={20} color={webColor.icon} />
-            </Pressable>
             <RailBtn icon="trash" label="휴지통" onPress={p.onTrash} />
             {support}
           </View>
@@ -172,23 +172,23 @@ export function Sidebar(p: SidebarProps) {
   ];
 
   return (
-    <View style={[st.nav, st.navOpen]} accessibilityRole="menu" accessibilityLabel="메모스 메뉴">
+    <View style={[st.nav, st.navOpen, { width: z.sidebar }]} accessibilityRole="menu" accessibilityLabel="메모스 메뉴">
       {/* 위 · 고정 */}
       <View style={st.gap24}>
         <View style={st.head}>
           <Pressable onPress={() => p.onNavigate('home')} accessibilityRole="button" accessibilityLabel="홈으로" style={st.wordmark}>
             <Image source={require('../../icons/wordmark-web.png')} style={st.wordmarkImg} resizeMode="stretch" />
           </Pressable>
-          <View style={st.bellAt}>
+          <View style={[st.bellAt, { left: z.bellLeft }]}>
             <Bell unread={p.unreadNotifs} onPress={p.onBell} />
           </View>
-          <Pressable onPress={p.onToggle} accessibilityRole="button" accessibilityLabel="사이드바 접기" style={({ hovered }: HoverState) => [st.fold, hovered && { backgroundColor: webColor.hover }]}>
+          <Pressable onPress={p.onToggle} accessibilityRole="button" accessibilityLabel="사이드바 접기" style={({ hovered }: HoverState) => [st.fold, { left: z.foldLeft }, hovered && { backgroundColor: webColor.hover }]}>
             <WebIcon name="panel" size={24} color={webColor.iconSub} />
           </Pressable>
         </View>
         <View style={[st.rel, { zIndex: 40 }]}>
-          <View style={st.search}>
-            <WebIcon name="search" size={20} />
+          <View style={[st.search, { width: z.sideInner, height: z.rowH, paddingVertical: z.searchPadY }]}>
+            <WebIcon name="search" size={z.icon} />
             <TextInput
               value={q}
               onChangeText={setQ}
@@ -196,12 +196,12 @@ export function Sidebar(p: SidebarProps) {
               onBlur={() => setTimeout(() => setFocus(false), 150)}
               placeholder="검색"
               placeholderTextColor={webColor.groupLabel}
-              style={[st.searchInput, Platform.OS === 'web' && NO_OUTLINE]}
+              style={[st.searchInput, z.menuText, Platform.OS === 'web' && NO_OUTLINE]}
               accessibilityLabel="검색"
             />
           </View>
           {!q.trim() && focus ? (
-            <View style={st.drop}>
+            <View style={[st.drop, { top: z.dropTop, width: z.sideInner }]}>
               <Text style={st.dropHead}>최근 찾은 종목</Text>
               <View style={st.recent}>
                 {p.recentSearches.map((r) => (
@@ -221,7 +221,7 @@ export function Sidebar(p: SidebarProps) {
             </View>
           ) : null}
           {q.trim() ? (
-            <View style={st.drop}>
+            <View style={[st.drop, { top: z.dropTop, width: z.sideInner }]}>
               {hits.length === 0 ? (
                 <View style={st.none}>
                   <Text style={st.noneT}>찾지 못했어요</Text>
@@ -260,8 +260,8 @@ export function Sidebar(p: SidebarProps) {
 
       {/* 가운데 · 내 종목 */}
       <View style={st.mid}>
-        <View style={st.mineHead}>
-          <Row icon="stocks" label="내 종목" w={154} on={p.current === 'mine'} onPress={() => p.onNavigate('mine')} />
+        <View style={[st.mineHead, { height: z.rowH }]}>
+          <Row icon="stocks" label="내 종목" w={z.mineRow} on={p.current === 'mine'} onPress={() => p.onNavigate('mine')} />
           <Pressable onPress={p.onAddStock} accessibilityRole="button" accessibilityLabel="종목 추가" style={({ hovered }: HoverState) => [st.plus, hovered && { backgroundColor: webColor.hover }]}>
             <WebIcon name="plus" size={28} height={32} color="#1C1C1C" />
           </Pressable>
@@ -274,9 +274,9 @@ export function Sidebar(p: SidebarProps) {
             <View style={st.gap12}>
               {groups.map((g) => (
                 <View key={g.key} style={st.gap4}>
-                  <Pressable onPress={() => setOpen((o) => ({ ...o, [g.key]: !o[g.key] }))} accessibilityRole="button" accessibilityLabel={`${g.label} 접기`} style={({ hovered }: HoverState) => [st.group, { backgroundColor: hovered ? webColor.hover : webColor.surface }]}>
+                  <Pressable onPress={() => setOpen((o) => ({ ...o, [g.key]: !o[g.key] }))} accessibilityRole="button" accessibilityLabel={`${g.label} 접기`} style={({ hovered }: HoverState) => [st.group, { width: z.sideInner, height: z.rowH, backgroundColor: hovered ? webColor.hover : webColor.surface }]}>
                     <Text style={st.groupT}>{g.label}</Text>
-                    <View style={st.groupChev}>
+                    <View style={[st.groupChev, { left: z.groupChevLeft, top: z.groupChevTop }]}>
                       <Chev up={open[g.key]} />
                     </View>
                   </Pressable>
@@ -308,23 +308,18 @@ export function Sidebar(p: SidebarProps) {
       {/* 아래 · 고정 */}
       <View style={st.gap20}>
         <View style={st.gap8}>
-          <View style={[st.row, { width: size.sideInner }]}>
-            <AppIcon name={p.dark ? 'moon' : 'sun'} size={20} color={webColor.icon} />
-            <Text style={[LABEL, st.flex]}>다크 모드</Text>
-            <SkySwitch on={p.dark} onToggle={p.onToggleDark} width={48} />
-          </View>
           <Row icon="trash" label="휴지통" onPress={p.onTrash} />
           {support}
         </View>
-        <View style={st.divider} />
-        <View style={st.profile}>
+        <View style={[st.divider, { width: z.sideInner }]} />
+        <View style={[st.profile, { width: z.sideInner }]}>
           <Pressable onPress={p.onProfile} accessibilityRole="button" accessibilityLabel="내 프로필" style={st.profileBtn}>
-            <Avatar name={p.profile.name} photoUrl={p.profile.photoUrl} size={48} fontSize={20} variant="web" />
+            <Avatar name={p.profile.name} photoUrl={p.profile.photoUrl} size={z.avatar} fontSize={z.avatarText} variant="web" />
             <View style={st.profileText}>
-              <Text style={[LABEL, st.maxw]} numberOfLines={1}>
+              <Text style={[LABEL, z.menuText, { maxWidth: z.profileText }]} numberOfLines={1}>
                 {p.profile.name}
               </Text>
-              <Text style={[st.job, st.maxw]} numberOfLines={1}>
+              <Text style={[st.job, { maxWidth: z.profileText }]} numberOfLines={1}>
                 {p.profile.job}
               </Text>
             </View>
@@ -340,7 +335,7 @@ export function Sidebar(p: SidebarProps) {
 
 const st = StyleSheet.create({
   nav: { height: '100%', backgroundColor: webColor.surface, paddingHorizontal: 16, paddingVertical: 24, zIndex: 30 },
-  navOpen: { width: size.sidebar, gap: 8 },
+  navOpen: { gap: 8 },
   navRail: { width: size.rail, justifyContent: 'space-between' },
   flex: { flex: 1 },
   shrink: { flexShrink: 1 },
@@ -352,7 +347,7 @@ const st = StyleSheet.create({
   gap20: { gap: 20 },
   gap24: { gap: 24 },
   on: { fontWeight: '700', color: webColor.selInk },
-  row: { height: 40, flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 8, paddingHorizontal: 12 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 8, paddingHorizontal: 12 },
   rail: { width: 40, height: 40, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   railSearch: { width: 40, height: 40, borderRadius: 8, backgroundColor: webColor.hover, alignItems: 'center', justifyContent: 'center' },
   railMid: { flex: 1, minHeight: 0, paddingTop: 8 },
@@ -360,12 +355,12 @@ const st = StyleSheet.create({
   head: { height: 40, position: 'relative' },
   wordmark: { position: 'absolute', left: 0, top: -16, width: 117, height: 72 },
   wordmarkImg: { width: 117, height: 72 },
-  bellAt: { position: 'absolute', left: 154, top: 4 },
+  bellAt: { position: 'absolute', top: 4 },
   bellBadge: { position: 'absolute', right: -4, top: -4 },
-  fold: { position: 'absolute', left: 194, top: 8, width: 24, height: 24, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
-  search: { height: 40, width: size.sideInner, flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 8, backgroundColor: webColor.hover, paddingHorizontal: 12, paddingVertical: 10 },
-  searchInput: { flex: 1, ...fpx(17, 26), color: webColor.label, padding: 0 },
-  drop: { position: 'absolute', left: 0, top: 48, width: size.sideInner, borderRadius: 12, borderWidth: 1, borderColor: webColor.line2, backgroundColor: webColor.surface, padding: 6, ...shadow.drop },
+  fold: { position: 'absolute', top: 8, width: 24, height: 24, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+  search: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 8, backgroundColor: webColor.hover, paddingHorizontal: 12 },
+  searchInput: { flex: 1, color: webColor.label, padding: 0 },
+  drop: { position: 'absolute', left: 0, borderRadius: 12, borderWidth: 1, borderColor: webColor.line2, backgroundColor: webColor.surface, padding: 6, ...shadow.drop },
   dropHead: { ...fpx(13, 20), fontWeight: '700', color: webColor.sub2, paddingHorizontal: 10, paddingBottom: 4, paddingTop: 8 },
   dropHead2: { paddingTop: 4 },
   recent: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, paddingHorizontal: 8, paddingBottom: 8 },
@@ -382,24 +377,23 @@ const st = StyleSheet.create({
   hitT: { flexShrink: 1, ...fpx(14, 21), color: webColor.strong },
   hitS: { ...fpx(13, 20), color: webColor.mute },
   mid: { flex: 1, minHeight: 0, gap: 12 },
-  mineHead: { height: 40, flexDirection: 'row', alignItems: 'center' },
+  mineHead: { flexDirection: 'row', alignItems: 'center' },
   plus: { height: 32, width: 28, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
   mineChev: { marginLeft: 4, height: 32, width: 28, alignItems: 'center', justifyContent: 'center' },
-  group: { position: 'relative', height: 40, width: size.sideInner, flexDirection: 'row', alignItems: 'center', borderRadius: 8, paddingLeft: 40 },
+  group: { position: 'relative', flexDirection: 'row', alignItems: 'center', borderRadius: 8, paddingLeft: 40 },
   groupT: { ...fpx(13, 20), fontWeight: '500', color: webColor.groupLabel },
-  groupChev: { position: 'absolute', left: 186, top: 4, height: 32, width: 28, alignItems: 'center', justifyContent: 'center' },
+  groupChev: { position: 'absolute', height: 32, width: 28, alignItems: 'center', justifyContent: 'center' },
   listWrap: { flexDirection: 'row', gap: 3, paddingLeft: 44 },
   listLine: { width: 1, backgroundColor: webColor.line },
-  stockWrap: { width: 170, borderRadius: 8 },
-  stock: { height: 40, width: 170, flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 8, paddingLeft: 8, paddingRight: 12 },
-  stockMenu: { position: 'absolute', right: 4, top: 8, width: 24, height: 24, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+  stockWrap: { borderRadius: 8 },
+  stock: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 8, paddingLeft: 8, paddingRight: 12 },
+  stockMenu: { position: 'absolute', right: 4, width: 24, height: 24, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
   empty: { ...fpx(13, 20), color: webColor.mute2, paddingBottom: 4, paddingLeft: 44 },
   fly: { position: 'absolute', bottom: 0, zIndex: 40, width: 192, gap: 4, borderRadius: 8, backgroundColor: webColor.surface, paddingHorizontal: 8, paddingVertical: 12, ...shadow.menu },
-  divider: { height: 1, width: size.sideInner, backgroundColor: webColor.hover },
-  profile: { height: 48, width: size.sideInner, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingRight: 4 },
+  divider: { height: 1, backgroundColor: webColor.hover },
+  profile: { height: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingRight: 4 },
   profileBtn: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   profileText: { minWidth: 0, gap: 4 },
-  maxw: { maxWidth: 130 },
   job: { ...fpx(13, 20), color: webColor.sub },
   logout: { width: 18, height: 18, alignItems: 'center', justifyContent: 'center' },
 });

@@ -77,28 +77,7 @@ export function healthScore(key: keyof CompanyHealth, v: number | null): number 
   return Math.max(0.3, Math.min(1, f[key](v)));
 }
 
-/** 금융회사 점수 기준 (화면 자체 기준 · 바꿀 때는 여기만) */
-export const FINANCIAL_HEALTH = {
-  /** 부채비율 %: 이 값 이하면 1점, 이 값 이상이면 최저점, 사이는 직선 (보통 900~1,300% 가 0.6~0.8점) */
-  debtBest: 500,
-  debtWorst: 2000,
-  /** 이자보상비율 배: 이 값 이상이면 1점 (음수는 0점) */
-  interestFull: 30,
-  /** 유보율: log10(%) 이 이 값이면 1점 */
-  reserveLogFull: 4.5,
-  /** 최저점 (값이 있고 음수가 아닐 때) */
-  min: 0.3,
-} as const;
-/** 금융회사 안정성 점수. 값이 없으면 0 (가운데) · 유동·당좌는 일반 기준 */
-export function financialHealthScore(key: keyof CompanyHealth, v: number | null): number {
-  if (v == null) return 0;
-  if (key === 'current' || key === 'quick') return healthScore(key, v);
-  const c = FINANCIAL_HEALTH;
-  if (key === 'interest' && v < 0) return 0;
-  const raw = key === 'debt' ? 1 - ((v - c.debtBest) / (c.debtWorst - c.debtBest)) * (1 - c.min) : key === 'interest' ? v / c.interestFull : Math.log10(Math.max(10, v)) / c.reserveLogFull;
-  return Math.max(c.min, Math.min(1, raw));
-}
-export const FINANCIAL_HEALTH_NOTE = '금융회사는 예금이 부채로 잡혀 부채비율이 높게 나와요. 일반 기업과 기준이 달라요.';
+export const FINANCIAL_HEALTH_NOTE = '금융회사는 예금이 부채로 잡혀 부채비율이 높게 나와요.';
 
 /* ---------- 용어 설명 (원본 앱 TERMS: 풀이와 계산식만 · 좋다·나쁘다 판단 없음) ---------- */
 export type TermKey = 'per' | 'pbr' | 'eps' | 'bps' | 'mc' | 'sh' | 'debt' | 'cur' | 'quick' | 'icr' | 'ret' | 'opm' | 'npm' | 'roe';

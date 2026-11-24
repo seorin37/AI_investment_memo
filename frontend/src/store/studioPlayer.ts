@@ -55,6 +55,8 @@ interface StudioPlayerState {
   openLab(id: string): void;
   /** 서버 만든 항목으로 바꾸기. 이번 세션에서 만든 mock 오디오·보고서(server 아님)는 위에 남긴다 (2026-11-23) */
   setServerMade(items: MadeItem[]): void;
+  /** 만든 항목 목록에서 빼기 (삭제 = 휴지통, 2026-11-24). 서버 호출은 studioItems.useRemoveMade */
+  removeMade(id: string): void;
   /** 실험실 화면에서 고른 종목 · 조건 (원본 labStk · lab) */
   labCode: string;
   labDirs: LabDir[];
@@ -201,6 +203,7 @@ export const useStudioPlayer = create<StudioPlayerState>((set, get) => {
         const ids = new Set(items.map((m) => m.id));
         return { made: [...s.made.filter((m) => !m.server && !ids.has(m.id)), ...items] };
       }),
+    removeMade: (id) => set((s) => ({ made: s.made.filter((m) => m.id !== id) })),
     labCode: mockLabStocks[0].stock_code,
     labDirs: mockLabVars.map((v) => v.def),
     setLab: (p) => set((s) => ({ labCode: p.code ?? s.labCode, labDirs: p.dirs ?? s.labDirs })),

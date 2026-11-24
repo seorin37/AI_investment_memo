@@ -1,6 +1,8 @@
 """POST /api/v1/studio/reports — 주간보고서 만들기 (2026-11-23, docs/weekly-report-plan.md 6장).
 
-- 기간은 가장 최근에 끝난 월~금(build.last_week). 같은 주·같은 종목 조합·같은 증시 칸 보고서가 이미 있으면 그것을 돌려준다(크레딧 안 씀).
+- 기간: 주가는 그 주 월~금 거래일, 소식(뉴스·공시)은 월요일 0시 ~ 일요일 밤 12시(주말 기사 포함, build.news_window).
+- 같은 주·같은 종목 조합·같은 증시 칸 보고서가 이미 있으면 그것을 돌려준다(크레딧 안 씀).
+  단, 주말(아직 일요일이 안 끝난 주)에 만든 것은 같은 날 것만 다시 쓴다 — 다음 날에는 새 주말 기사가 있을 수 있다.
 - 새로 만들면 studio_items에 status=generating으로 넣고, 응답 뒤 백그라운드로 만든다. 앱은 GET /studio/items로 상태를 본다.
 - 크레딧(report)은 만들기에 성공했을 때만 뺀다. 실패하면 status=failed, error.
 - 오래 멈춘 generating(서버 재시작 등, 15분 넘음)은 같은 조합 찾기에서 빼서 다시 만들 수 있게 한다.
@@ -9,7 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -20,17 +22,18 @@ from app.auth.routes import get_current_user
 from app.credits import ledger
 from app.db import get_read_db, get_read_session, get_session
 
-from .build import SEOUL, build_report, last_week, week_label
+from .build import SEOUL, build_report, last_week, news_window, week_label
 
 log = logging.getLogger("studio_report")
 router = APIRouter(prefix="/api/v1/studio", tags=["studio-report"])
 
 MY_CODES_SQL = """SELECT btrim(symbol) AS code FROM user_stocks WHERE user_id = :u AND deleted_at IS NULL"""
 SAME_SQL = """SELECT id, status FROM studio_items
-WHERE user_id = :u AND kind = 'report' AND period_start = :mon AND expires_at > now()
+WHERE user_id = :u AND kind = 'report' AND period_start = :mon AND expires_at > now() AND deleted_at IS NULL
   AND (status = 'ready' OR (status IN ('queued', 'generating') AND created_at > now() - interval '15 minutes'))
   AND (SELECT array_agg(btrim(x) ORDER BY btrim(x)) FROM unnest(symbols) x) = CAST(:codes AS text[])
   AND coalesce((content->>'market_on')::boolean, false) = :market
+  AND (NOT :partial OR (created_at AT TIME ZONE 'Asia/Seoul')::date = :today)
 ORDER BY created_at DESC LIMIT 1"""
 INSERT_SQL = """INSERT INTO studio_items (user_id, kind, trigger, status, title, period_start, period_end, symbols, content)
 VALUES (:u, 'report', 'request', 'generating', :title, :mon, :fri, CAST(:codes AS char(6)[]), CAST(:content AS jsonb))
@@ -90,8 +93,12 @@ def post_report(body: ReportRequest, tasks: BackgroundTasks, current: dict = Dep
     mine = {r[0] for r in db.execute(text(MY_CODES_SQL), {"u": user_id}).all()}
     if set(codes) - mine:
         raise HTTPException(422, detail="내 종목이 아닌 종목이 있어요.")
-    monday, friday = last_week(datetime.now(SEOUL).date())
-    same = db.execute(text(SAME_SQL), {"u": user_id, "mon": monday, "codes": codes, "market": body.market}).mappings().first()
+    now = datetime.now(SEOUL)
+    monday, _friday = last_week(now.date())
+    _start, end, partial = news_window(monday, now)
+    sunday = monday + timedelta(days=6)
+    same = db.execute(text(SAME_SQL), {"u": user_id, "mon": monday, "codes": codes, "market": body.market,
+                                       "partial": partial, "today": now.date()}).mappings().first()
     if same is not None:
         return {"item_id": str(same["id"]), "status": same["status"], "reused": True}
     db.rollback()
@@ -102,7 +109,7 @@ def post_report(body: ReportRequest, tasks: BackgroundTasks, current: dict = Dep
     if balance < cost:
         raise HTTPException(402, detail="크레딧이 부족해요. 충전하거나 다음 달에 다시 만들어 주세요.")
     with get_session() as wdb:
-        item_id = wdb.execute(text(INSERT_SQL), {"u": user_id, "title": week_label(monday)[1], "mon": monday, "fri": friday,
+        item_id = wdb.execute(text(INSERT_SQL), {"u": user_id, "title": week_label(monday)[1], "mon": monday, "fri": sunday,
                                                  "codes": codes, "content": json.dumps({"market_on": body.market})}).scalar()
     tasks.add_task(generate, int(item_id), user_id, codes, body.market)
     return {"item_id": str(item_id), "status": "generating", "reused": False}

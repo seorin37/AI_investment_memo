@@ -6,6 +6,7 @@ import {
   qk,
   useBoard,
   useDeleteBoardItem,
+  useMarkMemoUpdatesRead,
   useMemoTimeline,
   useReorderBoard,
   useRestoreTrash,
@@ -62,7 +63,11 @@ export type ConnectResult = { state: 'items' | 'empty' | 'error'; items: AiTrack
 
 export const connectResult = (a: MemoAnalysis | null | undefined): ConnectResult => {
   if (!a || a.status === 'failed') return { state: 'error', items: [] };
-  const items = toTrackItems(a.items.filter((i) => i.type !== 'ask'));
+  /* 질문(ask)도 보여 준다 — 빼면 '찾지 못했어요'로 보여 '일반 메모로 두기'를 누르게 되고, 그러면 답을 못 받는다 (2026-11-23) */
+  const items: AiTrackItem[] = [
+    ...toTrackItems(a.items.filter((i) => i.type !== 'ask')),
+    ...a.items.filter((i) => i.type === 'ask').map((i) => ({ kind: 'ask' as const, label: i.description, quote: i.description })),
+  ];
   return { state: items.length ? 'items' : 'empty', items };
 };
 
@@ -76,6 +81,7 @@ export function useBoardData(code: string, openId: string | null) {
   const restore = useRestoreTrash();
   const reorder = useReorderBoard(code);
   const checkItem = useSetBoardChecklistItem();
+  const markSeen = useMarkMemoUpdatesRead();
   const refresh = () => qc.invalidateQueries({ queryKey: qk.board(code) });
   /** 진행 중인 삭제 — 되돌리기는 삭제가 서버에서 끝난 뒤 복원해야 한다 (먼저 보내면 휴지통에 없어 404) */
   const deleting = useRef<Record<string, Promise<unknown>>>({});
@@ -100,6 +106,8 @@ export function useBoardData(code: string, openId: string | null) {
         }),
       ),
     reorder: (order: string[]) => real && reorder.mutate(order),
+    /** 메모 창에서 AI 업데이트를 봤을 때: 그 메모 소식을 서버에서 읽음으로 (보드 배지 · 홈 · 업데이트 화면 숫자도 다시 읽음) */
+    seenUpdates: (id: string) => real && /^\d+$/.test(id) && markSeen.mutate(id),
     aiOff: (id: string) => real && api.setAiLink(id, false).finally(refresh),
     /** AI 켜기 + 분석 결과 (연결 창) */
     async aiOn(id: string): Promise<ConnectResult> {

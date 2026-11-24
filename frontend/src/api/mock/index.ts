@@ -383,6 +383,13 @@ export const mockApi: Api = {
     recountUnread();
     return wait(undefined);
   },
+  markMemoUpdatesRead: async (memoId) => {
+    db.aiUpdates.forEach((u) => {
+      if (u.memo_id === memoId) u.read = true;
+    });
+    recountUnread();
+    return wait(undefined);
+  },
   uploadFile: async (file) => wait({ url: file.uri, name: file.name }),
 
   // ─── 최신 업데이트

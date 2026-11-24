@@ -20,9 +20,10 @@ import { useTrackedView } from '@/ui/screens/my/useTrackedView';
 import { useAiStats, useMyStocks } from '@/hooks/queries';
 import Constants from 'expo-constants';
 import { legalDocument } from '@/ui/screens/auth/Auth.mock';
-import { mockCreditDefault, mockCreditPacks, mockPayMethods, mockDataSources, mockInbox, mockOss, mockPlanCompare, mockPlanDefault, mockPlanNotes, mockPlans, mockReportKinds, mockWithdrawCounts } from '@/ui/screens/my/My.mock';
+import { mockCreditDefault, mockCreditPacks, mockPayMethods, mockDataSources, mockOss, mockPlanCompare, mockPlanDefault, mockPlanNotes, mockPlans, mockReportKinds, mockWithdrawCounts } from '@/ui/screens/my/My.mock';
 import { WebFeedback } from '@/ui/screens/my/web/Feedback';
 import { WebInbox } from '@/ui/screens/my/web/Inbox';
+import { useInboxData } from '@/ui/screens/my/useInboxData';
 import { WebSettings, type SettingsTab } from '@/ui/screens/my/web/Settings';
 import { useTodayQuizView } from '@/ui/screens/studio/useTodayQuiz';
 import { useTrashData } from '@/ui/screens/my/useTrashData';
@@ -30,12 +31,14 @@ import { WebTrash } from '@/ui/screens/my/web/Trash';
 import { chapterAt, fmt, useStudioPlayer } from '@/store/studioPlayer';
 import { mockAudioEpisode, mockAudioGen, mockAudioPeriods, mockAudioStocks, mockLabDisclaimer, mockLabNote, mockLabVars, mockLastClose, mockReport, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
 import { WebFail, WebGen, WebMini, WebPlayer } from '@/ui/screens/studio/web/Audio';
+import { shellSizeFor } from '@/ui/layout/web/shellSize';
 import { WebReportPopup, WebReportSum } from '@/ui/screens/studio/web/Report';
 import { WebLab, WebLabResult, WebQuiz } from '@/ui/screens/studio/web/QuizLab';
 import { labResultGroups } from '@/ui/screens/studio/labParts';
 import { labStockFor, useLabStocks, useRunLab } from '@/ui/screens/studio/useLabRun';
 import { useStudioItemsSync } from '@/ui/screens/studio/studioItems';
 import { reportView, useCreateReport, useReportPickStocks } from '@/ui/screens/studio/reportView';
+import { useLabMemo } from '@/ui/screens/studio/useLabMemo';
 import { useLabVars } from '@/ui/screens/studio/useLabVars';
 import { WebAudioPopup } from '@/ui/screens/studio/web/AudioPopup';
 import type { StudioKind } from '@/ui/screens/studio/Studio.types';
@@ -143,9 +146,9 @@ export default function MainLayout() {
   const [trashOpen, setTrashOpen] = useState(false);
   const [fbOpen, setFbOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
-  const unread = useMyMock((s) => s.unread);
-  const readNotif = useMyMock((s) => s.read);
-  const readAll = useMyMock((s) => s.readAll);
+  /* 알림함: 실제 모드면 내 종목 AI 업데이트(서버 읽음 상태), mock 모드면 예시 (useInboxData, 2026-11-23) */
+  const inbox = useInboxData();
+  const unread = inbox.unread;
   const uiToast = useUI((s) => s.toast);
   /* ⑧-8a 스튜디오: 사용량 창 · PLUS 창(다 쓴 뒤 만들기) · 충전 창. 결제·만들기는 연결 안 됨 */
   const [studioPop, setStudioPop] = useState<'usage' | 'credit' | 'charge' | 'audio' | 'report' | null>(null);
@@ -165,12 +168,14 @@ export default function MainLayout() {
   /* ⑧-8c 주간보고서: 스튜디오 열 요약 · 가운데 /report 자세히 */
   const repItem = sp.made.find((m) => m.id === sp.curReport && m.kind === 'report');
   const labItem = sp.made.find((m) => m.id === sp.curLab && m.kind === 'lab');
+  /* 실험 결과 '내 메모와 연결': 그 종목의 내 메모 1개 (실험 결과 화면일 때만 읽음 · 엑셀 웹 #11) */
+  const labMemo = useLabMemo(labItem?.lab?.code, sp.webView === 'labResult');
   /* 서버 보고서면 그 내용, 아니면 mock 예시 (reportView, 2026-11-23) */
   const repView = reportView(repItem);
   const reportPick = useReportPickStocks();
   const createReport = useCreateReport();
   const { studio_fail } = useGlobalSearchParams<{ studio_fail?: string }>();
-  const unreadShown = mockInbox.filter((n) => unread.includes(n.id) && (n.kind === 'ai' ? myNoti.ai : myNoti.studio)).length;
+  const unreadShown = inbox.items.filter((n) => unread.includes(n.id) && (n.kind === 'ai' ? myNoti.ai : myNoti.studio)).length;
   const say = (x: { msg: string; undo?: () => void; check?: boolean }) => {
     setSnack(x);
     setTimeout(() => setSnack((c) => (c === x ? null : c)), 4000);
@@ -207,7 +212,6 @@ export default function MainLayout() {
         /* 설정에서 바꾼 이름·소개를 사이드바 프로필에도 (mock 상태) */
         profile: { ...mockSideProfile, name: myProfile.name, job: myProfile.intro, photoUrl: myProfile.photoUrl ?? null },
         unreadNotifs: unreadShown,
-        dark,
         recentSearches: mockRecentSearches,
         popular: mockPopular,
         onSearch: search,
@@ -234,7 +238,6 @@ export default function MainLayout() {
           }),
         onAddStock: () => setAddOpen(true),
         onBell: () => setInboxOpen((o) => !o),
-        onToggleDark: () => setDark(!dark),
         onTrash: () => setTrashOpen(true),
         onSettings: () => setSettings('내 프로필'),
         onFeedback: () => setFbOpen(true),
@@ -255,6 +258,8 @@ export default function MainLayout() {
         /* ⑧-8a 스튜디오 홈 (원본 studio.tsx Home). 오디오·보고서·실험실·퀴즈 화면은 8b~8d */
         content: (
           <View style={{ flex: 1 }}>
+            {/* 미니 플레이어가 보이면 스튜디오 내용 아래 84 비움 (원본 studio.tsx 222 pb-[84px]) — 하단 고정 버튼도 함께 올라감 */}
+            <View style={{ flex: 1, minHeight: 0, paddingBottom: sp.mini && spItem && sp.webView !== 'player' ? 84 : 0 }}>
             {sp.webView === 'gen' && sp.job ? <WebGen job={sp.job} steps={sp.job.kind === 'report' ? mockReport.web_steps : mockAudioGen.steps} />
               : sp.webView === 'fail' ? <WebFail kind={sp.job?.kind ?? 'audio'} onHome={() => { sp.dropFailed(); sp.setWebView('home'); }} onRetry={() => { sp.retry(); sp.setWebView('gen'); }} />
               : sp.webView === 'quiz' ? <WebQuiz q={quiz} done={sp.quizPick} onBack={() => sp.setWebView('home')} onSubmit={sp.submitQuiz} />
@@ -277,11 +282,12 @@ export default function MainLayout() {
               : sp.webView === 'labResult' && labItem?.lab ? (
                 <WebLabResult
                   stock={labStockFor(labStocks, labItem.lab)}
+                  memo={labMemo}
                   vars={labVars}
                   groups={labResultGroups(labItem.lab)}
                   disclaimer={mockLabDisclaimer}
                   onBack={() => sp.setWebView('home')}
-                  onMemo={() => openStock(labItem.lab?.code ?? '')}
+                  onMemo={(id) => router.navigate({ pathname: '/stocks/[code]', params: id ? { code: labItem.lab?.code ?? '', memo: id } : { code: labItem.lab?.code ?? '', new: '1' } })}
                   onAgain={() => { sp.setLab({ code: labItem.lab?.code, dirs: labItem.lab?.dirs }); sp.setWebView('lab'); }}
                 />
               )
@@ -312,7 +318,7 @@ export default function MainLayout() {
                 <WebStudioHome
                   features={mockStudioFeatures}
                   made={sp.made}
-                  bottomPad={sp.mini && spItem ? 60 : 0}
+                  bottomPad={0}
                   spent={usageSpent}
                   refill={usage.usage_refill}
                   onFeature={studioFeat}
@@ -329,6 +335,7 @@ export default function MainLayout() {
                   onChangePlan={() => setSettings('사용량')}
                 />
               )}
+            </View>
             {sp.mini && spItem && sp.webView !== 'player' ? (
               <WebMini
                 title={spItem.title}
@@ -416,6 +423,8 @@ export default function MainLayout() {
       }}
       onPhoto={() => say({ msg: '아직 연결되지 않았어요 · 데이터는 그대로예요' })}
       onPhotoDelete={() => say({ msg: '지울 사진이 없어요' })}
+      dark={dark}
+      onToggleDark={() => setDark(!dark)}
       onLogout={() => { setSettings(null); logout(); }}
       onWithdraw={() => say({ msg: '아직 탈퇴 기능은 연결되지 않았어요 · 데이터는 그대로예요' })}
       noti={myNoti}
@@ -492,18 +501,20 @@ export default function MainLayout() {
     <WebFeedback open={fbOpen} kinds={mockReportKinds} onClose={() => setFbOpen(false)} onSend={() => say({ msg: '아직 연결되지 않았어요' })} />
     <WebInbox
       open={inboxOpen}
-      left={(sideOpen ? 250 : 72) + 8}
-      items={mockInbox}
+      left={sideOpen ? shellSizeFor(width).inboxLeft : size.rail + 8}
+      items={inbox.items}
       unread={unread}
       noti={myNoti}
       onClose={() => setInboxOpen(false)}
       onOpen={(n) => {
         setInboxOpen(false);
-        readNotif(n.id);
-        if (n.kind === 'ai' && n.stock_code) openStock(n.stock_code);
+        inbox.read(n.id);
+        /* 실제 알림(memo_id 있음)은 그 메모 창을 그 소식 근거로 열기, 예시 알림은 종목 보드 */
+        if (n.kind === 'ai' && n.stock_code && n.memo_id) router.navigate({ pathname: '/stocks/[code]', params: { code: n.stock_code, memo: n.memo_id, ev: n.id } });
+        else if (n.kind === 'ai' && n.stock_code) openStock(n.stock_code);
         else setStudioOpen(true);
       }}
-      onReadAll={readAll}
+      onReadAll={inbox.readAll}
       onSettings={() => { setInboxOpen(false); setSettings('알림'); }}
     />
     <ConfirmDialog

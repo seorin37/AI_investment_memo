@@ -67,6 +67,14 @@ class FakeRepo:
     def mark_read(self, user_id, update_id):
         return update_id == 1
 
+    def mark_memo_read(self, user_id, memo_id):
+        if self.memo(user_id, memo_id) is None:
+            return None
+        hit = [r for r in self.rows if r["memo_id"] == memo_id and not r["is_read"]]
+        for r in hit:
+            r["is_read"] = True
+        return len(hit)
+
 
 ROWS = [card(1, "news"), card(2, "price_condition", title="조건가에 도달했어요", price_state="reached", observed_value=71000,
                                item_type="price_above", price_threshold=70000,
@@ -111,12 +119,21 @@ class ServiceTest(unittest.TestCase):
         with self.assertRaises(UpdateNotFoundError):
             self.s.mark_read(1, 2)
 
+    def test_mark_memo_read(self):
+        rows = [dict(r) for r in ROWS]
+        s = UpdatesService(FakeRepo(rows))
+        self.assertEqual(s.mark_memo_read(1, 3), 1)                    # 메모 3의 안 읽은 카드(1번)만 읽음으로
+        self.assertEqual([r["is_read"] for r in rows], [True, True, False])  # 다른 메모(5) 카드는 그대로
+        self.assertEqual(s.mark_memo_read(1, 3), 0)                    # 다시 불러도 괜찮음
+        with self.assertRaises(MemoNotFoundError):
+            s.mark_memo_read(1, 99)
+
 
 class RouteTest(unittest.TestCase):
     def setUp(self):
         app = FastAPI()
         app.include_router(router)
-        svc = UpdatesService(FakeRepo(ROWS))
+        svc = UpdatesService(FakeRepo([dict(r) for r in ROWS]))
         app.dependency_overrides[get_current_user] = lambda: {"id": 1}
         app.dependency_overrides[get_query_service] = lambda: svc
         app.dependency_overrides[get_command_service] = lambda: svc
@@ -130,6 +147,8 @@ class RouteTest(unittest.TestCase):
         self.assertEqual(self.c.get("/api/v1/ai-updates/summary").status_code, 200)
         self.assertEqual(self.c.post("/api/v1/ai-updates/1/read").status_code, 204)
         self.assertEqual(self.c.post("/api/v1/ai-updates/2/read").status_code, 404)
+        self.assertEqual(self.c.post("/api/v1/memos/3/ai-updates/read").status_code, 204)
+        self.assertEqual(self.c.post("/api/v1/memos/99/ai-updates/read").status_code, 404)
 
 
 if __name__ == "__main__":

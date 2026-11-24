@@ -59,7 +59,7 @@ export const mockPlanDefault = 'PLUS';
 /* ---------- ⑨-3c ---------- */
 
 /** 휴지통 (원본 my.html TR · 11.17 웹 통일: 웹 휴지통과 같은 4개) */
-export interface TrashItem { id: string; kind: '메모' | '투자 기록' | '종목'; title: string; /** 어느 종목 · 무엇 */ sub: string; ago: string; stock_code?: string }
+export interface TrashItem { id: string; kind: '메모' | '투자 기록' | '종목' | '스튜디오'; title: string; /** 어느 종목 · 무엇 */ sub: string; ago: string; stock_code?: string }
 export const mockTrash: TrashItem[] = [
   { id: 't1', kind: '메모', title: '20만원 밑으로 오면 다시 생각', sub: 'SK하이닉스 · 메모', ago: '2시간 전', stock_code: '000660' },
   { id: 't2', kind: '투자 기록', title: '10/08 실적 발표 전 점검', sub: '투자 기록', ago: '어제' },
@@ -71,7 +71,8 @@ export const mockTrash: TrashItem[] = [
  * 알림함 (원본 my.html INB · web x.tsx InboxPanel — 같은 5개, 앞의 3개 안 읽음).
  * 문구 규칙: 권유·호재/악재·전망 없음, 주가는 'MM.DD 종가 기준' (원본 '전일 확정 종가 기준'을 바꿈)
  */
-export interface InboxItem { id: string; kind: 'ai' | 'studio'; day: '오늘' | '어제'; title: string; sub: string; when: string; stock_code?: string }
+/** day '이전' = 그저께보다 오래된 것 (실제 모드 알림함, useInboxData). memo_id: 누르면 그 메모를 열 때 씀 */
+export interface InboxItem { id: string; kind: 'ai' | 'studio'; day: '오늘' | '어제' | '이전'; title: string; sub: string; when: string; stock_code?: string; memo_id?: string }
 export const mockInbox: InboxItem[] = [
   { id: 'n1', kind: 'ai', day: '오늘', title: 'SK하이닉스 · 실적 나오면 다시 보기', sub: '메모에 새 소식이 연결됐어요 · HBM4 공급 확대', when: '10분 전', stock_code: '000660' },
   { id: 'n2', kind: 'studio', day: '오늘', title: '내 종목 라디오가 다 만들어졌어요', sub: '오디오 · 6:42 · 눌러서 듣기', when: '1시간 전' },
