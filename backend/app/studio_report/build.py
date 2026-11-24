@@ -25,6 +25,8 @@ WEEKDAYS = "월화수목금토일"
 NEWS_PER_STOCK = 3
 # 여러 종목을 한꺼번에 다루는 시황·매매 동향 기사 (종목 소식이 아니다)
 ROUNDUP = re.compile(r"시황|초고수|마감\s*[\]】]|\[이런국장|증시\s*(브리핑|요약)|오늘의\s*(증시|종목)|코스피.{0,6}(상승|하락|마감|출발)")
+# 지수·시장 전체 기사는 종목 섹션이 아니라 국내 증시 칸 몫이다 (2026-11-23)
+MARKET_WIDE = re.compile(r"코스피|코스닥|사이드카|서킷브레이커|증시")
 # 제목 앞 [기재정정]·[첨부정정] 같은 표시
 TAG = re.compile(r"^\s*\[[^\]]*\]\s*")
 # 공시 제목을 읽기 쉽게 (DART 붙여 쓴 이름 → 띄어 쓴 이름). 없으면 원래 제목
@@ -45,11 +47,20 @@ DISCLOSURE_NAMES = [
 # ─── 주 ───────────────────────────────────────────────
 
 def last_week(today: date) -> tuple[date, date]:
-    """가장 최근에 끝난 월~금. 토·일이면 이번 주, 월~금이면 지난주."""
+    """보고서 주의 월요일과 금요일(주가 거래일 끝). 토·일이면 이번 주, 월~금이면 지난주."""
     monday = today - timedelta(days=today.weekday())
     if today.weekday() < 5:
         monday -= timedelta(days=7)
     return monday, monday + timedelta(days=4)
+
+
+def news_window(monday: date, now: datetime) -> tuple[datetime, datetime, bool]:
+    """소식(뉴스·공시)을 모으는 기간: 월요일 0시 ~ 일요일 밤 12시 (주말 기사도 넣는다, 2026-11-23).
+    주말에 만들어 아직 일요일이 안 끝났으면 지금까지. (시작, 끝, 아직 진행 중인 주인지)"""
+    start = datetime.combine(monday, time.min, SEOUL)
+    end = datetime.combine(monday + timedelta(days=7), time.min, SEOUL)
+    now = now.astimezone(SEOUL)
+    return start, min(end, now), now < end
 
 
 def week_label(monday: date) -> tuple[str, str]:
@@ -115,6 +126,7 @@ class Item:
     linked: bool = False      # 내 메모 추적 항목에 붙은 카드의 근거
     snippet: str = ""         # LLM 입력용 본문 앞부분 (뉴스 요약·리드·첫 청크 / 공시 첫 청크) — 화면에는 안 보인다
     show: bool = True         # '이번 주 소식' 목록에 보인다 (False면 이슈 정리 근거로만 쓰고 출처 목록에만)
+    buzz: int = 0             # 같은 날 비슷한 제목의 기사 수 (여러 매체가 다룬 큰 소식일수록 큼) — LLM 입력에 적는다
 
 
 def clean_disclosure_title(title: str) -> str:
@@ -157,16 +169,37 @@ def mentions(title: str, name: str) -> bool:
     return False
 
 
-def pick_news(rows: list[dict], names: list[str], limit: int = NEWS_PER_STOCK) -> list[Item]:
+WORD = re.compile(r"[가-힣A-Za-z0-9]{2,}")
+
+
+def _buzz(rows: list[dict], names: list[str]) -> dict:
+    """같은 날 다른 기사들과 낱말 2개 이상을 같이 쓰는 기사 수 — 여러 매체가 다룬 큰 소식일수록 크다.
+    score가 같을 때(주말 기사는 아직 0) 큰 소식을 먼저 고르는 데 쓴다. 회사 이름은 낱말에서 뺀다."""
+    drop = {n.lower() for n in names}
+    words = {r["id"]: {w.lower() for w in WORD.findall(r["title"] or "")} - drop for r in rows}
+    days: dict = {}
+    for r in rows:
+        days.setdefault(r["published_at"].astimezone(SEOUL).date(), []).append(r["id"])
+    out = {}
+    for ids in days.values():
+        for a in ids:
+            out[a] = sum(1 for b in ids if b != a and len(words[a] & words[b]) >= 2)
+    return out
+
+
+def pick_news(rows: list[dict], names: list[str], limit: int = NEWS_PER_STOCK, per_day: int | None = None) -> list[Item]:
     """rows: {id, title, published_at, url, score, source, cluster_id}. 제목에 회사 이름이 있는 기사만, 시황 묶음 빼고,
-    같은 사건(cluster)·같은 제목은 하나, score 높은 순 limit건 → 날짜순."""
+    같은 사건(cluster)·같은 제목은 하나, score 높은 순 limit건 → 날짜순.
+    per_day를 주면 날짜마다 돌아가며 하나씩 고른다(하루 최대 per_day) — 주말 기사는 아직 score가 0이라
+    점수 순으로만 고르면 늘 밀린다 (2026-11-23)."""
     keys = [n for n in names if n]
     seen_cluster: set = set()
     seen_title: set = set()
-    out: list[Item] = []
-    for r in sorted(rows, key=lambda r: (-(r["score"] or 0), r["published_at"])):
+    cands: list[Item] = []
+    buzz = _buzz(rows, keys)
+    for r in sorted(rows, key=lambda r: (-(r["score"] or 0), -buzz.get(r["id"], 0), r["published_at"])):
         title = (r["title"] or "").strip()
-        if not any(mentions(title, k) for k in keys) or ROUNDUP.search(title):
+        if not any(mentions(title, k) for k in keys) or ROUNDUP.search(title) or MARKET_WIDE.search(title):
             continue
         key = re.sub(r"\W", "", title.lower())[:20]      # 끝이 잘린 같은 제목("…매수자...")도 같은 기사로
         if (r.get("cluster_id") is not None and r["cluster_id"] in seen_cluster) or key in seen_title:
@@ -174,10 +207,20 @@ def pick_news(rows: list[dict], names: list[str], limit: int = NEWS_PER_STOCK) -
         seen_title.add(key)
         if r.get("cluster_id") is not None:
             seen_cluster.add(r["cluster_id"])
-        out.append(Item("뉴스", r["published_at"].astimezone(SEOUL).date(), title, r.get("source") or "", f"news:{r['id']}",
-                        r.get("url"), float(r["score"] or 0)))
-        if len(out) >= limit:
-            break
+        cands.append(Item("뉴스", r["published_at"].astimezone(SEOUL).date(), title, r.get("source") or "", f"news:{r['id']}",
+                          r.get("url"), float(r["score"] or 0), buzz=buzz.get(r["id"], 0)))
+    if per_day is None:
+        out = cands[:limit]
+    else:
+        by_day: dict = {}
+        for c in cands:                                   # 날짜별로 점수 순서 유지
+            by_day.setdefault(c.day, []).append(c)
+        out, k = [], 0
+        while len(out) < limit and any(len(v) > k for v in by_day.values()) and k < per_day:
+            for d in sorted(by_day):
+                if len(by_day[d]) > k and len(out) < limit:
+                    out.append(by_day[d][k])
+            k += 1
     return sorted(out, key=lambda i: i.day)
 
 
@@ -409,9 +452,11 @@ def build_report(db, user_id: int, codes: list[str] | None = None, today: date |
     """보고서 content. codes가 없으면 내 종목 전부. llm(메시지→dict)을 주면 흐름 문장을 LLM으로 쓴다(2단계), 없으면 코드 문장."""
     today = today or datetime.now(SEOUL).date()
     monday, friday = last_week(today)
-    start = datetime.combine(monday, time.min, SEOUL)
-    end = datetime.combine(friday + timedelta(days=1), time.min, SEOUL)
-    window = {"start": start, "end": end, "mon": monday, "fri": friday}
+    now = now or datetime.now(SEOUL)
+    start, end, partial = news_window(monday, now if today == now.astimezone(SEOUL).date() else
+                                      datetime.combine(today, time.max, SEOUL))
+    news_last = (end - timedelta(microseconds=1)).date()          # 소식 마지막 날 (보통 일요일)
+    window = {"start": start, "end": end, "mon": monday, "fri": news_last}
     mine = _rows(db, STOCK_SQL, u=user_id)
     stocks = [s for s in mine if not codes or s["code"] in codes]
     warnings: list[str] = []
@@ -422,8 +467,8 @@ def build_report(db, user_id: int, codes: list[str] | None = None, today: date |
             warnings.append(f"{s['name']}: 그 주 시세가 없어 뺐어요")
             continue
         # 금요일 시세가 아직 없는 건 정상이다 (2026-11-23 확인). 머리·지수는 종목의 실제 마지막 거래일에 맞춘다
-        items = pick_disclosures(_rows(db, DISC_SQL, s=s["code"], mon=monday, fri=friday))
-        ctx_news = pick_news(_rows(db, NEWS_SQL, s=s["code"], start=start, end=end), company_names(s["name"], s["code"]), limit=10)
+        items = pick_disclosures(_rows(db, DISC_SQL, s=s["code"], mon=monday, fri=news_last))
+        ctx_news = pick_news(_rows(db, NEWS_SQL, s=s["code"], start=start, end=end), company_names(s["name"], s["code"]), limit=10, per_day=2)
         shown = {i.ref for i in sorted(ctx_news, key=lambda i: -i.score)[:NEWS_PER_STOCK]}
         for i in ctx_news:
             i.show = i.ref in shown                       # 화면 목록은 3건, 나머지는 이슈 정리 근거
@@ -476,7 +521,7 @@ def build_report(db, user_id: int, codes: list[str] | None = None, today: date |
             "stock_code": s["code"], "name": s["name"], "own": "보유" if s["status"] == "holding" else "관심",
             "pct": p["pct"], "close": p["close"], "prev": p["prev"], "closes": p["closes"], "yr": p["yr"],
             "hi": p["hi"], "lo": p["lo"], "vol": p["vol"], "trade_dates": [d.isoformat() for d in dates],
-            "events": [[it.day.weekday(), it.no, "g" if it.kind == "공시" else "n"] for it in shown_items if monday <= it.day <= friday],
+            "events": [[it.day.weekday(), it.no, "g" if it.kind == "공시" else "n"] for it in shown_items if monday <= it.day <= friday and it.day.weekday() < 5],   # 차트 점은 거래일만 (주말 소식은 목록에만)
             "counts": {"공시": sum(1 for i in shown_items if i.kind == "공시"), "뉴스": sum(1 for i in shown_items if i.kind == "뉴스")},
             "story": story, "story_source": source, "issues": issues,
             "items": [{"no": i.no, "kind": i.kind, "date": md(i.day), "title": i.title, "src": i.src, "ref": i.ref,
@@ -506,12 +551,12 @@ def build_report(db, user_id: int, codes: list[str] | None = None, today: date |
         if mk["meta"].get("removed"):
             story_meta.setdefault("removed", []).append({"name": "국내 증시", "sentences": mk["meta"]["removed"]})
     return {
-        "period_start": monday.isoformat(), "period_end": friday.isoformat(),
+        "period_start": monday.isoformat(), "period_end": news_last.isoformat(), "partial_week": partial,
         "week": week, "title": title,
-        "range": f"{md(monday)}({WEEKDAYS[0]}) ~ {md(last_day)}({WEEKDAYS[last_day.weekday()]})",
+        "range": f"{md(monday)}({WEEKDAYS[0]}) ~ {md(news_last)}({WEEKDAYS[news_last.weekday()]})",   # 소식 기간 (주말 포함)
         "trade_days": n_days, "as_of": last_day.isoformat(),
         "days": [f"{md(d)} {WEEKDAYS[d.weekday()]}" for d in days], "days_short": list(WEEKDAYS[:5]),
-        "made_at": (now or datetime.now(SEOUL)).astimezone(SEOUL).strftime("%m.%d %H:%M"),
+        "made_at": now.astimezone(SEOUL).strftime("%m.%d %H:%M"),
         "market": mk["cells"] if mk else [],                              # 종목과 같은 날 기준
         "market_summary": mk["summary"] if mk else "", "flow": mk["flow"] if mk else [],
         "stocks": out_stocks, "sources": sources,

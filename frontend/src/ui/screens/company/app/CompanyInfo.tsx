@@ -76,7 +76,8 @@ export function AppCompanyInfo(p: CompanyInfoProps) {
   const pr = p.profile;
   const candles = p.candles[range];
   const all = p.quarters;
-  const healthKeys = HEALTH_KEYS.filter((h) => p.health[h.key] != null);
+  /* 다섯 지표를 늘 보여 준다 (11-23). 값이 없으면 가운데 점 · '—' */
+  const healthKeys = HEALTH_KEYS;
   const shown = all.slice(-8);
   const last = shown[shown.length - 1];
   const gkey = GTABS[gtab].key;
@@ -305,16 +306,15 @@ export function AppCompanyInfo(p: CompanyInfoProps) {
                       {p.health_as_of.slice(0, 4)}년 {Number(p.health_as_of.slice(5, 7))}월 기준
                     </Text>
                   </View>
-                  {/* 값이 있는 축만 (11-21 결정 ②: 금융사는 부채비율·유보율 두 축 = 선 하나) */}
-                  <Radar labels={healthKeys.map((h) => h.k)} scores={healthKeys.map((h) => healthScore(h.key, p.health[h.key]))} width={cw} visible={seen} />
+                  <Radar labels={healthKeys.map((h) => h.k)} scores={healthKeys.map((h) => healthScore(h.key, p.health[h.key]))} missing={healthKeys.map((h) => p.health[h.key] == null)} width={cw} visible={seen} />
                   <View style={st.hl}>
                     {healthKeys.map((h, i) => (
                       <View key={h.k} style={[st.hli, i === healthKeys.length - 1 && { borderBottomWidth: 0 }]}>
                         <View style={st.kvL}>
-                          <Text style={st.hliT}>{h.k}</Text>
+                          <Text style={[st.hliT, p.health[h.key] == null && st.hliOff]}>{h.k}</Text>
                           <Q onPress={() => setTerm(h.term)} label={h.k} />
                         </View>
-                        <Text style={st.hliV}>{healthVal(h.key, p.health[h.key])}</Text>
+                        <Text style={[st.hliV, p.health[h.key] == null && st.hliOff]}>{healthVal(h.key, p.health[h.key])}</Text>
                       </View>
                     ))}
                   </View>
@@ -553,6 +553,7 @@ const st = StyleSheet.create({
   hli: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: '#F1F2F4' },
   hliT: { ...ft(13.5), color: appColor.ink },
   hliV: { ...ft(13.5), fontWeight: '700', color: appColor.ink, fontVariant: ['tabular-nums'] },
+  hliOff: { color: '#B0B8C1' },
   note: { backgroundColor: '#F4F5F7', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, ...ft(12, 1.6), color: appColor.ink3, marginTop: 10, overflow: 'hidden' },
   src: { textAlign: 'center', ...ft(11.5, 1.6), color: appColor.ink3, marginTop: 4, marginHorizontal: 16, marginBottom: 8 },
   nudgeWrap: { position: 'absolute', left: 16, right: 16, bottom: 16, alignItems: 'center' },

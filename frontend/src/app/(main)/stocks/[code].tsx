@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Linking } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Linking, Platform } from 'react-native';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { env } from '@/config/env';
 import { useCoach } from '@/store/coach';
 import { useUI } from '@/store/ui';
@@ -28,15 +28,16 @@ import { feedOf, findMemo, versionsOf } from '@/ui/screens/updates/Updates.mock'
  */
 export default function StockScreen() {
   /* memo · ev: 업데이트(⑥)의 '근거 자세히 보기' → 메모 창을 그 소식 근거로 열기 */
-  const { code, tab, memo, ev, first, stock_name, onboarding_selected, onboarding_home_mode } = useLocalSearchParams<{ code: string; tab?: 'board' | 'info'; memo?: string; ev?: string; first?: string; stock_name?: string; onboarding_selected?: string; onboarding_home_mode?: string }>();
+  /* new=1: 스튜디오 실험 결과 '메모 쓰기' → 새 메모 창 바로 열기 (엑셀 웹 #11) */
+  const { code, tab, memo, ev, first, new: newParam, stock_name, onboarding_selected, onboarding_home_mode } = useLocalSearchParams<{ code: string; tab?: 'board' | 'info'; memo?: string; ev?: string; first?: string; new?: string; stock_name?: string; onboarding_selected?: string; onboarding_home_mode?: string }>();
   const active = tab === 'info' ? 'info' : 'board';
-  if (active === 'board') return <BoardTab key={memo ?? 'board'} code={code} memoParam={memo} ev={ev} firstFlow={first === '1'} stockName={stock_name} onboardingSelected={onboarding_selected} onboardingHomeMode={onboarding_home_mode} />;
+  if (active === 'board') return <BoardTab key={memo ?? 'board'} code={code} memoParam={memo} ev={ev} firstFlow={first === '1'} newParam={newParam} stockName={stock_name} onboardingSelected={onboarding_selected} onboardingHomeMode={onboarding_home_mode} />;
   return <InfoTab code={code} />;
 }
 
 type Connect = { id: string | null; title: string; body: string; color: MemoColor; fromNew: boolean };
 
-function BoardTab({ code, memoParam, ev, firstFlow, stockName, onboardingSelected, onboardingHomeMode }: { code: string; memoParam?: string; ev?: string; firstFlow: boolean; stockName?: string; onboardingSelected?: string; onboardingHomeMode?: string }) {
+function BoardTab({ code, memoParam, ev, firstFlow, newParam, stockName, onboardingSelected, onboardingHomeMode }: { code: string; memoParam?: string; ev?: string; firstFlow: boolean; newParam?: string; stockName?: string; onboardingSelected?: string; onboardingHomeMode?: string }) {
   const router = useRouter();
   const empty = firstFlow || code === mockEmptyStock.stock_code;
   const baseStock = firstFlow && stockName ? { ...mockEmptyStock, stock_code: code, name: stockName } : empty ? mockEmptyStock : mockBoardStock;
@@ -58,6 +59,33 @@ function BoardTab({ code, memoParam, ev, firstFlow, stockName, onboardingSelecte
   const [newKey, setNewKey] = useState(0);
   /* 새 메모 창의 처음 탭 (0 메모 · 1 체크리스트 — '체크리스트 만들기' · 체크리스트 카드 열기) */
   const [newTab, setNewTab] = useState<0 | 1>(0);
+  /* ?new=1 이 들어오면 새 메모 창(메모 탭)을 열고, 주소에서 new 를 지움 — 닫은 뒤 새로고침·뒤로가기로 다시 열리지 않게.
+     온보딩(?first=1)은 위 firstFlow 그대로 · 이미 이 보드에 있을 때 다시 들어와도 열림 (2026-11-24, 엑셀 웹 #11) */
+  const [seenNew, setSeenNew] = useState<string | undefined>(undefined);
+  if (newParam !== seenNew) {
+    setSeenNew(newParam);
+    if (newParam === '1' && !firstFlow) {
+      setDlg(false);
+      setNewTab(0);
+      setNewKey((n) => n + 1);
+      setNewOpen(true);
+    }
+  }
+  /* router.setParams 는 앱 전체 기준이라 막 열린 이 화면 값을 못 지웠음 → 이 화면의 navigation 으로 지우고,
+     웹은 주소창도 직접 정리 (보드는 다시 그리지 않아서 열린 창은 그대로) */
+  const navigation = useNavigation();
+  useEffect(() => {
+    if (newParam !== '1') return;
+    navigation.setParams({ new: undefined } as never);
+    if (Platform.OS !== 'web') return;
+    /* 다음 틈에 (라우터가 주소를 먼저 쓴 뒤) · 위 setParams 로 값이 바뀌어도 취소하지 않음 */
+    setTimeout(() => {
+      const u = new URL(window.location.href);
+      if (!u.searchParams.has('new')) return;
+      u.searchParams.delete('new');
+      window.history.replaceState(window.history.state, '', u.pathname + u.search + u.hash);
+    }, 0);
+  }, [newParam, navigation]);
   const toast = useUI((s) => s.showToast);
   const [first, setFirst] = useState<string | undefined>(undefined);
   const [connect, setConnect] = useState<Connect | null>(null);

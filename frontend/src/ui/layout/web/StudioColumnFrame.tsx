@@ -2,8 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { AppIcon, WebIcon } from '@/ui/icons/Icon';
-import { fpx, size, studioFeature, webColor } from '@/ui/theme';
+import { size, studioFeature, webColor } from '@/ui/theme';
 import { useCoachRef } from '@/ui/shared/Coach';
+import { useShellSize } from './shellSize';
 import type { StudioColumnFrameProps, StudioFeature } from './WebShell.types';
 
 type HoverState = { pressed: boolean; hovered?: boolean };
@@ -47,13 +48,14 @@ export function FeatIcon({ f, size = 20 }: { f: StudioFeature; size?: number }) 
 
 /**
  * 웹 오른쪽 스튜디오 열의 틀 (원본 studio.tsx StudioColumn 바깥)
- * 펼침: 바깥 436 (위·오른쪽·아래 24) · 카드 412 · 라운드 22 · 테두리 #E4E4E7 · 머리 72
+ * 펼침: 바깥 436/388 (shellSize · 위·오른쪽·아래 24) · 카드 412/364 · 라운드 22 · 테두리 #E4E4E7 · 머리 72
  * 접힘: 바깥 96 · 카드 72 · 높이 800(최대 100%) · 기능 버튼 4개
  * 카드 안 내용은 ⑧ 스튜디오 묶음에서 children 으로.
  */
 export function StudioColumnFrame({ open, onToggle, stockCount, aiMemoCount, usagePct, onUsage, onFeature, badges, children }: StudioColumnFrameProps) {
   /* 사용법 안내 ④ 대상 (원본 studio.tsx data-coach="studio") */
   const coachRef = useCoachRef('studio');
+  const z = useShellSize();
   if (!open)
     return (
       <View style={st.colClosed} accessibilityLabel="스튜디오 (접힘)">
@@ -74,18 +76,18 @@ export function StudioColumnFrame({ open, onToggle, stockCount, aiMemoCount, usa
     );
   const out = usagePct >= 100;
   return (
-    <View style={st.col} accessibilityLabel="스튜디오">
-      <View ref={coachRef} collapsable={false} style={st.card}>
-        <View style={st.head}>
+    <View style={[st.col, { width: z.studioCol }]} accessibilityLabel="스튜디오">
+      <View ref={coachRef} collapsable={false} style={[st.card, { width: z.studioCard }]}>
+        <View style={[st.head, z.studioHead]}>
           <View style={st.star}>
             <WebIcon name="sparkleNudge" size={19} color="#FFFFFF" />
           </View>
           <View style={st.headText}>
-            <Text style={st.title} numberOfLines={1}>
+            <Text style={[st.title, z.studioTitle]} numberOfLines={1}>
               스튜디오
             </Text>
-            <Text style={st.sub} numberOfLines={1}>
-              내 종목 {stockCount} · AI 연결 메모 {aiMemoCount}
+            <Text style={[st.sub, z.studioSub]} numberOfLines={1}>
+              {z.compact ? `종목 ${stockCount} · AI 메모 ${aiMemoCount}` : `내 종목 ${stockCount} · AI 연결 메모 ${aiMemoCount}`}
             </Text>
           </View>
           <Pressable onPress={onUsage} accessibilityRole="button" accessibilityLabel={`AI 사용량 ${usagePct}%`} style={({ hovered }: HoverState) => [st.usage, { backgroundColor: out ? webColor.usageOutBg : hovered ? webColor.chipHover : webColor.chip }]}>
@@ -105,14 +107,14 @@ export function StudioColumnFrame({ open, onToggle, stockCount, aiMemoCount, usa
 }
 
 const st = StyleSheet.create({
-  col: { width: size.studioCol, height: '100%', paddingTop: 24, paddingRight: 24, paddingBottom: 24 },
-  card: { width: size.studioCard, flex: 1, overflow: 'hidden', borderRadius: 22, borderWidth: 1, borderColor: webColor.studioLine, backgroundColor: webColor.surface },
-  head: { height: 72, flexDirection: 'row', alignItems: 'center', gap: 10, paddingBottom: 10, paddingLeft: 20, paddingRight: 12, paddingTop: 20 },
+  col: { height: '100%', paddingTop: 24, paddingRight: 24, paddingBottom: 24 },
+  card: { flex: 1, overflow: 'hidden', borderRadius: 22, borderWidth: 1, borderColor: webColor.studioLine, backgroundColor: webColor.surface },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   star: { width: 32, height: 32, borderRadius: 10, backgroundColor: webColor.ink, alignItems: 'center', justifyContent: 'center' },
   headText: { flex: 1, minWidth: 0 },
   /* 원본 text-[22px] leading-[1.3] tracking-[-0.4px] */
-  title: { fontSize: 22, lineHeight: 28.6, letterSpacing: -0.4, fontWeight: '700', color: webColor.ink },
-  sub: { ...fpx(14, 21), color: webColor.studioSub },
+  title: { letterSpacing: -0.4, fontWeight: '700', color: webColor.ink },
+  sub: { color: webColor.studioSub },
   usage: { height: 32, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingHorizontal: 12 },
   bar: { width: 24, height: 6, borderRadius: 999, overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.1)' },
   barFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 999 },

@@ -67,7 +67,7 @@ def md(d: date) -> str:
 
 
 # 문장 끝: "~요." "~요[3]." "~요[3]" "~다." (마침표 없이 번호로 끝나는 문장도 센다)
-SENT_END = re.compile(r"(?:(?:(?<![주필중수])요|니다|다(?=[\[.!?]))(?:\[\d+\])*[.!?]?|[.!?])(?=\s|$)")   # "주요·필요·중요·수요"는 끝이 아니다
+SENT_END = re.compile(r"(?:(?:(?<![주필중수])요|니다|다(?=[\[.!?]))[.!?]?(?:\[\d+\])*[.!?]?|[.!?](?:\[\d+\])*)(?=\s|$)")   # "~요[3]." "~요.[3]" 둘 다 끝. "주요·필요·중요·수요"는 아님
 
 
 def sentences(text: str) -> list[str]:
@@ -99,6 +99,8 @@ def price_lines(p: dict) -> list[str]:
 
 def item_line(it) -> str:
     head = f"[{it.no}] {md(it.day)}({WEEKDAYS[it.day.weekday()]}) · {it.kind} · {it.src or '뉴스'} · {it.title}"
+    if getattr(it, "buzz", 0) >= 2:                  # 여러 매체가 다룬 소식 (중요도 힌트)
+        head += f" · 같은 날 비슷한 기사 {it.buzz}건"
     snip = (getattr(it, "snippet", "") or "").strip()
     return head + (f"\n    내용: {snip[:SNIPPET_CHARS]}" if snip else "")
 
@@ -245,8 +247,16 @@ def llm_stock(name: str, p: dict, items: list, call: LLMCall, fallback: str, ext
     source = input_text(name, p, items, extra)
     nos = {it.no for it in items}
 
+    # 주말(토·일)에 여러 매체가 다룬 소식은 이슈 정리에서 빠뜨리지 않는다 (월~금만 쓰고 주말을 건너뛰는 일이 있었다, 2026-11-23)
+    must = sorted({it.no for it in items if it.kind == "뉴스" and it.day.weekday() >= 5 and getattr(it, "buzz", 0) >= 2})
+
     def check(out: dict) -> list[str]:
-        return check_story(out.get("story", ""), source, nos) + check_issues(out.get("issues", ""), source, nos)
+        probs = check_story(out.get("story", ""), source, nos) + check_issues(out.get("issues", ""), source, nos)
+        used = {int(r) for r in REF.findall(out.get("issues", ""))}
+        if must and not (used & set(must)):
+            probs.append("issues: 주말에 여러 매체가 다룬 소식 " + "".join(f"[{n}]" for n in must)
+                         + "을 다루지 않음 (출처를 주어로, 기사에 적힌 진행 상태까지 한 주제로 쓰기)")
+        return probs
     out, meta = ask(call, STOCK_PROMPT, source, SCHEMA_STOCK, check)
     if out is None:
         return fallback, "", {"source": "code", **meta, "removed": []}

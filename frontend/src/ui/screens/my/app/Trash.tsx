@@ -42,7 +42,7 @@ export function AppTrash({ items, onBack, onRestore, onUndo, onPurge }: TrashPro
         </Rv>
         <Rv i={1}>
           <View style={st.fch}>
-            {(['전체', '메모', '투자 기록', '종목'] as Filter[]).map((k) => (
+            {(['전체', '메모', '투자 기록', '종목', '스튜디오'] as Filter[]).map((k) => (
               <Pressable key={k} onPress={() => setF(k)} style={[st.fb, f === k && st.fbOn]} accessibilityRole="tab" accessibilityState={{ selected: f === k }}>
                 <Text style={[st.fbT, f === k && { color: '#FFFFFF' }]}>{k} {count(k)}</Text>
               </Pressable>
@@ -54,7 +54,7 @@ export function AppTrash({ items, onBack, onRestore, onUndo, onPurge }: TrashPro
             <Grp>
               {list.map((t, i) => (
                 <View key={t.id} style={[st.tr, i === list.length - 1 && { borderBottomWidth: 0 }]}>
-                  <View style={st.ic2}>{t.kind === '종목' ? <BagIcon /> : <NoteIcon />}</View>
+                  <View style={st.ic2}>{t.kind === '종목' ? <BagIcon /> : t.kind === '스튜디오' ? <SparkIcon /> : <NoteIcon />}</View>
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={st.trB} numberOfLines={1}>{t.title}</Text>
                     <Text style={st.trS} numberOfLines={1}>{t.sub} · {t.ago} 삭제</Text>
@@ -82,7 +82,7 @@ export function AppTrash({ items, onBack, onRestore, onUndo, onPurge }: TrashPro
         red
         title="영구 삭제할까요?"
         /* 종목: 원본 웹에 종목용 문구가 없어 새로 씀 */
-        body={ask?.kind === '종목' ? '이 종목과 메모를 영구 삭제할까요? 되돌릴 수 없어요.' : '삭제하면 되돌릴 수 없어요. 이 메모의 수정 이력과 받은 소식도 함께 지워져요.'}
+        body={ask?.kind === '종목' ? '이 종목과 메모를 영구 삭제할까요? 되돌릴 수 없어요.' : ask?.kind === '스튜디오' ? '삭제하면 되돌릴 수 없어요. 다시 보려면 새로 만들어야 해요.' : '삭제하면 되돌릴 수 없어요. 이 메모의 수정 이력과 받은 소식도 함께 지워져요.'}
         ok="영구 삭제"
         onCancel={() => setAsk(null)}
         onOk={() => { const t = ask; setAsk(null); onPurge(t); }}
@@ -93,6 +93,9 @@ export function AppTrash({ items, onBack, onRestore, onUndo, onPurge }: TrashPro
 
 function NoteIcon() {
   return <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#575B63" strokeWidth={1.8} strokeLinejoin="round"><Path d="M5 4h14v11l-5 5H5z" /><Path d="M14 20v-5h5" /></Svg>;
+}
+function SparkIcon() {
+  return <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#575B63" strokeWidth={1.8} strokeLinejoin="round"><Path d="M12 3.5l2 5 5 2-5 2-2 5-2-5-5-2 5-2 2-5z" /></Svg>;
 }
 function BagIcon() {
   return <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#575B63" strokeWidth={1.8}><Rect x={3} y={7} width={18} height={13} rx={2.5} /><Path d="M9 7V5h6v2" /></Svg>;

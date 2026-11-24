@@ -1,4 +1,4 @@
-"""휴지통 SQL. 메모는 memos.deleted_at, 종목은 user_stocks.deleted_at 으로 소프트 삭제돼 있다."""
+"""휴지통 SQL. 메모는 memos.deleted_at, 종목은 user_stocks.deleted_at, 스튜디오 만든 항목은 studio_items.deleted_at 으로 소프트 삭제돼 있다."""
 
 from __future__ import annotations
 
@@ -40,6 +40,37 @@ class TrashRepository:
             {"user_id": user_id},
         ).mappings().all()
         return [dict(row) for row in rows]
+
+    # ─── 스튜디오 만든 항목 (studio_items.deleted_at, 0025). 30일 보관(expires_at)이 지나면 휴지통에서도 뺀다
+    def deleted_studio(self, user_id: int) -> list[dict[str, Any]]:
+        rows = self.db.execute(
+            text(
+                """
+                SELECT id, kind, title, created_at, deleted_at
+                FROM studio_items
+                WHERE user_id = :user_id AND deleted_at IS NOT NULL AND expires_at > now()
+                """
+            ),
+            {"user_id": user_id},
+        ).mappings().all()
+        return [dict(row) for row in rows]
+
+    def restore_studio(self, user_id: int, item_id: int) -> bool:
+        return self.db.execute(
+            text(
+                """
+                UPDATE studio_items SET deleted_at = NULL
+                WHERE id = :id AND user_id = :user_id AND deleted_at IS NOT NULL AND expires_at > now()
+                """
+            ),
+            {"id": item_id, "user_id": user_id},
+        ).rowcount > 0
+
+    def purge_studio(self, user_id: int, item_id: int) -> bool:
+        return self.db.execute(
+            text("DELETE FROM studio_items WHERE id = :id AND user_id = :user_id AND deleted_at IS NOT NULL"),
+            {"id": item_id, "user_id": user_id},
+        ).rowcount > 0
 
     # ─── 투자 기록 (journal_entries.deleted_at). blocks(0020) 칸은 쓰지 않아 0020 전에도 동작한다
     def deleted_journals(self, user_id: int) -> list[dict[str, Any]]:

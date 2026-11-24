@@ -18,11 +18,25 @@ export function reportSummary(S: ReportStock[], allDefault: boolean, fallback: s
   }
   const ups = S.filter((r) => r.pct > 0).length;
   const top = S.slice().sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct))[0];
-  return `내 종목 ${S.length}곳 중 ${ups}곳이 올랐어요. ${top ? `${josa(top.name, '이', '가')} ${sign(top.pct)}로 가장 크게 움직였어요.` : ''}`;
+  const downs = S.filter((r) => r.pct < 0).length;
+  /* '4곳 중 0곳이 올랐어요' 대신 모두 오르거나 내린 주는 그렇게 말한다 (2026-11-23) */
+  const head = ups === S.length ? `내 종목 ${S.length}곳이 모두 올랐어요.` : downs === S.length ? `내 종목 ${S.length}곳이 모두 내렸어요.` : `내 종목 ${S.length}곳 중 ${ups}곳이 올랐어요.`;
+  return `${head} ${top ? `${josa(top.name, '이', '가')} ${sign(top.pct)}로 가장 크게 움직였어요.` : ''}`;
 }
 
 /** 서버 보고서 추가 칸 (2026-11-23) — 이슈 정리 문단 · 밸류 칸 · 분기 실적 한 줄 */
-export const stripRefs = (t: string) => t.replace(/\s*\[\d+\]/g, '');
+export const stripRefs = (t: string) => t.replace(/\s*\((?:\[\d+\][,\s]*)+\)/g, '').replace(/\s*\[\d+\]/g, '');   // '1건([10])' → '1건'
+/** 긴 국내 증시 시황을 웹 2단·앱 문단으로 읽을 수 있게 사실 문장만 묶는다. */
+export function marketParas(t: string): string[] {
+  const clean = stripRefs(t).trim();
+  if (!clean) return [];
+  const explicit = clean.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  if (explicit.length > 1) return explicit;
+  const sentences = clean.match(/.*?[.!?](?=\s|$)|.+$/g)?.map((s) => s.trim()).filter(Boolean) ?? [clean];
+  if (sentences.length <= 3) return [clean];
+  const half = Math.ceil(sentences.length / 2);
+  return [sentences.slice(0, half).join(' '), sentences.slice(half).join(' ')].filter(Boolean);
+}
 export function issueParas(s: ReportStock): string[] {
   return (s.issues ?? '').split(/\n\s*\n/).map((p) => stripRefs(p).trim()).filter(Boolean);
 }
@@ -30,27 +44,31 @@ export function valuationCells(s: ReportStock): [string, string][] {
   const v = s.valuation;
   if (!v) return [];
   const x = (n: number | null, d = 2) => (n == null ? '-' : n.toFixed(d));
-  return [['PER', `${x(v.per)}배`], ['PBR', `${x(v.pbr)}배`], ['시가총액', v.market_cap || '-'], ['52주 위치', v.w52_pos == null ? '-' : `${v.w52_pos}%`]];
+  return [['PER', x(v.per)], ['PBR', x(v.pbr)], ['시가총액', v.market_cap || '-'], ['52주 위치', v.w52_pos == null ? '-' : `${v.w52_pos}%`]];
 }
 export function quarterLine(s: ReportStock): string {
   const q = s.quarter;
   if (!q) return '';
   const y = (n: number | null) => (n == null ? '' : ` (전년 같은 분기 ${n > 0 ? '+' : ''}${n.toFixed(1)}%)`);
-  const bits = [q.revenue ? `매출 ${q.revenue}${y(q.revenue_yoy)}` : '', q.operating_income ? `영업이익 ${q.operating_income}${y(q.op_yoy)}` : ''].filter(Boolean);
+  const bits = [
+    q.revenue ? `매출 ${q.revenue}${y(q.revenue_yoy)}` : '',
+    q.operating_income ? `영업이익 ${q.operating_income}${y(q.op_yoy)}` : '',
+    q.net_income ? `순이익 ${q.net_income}` : '',
+  ].filter(Boolean);
   return bits.length ? `${q.label}(${q.basis}) ${bits.join(' · ')}` : '';
 }
 
 /** 작은 주가 선 (원본 spark 58×20) */
 export function Spark({ c, color, w = 58, h = 20 }: { c: number[]; color: string; w?: number; h?: number }) {
   const mn = Math.min(...c), mx = Math.max(...c);
-  const pts = c.map((v, i) => `${(i * (w - 2)) / (c.length - 1) + 1},${h - 2 - ((v - mn) / (mx - mn || 1)) * (h - 4) + 1}`).join(' ');
+  const pts = c.map((v, i) => `${(i * (w - 2)) / Math.max(1, c.length - 1) + 1},${h - 2 - ((v - mn) / (mx - mn || 1)) * (h - 4) + 1}`).join(' ');
   return <Svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}><Polyline points={pts} fill="none" stroke={color} strokeWidth={1.6} strokeLinejoin="round" /></Svg>;
 }
 
 /** 넓은 주가 선 (원본 sparkW · 한 종목 표지) */
 export function SparkWide({ c, color }: { c: number[]; color: string }) {
   const W = 300, H = 64, mn = Math.min(...c), mx = Math.max(...c);
-  const x = (i: number) => 4 + (i * (W - 8)) / (c.length - 1), y = (v: number) => 6 + (H - 14) * (1 - (v - mn) / (mx - mn || 1));
+  const x = (i: number) => 4 + (i * (W - 8)) / Math.max(1, c.length - 1), y = (v: number) => 6 + (H - 14) * (1 - (v - mn) / (mx - mn || 1));
   const d = c.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' ');
   return (
     <Svg width="100%" height={64} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">

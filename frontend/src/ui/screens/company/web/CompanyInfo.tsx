@@ -9,7 +9,8 @@ import { NudgePill } from '@/ui/shared/NudgePill';
 import { WebStockHead } from '@/ui/shared/StockHead';
 import { fpx, webColor } from '@/ui/theme';
 import type { CompanyInfoProps, CompanyQuarter } from '../CompanyInfo.types';
-import { HEALTH_KEYS, healthScore, healthVal, jo, won } from '../companyFormat';
+import { HEALTH_KEYS, healthScore, healthVal, jo, mmddOf, won } from '../companyFormat';
+import type { Candle } from '@/types/models';
 import { useNudge } from '@/store/nudge';
 
 type Hover = { pressed: boolean; hovered?: boolean };
@@ -24,7 +25,7 @@ const QX = CW / 690;
 
 /**
  * 웹 기업정보 (원본 web/src/screens/company.tsx CompanyInfo · Figma 2.5 7 · 7.1 도움말 · 7.2 그래프 호버)
- * 종목 머리 · [보드 | 기업 정보] · 기업 개요 · 주가·거래량 (캔들 42개 · 마우스 따라 안내선) · 시세정보·투자정보 (52주 막대 · ? 도움말)
+ * 종목 머리 · [보드 | 기업 정보] · 기업 개요 · 주가·거래량 (최대 캔들 42개 · 가까운 캔들 정보 상자) · 시세정보·투자정보 (52주 막대 · ? 도움말)
  * 실적 (매출·영업이익·당기순이익 · 막대 hover 말풍선) · 수익성 (영업이익률·순이익률·ROE) · 기업 건전성 (레이더 · 지표 고르기)
  */
 export function WebCompanyInfo(p: CompanyInfoProps) {
@@ -104,37 +105,61 @@ function X({ onPress }: { onPress: () => void }) {
   );
 }
 
-/* ---------- 주가 · 거래량 (원본 PriceChart: 카드 349 · 816×266 · 캔들 42 · 안내선은 마우스 따라) ---------- */
+/* ---------- 주가 · 거래량 (원본 PriceChart: 카드 349 · 816×266 · 최대 캔들 42 · 안내선·정보 상자는 앱처럼 가까운 캔들에 붙음) ---------- */
 const GRID_Y = [17.6, 57.1, 96.6, 136.2, 175.7];
 const GRID_X = [4, 101, 199, 296, 393, 491, 588];
 const NC = 42;
+const PLOT_L = 4 * PX;
+const PLOT_R = 588 * PX;
+const MAX_CONTENT = { width: 'max-content' } as unknown as ViewStyle;
 function PriceChart({ p, k }: { p: CompanyInfoProps; k: number }) {
-  const cs = p.candles['3M'].slice(-NC);
+  const all = p.candles['3M'];
+  if (!all.length)
+    return (
+      <View style={[st.card, { height: 349 }]}>
+        <View style={{ position: 'absolute', left: 22, top: 25, width: 816, height: 300 }}>
+          <Text style={st.h20}>주가 · 거래량</Text>
+          <View style={st.priceEmpty}>
+            <Text style={st.priceEmptyT}>시세를 불러오지 못했어요</Text>
+          </View>
+        </View>
+      </View>
+    );
+  return <PriceChartBody all={all} k={k} />;
+}
+
+function PriceChartBody({ all, k }: { all: Candle[]; k: number }) {
+  const cs = all.slice(-NC);
+  const first = all.length - cs.length;
+  /* 42개보다 적으면 간격은 그대로, 최신 캔들을 오른쪽 끝에 */
+  const slot = NC - cs.length;
   const lo0 = Math.min(...cs.map((c) => c.low));
   const hi0 = Math.max(...cs.map((c) => c.high));
-  const padP = (hi0 - lo0) * 0.08;
+  /* 고가 = 저가면(거래정지·캔들 1개) 위아래 여백을 따로 줌 */
+  const padP = (hi0 - lo0) * 0.08 || Math.max(1, hi0 * 0.01);
   const lo = lo0 - padP;
   const hi = hi0 + padP;
-  const vmax = Math.max(...cs.map((c) => c.volume));
+  const vmax = Math.max(1, ...cs.map((c) => c.volume));
   const PY = (v: number) => GRID_Y[0] + ((hi - v) / (hi - lo)) * (GRID_Y[4] - GRID_Y[0]);
-  const CXp = (i: number) => 11 + (i * (581 - 11)) / (NC - 1);
+  const CXp = (i: number) => 11 + ((i + slot) * (581 - 11)) / (NC - 1);
   const t = useProgress(true, 900);
   const last = cs.length - 1;
-  const [hov, setHov] = useState<{ i: number; y: number } | null>(null);
-  const cur = hov ?? { i: last, y: PY(cs[last].close) };
-  const hx = CXp(cur.i);
-  const pv = hov ? hi - ((cur.y - GRID_Y[0]) / (GRID_Y[4] - GRID_Y[0])) * (hi - lo) : cs[last].close;
-  const unit = pv > 100000 ? 500 : pv > 10000 ? 50 : 5;
-  const price = won(Math.round(pv / unit) * unit);
+  const [hov, setHov] = useState<number | null>(null);
+  const [boxW, setBoxW] = useState(0);
+  const at = hov == null ? null : Math.min(hov, last);
+  const d = at == null ? null : cs[at];
+  const hx = at == null ? 0 : CXp(at) * PX;
+  const prev = at == null ? undefined : all[first + at - 1]?.close;
+  const pct = d && prev ? ((d.close - prev) / prev) * 100 : null;
+  /* 상자는 선 오른쪽, 넘치면 왼쪽으로 뒤집고 차트 안으로 제한 */
+  const boxRight = hx + 10;
+  const boxX = Math.max(PLOT_L, Math.min(PLOT_R - boxW, boxRight + boxW <= PLOT_R ? boxRight : hx - 10 - boxW));
   const labels = [0, 1, 2, 3, 4].map((j) => {
     const v = hi - ((hi - lo) * j) / 4;
     const u = v > 100000 ? 1000 : v > 10000 ? 100 : 10;
     return [Math.round(v / u) * u, GRID_Y[j] - 5.6] as const;
   });
-  const dates = [0, 1, 2, 3, 4, 5].map((j) => {
-    const i = Math.round((j * (NC - 1)) / 5.3);
-    return [`${cs[i].date.slice(5, 7)}.${cs[i].date.slice(8, 10)}`, CXp(i) - 7] as const;
-  });
+  const dates = [...new Set([0, 1, 2, 3, 4, 5].map((j) => Math.round((j * last) / 5.3)))].map((i) => [mmddOf(cs[i].date), CXp(i) - 7] as const);
   return (
     <View style={[st.card, { height: 349 }]}>
       <View style={{ position: 'absolute', left: 22, top: 25, width: 816, height: 300 }}>
@@ -142,12 +167,12 @@ function PriceChart({ p, k }: { p: CompanyInfoProps; k: number }) {
         <View style={{ position: 'absolute', left: 0, top: 34, width: 816, height: 266 }}>
           <Svg width={816} height={266}>
             {GRID_Y.map((y) => (
-              <Rect key={y} x={4 * PX} y={y} width={584 * PX} height={1} fill="#E5EBF2" />
+              <Rect key={y} x={PLOT_L} y={y} width={584 * PX} height={1} fill="#E5EBF2" />
             ))}
             {GRID_X.map((x) => (
               <Rect key={x} x={x * PX} y={17.6} width={0.6} height={158.1} fill="#E5EBF2" />
             ))}
-            <Rect x={4 * PX} y={244} width={584 * PX} height={1} fill="#E5EBF2" />
+            <Rect x={PLOT_L} y={244} width={584 * PX} height={1} fill="#E5EBF2" />
             {cs.map((c, i) => {
               const up = c.close >= c.open;
               const col = up ? '#F04545' : '#3B82F5';
@@ -159,23 +184,26 @@ function PriceChart({ p, k }: { p: CompanyInfoProps; k: number }) {
                 <G key={c.date} opacity={s}>
                   <Rect x={CXp(i) * PX} y={PY(c.high)} width={0.6} height={Math.max(1, PY(c.low) - PY(c.high))} fill={col} />
                   <Rect x={CXp(i) * PX + 0.3 - 5} y={bt} width={10} height={Math.max(1.2, bb - bt)} rx={1} fill={col} />
-                  <Rect x={CXp(i) * PX + 0.3 - 5} y={244 - vh * s} width={10} height={vh * s} rx={1} fill={col} />
+                  <Rect x={CXp(i) * PX + 0.3 - 5} y={244 - vh * s} width={10} height={vh * s} rx={1} fill={up ? '#F3A9AC' : '#A8C1F3'} />
                 </G>
               );
             })}
-            <Rect x={hx * PX - 0.3} y={15.2} width={0.6} height={228.8} fill="#7A8594" fillOpacity={0.55} />
-            <Rect x={4 * PX} y={cur.y - 0.5} width={584 * PX} height={1} fill="#7A8594" fillOpacity={0.55} />
-            <Ellipse cx={hx * PX} cy={cur.y - 1.1} rx={2.4} ry={4} fill="#FFFFFF" stroke="#141A24" strokeWidth={2} />
+            {d ? (
+              <G>
+                <Rect x={hx - 0.3} y={15.2} width={0.6} height={228.8} fill="#7A8594" fillOpacity={0.55} />
+                <Rect x={PLOT_L} y={PY(d.close) - 0.5} width={584 * PX} height={1} fill="#7A8594" fillOpacity={0.55} />
+                <Circle cx={hx} cy={PY(d.close)} r={4.5} fill="#FFFFFF" stroke="#16171A" strokeWidth={2} />
+              </G>
+            ) : null}
           </Svg>
           <MouseArea
             width={816}
             height={266}
             scale={k}
-            onMove={(x, y) => {
+            onMove={(x) => {
               const mx = x / PX;
-              if (mx < 4 || mx > 588) return;
-              const i = Math.max(0, Math.min(last, Math.round(((mx - 11) / (581 - 11)) * (NC - 1))));
-              setHov({ i, y: Math.max(GRID_Y[0], Math.min(GRID_Y[4], y)) });
+              if (mx < 4 || mx > 588) return setHov(null);
+              setHov(Math.max(0, Math.min(last, Math.round(((mx - 11) / (581 - 11)) * (NC - 1)) - slot)));
             }}
             onLeave={() => setHov(null)}
             style={{ left: 0, top: 0 }}
@@ -189,19 +217,29 @@ function PriceChart({ p, k }: { p: CompanyInfoProps; k: number }) {
             거래량
           </Text>
           <Text pointerEvents="none" style={[st.vol, st.volV, { left: 40 }]}>
-            {won(cs[cur.i].volume)}
+            {won((d ?? cs[last]).volume)}
           </Text>
-          {dates.map(([d, x]) => (
-            <Text key={d} pointerEvents="none" style={[st.lbl11, { position: 'absolute', top: 254, left: x * PX }]}>
-              {d}
+          {dates.map(([date, x]) => (
+            <Text key={date} pointerEvents="none" style={[st.lbl11, { position: 'absolute', top: 254, left: x * PX }]}>
+              {date}
             </Text>
           ))}
-          <View pointerEvents="none" style={[st.tag, { top: cur.y - 12.8, left: 589 * PX, width: 70 }]}>
-            <Text style={st.tagT} numberOfLines={1}>{price}</Text>
-          </View>
-          <View pointerEvents="none" style={[st.tag, { top: 247, left: hx * PX - 34, width: 68 }]}>
-            <Text style={st.tagD}>{cs[cur.i].date}</Text>
-          </View>
+          {d ? (
+            <>
+              <View pointerEvents="none" style={[st.priceDate, { left: Math.max(PLOT_L, Math.min(PLOT_R - 48, hx - 24)) }]}>
+                <Text style={st.tagD}>{mmddOf(d.date)}</Text>
+              </View>
+              <View pointerEvents="none" onLayout={(e) => setBoxW(e.nativeEvent.layout.width)} style={[st.priceTip, MAX_CONTENT, { left: boxX, opacity: boxW ? 1 : 0 }]}>
+                <Text style={st.priceTipT} numberOfLines={1}>
+                  <Text style={st.priceTipB}>{mmddOf(d.date)} 일봉</Text> · 종가 {won(d.close)}
+                  {pct == null ? null : <Text style={{ color: pct < 0 ? '#8FB0FF' : '#FF8A8E' }}> {`${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`}</Text>}
+                </Text>
+                <Text style={st.priceTipT} numberOfLines={1}>
+                  시 {won(d.open)} · 고 {won(d.high)} · 저 {won(d.low)} · 거래량 {won(d.volume)}주
+                </Text>
+              </View>
+            </>
+          ) : null}
         </View>
       </View>
     </View>
@@ -538,12 +576,10 @@ function Health({ p }: { p: CompanyInfoProps }) {
   const t = useProgress(true, 700);
   const sc = 1 - Math.pow(1 - t, 3);
   const keyOf = (name: string) => HEALTH_KEYS.find((h) => h.k === name)!.key;
-  /* 값이 있는 축만 그린다 (11-21 결정 ②: 금융사는 부채비율·유보율 두 축 = 선 하나). 다섯 축이면 원본 좌표 그대로 */
-  const axes = AX.map((name, i) => ({ name, lbl: LBL[i] })).filter((a) => p.health[keyOf(a.name)] != null);
-  const n = axes.length;
-  const ang = (i: number) => -Math.PI / 2 + (i * 2 * Math.PI) / Math.max(n, 1);
-  const lblAt = (i: number): [number, number] =>
-    n === AX.length ? axes[i].lbl : [150 + Math.cos(ang(i)) * 100 - 26, 150 + Math.sin(ang(i)) * 100 - 10];
+  /* 다섯 축을 늘 그린다 (11-23: 11-21 결정 ② 대신). 값이 없는 지표(금융사의 유동·당좌·이자보상비율 등)는
+     가운데 점으로 두고 점·라벨을 흐리게 → 금융사는 부채비율·유보율과 가운데를 잇는 삼각형이 된다 */
+  const axes = AX.map((name, i) => ({ name, lbl: LBL[i], has: p.health[keyOf(name)] != null }));
+  const ang = (i: number) => -Math.PI / 2 + (i * 2 * Math.PI) / AX.length;
   const R0 = axes.map((_, i) => [150 + Math.cos(ang(i)) * 72, 150 + Math.sin(ang(i)) * 72] as const);
   const pts = R0.map(([x, y], i) => {
     const s = healthScore(keyOf(axes[i].name), p.health[keyOf(axes[i].name)]) * sc;
@@ -553,7 +589,8 @@ function Health({ p }: { p: CompanyInfoProps }) {
     axes
       .map((_, i) => `${(150 + Math.cos(ang(i)) * r).toFixed(1)},${(150 + Math.sin(ang(i)) * r).toFixed(1)}`)
       .join(' ');
-  const LIST = ['부채비율', '유동비율', '당좌비율', '이자보상비율', '유보율'].filter((name) => p.health[keyOf(name)] != null);
+  const LIST = ['부채비율', '유동비율', '당좌비율', '이자보상비율', '유보율'];
+  const hasOf = (name: string) => p.health[keyOf(name)] != null;
   const val = (name: string) => healthVal(keyOf(name), p.health[keyOf(name)]);
   return (
     <View style={[st.card, st.pad24, { height: 404 }]}>
@@ -572,13 +609,13 @@ function Health({ p }: { p: CompanyInfoProps }) {
             <Line key={i} x1={150} y1={150} x2={x} y2={y} stroke="#B4B2A9" strokeOpacity={0.55} strokeWidth={0.8} />
           ))}
           <Polygon points={pts.map((q) => q.join(',')).join(' ')} fill="#378ADD" fillOpacity={0.18} stroke="#378ADD" strokeWidth={1.8} />
-          {pts.map((q, i) => (
-            <Circle key={i} cx={q[0]} cy={q[1]} r={sel === axes[i].name ? 4 : 3} fill="#378ADD" stroke="#FFFFFF" strokeWidth={1.5} />
-          ))}
+          {pts.map((q, i) =>
+            axes[i].has ? <Circle key={i} cx={q[0]} cy={q[1]} r={sel === axes[i].name ? 4 : 3} fill="#378ADD" stroke="#FFFFFF" strokeWidth={1.5} /> : null,
+          )}
         </Svg>
         {axes.map(({ name: a }, i) => (
-          <Pressable key={a} onPress={() => setSel(sel === a ? null : a)} accessibilityRole="button" style={{ position: 'absolute', left: lblAt(i)[0] + HX, top: lblAt(i)[1] }}>
-            {({ hovered }: Hover) => <Text style={[st.hT, sel === a || hovered ? { color: '#191F28' } : null, sel === a && { fontWeight: '700' }]}>{a}</Text>}
+          <Pressable key={a} onPress={() => setSel(sel === a ? null : a)} accessibilityRole="button" style={{ position: 'absolute', left: axes[i].lbl[0] + HX, top: axes[i].lbl[1] }}>
+            {({ hovered }: Hover) => <Text style={[st.hT, !axes[i].has && st.hOff, sel === a || hovered ? { color: '#191F28' } : null, sel === a && { fontWeight: '700' }]}>{a}</Text>}
           </Pressable>
         ))}
         <View style={[st.hLegend, { left: HL }]}>
@@ -590,8 +627,8 @@ function Health({ p }: { p: CompanyInfoProps }) {
             const on = sel === name;
             return (
               <Pressable key={name} onPress={() => setSel(on ? null : name)} accessibilityRole="button" style={st.hRow}>
-                <Text style={[st.hT, on && st.hOn]}>{name}</Text>
-                <Text style={[st.hT, on && st.hOn]}>{val(name)}</Text>
+                <Text style={[st.hT, !hasOf(name) && st.hOff, on && st.hOn]}>{name}</Text>
+                <Text style={[st.hT, !hasOf(name) && st.hOff, on && st.hOn]}>{val(name)}</Text>
               </Pressable>
             );
           })}
@@ -603,12 +640,12 @@ function Health({ p }: { p: CompanyInfoProps }) {
                 {sel} · {val(sel)}
               </Text>
               <Text style={[st.hInfoP, { color: '#4E5968' }]}>{HDESC[sel][0]}</Text>
-              <Text style={st.hInfoP}>{HDESC[sel][1]}</Text>
+              <Text style={st.hInfoP}>{hasOf(sel) ? HDESC[sel][1] : '이 회사는 이 지표를 계산할 재무 값이 없어요. 은행·보험 같은 금융업은 공시하지 않는 지표예요.'}</Text>
             </>
           ) : (
             <>
               <Text style={st.hInfoB}>{p.stock.name} 재무 건전성</Text>
-              <Text style={[st.hInfoP, { color: '#4E5968' }]}>바깥쪽으로 갈수록 안정적이에요. 지표 이름을 누르면 설명이 나와요.</Text>
+              <Text style={[st.hInfoP, { color: '#4E5968' }]}>바깥쪽으로 갈수록 안정적이에요. 지표 이름을 누르면 설명이 나와요.{axes.some((x) => !x.has) ? ' 값이 없는 지표는 가운데에 두고 흐리게 보여요.' : ''}</Text>
               <Text style={st.hInfoP}>바깥 테두리는 메모스톡 자체 기준 · 최근 분기 재무제표</Text>
             </>
           )}
@@ -637,9 +674,14 @@ const st = StyleSheet.create({
   lbl11: { ...fpx(11, 16), color: '#6B788C' },
   vol: { position: 'absolute', top: 184, ...fpx(13, 20), fontWeight: '500', color: '#141A24' },
   volV: { fontWeight: '700', color: '#6B788C' },
-  tag: { position: 'absolute', height: 20, borderRadius: 4, backgroundColor: '#383B40', alignItems: 'center', justifyContent: 'center' },
   tagT: { ...fpx(13, 20), fontWeight: '700', color: '#FFFFFF' },
   tagD: { ...fpx(11, 16), fontWeight: '500', color: '#FFFFFF' },
+  priceDate: { position: 'absolute', top: 247, width: 48, height: 20, borderRadius: 999, backgroundColor: '#16171A', alignItems: 'center', justifyContent: 'center' },
+  priceTip: { position: 'absolute', top: GRID_Y[0] + 6, gap: 2, borderRadius: 12, backgroundColor: '#16171A', paddingHorizontal: 12, paddingVertical: 8 },
+  priceTipT: { ...fpx(13, 20), color: '#FFFFFF' },
+  priceTipB: { fontWeight: '700' },
+  priceEmpty: { position: 'absolute', left: 0, top: 34, width: 816, height: 266, alignItems: 'center', justifyContent: 'center' },
+  priceEmptyT: { ...fpx(15, 22), color: '#6B788C' },
   help: { borderWidth: 1, borderColor: '#E8ECF3', alignItems: 'center', justifyContent: 'center' },
   helpT: { lineHeight: 14, fontWeight: '700', color: '#747D8D', textAlign: 'center' },
   x: { ...fpx(20, 29), color: '#747D8D' },
@@ -672,6 +714,7 @@ const st = StyleSheet.create({
   legT: { ...fpx(13, 20), fontWeight: '500', color: '#6B7684' },
   hT: { ...fpx(13, 20), fontWeight: '500', color: '#333D4B' },
   hOn: { fontWeight: '700', color: '#191F28' },
+  hOff: { color: '#B0B8C1' },
   hLegend: { position: 'absolute', top: 10, flexDirection: 'row', alignItems: 'center', gap: 6 },
   hDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#378ADD' },
   hRow: { height: 30, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#E5E8EB' },

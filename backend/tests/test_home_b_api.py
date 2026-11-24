@@ -345,6 +345,7 @@ class FakeTrashRepo:
         self.usage = set()
         self.restored_stocks_for_memo = []
         self.journals: dict[int, dict] = {}
+        self.studio: dict[int, dict] = {}
 
     def deleted_memos(self, user_id):
         return list(self.memos.values())
@@ -360,6 +361,15 @@ class FakeTrashRepo:
 
     def deleted_stocks(self, user_id):
         return list(self.stocks.values())
+
+    def deleted_studio(self, user_id):
+        return list(self.studio.values())
+
+    def restore_studio(self, user_id, item_id):
+        return self.studio.pop(item_id, None) is not None
+
+    def purge_studio(self, user_id, item_id):
+        return self.studio.pop(item_id, None) is not None
 
     def restore_memo(self, user_id, memo_id):
         row = self.memos.pop(memo_id, None)
@@ -419,6 +429,21 @@ class TrashApiTest(unittest.TestCase):
         self.assertEqual(self.client.delete("/api/v1/trash/memo-11").status_code, 204)
         self.assertEqual(self.client.delete("/api/v1/trash/stock-035420").status_code, 204)
         self.assertEqual(self.client.delete("/api/v1/trash/memo-11").status_code, 404)
+
+    def test_studio_items_listed_restored_purged(self):
+        """스튜디오 만든 항목 (0025): 지우면 휴지통에 'studio-{id}'로, 복원·영구 삭제 (2026-11-24)"""
+        made = datetime(2026, 11, 23, 7, tzinfo=timezone.utc)
+        self.repo.studio = {
+            2: {"id": 2, "kind": "report", "title": "11월 3주 주간 보고서", "created_at": made, "deleted_at": datetime(2026, 11, 20, 4, tzinfo=timezone.utc)},
+            1: {"id": 1, "kind": "lab", "title": "", "created_at": made, "deleted_at": datetime(2026, 11, 20, 0, tzinfo=timezone.utc)},
+        }
+        got = self.client.get("/api/v1/trash").json()
+        self.assertEqual(got[0], {"id": "studio-2", "kind": "studio", "title": "11월 3주 주간 보고서", "context": "주간보고서 · 11.23", "deleted_at": "2026-11-20T04:00:00+00:00"})
+        self.assertEqual((got[-1]["id"], got[-1]["title"], got[-1]["context"]), ("studio-1", "투자 실험실", "투자 실험실 · 11.23"))
+        self.assertEqual(self.client.post("/api/v1/trash/studio-2/restore").status_code, 204)
+        self.assertEqual(self.client.post("/api/v1/trash/studio-2/restore").status_code, 404)
+        self.assertEqual(self.client.delete("/api/v1/trash/studio-1").status_code, 204)
+        self.assertNotIn("studio-1", [i["id"] for i in self.client.get("/api/v1/trash").json()])
 
     def test_purge_blocked_by_usage_events_is_409_and_keeps_item(self):
         self.repo.usage.add(10)
