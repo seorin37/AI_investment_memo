@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Animated, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
 import Svg, { ClipPath, Defs, Path } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
 import type { Memo } from '@/types/models';
@@ -54,6 +54,8 @@ export interface AppMemoCardProps {
   aiSpent?: boolean;
   onPress: () => void;
   onLongPress: () => void;
+  /** 꾹 누른 뒤 뗌 (끌기 · 고르기 구분) */
+  onPressOut?: () => void;
 }
 
 /**
@@ -62,7 +64,7 @@ export interface AppMemoCardProps {
  * 제목 15px 800 줄 1.36 · 위아래 6 · 두 줄 / 본문 12.5px 줄 1.5 #2E2E38 · 세 줄
  * 누르면 .12초 뒤 .965 로 줄어듦 (.45s cubic-bezier(.3,1.3,.5,1)) · .48초 꾹 누르면 고르기
  */
-export function AppMemoCard({ memo: m, width, height, selecting, selected, aiSpent, onPress, onLongPress }: AppMemoCardProps) {
+export function AppMemoCard({ memo: m, width, height, selecting, selected, aiSpent, onPress, onLongPress, onPressOut }: AppMemoCardProps) {
   const paper = usePaper();
   const k = useMotionK();
   const p = paper[m.color];
@@ -76,7 +78,10 @@ export function AppMemoCard({ memo: m, width, height, selecting, selected, aiSpe
         onLongPress={onLongPress}
         delayLongPress={480}
         onPressIn={() => scaleTo(0.965, 120)}
-        onPressOut={() => scaleTo(1)}
+        onPressOut={() => {
+          scaleTo(1);
+          onPressOut?.();
+        }}
         accessibilityRole="button"
         accessibilityLabel={m.title}
         accessibilityState={{ selected }}
@@ -125,7 +130,12 @@ export function AppMemoCard({ memo: m, width, height, selecting, selected, aiSpe
   );
 }
 
+/** 웹: 끌 수 있는 카드의 커서 (RN 타입에 없는 웹 값) */
+export const GRAB = { cursor: 'grab' } as unknown as ViewStyle;
+
 export interface WebMemoCardProps {
+  /** 끌 수 있는 카드 (고정 아님) */
+  grab?: boolean;
   memo: Memo;
   selecting: boolean;
   selected: boolean;
@@ -152,7 +162,7 @@ function Tip({ children, style }: { children: string; style: object }) {
  * 테이프 84×34 (위 -16): 고정이면 붙은 테이프 (hover 시 떼려는 모양) · 아니면 hover 시 점선 · 배지 24 (위 -10 · 오른쪽 -10) · ⋯ 메뉴 hover (아래 8 · 왼쪽 12)
  * hover: 종이가 위로 3 · -.3° 기울고 그림자
  */
-export function WebMemoCard({ memo: m, selecting, selected, onOpen, onPin, onToggleAi, onMenu, onPick }: WebMemoCardProps) {
+export function WebMemoCard({ memo: m, grab, selecting, selected, onOpen, onPin, onToggleAi, onMenu, onPick }: WebMemoCardProps) {
   const paper = usePaper();
   const p = paper[m.color];
   const [hov, setHov] = useState(false);
@@ -169,7 +179,7 @@ export function WebMemoCard({ memo: m, selecting, selected, onOpen, onPin, onTog
       }}
     >
       {/* 원본도 카드 바깥은 div (안에 플러그 버튼이 있어 button 으로 두면 웹에서 button 이 겹침) */}
-      <Pressable onPress={selecting ? onPick : onOpen} accessibilityLabel={m.title} style={[st.webPaperWrap, hov && !selecting && st.webHover]}>
+      <Pressable onPress={selecting ? onPick : onOpen} accessibilityLabel={m.title} style={[st.webPaperWrap, hov && !selecting && st.webHover, grab && GRAB]}>
         <PaperFace width={276} height={200} bg={p.bg} accent={p.accent} variant="web" />
         <View style={st.webIn}>
           <View style={st.webTop}>

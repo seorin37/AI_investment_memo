@@ -6,7 +6,7 @@ import type { Checklist, Memo } from '@/types/models';
 import { Grip6, PlusGlyph } from '@/ui/icons/BoardGlyphs';
 import { FixedFrame } from '@/ui/layout/web/FixedFrame';
 import { FadeIn } from '@/ui/motion/Reveal';
-import { WebChecklistCard } from '@/ui/shared/ChecklistCard';
+import { WebChecklistCard, WebChecklistRow } from '@/ui/shared/ChecklistCard';
 import { WebChips } from '@/ui/shared/Chips';
 import { ContextMenu, type MenuItem } from '@/ui/shared/ContextMenu';
 import { WebMemoCard } from '@/ui/shared/MemoCard';
@@ -18,12 +18,14 @@ import { WebStockHead } from '@/ui/shared/StockHead';
 import { PriceNoteHead } from '../PriceNoteHead';
 import { WebViewToggle, type BoardView } from '@/ui/shared/ViewToggle';
 import { fpx, webColor } from '@/ui/theme';
-import { arrange } from '../boardCards';
+import { arrange, pinnedIds } from '../boardCards';
 import type { BoardFilter, MemoBoardProps } from '../MemoBoard.types';
-import { useBoardDragWeb, useContextMenuWeb, useEscapeWeb } from './boardDom.web';
+import { type DragCell, useBoardDragWeb, useContextMenuWeb, useEscapeWeb } from './boardDom.web';
 import { useCoachRef } from '@/ui/shared/Coach';
 
 const HOLE = '__hole';
+const GRID_CELL: DragCell = { cols: 3, w: 276, h: 200, gx: 16, gy: 24 };
+const LIST_CELL: DragCell = { cols: 1, w: 860, h: 76, gx: 0, gy: 0 };
 type Snack = { id: number; msg: string; undo?: string[]; check?: boolean };
 type HoverState = { pressed: boolean; hovered?: boolean };
 const EXAMPLES = ['실적 나오면 다시 보기', '많이 빠지면 다시 생각해 보기', '요즘 분위기 좋아 보여'];
@@ -34,7 +36,7 @@ const data = (o: Record<string, string>) => ({ dataSet: o }) as object;
  * 웹 메모 보드 (원본 web/src/screens/stock.tsx StockPage + board.tsx Board + memox.tsx)
  * 860 고정 틀 (가운데 폭에 맞춰 줄임) · 위 56 · 아래 24 · 사이 20: 종목 머리 · [보드 | 기업 정보] · 보드
  * 보드 (사이 16): (사용량 소진) · 머리 40 ('내 메모 N' 17/26 bold · 칩 · 끌기 안내 · 격자/목록) · 3칸 격자 (276 · 사이 16 / 24 · 위 14 · 아래 40)
- * 카드를 끌어 순서 바꾸기 · hover · ⋯ 메뉴 · 우클릭 메뉴 · Esc. + 버튼 (56 #111 · 가운데 칸 오른쪽 아래 32) · 고르기 막대 (아래 28)
+ * 고정 카드는 맨 앞 고정 구역(끌 수 없음) · 나머지는 격자와 목록에서 끌거나 Alt+↑↓ 로 순서 바꾸기 · hover · ⋯ 메뉴 · 우클릭 메뉴 · Esc. + 버튼 (56 #111 · 가운데 칸 오른쪽 아래 32) · 고르기 막대 (아래 28)
  */
 export function WebMemoBoard(p: MemoBoardProps) {
   /* 사용법 안내 ① 대상 (원본 board.tsx data-coach="fab") */
@@ -46,17 +48,19 @@ export function WebMemoBoard(p: MemoBoardProps) {
   const [menu, setMenu] = useState<{ id: string; at: { x: number; y: number } } | null>(null);
   const [snack, setSnack] = useState<Snack | null>(null);
   const grid = useRef<React.ComponentRef<typeof View>>(null);
+  const listBox = useRef<React.ComponentRef<typeof View>>(null);
 
   const byId = (id: string) => p.memos.find((m) => m.id === id);
   const ckById = (id: string) => p.checklists.find((c) => c.id === id);
   /* 순서: 고정 먼저 · 순서에 없는 새 것은 자기 구역 맨 위 */
   const order = arrange(p);
+  const pinned = pinnedIds(p);
 
   const shownMemo = (m: Memo) => filter === 'all' || (filter === 'ai' ? m.ai_linked : m.unread_updates > 0);
   const empty = p.memos.length === 0 && p.checklists.length === 0;
-  const canDrag = filter === 'all' && !sel && view === 'grid';
-  const { drag, justDropped } = useBoardDragWeb(grid, !empty && view === 'grid', order, canDrag, k, p.onReorder);
-  useContextMenuWeb(grid, !empty && view === 'grid', (key, at) => {
+  const canDrag = filter === 'all' && !sel;
+  const { drag, justDropped } = useBoardDragWeb(view === 'grid' ? grid : listBox, !empty, order, canDrag, k, p.onReorder, pinned.size, view === 'grid' ? GRID_CELL : LIST_CELL);
+  useContextMenuWeb(view === 'grid' ? grid : listBox, !empty, (key, at) => {
     if (!sel) setMenu({ id: key, at });
   });
   /* Esc: 메뉴 → 고르기 순으로 닫기 (원본 CtxMenu · SelectBar) */
@@ -127,6 +131,15 @@ export function WebMemoBoard(p: MemoBoardProps) {
   const lifted = drag ? byId(drag.key) : null;
   const liftedCl = drag ? ckById(drag.key) : null;
 
+  /* 목록 보기 한 줄 */
+  const row = (key: string, first: boolean) => {
+    const cl = ckById(key);
+    if (cl) return <WebChecklistRow checklist={cl} first={first} grab={canDrag && !cl.pinned} onOpen={() => !justDropped() && p.onOpenChecklist(key)} onMenu={(at) => setMenu({ id: key, at })} />;
+    const m = byId(key);
+    if (!m) return null;
+    return <WebMemoRow memo={m} first={first} grab={canDrag && !m.pinned} selecting={!!sel} selected={!!sel?.includes(key)} onOpen={() => open(m)} onPick={() => toggleSel(key)} onMenu={(at) => setMenu({ id: key, at })} />;
+  };
+
   return (
     <View style={st.root}>
       <ScrollView style={st.flex} showsVerticalScrollIndicator={false}>
@@ -168,14 +181,16 @@ export function WebMemoBoard(p: MemoBoardProps) {
               {empty ? (
                 <EmptyBoard name={p.stock.name} onExample={(t) => p.onNewMemo(t)} onFirst={() => p.onNewMemo()} onChecklist={p.onNewChecklist} />
               ) : view === 'list' ? (
-                <FadeIn style={st.list}>
-                  {[...shown]
-                    .sort((a, b) => Number(b.pinned) - Number(a.pinned))
-                    .map((m, i) => (
-                      <WebMemoRow key={m.id} memo={m} first={i === 0} selecting={!!sel} selected={!!sel?.includes(m.id)} onOpen={() => open(m)} onPick={() => toggleSel(m.id)} onMenu={(at) => setMenu({ id: m.id, at })} />
-                    ))}
-                  {shown.length === 0 ? <Text style={st.none}>조건에 맞는 메모가 없어요</Text> : null}
-                </FadeIn>
+                <View ref={listBox} style={st.listBox}>
+                  <FadeIn style={st.list}>
+                    {viewKeys.map((key, i) => {
+                      if (key === HOLE) return <View key={HOLE} style={st.listHole} />;
+                      return <View key={key} {...data({ bkey: key })}>{row(key, i === 0)}</View>;
+                    })}
+                    {viewKeys.length === 0 ? <Text style={st.none}>조건에 맞는 메모가 없어요</Text> : null}
+                  </FadeIn>
+                  {drag ? <View pointerEvents="none" style={[st.listLift, { left: drag.left, top: drag.top }]}>{row(drag.key, true)}</View> : null}
+                </View>
               ) : (
                 <View style={st.gridWrap}>
                   <View ref={grid} style={st.grid}>
@@ -185,13 +200,13 @@ export function WebMemoBoard(p: MemoBoardProps) {
                       if (cl)
                         return (
                           <View key={key} {...data({ bkey: key })} style={st.slot}>
-                            <WebChecklistCard checklist={cl} onOpen={() => !justDropped() && p.onOpenChecklist(key)} onToggleItem={(iid) => p.onToggleChecklistItem(key, iid)} onPin={() => pin([key], !cl.pinned)} onMenu={(at) => setMenu({ id: key, at })} />
+                            <WebChecklistCard checklist={cl} grab={canDrag && !cl.pinned} onOpen={() => !justDropped() && p.onOpenChecklist(key)} onToggleItem={(iid) => p.onToggleChecklistItem(key, iid)} onPin={() => pin([key], !cl.pinned)} onMenu={(at) => setMenu({ id: key, at })} />
                           </View>
                         );
                       const m = byId(key)!;
                       return (
                         <View key={key} {...data({ bkey: key })} style={st.slot}>
-                          <WebMemoCard memo={m} selecting={!!sel} selected={!!sel?.includes(key)} onOpen={() => open(m)} onPick={() => toggleSel(key)} onPin={() => pin([key], !m.pinned)} onToggleAi={() => p.onToggleAi(key)} onMenu={(at) => setMenu({ id: key, at })} />
+                          <WebMemoCard memo={m} grab={canDrag && !m.pinned} selecting={!!sel} selected={!!sel?.includes(key)} onOpen={() => open(m)} onPick={() => toggleSel(key)} onPin={() => pin([key], !m.pinned)} onToggleAi={() => p.onToggleAi(key)} onMenu={(at) => setMenu({ id: key, at })} />
                         </View>
                       );
                     })}
@@ -319,6 +334,9 @@ const st = StyleSheet.create({
   hint: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 4 },
   hintT: { ...fpx(13, 20), color: webColor.sub2 },
   vt: { marginLeft: 'auto' },
+  listBox: { position: 'relative', width: '100%' },
+  listHole: { height: 76, backgroundColor: 'rgba(17,17,17,0.03)' },
+  listLift: { position: 'absolute', zIndex: 50, width: 860, borderRadius: 14, backgroundColor: '#FFFFFF', transform: [{ scale: 1.01 }], shadowColor: '#000000', shadowOpacity: 0.22, shadowRadius: 28, shadowOffset: { width: 0, height: 18 } },
   list: { width: '100%', overflow: 'hidden', borderRadius: 20, borderWidth: 1, borderColor: webColor.line, backgroundColor: '#FFFFFF' },
   none: { paddingHorizontal: 20, paddingVertical: 40, textAlign: 'center', ...fpx(15, 23), fontWeight: '500', color: webColor.sub2 },
   gridWrap: { paddingTop: 14, paddingBottom: 40 },

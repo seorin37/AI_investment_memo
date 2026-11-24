@@ -89,3 +89,14 @@ export function restoreCards(b: BoardCards, removed: RemovedCard[]): BoardCards 
     order,
   };
 }
+
+/** 카드를 to 자리로 (집은 카드를 뺀 목록 기준). 고정 카드는 못 옮기고, 고정 구역 안으로도 못 감 → 바뀐 게 없으면 null */
+export function moveCard(order: string[], pinCount: number, id: string, to: number): string[] | null {
+  const from = order.indexOf(id);
+  if (from < pinCount) return null;
+  const next = order.filter((x) => x !== id);
+  const at = Math.max(pinCount, Math.min(next.length, to));
+  if (at === from) return null;
+  next.splice(at, 0, id);
+  return next;
+}

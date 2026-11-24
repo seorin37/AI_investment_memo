@@ -20,10 +20,12 @@ import { PriceNoteHead } from '../PriceNoteHead';
 import { SwipeRow } from '@/ui/shared/SwipeRow';
 import { AppViewToggle, type BoardView } from '@/ui/shared/ViewToggle';
 import { appColor, ft } from '@/ui/theme';
+import { arrange } from '../boardCards';
+import { SortCards } from './SortCards';
 import type { BoardFilter, MemoBoardProps } from '../MemoBoard.types';
 import { usePaper } from '@/ui/shared/Dark';
 
-type Item = { key: string; memo?: Memo; checklist?: Checklist; pinned: boolean; at: string };
+type Item = { key: string; memo?: Memo; checklist?: Checklist; pinned: boolean };
 type Snack = { id: number; msg: string; undo?: string[] };
 
 /* 원본 C 순서: 노랑 · 초록 · 파랑 · 보라 · 분홍 */
@@ -37,7 +39,7 @@ const EXAMPLES = ['실적 나오면 다시 보기', '많이 빠지면 다시 생
  * · (사용량 소진 안내) · 칩 줄 + 2열/목록 전환 (좌우 16 · 아래 14 · 사이 6) · 카드 (아래 120)
  * 2열: 왼쪽 16 · 칸 사이 12 · 줄 166 (카드 150 + 16) · 카드 폭 (화면폭 - 44) / 2 → 412 에서 184
  * 목록: 줄 64 · 줄 밀기 (메모만) · 꾹 눌러 고르기 → 머리·막대 바뀜 (탭바는 부모가 숨김)
- * 정렬: 고정 먼저 → 고친 날짜 최신 순 (원본 vis()). 원본 앱에는 끌어서 순서 바꾸기가 없음.
+ * 순서: 고정 먼저(맨 위 고정 구역) → 저장된 순서. 일반 카드는 꾹 눌러 끌어서 바꿈 (전체 보기에서, SortCards). 웹과 같은 순서.
  * header: 평소 상단 바 (라우트가 줌). 고르는 동안은 'N개 선택' 머리로 바꿔 끼움.
  */
 export function AppMemoBoard(p: MemoBoardProps & { header: React.ReactNode }) {
@@ -55,10 +57,16 @@ export function AppMemoBoard(p: MemoBoardProps & { header: React.ReactNode }) {
   const items: Item[] = useMemo(() => {
     const ms: Item[] = p.memos
       .filter((m) => filter === 'all' || (filter === 'ai' ? m.ai_linked : m.unread_updates > 0))
-      .map((m) => ({ key: m.id, memo: m, pinned: m.pinned, at: m.updated_at }));
-    const cl: Item[] = filter === 'all' ? p.checklists.map((c) => ({ key: c.id, checklist: c, pinned: !!c.pinned, at: c.updated_at })) : [];
-    return [...ms, ...cl].sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.at.localeCompare(a.at));
-  }, [p.memos, p.checklists, filter]);
+      .map((m) => ({ key: m.id, memo: m, pinned: m.pinned }));
+    const cl: Item[] = filter === 'all' ? p.checklists.map((c) => ({ key: c.id, checklist: c, pinned: !!c.pinned })) : [];
+    const rank = new Map(arrange({ memos: p.memos, checklists: p.checklists, order: p.order }).map((id, i) => [id, i]));
+    return [...ms, ...cl].sort((a, b) => (rank.get(a.key) ?? 0) - (rank.get(b.key) ?? 0));
+  }, [p.memos, p.checklists, p.order, filter]);
+  /* 끌어 옮기기: 스크롤 잠금 · 위치 */
+  const [locked, setLocked] = useState(false);
+  const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const viewport = useRef<React.ComponentRef<typeof View>>(null);
+  const scrollY = useRef(0);
 
   const memoCount = p.memos.length;
   const newTotal = p.memos.reduce((n, m) => n + m.unread_updates, 0);
@@ -174,7 +182,8 @@ export function AppMemoBoard(p: MemoBoardProps & { header: React.ReactNode }) {
   return (
     <View ref={rootRef} collapsable={false} style={st.root}>
       {sel ? <AppSelectHeader count={sel.length} allSelected={sel.length === items.length} onClose={() => setSel(null)} onToggleAll={() => setSel(sel.length === items.length ? null : items.map((i) => i.key))} /> : p.header}
-      <ScrollView style={st.flex} contentContainerStyle={st.content} showsVerticalScrollIndicator={false} onScrollBeginDrag={() => openRow && setOpenRow(null)}>
+      <View ref={viewport} collapsable={false} style={st.flex}>
+      <ScrollView ref={scroll} style={st.flex} scrollEnabled={!locked} onScroll={(e) => { scrollY.current = e.nativeEvent.contentOffset.y; }} scrollEventThrottle={16} contentContainerStyle={st.content} showsVerticalScrollIndicator={false} onScrollBeginDrag={() => openRow && setOpenRow(null)}>
         <View style={st.cardWrap}>
           {p.priceNote ? <PriceNoteHead stock={p.stock} note={p.priceNote} variant="app" /> : <AppStockCard {...p.stock} />}
         </View>
@@ -211,53 +220,61 @@ export function AppMemoBoard(p: MemoBoardProps & { header: React.ReactNode }) {
           <EmptyBoard onExample={(t) => p.onNewMemo(t)} onFirst={() => p.onNewMemo()} />
         ) : (
           <FadeIn key={`${view}-${filter}`}>
-            {view === 'grid' ? (
-              <View style={st.grid}>
-                {items.map((it) =>
-                  it.checklist ? (
-                    <AppChecklistCard key={it.key} checklist={it.checklist} onAllDone={celebrate} width={cw} height={150} selecting={selecting} selected={!!sel?.includes(it.key)} onPress={() => tap(it)} onLongPress={() => enterSel(it.key)} onToggleItem={(iid) => p.onToggleChecklistItem(it.key, iid)} />
-                  ) : (
-                    <AppMemoCard key={it.key} memo={it.memo!} width={cw} height={150} selecting={selecting} selected={!!sel?.includes(it.key)} aiSpent={p.aiSpent} onPress={() => tap(it)} onLongPress={() => enterSel(it.key)} />
-                  ),
-                )}
-              </View>
-            ) : (
-              <View style={st.list}>
-                {items.map((it) =>
-                  it.checklist ? (
-                    <AppChecklistRow key={it.key} checklist={it.checklist} width={W} selecting={selecting} selected={!!sel?.includes(it.key)} onPress={() => tap(it)} onLongPress={() => enterSel(it.key)} />
-                  ) : (
+            <View style={view === 'grid' ? st.grid : st.list}>
+              <SortCards
+                keys={items.map((it) => it.key)}
+                pinCount={items.filter((it) => it.pinned).length}
+                layout={view === 'grid' ? { cols: 2, w: cw, h: 150, gx: 12, gy: 16, radius: 16 } : { cols: 1, w: W, h: 64, gx: 0, gy: 0, radius: 0 }}
+                enabled={filter === 'all' && !selecting && !openRow}
+                scroll={scroll}
+                viewport={viewport}
+                scrollY={scrollY}
+                onLock={setLocked}
+                onHold={enterSel}
+                onDrop={p.onReorder}
+                renderCard={(key, hold) => {
+                  const it = items.find((x) => x.key === key)!;
+                  const own = { selecting, selected: !!sel?.includes(key), onPress: () => tap(it), ...hold };
+                  if (view === 'grid')
+                    return it.checklist ? (
+                      <AppChecklistCard checklist={it.checklist} onAllDone={celebrate} width={cw} height={150} {...own} onToggleItem={(iid) => p.onToggleChecklistItem(key, iid)} />
+                    ) : (
+                      <AppMemoCard memo={it.memo!} width={cw} height={150} aiSpent={p.aiSpent} {...own} />
+                    );
+                  if (it.checklist) return <AppChecklistRow checklist={it.checklist} width={W} {...own} />;
+                  const m = it.memo!;
+                  return (
                     <SwipeRow
-                      key={it.key}
-                      enabled={!selecting}
-                      open={openRow === it.key}
-                      onOpenChange={(o) => setOpenRow(o ? it.key : openRow === it.key ? null : openRow)}
-                      pinLabel={it.memo!.pinned ? '고정 해제' : '고정'}
+                      enabled={!selecting && !locked}
+                      open={openRow === key}
+                      onOpenChange={(o) => setOpenRow(o ? key : openRow === key ? null : openRow)}
+                      pinLabel={m.pinned ? '고정 해제' : '고정'}
                       onPin={() => {
-                        p.onPin([it.key], !it.memo!.pinned);
-                        toast(it.memo!.pinned ? '고정을 풀었어요' : '메모를 고정했어요');
+                        p.onPin([key], !m.pinned);
+                        toast(m.pinned ? '고정을 풀었어요' : '메모를 고정했어요');
                       }}
-                      aiLabel={it.memo!.ai_linked ? 'AI 끄기' : 'AI 연결'}
+                      aiLabel={m.ai_linked ? 'AI 끄기' : 'AI 연결'}
                       onAi={() => {
                         setOpenRow(null);
-                        p.onToggleAi(it.key);
+                        p.onToggleAi(key);
                       }}
                       onDelete={() => {
                         setOpenRow(null);
-                        p.onDelete([it.key]);
-                        toast('메모를 휴지통으로 옮겼어요', [it.key]);
+                        p.onDelete([key]);
+                        toast('메모를 휴지통으로 옮겼어요', [key]);
                       }}
                     >
-                      <AppMemoRow memo={it.memo!} width={W} selecting={selecting} selected={!!sel?.includes(it.key)} onPress={() => tap(it)} onLongPress={() => enterSel(it.key)} />
+                      <AppMemoRow memo={m} width={W} {...own} />
                     </SwipeRow>
-                  ),
-                )}
-              </View>
-            )}
+                  );
+                }}
+              />
+            </View>
           </FadeIn>
         )}
         <View style={st.bottom} />
       </ScrollView>
+      </View>
       {!selecting ? (
         <FabFan
           open={fan}
@@ -339,7 +356,7 @@ const st = StyleSheet.create({
   spb: { marginTop: 2, marginHorizontal: 16, marginBottom: 12 },
   frow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingBottom: 14 },
   vt: { marginLeft: 'auto' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 12, rowGap: 16, paddingHorizontal: 16, paddingTop: 10 },
+  grid: { paddingHorizontal: 16, paddingTop: 10 },
   list: {},
   bottom: { height: 120 },
   snack: { position: 'absolute', left: 14, right: 14, bottom: 14 },

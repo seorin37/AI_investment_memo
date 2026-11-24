@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { addChecklist, addMemo, arrange, removeCards, restoreCards, setPinned } from '../src/ui/screens/board/boardCards.ts';
+import { addChecklist, addMemo, arrange, moveCard, removeCards, restoreCards, setPinned } from '../src/ui/screens/board/boardCards.ts';
 
 /* 메모 보드 카드 순서 · 고정 구역 규칙 (앱·웹 공통, DB 없이) */
 const card = (id, pinned = false) => ({ id, pinned });
@@ -32,4 +32,14 @@ test('지우고 되돌리면 있던 자리로, 두 번 되돌려도 하나', () 
   const back = restoreCards(cards, removed);
   assert.deepEqual(arrange(back), ['p', 'a', 'c1', 'b', 'c2']);
   assert.equal(restoreCards(back, removed).memos.length, 3);
+});
+
+test('끌기: 고정 카드는 못 옮기고, 고정 구역 안으로는 바로 아래까지만', () => {
+  const o = ['p', 'q', 'a', 'b', 'c'];
+  assert.equal(moveCard(o, 2, 'p', 4), null);
+  assert.deepEqual(moveCard(o, 2, 'c', 0), ['p', 'q', 'c', 'a', 'b']);
+  assert.deepEqual(moveCard(o, 2, 'a', 3), ['p', 'q', 'b', 'a', 'c']);
+  assert.deepEqual(moveCard(o, 2, 'a', 99), ['p', 'q', 'b', 'c', 'a']);
+  assert.equal(moveCard(o, 2, 'a', 1), null);
+  assert.equal(moveCard(o, 2, 'x', 3), null);
 });

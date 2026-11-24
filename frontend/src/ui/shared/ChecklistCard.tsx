@@ -4,10 +4,10 @@ import Svg, { Circle } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
 import type { Checklist, ChecklistItem } from '@/types/models';
 import { AppPin, CheckMark, CkiMark, Dots } from '@/ui/icons/BoardGlyphs';
-import { appColor, checklistColor, fpx, ft } from '@/ui/theme';
+import { appColor, checklistColor, fpx, ft, webColor } from '@/ui/theme';
 import { DotBurst } from '@/components/motion/Celebrate';
 import { useChecklistTone } from './Dark';
-import { SelCircle } from './MemoCard';
+import { GRAB, SelCircle } from './MemoCard';
 import { AppTape, WebTape } from './MemoPaper';
 import { ListCheck } from './MemoRow';
 
@@ -36,6 +36,8 @@ export interface AppChecklistCardProps {
   selected: boolean;
   onPress: () => void;
   onLongPress: () => void;
+  /** 꾹 누른 뒤 뗌 (끌기 · 고르기 구분) */
+  onPressOut?: () => void;
   onToggleItem: (id: string) => void;
 }
 
@@ -45,7 +47,7 @@ export interface AppChecklistCardProps {
  * 항목 (위 8 · 사이 6): 동그라미 17 (안쪽 1.6 #E9B48F · 흰 .7 / 한 것 #FF7A1A) · 12.5px · 한 것 #B49A8A 줄 긋기
  * 3개까지 + '+N개 더' 11.5px 600 #B07A55. 항목 줄을 누르면 체크, 그 밖을 누르면 체크리스트 화면)
  */
-export function AppChecklistCard({ checklist, width, height, selecting, selected, onPress, onLongPress, onToggleItem, onAllDone }: AppChecklistCardProps & { onAllDone?: (center: { x: number; y: number }) => void }) {
+export function AppChecklistCard({ checklist, width, height, selecting, selected, onPress, onLongPress, onPressOut, onToggleItem, onAllDone }: AppChecklistCardProps & { onAllDone?: (center: { x: number; y: number }) => void }) {
   const L = checklist.items.length;
   /* 축하 (원본 memo.html toggleCk: 체크할 때 점이 튀고 · 마지막 항목이면 .32초 뒤 카드 가운데서 색종이) */
   const outer = useRef<React.ComponentRef<typeof View>>(null);
@@ -64,7 +66,7 @@ export function AppChecklistCard({ checklist, width, height, selecting, selected
   const tone = useChecklistTone();
   return (
     <View ref={outer} collapsable={false} style={{ width, height }}>
-      <Pressable onPress={onPress} onLongPress={onLongPress} delayLongPress={480} accessibilityRole="button" accessibilityLabel={checklist.title || '체크리스트'} style={[st.face, { width, height, backgroundColor: tone.paper }, selected && st.faceSel]}>
+      <Pressable onPress={onPress} onLongPress={onLongPress} onPressOut={onPressOut} delayLongPress={480} accessibilityRole="button" accessibilityLabel={checklist.title || '체크리스트'} style={[st.face, { width, height, backgroundColor: tone.paper }, selected && st.faceSel]}>
         <View style={st.ckh}>
           <View style={st.cki}>
             <CkiMark size={14} />
@@ -79,7 +81,7 @@ export function AppChecklistCard({ checklist, width, height, selecting, selected
         <View style={st.ckl}>
           {L ? (
             ord.slice(0, 3).map((x) => (
-              <Pressable key={x.id} onPress={() => (selecting ? onPress() : toggle(x.id))} onLongPress={onLongPress} delayLongPress={480} accessibilityRole="checkbox" accessibilityState={{ checked: x.done }} accessibilityLabel={x.text} style={({ pressed }) => [st.cr, pressed && { backgroundColor: 'rgba(255,122,26,0.12)' }]}>
+              <Pressable key={x.id} onPress={() => (selecting ? onPress() : toggle(x.id))} onLongPress={onLongPress} onPressOut={onPressOut} delayLongPress={480} accessibilityRole="checkbox" accessibilityState={{ checked: x.done }} accessibilityLabel={x.text} style={({ pressed }) => [st.cr, pressed && { backgroundColor: 'rgba(255,122,26,0.12)' }]}>
                 <View style={[st.cc, x.done ? [st.ccOn, { backgroundColor: tone.tape }] : [st.ccOff, { borderColor: tone.cardBox, backgroundColor: tone.cardBoxBg }]]}>
                   {x.done ? <CheckMark kind="cki" size={11} stroke={1.9} /> : null}
                   <DotBurst fire={pop?.id === x.id ? pop.n : 0} size={17} />
@@ -103,12 +105,12 @@ export function AppChecklistCard({ checklist, width, height, selecting, selected
 }
 
 /** 앱 목록 체크리스트 줄 (원본 .list .item.ck: 흰 바탕 · 아래 선 · 표 36 (라운드 11) · 이름 15.5px 800 · 'n/N 완료 · 다음 항목' 12.5px) */
-export function AppChecklistRow({ checklist, width, selecting, selected, onPress, onLongPress }: Omit<AppChecklistCardProps, 'height' | 'onToggleItem'>) {
+export function AppChecklistRow({ checklist, width, selecting, selected, onPress, onLongPress, onPressOut }: Omit<AppChecklistCardProps, 'height' | 'onToggleItem'>) {
   const L = checklist.items.length;
   const d = checklist.items.filter((x) => x.done).length;
   const next = checklist.items.find((x) => !x.done)?.text ?? '모두 끝냈어요';
   return (
-    <Pressable onPress={onPress} onLongPress={onLongPress} delayLongPress={480} accessibilityRole="button" accessibilityLabel={checklist.title || '체크리스트'} style={({ pressed }) => [st.row, { width, backgroundColor: selected ? '#F4F0FF' : pressed ? '#F1F1F4' : '#FFFFFF' }]}>
+    <Pressable onPress={onPress} onLongPress={onLongPress} onPressOut={onPressOut} delayLongPress={480} accessibilityRole="button" accessibilityLabel={checklist.title || '체크리스트'} style={({ pressed }) => [st.row, { width, backgroundColor: selected ? '#F4F0FF' : pressed ? '#F1F1F4' : '#FFFFFF' }]}>
       <ListCheck visible={selecting} on={selected} />
       <View style={st.ckiBig}>
         <CkiMark size={18} />
@@ -151,7 +153,7 @@ function Ring({ done, n }: { done: number; n: number }) {
  * 4개 이상이면 2개 + '외 N개 더 있어요 · 눌러서 모두 보기' 14/21 500 #8A8592)
  * 고정 테이프(위 -16 가운데)와 ⋯ 메뉴(hover)는 메모 카드와 같은 자리 · 같은 모양
  */
-export function WebChecklistCard({ checklist, onOpen, onToggleItem, onPin, onMenu }: { checklist: Checklist; onOpen: () => void; onToggleItem: (id: string) => void; onPin: () => void; onMenu: (at: { x: number; y: number }) => void }) {
+export function WebChecklistCard({ checklist, onOpen, onToggleItem, onPin, onMenu, grab }: { checklist: Checklist; grab?: boolean; onOpen: () => void; onToggleItem: (id: string) => void; onPin: () => void; onMenu: (at: { x: number; y: number }) => void }) {
   const [hov, setHov] = useState(false);
   const [tape, setTape] = useState(false);
   const L = checklist.items.length;
@@ -159,7 +161,7 @@ export function WebChecklistCard({ checklist, onOpen, onToggleItem, onPin, onMen
   const shown = L > 3 ? checklist.items.slice(0, 2) : checklist.items;
   return (
     <View style={st.webWrap} onPointerEnter={() => setHov(true)} onPointerLeave={() => { setHov(false); setTape(false); }}>
-    <Pressable onPress={onOpen} accessibilityLabel={checklist.title} style={st.web}>
+    <Pressable onPress={onOpen} accessibilityLabel={checklist.title} style={[st.web, grab && GRAB]}>
       <View style={st.webHead}>
         <View style={st.webHeadT}>
           <Text style={st.webTitle}>{checklist.title}</Text>
@@ -191,7 +193,38 @@ export function WebChecklistCard({ checklist, onOpen, onToggleItem, onPin, onMen
   );
 }
 
+/** 웹 목록 체크리스트 줄 (메모 줄 WebMemoRow 와 같은 치수: 76 · 좌우 20 · 사이 16 · 표 40) */
+export function WebChecklistRow({ checklist: c, first, grab, onOpen, onMenu }: { checklist: Checklist; first: boolean; grab?: boolean; onOpen: () => void; onMenu: (at: { x: number; y: number }) => void }) {
+  const d = c.items.filter((x) => x.done).length;
+  const next = c.items.find((x) => !x.done)?.text ?? '모두 끝냈어요';
+  return (
+    <Pressable onPress={onOpen} accessibilityLabel={c.title} style={({ hovered }: { pressed: boolean; hovered?: boolean }) => [st.wrow, !first && st.wline, hovered && { backgroundColor: webColor.hover }, grab && GRAB]}>
+      <View style={st.wic}>
+        <CheckMark kind="cki" size={20} stroke={1.8} />
+      </View>
+      <View style={st.lt}>
+        <View style={st.wtop}>
+          <Text style={[st.webTitle, { flexShrink: 1 }]} numberOfLines={1}>{c.title}</Text>
+          {c.pinned ? <View style={st.wpin}><Text style={st.wpinT}>고정</Text></View> : null}
+        </View>
+        <Text style={st.wsub} numberOfLines={1}>{c.items.length ? `${d}/${c.items.length} 완료 · ${next}` : '확인할 일을 추가해 보세요'}</Text>
+      </View>
+      <Pressable onPress={(e) => onMenu({ x: e.nativeEvent.pageX - 220, y: e.nativeEvent.pageY + 6 })} accessibilityRole="button" accessibilityLabel="체크리스트 메뉴" style={({ hovered }: { pressed: boolean; hovered?: boolean }) => [st.wdots, hovered && { backgroundColor: webColor.chip }]}>
+        <Dots color={webColor.sub2} />
+      </Pressable>
+    </Pressable>
+  );
+}
+
 const st = StyleSheet.create({
+  wrow: { height: 76, flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 20 },
+  wline: { borderTopWidth: 1, borderTopColor: '#F0F1F3' },
+  wic: { width: 40, height: 40, borderRadius: 10, backgroundColor: '#ADA0C5', alignItems: 'center', justifyContent: 'center' },
+  wtop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  wpin: { borderRadius: 6, backgroundColor: webColor.chip, paddingHorizontal: 6 },
+  wpinT: { ...fpx(13, 20), fontWeight: '500', color: webColor.ink2 },
+  wsub: { ...fpx(14, 21), color: '#747D8D' },
+  wdots: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   face: { borderRadius: 16, backgroundColor: checklistColor.paper, paddingTop: 14, paddingHorizontal: 13, overflow: 'hidden' },
   faceSel: { borderWidth: 2.5, borderColor: appColor.accent, paddingTop: 11.5, paddingHorizontal: 10.5 },
   ckh: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 22 },
