@@ -90,6 +90,9 @@ class FakeTrashForJournal:
     def deleted_stocks(self, user_id):
         return []
 
+    def deleted_studio(self, user_id):
+        return []
+
     def deleted_journals(self, user_id):
         return [{"id": r["id"], "title": r["title"], "content": r["body"], "deleted_at": r["deleted_at"]}
                 for r in self.j.rows.values() if r["user_id"] == user_id and r["deleted_at"] is not None]

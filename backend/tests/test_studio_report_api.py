@@ -112,3 +112,10 @@ def test_failure_marks_failed_without_credit(monkeypatch):
     assert api.post("/api/v1/studio/reports", json={"codes": ["000660"]}).status_code == 202
     assert spent == []
     assert [p for op, p in db.calls if op == "UPDATE"] == [{"id": 42, "error": "RuntimeError"}]
+
+
+def test_trashed_report_is_not_reused():
+    """휴지통에 넣은 보고서(deleted_at, 0025)를 '같은 주 같은 종목'으로 다시 쓰면 새로 만들어도 목록에 안 보인다 → 다시 쓰지 않는다."""
+    from app.studio_report import routes as report_routes
+
+    assert "deleted_at IS NULL" in report_routes.SAME_SQL

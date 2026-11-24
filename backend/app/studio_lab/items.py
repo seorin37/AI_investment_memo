@@ -1,6 +1,7 @@
 """스튜디오 만든 항목 (studio_items, 0019) — 목록·삭제·실험실 결과 저장 (2026-11-23).
 
-- 목록은 내 것 중 만료(expires_at) 전인 것만, 최근 것부터.
+- 목록은 내 것 중 만료(expires_at) 전이고 휴지통에 없는 것만, 최근 것부터.
+- 삭제는 휴지통으로 (deleted_at, 0025 · 2026-11-24 팀장 결정). 복원·영구 삭제는 /trash.
 - 실험실은 LLM 답이 나왔을 때만 저장한다 (규칙 대체 답은 저장하지 않는다 — 크레딧 차감과 같은 기준).
 - 주간보고서·오디오는 아직 생성 백엔드가 없어 여기서 만들지 않는다.
 """
@@ -16,9 +17,10 @@ from sqlalchemy import text
 LAB_VAR_NAMES = ("원/달러 환율", "국제유가", "한국 기준금리", "미국 10년물 국채금리")
 
 LIST_SQL = """SELECT id, kind, status, title, symbols, content, credits_used, created_at, expires_at
-FROM studio_items WHERE user_id = :uid AND expires_at > now() ORDER BY created_at DESC, id DESC"""
+FROM studio_items WHERE user_id = :uid AND expires_at > now() AND deleted_at IS NULL ORDER BY created_at DESC, id DESC"""
 
-DELETE_SQL = "DELETE FROM studio_items WHERE id = :id AND user_id = :uid"
+DELETE_SQL = """UPDATE studio_items SET deleted_at = now()
+WHERE id = :id AND user_id = :uid AND deleted_at IS NULL AND expires_at > now()"""
 
 INSERT_LAB_SQL = """INSERT INTO studio_items (user_id, kind, trigger, status, title, symbols, content, credits_used, ready_at)
 VALUES (:uid, 'lab', 'request', 'ready', :title, ARRAY[:symbol]::char(6)[], CAST(:content AS jsonb), :credits, now())

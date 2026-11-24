@@ -29,7 +29,7 @@ router = APIRouter(prefix="/api/v1/studio", tags=["studio-report"])
 
 MY_CODES_SQL = """SELECT btrim(symbol) AS code FROM user_stocks WHERE user_id = :u AND deleted_at IS NULL"""
 SAME_SQL = """SELECT id, status FROM studio_items
-WHERE user_id = :u AND kind = 'report' AND period_start = :mon AND expires_at > now()
+WHERE user_id = :u AND kind = 'report' AND period_start = :mon AND expires_at > now() AND deleted_at IS NULL
   AND (status = 'ready' OR (status IN ('queued', 'generating') AND created_at > now() - interval '15 minutes'))
   AND (SELECT array_agg(btrim(x) ORDER BY btrim(x)) FROM unnest(symbols) x) = CAST(:codes AS text[])
   AND coalesce((content->>'market_on')::boolean, false) = :market
