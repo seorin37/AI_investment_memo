@@ -1,5 +1,6 @@
 import type { LabRunGroup } from '@/types/models';
 import type { ReportStock, mockReport } from './Studio.mock';
+import type { AudioEp } from './audioEp';
 import type { CreditPack } from '../my/My.mock';
 
 export type StudioKind = 'audio' | 'report' | 'lab' | 'quiz';
@@ -33,6 +34,8 @@ export interface MadeItem {
   server?: boolean;
   /** 주간보고서: 서버가 만든 보고서 (없으면 mock 예시) — reportView.fromServerReport (2026-11-23) */
   report?: { rep: typeof mockReport; stocks: ReportStock[] };
+  /** AI 오디오: 서버가 만든 한 편 (없으면 mock 예시) — audioView.fromServerAudio (2026-11-24). fileUrl: 음성 파일 */
+  audio?: { ep: AudioEp; fileUrl?: string };
   /** 투자 실험실: 종목 · 조건 4칸 (상승/유지/하락) */
   lab?: { code: string; dirs: ('상승' | '유지' | '하락')[]; name?: string; groups?: LabRunGroup[]; added?: Record<string, string> };
 }

@@ -30,7 +30,9 @@ import { useQuizAnswer } from '@/ui/screens/studio/useQuizAnswer';
 import { useTrashData } from '@/ui/screens/my/useTrashData';
 import { WebTrash } from '@/ui/screens/my/web/Trash';
 import { chapterAt, fmt, useStudioPlayer } from '@/store/studioPlayer';
-import { mockAudioEpisode, mockAudioGen, mockAudioPeriods, mockAudioStocks, mockLabDisclaimer, mockLabNote, mockLabVars, mockLastClose, mockReport, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
+import { mockAudioGen, mockLabDisclaimer, mockLabNote, mockLabVars, mockReport, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
+import { epOf } from '@/ui/screens/studio/audioEp';
+import { useAudioPick, useCreateAudio } from '@/ui/screens/studio/audioView';
 import { WebFail, WebGen, WebLabGen, WebMini, WebPlayer } from '@/ui/screens/studio/web/Audio';
 import { shellSizeFor } from '@/ui/layout/web/shellSize';
 import { WebReportPopup, WebReportSum } from '@/ui/screens/studio/web/Report';
@@ -226,6 +228,10 @@ export default function MainLayout() {
   const repView = reportView(repItem);
   const reportPick = useReportPickStocks();
   const createReport = useCreateReport();
+  /* AI 오디오: 실제 모드면 GET /studio/audio/options (창을 열었을 때만) · POST /studio/audio (2026-11-24) */
+  const audioPick = useAudioPick(studioPop === 'audio');
+  const createAudio = useCreateAudio();
+  const spEp = epOf(spItem);
   const { studio_fail } = useGlobalSearchParams<{ studio_fail?: string }>();
   const unreadShown = inbox.items.filter((n) => unread.includes(n.id) && (n.kind === 'ai' ? myNoti.ai : myNoti.studio)).length;
   /* action(오른쪽 버튼)이 있을 때만 5초, 나머지는 그대로 4초 */
@@ -365,7 +371,7 @@ export default function MainLayout() {
               : sp.webView === 'player' && spItem ? (
                 <WebPlayer
                   item={spItem}
-                  ep={mockAudioEpisode}
+                  ep={spEp}
                   t={sp.t}
                   playing={sp.playing}
                   speed={sp.speed}
@@ -400,8 +406,8 @@ export default function MainLayout() {
             {sp.mini && spItem && sp.webView !== 'player' ? (
               <WebMini
                 title={spItem.title}
-                sub={`지금 · ${mockAudioEpisode.chapters[chapterAt(sp.t)][1]} · ${fmt(sp.t)}`}
-                progress={sp.t / mockAudioEpisode.dur}
+                sub={`지금 · ${spEp.chapters[chapterAt(sp.t, spEp)][1]} · ${fmt(sp.t)}`}
+                progress={sp.t / spEp.dur}
                 playing={sp.playing}
                 onOpen={() => { sp.setMini(false); sp.setWebView('player'); }}
                 onToggle={sp.toggle}
@@ -531,16 +537,17 @@ export default function MainLayout() {
     />
     <WebAudioPopup
       open={studioPop === 'audio'}
-      stocks={mockAudioStocks}
-      periods={mockAudioPeriods}
-      lastClose={mockLastClose}
+      stocks={audioPick.stocks}
+      periods={audioPick.periods}
+      lastClose={audioPick.lastClose}
       preset={popPreset}
       onClose={() => setStudioPop(null)}
       onMake={({ codes, period, market }) => {
         setStudioPop(null);
         setStudioOpen(true);
         sp.setWebView('gen');
-        sp.startAudio({ sub: `${codes.length}종목 · ${period} · ${market ? '증시 요약 포함' : '증시 요약 없음'}`, n: codes.length }, __DEV__ && studio_fail === '1');
+        sp.startAudio({ sub: `${codes.length}종목 · ${period} · ${market ? '증시 요약 포함' : '증시 요약 없음'}`, n: codes.length, codes, market },
+          __DEV__ && studio_fail === '1', env.useMock ? undefined : () => createAudio(codes, period, market));
       }}
     />
     <WebReportPopup

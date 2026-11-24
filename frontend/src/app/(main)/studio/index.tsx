@@ -6,7 +6,8 @@ import { useUI } from '@/store/ui';
 import { TopBar } from '@/ui/layout/app/TopBar';
 import { useUsageView } from '@/ui/screens/my/useUsageView';
 import { useMyProfile } from '@/ui/screens/my/useMyProfile';
-import { mockAudioPeriods, mockAudioStocks, mockReport, mockStudioCounts, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
+import { mockReport, mockStudioCounts, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
+import { useAudioPick, useCreateAudio } from '@/ui/screens/studio/audioView';
 import { useCreateReport, useReportPickStocks } from '@/ui/screens/studio/reportView';
 import { env } from '@/config/env';
 import { AppAudioSheet } from '@/ui/screens/studio/app/AudioSheet';
@@ -35,6 +36,9 @@ export default function StudioTab() {
   const createReport = useCreateReport();
   const [sheet, setSheet] = useState(false);
   const [rsheet, setRSheet] = useState(false);
+  /* AI 오디오: 실제 모드면 GET /studio/audio/options (시트를 열었을 때만) · POST /studio/audio (2026-11-24) */
+  const audioPick = useAudioPick(sheet);
+  const createAudio = useCreateAudio();
   const [mk, setMk] = useState(make);
   if (make !== mk) {
     setMk(make);
@@ -82,12 +86,13 @@ export default function StudioTab() {
       />
       <AppAudioSheet
         open={sheet}
-        stocks={mockAudioStocks}
-        periods={mockAudioPeriods}
+        stocks={audioPick.stocks}
+        periods={audioPick.periods}
         onClose={() => setSheet(false)}
         onMake={({ codes, period, market }) => {
           setSheet(false);
-          p.startAudio({ sub: `${codes.length}종목 · ${period} · ${market ? '증시 요약 포함' : '증시 요약 없음'}`, n: codes.length }, __DEV__ && fail === '1');
+          p.startAudio({ sub: `${codes.length}종목 · ${period} · ${market ? '증시 요약 포함' : '증시 요약 없음'}`, n: codes.length, codes, market },
+            __DEV__ && fail === '1', env.useMock ? undefined : () => createAudio(codes, period, market));
           setTimeout(() => router.push('/studio-gen'), 220);
         }}
       />

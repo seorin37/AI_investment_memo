@@ -5,7 +5,7 @@ import { useCoach } from '@/store/coach';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/store/auth';
 import { chapterAt, fmt, useStudioPlayer } from '@/store/studioPlayer';
-import { mockAudioEpisode } from '@/ui/screens/studio/Studio.mock';
+import { epOf } from '@/ui/screens/studio/audioEp';
 import { AppMiniPlayer } from '@/ui/screens/studio/app/MiniPlayer';
 import { size } from '@/ui/theme';
 import { useUI } from '@/store/ui';
@@ -116,14 +116,15 @@ function Mini({ hidden }: { hidden: boolean }) {
   const insets = useSafeAreaInsets();
   const p = useStudioPlayer();
   const item = p.made.find((m) => m.id === p.cur);
-  const ch = mockAudioEpisode.chapters[chapterAt(p.t)][1].split(' ·')[0];
+  const ep = epOf(item);
+  const ch = ep.chapters[chapterAt(p.t, ep)][1].split(' ·')[0];
   return (
     <AppMiniPlayer
       visible={p.mini && !!item && !hidden}
       bottom={1 + 65 + Math.max(size.tabBarPadBottom, insets.bottom) + 10}
       title={item?.title ?? ''}
-      sub={`${ch} · ${fmt(p.t)} / ${fmt(mockAudioEpisode.dur)}`}
-      progress={p.t / mockAudioEpisode.dur}
+      sub={`${ch} · ${fmt(p.t)} / ${fmt(ep.dur)}`}
+      progress={p.t / ep.dur}
       playing={p.playing}
       onOpen={() => router.push('/studio-player')}
       onToggle={p.toggle}

@@ -24,6 +24,9 @@ import type {
   LabRunResult,
   StudioItem,
   ReportCreateResult,
+  AudioItem,
+  AudioOptions,
+  AudioPeriod,
   MacroOverview,
   MarketOverview,
   MarketUpdate,
@@ -174,6 +177,10 @@ export interface Api {
   markReportWatch(itemId: string, key: string, memoId: string): Promise<void>;
   /** 주간보고서 만들기 (백그라운드, 완성은 listStudioItems로 확인) */
   createReport(input: { codes: string[]; market: boolean }): Promise<ReportCreateResult>;
+  /** AI 오디오 (2026-11-24): 만들기 시트 값 · 만들기(백그라운드) · 상태와 결과 (파일은 GET /studio/audio/{id}/file) */
+  getAudioOptions(): Promise<AudioOptions>;
+  createAudio(input: { codes: string[]; period: AudioPeriod; market: boolean }): Promise<ReportCreateResult>;
+  getAudio(id: string): Promise<AudioItem>;
   listCalendar(month: string): Promise<CalendarEvent[]>;
   createCalendarEvent(input: { date: string; title: string }): Promise<CalendarEvent>;
   listNews(): Promise<NewsHeadline[]>;

@@ -447,6 +447,11 @@ export const mockApi: Api = {
   markReportWatch: async () => wait(undefined),
   /* mock 모드 보고서는 store 타이머(startReport)가 만든다 — 부르지 않는다 */
   createReport: async () => wait({ item_id: 'mock', status: 'ready' as const, reused: false }),
+  /* mock 모드 오디오는 store 타이머(startAudio)와 Studio.mock 값을 쓴다 — 부르지 않는다 */
+  getAudioOptions: async () => wait({ stocks: [], periods: ['전날', '최근 3일', '최근 7일'], last_close: null, last_close_date: null, cost: 5 }),
+  createAudio: async () => wait({ item_id: 'mock', status: 'ready' as const, reused: false }),
+  getAudio: async (id) => wait({ id, status: 'failed' as const, title: '', error: 'mock', period: { start: '', end: '' }, symbols: [],
+    credits_used: 0, created_at: new Date().toISOString(), ready_at: null, content: {}, file_url: null }),
   listCalendar: async (month) => wait(db.calendar.filter((e) => e.date.startsWith(month))),
   createCalendarEvent: async (input) => {
     const e = { id: uid('e'), date: input.date, title: input.title, category: 'mine' as const, stock_code: null };

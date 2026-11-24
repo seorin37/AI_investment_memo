@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 import io
 import json
+import re
 import struct
 import wave
 from datetime import date, datetime, time
@@ -14,7 +15,7 @@ import pytest
 from app.studio_audio.collect import card_window, day_label, period_range
 from app.studio_audio.episode import NoUpdatesError, estimate_starts, flatten, text_hash, to_content, write_script
 from app.studio_audio.fallback import fallback, josa
-from app.studio_audio.prompt import (FEWSHOT_ANSWER, FEWSHOT_BRIEF, FEWSHOT_RECAP, build_user, config, messages,
+from app.studio_audio.prompt import (FEWSHOT_ANSWER, FEWSHOT_BRIEF, FEWSHOT_RECAP, RETRY_NOTE, build_user, config, messages,
                                      opening_topic, target_chars)
 from app.studio_audio.schema import AUDIO_SCHEMA, banned_hits, check
 from app.studio_audio.speech import native, sino, to_speech
@@ -137,7 +138,7 @@ def test_check_structure_errors():
     a["segments"] = [g for g in a["segments"] if g["kind"] != "no_news"]
     assert any("no_news" in e for e in check(a, BRIEF))
     a = copy.deepcopy(GOOD)
-    for line in a["segments"][2]["lines"]:
+    for line in (ln for g in a["segments"] for ln in g["lines"]):
         line["refs"] = [r for r in line["refs"] if r != "U2"]
     assert any("U2" in e for e in check(a, BRIEF))
     a = answer(**{"4_3_text": "다음 방송에서 만나요."})
@@ -352,7 +353,7 @@ def test_market_off_and_single_day():
 # ───────── 감정·말투 태그 (S2 [대괄호] 지시)
 def test_tone_tags_go_to_tts_only():
     lines = flatten(GOOD)
-    assert [ln.tone for ln in lines][:4] == ["bright", "warm", "bright", "warm"]
+    assert [ln.tone for ln in lines][:4] == ["bright", "bright", "bright", "warm"]
     first = lines[0]
     assert first.tag == config()["tts"]["tones"]["bright"] and first.tts_text.startswith("[bright")
     assert "[" not in first.text and "[" not in first.speech            # 화면 대본·읽기 문장에는 태그가 없다
@@ -424,19 +425,23 @@ def test_recap_numbers_are_checked():
 @pytest.mark.parametrize("path, value, word", [
     ("2_3_tone", "bright", "bright"),                                  # bright는 opening·closing만
     ("1_2_tone", "surprised", "surprised"),                            # 지수 등락에 surprised
-    ("2_16_tone", "surprised", "surprised"),                           # 종가 줄에 surprised
     ("2_1_cue", "light_laugh", "light_laugh"),                         # refs 있는 줄에 웃음
     ("0_1_text", "오늘 날씨가 참 좋아요.", "날씨"),
     ("0_1_text", "비가 와서 그런지 조용하네요.", "날씨"),
-    ("2_11_text", "쉽게 말하면 거품 같은 거예요.", "비유"),
+    ("2_4_text", "쉽게 말하면 거품 같은 거예요.", "비유"),
     ("2_1_cue", "giggle", "cue"),
 ])
 def test_v6_line_checks(path, value, word):
     assert any(word in e for e in check(answer(**{path: value}), BRIEF))
 
 
+def test_surprised_not_on_close_price_line():
+    a = answer(**{"2_3_text": "1월 9일 종가는 52,300원이었어요.", "2_3_tone": "surprised"})
+    assert any("surprised" in e for e in check(a, BRIEF))
+
+
 def test_weather_word_inside_other_words_is_ok():
-    a = answer(**{"2_11_text": "쉽게 말하면 공장 설비가 늘어나는 데 돈을 쓰는 거예요."})
+    a = answer(**{"2_4_text": "쉽게 말하면 공장 설비가 늘어나는 데 돈을 쓰는 거예요."})
     assert check(a, BRIEF) == []
     assert banned_hits("예시증권은 배당이 늘 수 있다고 전망했어요.") == [] and banned_hits("그 회사 망했어요.") != []
 
@@ -453,6 +458,16 @@ def test_opening_line_limit_and_a_share():
     assert any("진행자 A" in e for e in check(a, BRIEF))
 
 
+def test_retry_shows_previous_script_and_note():
+    bad = answer(**{"2_1_text": "1월 7일 공시는 호재예요. 금액은 3,200억 원이에요."})
+    llm = fake_llm(bad, GOOD)
+    write_script(BRIEF, llm)
+    retry = llm.calls[1]
+    assert retry[-2]["role"] == "assistant" and "호재" in retry[-2]["content"]   # 고칠 대본이 보인다
+    assert retry[-1]["content"].startswith(RETRY_NOTE) and "호재" in retry[-1]["content"]
+    assert len(llm.calls[0]) == 4                                                # 첫 시도에는 없다
+
+
 def test_opening_topic_changes_per_broadcast():
     b1, b2 = copy.deepcopy(BRIEF), copy.deepcopy(BRIEF)
     b1.topic = b2.topic = ""
@@ -467,8 +482,21 @@ def test_opening_topic_changes_per_broadcast():
     assert opening_topic(BRIEF) == BRIEF.topic
 
 
+def test_fewshot_has_no_echo_reactions():
+    """audio-v8: 본론(market·stock)에는 숫자를 되묻거나 맞장구만 치는 줄이 없다. 웃음은 opening·closing 수다에만."""
+    body = [ln for g in GOOD["segments"] if g["kind"] in ("market", "stock") for ln in g["lines"]]
+    assert not any(ln["cue"] == "light_laugh" or ln["tone"] == "surprised" for ln in body)
+    assert not any(len(ln["text"]) <= 10 for ln in body)
+    ends = [ln for g in GOOD["segments"] if g["kind"] in ("opening", "closing") for ln in g["lines"]]
+    assert sum(ln["cue"] == "light_laugh" for ln in ends) >= 2                   # 앞뒤 수다는 있다
+    stock = next(g for g in GOOD["segments"] if g["kind"] == "stock")["lines"]
+    for prev, ln in zip(stock, stock[1:]):
+        if ln["speaker"] == "A" and ln["text"].endswith("?"):
+            assert not set(re.findall(r"\d[\d,.]*", ln["text"])) & set(re.findall(r"\d[\d,.]*", prev["text"]))
+
+
 def test_cue_tag_follows_tone_tag():
-    lines = flatten(GOOD)
+    lines = flatten(answer(**{"0_0_cue": "light_laugh"}))
     laugh = next(ln for ln in lines if ln.cue == "light_laugh")
     tts = config()["tts"]
     assert laugh.tts_text == f"{tts['tones'][laugh.tone]} {tts['cues']['light_laugh']} {laugh.speech}"
@@ -476,7 +504,7 @@ def test_cue_tag_follows_tone_tag():
 
 
 def test_short_reaction_gap(tmp_path):
-    lines = flatten(GOOD)
+    lines = flatten(answer(**{"2_3_text": "어디에 써요?"}))                     # 짧은 반응 한 줄
     cfg = {"lead": 0.3, "gap_line": 0.25, "gap_short": 0.15, "gap_segment": 0.7, "short_chars": 10}
     res = synthesize(lines, FakeTTS(cps=10, rate=8000), cfg, tmp_path)
     dur = lambda ln: max(0.4, len(ln.tts_text) / 10)

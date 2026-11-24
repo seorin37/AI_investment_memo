@@ -22,6 +22,7 @@ from app.home.routes import router as home_router
 from app.journal.routes import router as journal_router
 from app.studio_lab.routes import router as studio_lab_router
 from app.studio_report.routes import router as studio_report_router
+from app.studio_audio.routes import router as studio_audio_router
 from app.quiz.routes import router as quiz_router
 from app.web import mount_web
 from pipelines.common.db import DatabaseConfigError, get_read_dsn
@@ -79,6 +80,7 @@ app.include_router(home_router)
 app.include_router(journal_router)
 app.include_router(studio_lab_router)
 app.include_router(studio_report_router)
+app.include_router(studio_audio_router)
 app.include_router(quiz_router)
 
 
