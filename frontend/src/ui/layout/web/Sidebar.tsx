@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Image, Platform, Pressable, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { WebIcon, type WebIconName } from '@/ui/icons/Icon';
@@ -98,9 +98,35 @@ export function Sidebar(p: SidebarProps) {
   const [fly, setFly] = useState(false);
   const [q, setQ] = useState('');
   const [focus, setFocus] = useState(false);
+  /* 검색 결과에서 ↑↓로 고른 줄 (원본 shell.tsx sel) */
+  const [sel, setSel] = useState(0);
+  /* 드롭다운 항목을 누르는 중 — 입력칸 포커스가 빠져도(blur) 드롭다운을 닫지 않음 (원본 onMouseDown preventDefault 와 같은 효과, 웹·앱 공통) */
+  const picking = useRef(false);
+  const typing = useRef(false);
+  const pickIn = () => {
+    picking.current = true;
+  };
+  /* 누르다 다른 데서 뗐으면(onPress 없음) 다음 틈에 정리: 입력칸에 포커스가 없으면 닫기 */
+  const pickOut = () =>
+    setTimeout(() => {
+      if (!picking.current) return;
+      picking.current = false;
+      if (!typing.current) setFocus(false);
+    }, 0);
+  /* 항목을 골랐으면 고르는 중 표시를 끄고 드롭다운 닫기 */
+  const picked = () => {
+    picking.current = false;
+    setFocus(false);
+  };
   const [open, setOpen] = useState({ mine: true, holding: true, watching: true });
   const homeOn = p.current === 'home';
   const hits: SideSearchHit[] = q.trim() ? p.onSearch(q.trim()) : [];
+  const pickHit = (h: SideSearchHit | undefined) => {
+    if (!h) return;
+    p.onPickSearch(h);
+    setQ('');
+    setSel(0);
+  };
 
   const support = (
     <View style={st.rel}>
@@ -174,7 +200,8 @@ export function Sidebar(p: SidebarProps) {
   return (
     <View style={[st.nav, st.navOpen, { width: z.sidebar }]} accessibilityRole="menu" accessibilityLabel="메모스 메뉴">
       {/* 위 · 고정 */}
-      <View style={st.gap24}>
+      {/* zIndex 2: 검색 드롭다운이 아래 '내 종목' 블록(st.mid) 위로 (RN-web 은 View 마다 z-index 0 이라 블록끼리 순서를 정해 줘야 함) */}
+      <View style={[st.gap24, { zIndex: 2 }]}>
         <View style={st.head}>
           <Pressable onPress={() => p.onNavigate('home')} accessibilityRole="button" accessibilityLabel="홈으로" style={st.wordmark}>
             <Image source={require('../../icons/wordmark-web.png')} style={st.wordmarkImg} resizeMode="stretch" />
@@ -191,9 +218,34 @@ export function Sidebar(p: SidebarProps) {
             <WebIcon name="search" size={z.icon} />
             <TextInput
               value={q}
-              onChangeText={setQ}
-              onFocus={() => setFocus(true)}
-              onBlur={() => setTimeout(() => setFocus(false), 150)}
+              onChangeText={(v) => {
+                setQ(v);
+                setSel(0);
+              }}
+              onFocus={() => {
+                typing.current = true;
+                setFocus(true);
+              }}
+              onBlur={() => {
+                typing.current = false;
+                if (!picking.current) setTimeout(() => !picking.current && !typing.current && setFocus(false), 150);
+              }}
+              /* 원본 shell.tsx: ↓↑ 결과 이동 · Enter 고른 결과 열기 · Esc 검색어 지우기 */
+              onKeyPress={(e) => {
+                const k = e.nativeEvent.key;
+                if (k === 'Escape') {
+                  setQ('');
+                  setSel(0);
+                } else if (k === 'ArrowDown' || k === 'ArrowUp') {
+                  (e as unknown as { preventDefault?: () => void }).preventDefault?.();
+                  setSel((v) => (k === 'ArrowDown' ? Math.min(v + 1, hits.length - 1) : Math.max(v - 1, 0)));
+                } else if (k === 'Enter' && q.trim()) {
+                  /* 한글 조합 중 Enter(글자 확정)는 무시 — 확정 뒤 한 번 더 눌러야 열림 */
+                  const ne = e.nativeEvent as unknown as { isComposing?: boolean; keyCode?: number };
+                  if (ne.isComposing || ne.keyCode === 229) return;
+                  pickHit(hits[sel]);
+                }
+              }}
               placeholder="검색"
               placeholderTextColor={webColor.groupLabel}
               style={[st.searchInput, z.menuText, Platform.OS === 'web' && NO_OUTLINE]}
@@ -205,14 +257,14 @@ export function Sidebar(p: SidebarProps) {
               <Text style={st.dropHead}>최근 찾은 종목</Text>
               <View style={st.recent}>
                 {p.recentSearches.map((r) => (
-                  <Pressable key={r} onPress={() => p.onPickRecent(r)} style={({ hovered }: HoverState) => [st.recentChip, hovered && { backgroundColor: webColor.chipHover }]}>
+                  <Pressable key={r} onPressIn={pickIn} onPressOut={pickOut} onPress={() => { picked(); p.onPickRecent(r); }} style={({ hovered }: HoverState) => [st.recentChip, hovered && { backgroundColor: webColor.chipHover }]}>
                     <Text style={st.recentText}>{r}</Text>
                   </Pressable>
                 ))}
               </View>
               <Text style={[st.dropHead, st.dropHead2]}>많이 찾는 종목</Text>
               {p.popular.map((c) => (
-                <Pressable key={c.stock_code} onPress={() => p.onPickPopular(c.stock_code)} style={({ hovered }: HoverState) => [st.pop, hovered && { backgroundColor: webColor.row }]}>
+                <Pressable key={c.stock_code} onPressIn={pickIn} onPressOut={pickOut} onPress={() => { picked(); p.onPickPopular(c.stock_code); }} style={({ hovered }: HoverState) => [st.pop, hovered && { backgroundColor: webColor.row }]}>
                   <Text style={st.popName}>{c.name}</Text>
                   <Text style={st.popSub}>{c.mine ? '내 종목' : '추가'}</Text>
                 </Pressable>
@@ -228,18 +280,22 @@ export function Sidebar(p: SidebarProps) {
                   <Text style={st.noneB}>종목명·6자리 코드, 메모·기록 글자로 다시 찾아보세요</Text>
                 </View>
               ) : (
-                hits.map((h) => (
+                hits.map((h, i) => (
                   <Pressable
                     key={h.key}
+                    onPressIn={pickIn}
+                    onPressOut={pickOut}
+                    onHoverIn={() => setSel(i)}
                     onPress={() => {
-                      p.onPickSearch(h);
-                      setQ('');
+                      picked();
+                      pickHit(h);
                     }}
-                    style={({ hovered }: HoverState) => [st.hit, hovered && { backgroundColor: webColor.active }]}
+                    /* 고른 줄(↑↓ 또는 마우스) = 배경 · 굵게 (원본 sel === i) */
+                    style={[st.hit, sel === i && { backgroundColor: webColor.active }]}
                   >
-                    {({ hovered }: HoverState) => (
+                    {() => (
                       <>
-                        <Text style={[st.hitT, { fontWeight: hovered ? '700' : '500' }]} numberOfLines={1}>
+                        <Text style={[st.hitT, { fontWeight: sel === i ? '700' : '500' }]} numberOfLines={1}>
                           {h.title}
                         </Text>
                         <Text style={st.hitS}>{h.sub}</Text>
@@ -305,8 +361,8 @@ export function Sidebar(p: SidebarProps) {
         </ScrollView>
       </View>
 
-      {/* 아래 · 고정 */}
-      <View style={st.gap20}>
+      {/* 아래 · 고정. 설정 메뉴가 열렸을 때만 위로(3): 화면 덮개가 위쪽 블록(2)까지 덮어 바깥을 누르면 메뉴만 닫히게 */}
+      <View style={[st.gap20, fly && { zIndex: 3 }]}>
         <View style={st.gap8}>
           <Row icon="trash" label="휴지통" onPress={p.onTrash} />
           {support}

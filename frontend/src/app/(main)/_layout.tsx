@@ -273,8 +273,10 @@ export default function MainLayout() {
           const s = sideStocks.find((x) => x.name === name);
           if (s) openStock(s.stock_code);
         },
+        /* 많이 찾는 종목: 내 종목이면 그 보드 · '추가' 표시면 종목 추가 창 (원본 shell.tsx setOverlay('addStock')) */
         onPickPopular: (code) => {
           if (sideStocks.some((s) => s.stock_code === code)) openStock(code);
+          else setAddOpen(true);
         },
         onNavigate: (to) => router.navigate(to === 'home' ? '/' : to === 'mine' ? '/stocks' : `/${to}`),
         onOpenStock: openStock,
