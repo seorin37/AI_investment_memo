@@ -109,7 +109,10 @@ function MarketCell({ q, draw, onPress }: { q: MarketIndex; draw: boolean; onPre
   return (
     <View style={st.mcCol} onLayout={(ev) => setW(Math.max(40, Math.round(ev.nativeEvent.layout.width)))}>
       <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${q.name} 자세히`} style={({ pressed }) => [st.mc, pressed && { backgroundColor: '#F4F4F6' }]}>
-        <Text style={st.mcS}>{q.name}</Text>
+        <View style={st.mcTop}>
+          <Text style={[st.mcS, st.mcName]} numberOfLines={1}>{q.name}</Text>
+          <Text style={st.mcMore}>자세히 ›</Text>
+        </View>
         <Text style={st.mcB} numberOfLines={1}>
           {nf(q.value)}
         </Text>
@@ -443,6 +446,9 @@ const st = StyleSheet.create({
   mk3: { flexDirection: 'row', gap: 10 },
   mcCol: { flex: 1, minWidth: 0 },
   mc: { marginHorizontal: -6, marginVertical: -6, paddingTop: 6, paddingHorizontal: 6, paddingBottom: 4, borderRadius: 14 },
+  mcTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4 },
+  mcName: { flexShrink: 1 },
+  mcMore: { ...ft(11), color: appColor.ink3 },
   mcS: { ...ft(13), color: appColor.ink2 },
   mcB: { ...ft(18), fontWeight: '700', color: appColor.ink, marginTop: 4 },
   mcC: { ...ft(12) },
