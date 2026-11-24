@@ -4,6 +4,9 @@ daily:
   run_at: "06:30"            # 한국 시간. 메모 저장 응답의 next_update_at도 이 값을 쓴다
   max_usd_per_day: 1.0       # 그날(한국 날짜) 매일 실행분 LLM 비용 합이 이 값을 넘으면 남은 항목은 다음 날로
   lock_key: 581094101        # Postgres advisory lock (daily_refresh 581094001과 다른 값) — 중복 실행 방지
+  # 2026-11-24 크레딧 적용 켬: 잔액 0인 사용자의 항목은 매일 검사에서 건너뛰고(가격 조건은 무료라 계속), 만든 카드마다 차감.
+  # 켜지 않으면 크레딧을 다 쓴 사용자에게도 매일 LLM 비용이 나간다. 서버 명령의 --credits와 같다
+  credits: true
 # 2026-11-11 저장 방식. file: 결과 폴더 파일 + --used-refs·--item-state 파일 (기본) | db: 기존 테이블(tracking_updates·update_sources·
 # tracking_matches·tracking_items.last_checked_at)에 쓰고 항목도 DB에서 읽는다 (db_store.py, 로컬 테스트 DB만). experiment --store
 store: file
