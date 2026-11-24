@@ -1,0 +1,22 @@
+{"id": "H01", "group": "price", "expect": "ask", "symbol": "105560", "company": "KB금융", "text": "KB금융 요즘 주가 어떤 수준이야?"}
+{"id": "H02", "group": "price", "expect": "ask", "symbol": "005930", "company": "삼성전자", "text": "이 정도 가격이면 메리트 있나"}
+{"id": "H03", "group": "price", "expect": "ask", "symbol": "000660", "company": "SK하이닉스", "text": "하닉 주가 너무 과열된 거 같은데 아닌가?"}
+{"id": "H04", "group": "price", "expect": "ask", "symbol": "105560", "company": "KB금융", "text": "배당 생각하면 지금 가격 나쁘지 않은 건가"}
+{"id": "H05", "group": "decide", "expect": "ask", "symbol": "005930", "company": "삼성전자", "text": "삼전 지금 줍줍해도 되냐"}
+{"id": "H06", "group": "decide", "expect": "ask", "symbol": "000660", "company": "SK하이닉스", "text": "익절할까 말까"}
+{"id": "H07", "group": "decide", "expect": "ask", "symbol": "105560", "company": "KB금융", "text": "KB 계속 들고 가도 될지 모르겠다"}
+{"id": "H08", "group": "decide", "expect": "ask", "symbol": "005930", "company": "삼성전자", "text": "전량 매도 각인가?"}
+{"id": "H09", "group": "predict", "expect": "ask", "symbol": "000660", "company": "SK하이닉스", "text": "하이닉스 다음 주에도 오를려나"}
+{"id": "H10", "group": "predict", "expect": "ask", "symbol": "105560", "company": "KB금융", "text": "KB금융 금리 내려가면 떨어지겠지?"}
+{"id": "H11", "group": "predict", "expect": "ask", "symbol": "005930", "company": "삼성전자", "text": "삼전 10만전자 갈 수 있을까"}
+{"id": "H12", "group": "cause", "expect": "ask", "symbol": "000660", "company": "SK하이닉스", "text": "하이닉스 오늘 빠진 거 미국 반도체 지수 때문이라더라"}
+{"id": "H13", "group": "cause", "expect": "ask", "symbol": "105560", "company": "KB금융", "text": "금리 인하 얘기 때문에 은행주 약한 거 같음"}
+{"id": "H14", "group": "cause", "expect": "ask", "symbol": "005930", "company": "삼성전자", "text": "중국 수출 규제 때문에 빠졌다던데"}
+{"id": "H15", "group": "drop", "expect": "drop", "symbol": "000660", "company": "SK하이닉스", "text": "하이닉스 사랑해"}
+{"id": "H16", "group": "drop", "expect": "drop", "symbol": "005930", "company": "삼성전자", "text": "삼전은 언젠가 오른다 믿는다"}
+{"id": "H17", "group": "drop", "expect": "drop", "symbol": "105560", "company": "KB금융", "text": "KB 오늘 5주 추가 매수함"}
+{"id": "H18", "group": "drop", "expect": "drop", "symbol": "000660", "company": "SK하이닉스", "text": "주식 그만하고 싶다"}
+{"id": "H19", "group": "drop", "expect": "drop", "symbol": "005930", "company": "삼성전자", "text": "오늘도 물렸네 ㅋㅋ"}
+{"id": "H20", "group": "drop", "expect": "drop", "symbol": "105560", "company": "KB금융", "text": "분할 매수 원칙 지키기"}
+{"id": "H21", "group": "multi", "expect": "ask", "symbol": "000660", "company": "SK하이닉스", "text": "HBM 공급 계약 소식 나오면 알려줘. 근데 지금 사도 되나?"}
+{"id": "H22", "group": "multi", "expect": "ask", "symbol": "005930", "company": "삼성전자", "text": "요즘 너무 떨어져서 속상하다. 외국인 매도 때문이라던데 맞아?"}

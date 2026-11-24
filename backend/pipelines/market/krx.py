@@ -2,6 +2,7 @@ import os
 import re
 import time
 import random
+from dataclasses import dataclass
 from datetime import date
 
 import requests
@@ -20,18 +21,30 @@ RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
 STOCK_SYMBOL_PATTERN = re.compile(r"^[0-9A-Z]{6}$")
 
 
+@dataclass(frozen=True)
+class KrxDailySnapshot:
+    """One HTTP response with both parsed rows and the exact response bytes."""
+
+    endpoint: str
+    trade_date: date
+    status_code: int
+    content_type: str | None
+    raw_content: bytes
+    rows: list[dict]
+
+
 def is_valid_stock_symbol(symbol: str) -> bool:
     """Return whether *symbol* is a six-character KRX short code."""
 
     return STOCK_SYMBOL_PATTERN.fullmatch(symbol) is not None
 
 
-def _fetch_stock_daily(
+def _fetch_stock_daily_snapshot(
     endpoint: str,
     trade_date: date,
     *,
     max_attempts: int,
-) -> list[dict]:
+) -> KrxDailySnapshot:
     """KRX KOSPI 일별 데이터를 요청하고 일시적 오류만 재시도한다."""
 
     api_key = os.getenv("KRX_API_KEY")
@@ -69,7 +82,14 @@ def _fetch_stock_daily(
                     f"예상하지 못한 KRX 응답 형식: {str(data)[:300]}"
                 )
 
-            return rows
+            return KrxDailySnapshot(
+                endpoint=endpoint,
+                trade_date=trade_date,
+                status_code=response.status_code,
+                content_type=response.headers.get("Content-Type"),
+                raw_content=response.content,
+                rows=rows,
+            )
 
         except (requests.Timeout, requests.ConnectionError) as exc:
             retryable = True
@@ -98,6 +118,19 @@ def _fetch_stock_daily(
     raise RuntimeError("KRX 요청 재시도 횟수를 초과했습니다.")
 
 
+def _fetch_stock_daily(
+    endpoint: str,
+    trade_date: date,
+    *,
+    max_attempts: int,
+) -> list[dict]:
+    return _fetch_stock_daily_snapshot(
+        endpoint,
+        trade_date,
+        max_attempts=max_attempts,
+    ).rows
+
+
 def fetch_kospi_daily(
     trade_date: date,
     max_attempts: int = 3,
@@ -105,6 +138,19 @@ def fetch_kospi_daily(
     """Fetch the KRX KOSPI daily trading response."""
 
     return _fetch_stock_daily(KRX_URL, trade_date, max_attempts=max_attempts)
+
+
+def fetch_kospi_daily_snapshot(
+    trade_date: date,
+    max_attempts: int = 3,
+) -> KrxDailySnapshot:
+    """Fetch KOSPI daily trading data once and retain the exact HTTP body."""
+
+    return _fetch_stock_daily_snapshot(
+        KRX_URL,
+        trade_date,
+        max_attempts=max_attempts,
+    )
 
 
 def fetch_kosdaq_daily(

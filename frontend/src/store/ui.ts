@@ -3,7 +3,7 @@ import type { BoardItemKind } from '@/types/models';
 
 export type SettingsSection = 'profile' | 'display' | 'notifications' | 'ai' | 'usage' | 'mcp' | 'data' | 'about';
 
-/** 전역 모달 — AppShell 의 <ModalHost/> 가 렌더링 */
+/** 전역 모달 상태 (옛 웹 셸 ModalHost 가 쓰던 값 · 11/21 옛 셸 삭제 뒤에는 렌더링하는 곳 없음 · 연결 단계에서 정리) */
 export type ModalState =
   | { type: 'addStock' }
   | { type: 'trash' }
@@ -19,6 +19,12 @@ interface UIState {
   drawerOpen: boolean;
   modal: ModalState;
   toast: { id: number; message: string } | null;
+  /** 앱 하단 탭바 숨김 (메모 고르기 중 — MemoBoard onSelectionChange) */
+  tabBarHidden: boolean;
+  setTabBarHidden(hidden: boolean): void;
+  /** 웹 보드·메모 창의 'AI 사용량 다 씀' 버튼 → 셸(_layout)이 충전 창·설정 사용량 탭을 연다 (2026-11-24) */
+  spentReq: { kind: 'credit' | 'plan'; id: number } | null;
+  requestSpent(kind: 'credit' | 'plan'): void;
   toggleSidebar(): void;
   setDrawer(open: boolean): void;
   openModal(m: NonNullable<ModalState>): void;
@@ -31,6 +37,10 @@ export const useUI = create<UIState>()((set) => ({
   drawerOpen: false,
   modal: null,
   toast: null,
+  tabBarHidden: false,
+  spentReq: null,
+  requestSpent: (kind) => set({ spentReq: { kind, id: Date.now() } }),
+  setTabBarHidden: (hidden) => set({ tabBarHidden: hidden }),
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   setDrawer: (open) => set({ drawerOpen: open }),
   openModal: (modal) => set({ modal, drawerOpen: false }),

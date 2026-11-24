@@ -40,6 +40,7 @@
     "ios": "expo start --ios",
     "tunnel": "expo start --tunnel",
     "export:web": "expo export --platform web",
+    "export:web:same-origin": "node scripts/export-web-same-origin.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
     "test:stocks": "node --test tests/stock-api-contract.test.mjs",

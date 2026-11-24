@@ -13,6 +13,9 @@
 - 2026-11-09 표본 O/X로 더한 규칙: 스포츠 구단과 같은 이름(sports_names)은 근처에 경기 말이 있으면 빼고, 짧은 이름·그룹 이름
   바로 뒤에 조사가 아닌 한글이 붙으면(비상장 계열사 "LS오토", "두산인베스트먼트", "기아대책") 빼고, 이름에 "증권"이 든 종목은
   제목에서만(기사 출처 "~증권에 따르면"), 2글자 영문 이름 바로 앞이 한글이면("울산TP") 뺀다.
+- 2026-11-19 매시 태깅 첫날 오탐으로 더한 규칙: 제목이 경기 기사면 본문 구단 이름도 뺀다(sports_title_words), DB·미래산업은 문맥 필요,
+  직함은 띄어 쓴 낱말 두 개까지 건너 보고("삼성물산 건설부문 전략사업실장"), "전/前 ○○ … CIO·부사장"(former_role_words)과
+  "○○ 1차 협력사인 …"·"○○에서 …로 이직"(career_after_patterns)은 인물 경력·다른 회사 이야기로 본다.
 - 붙이는 기준: 제목(score 1.0) / 본문 리드 lead_chars자 안 1번(0.8) / 본문 2번 이상(0.6). 본문 규칙 종목은 기사당 max_body_tags개.
   원문이 없는 기사는 제목만 본다.
 - 공용 DB 쓰기는 --write --target host:port일 때만 (실제 대상과 다르면 멈춘다). 기본은 읽기 전용 dry-run.
@@ -64,7 +67,20 @@ class Rules:
     sports_names: set[str] = field(default_factory=set)
     sports_words: tuple[str, ...] = ()
     prefix_check: set[str] = field(default_factory=set)     # 바로 뒤 글자를 보는 이름 (짧은 이름·그룹 이름)
-    title_only: set[str] = field(default_factory=set)       # 제목에서만 붙이는 이름 ("증권"이 든 종목)
+    title_only: set[str] = field(default_factory=set)       # 제목에서만 붙이는 이름 ("증권"이 든 종목, 네이버)
+    context_after_window: int = 10                           # 리드·본문의 흔한 단어 이름: 바로 뒤 이 글자 수 안의 주식 낱말만
+    skip_title: tuple[re.Pattern, ...] = ()                  # 이 제목의 기사는 건너뛴다 ([인사]·[부고])
+    group_list_words: tuple[str, ...] = ()                   # "삼성·LG"처럼 그룹 이름 나열로 보는 말
+    group_list_tail: tuple[str, ...] = ()                    # 나열 끝에 오면 그룹 이야기 ("…LG그룹", "… 등 주요 대기업")
+    sports_re: re.Pattern | None = None                      # sports_words (정규식)
+    name_suffix_block: tuple[str, ...] = ()                  # 이름 바로 뒤에 붙으면 다른 기관 ("한국공항공사", "기업은행챔버홀")
+    spaced_suffix_re: re.Pattern | None = None               # 한 칸 띄고 오는 시설 이름 ("기업은행 챔버홀", "LG 시그니처홀")
+    group_product_re: re.Pattern | None = None               # 그룹 이름 뒤 제품·매장 낱말 ("LG 올레드", "LG 베스트샵")
+    body_with_stock_words: set[str] = field(default_factory=set)   # 제목 전용이지만 본문에서 바로 뒤 주식 낱말이면 붙이는 이름 (네이버)
+    person_role_re: re.Pattern | None = None                 # 이름 뒤 인물 직함·경력 ("우리금융지주 홍보실장", "한샘 출신")
+    former_role_re: re.Pattern | None = None                 # "전/前 + 이름" 뒤 직함 ("전 한화생명보험 CIO", "前 삼성전자 부사장")
+    career_after_re: re.Pattern | None = None                # 이름 뒤 다른 회사·이직 ("현대차 1차 협력사인 화신으로 이직")
+    sports_title_re: re.Pattern | None = None                # 제목이 경기 기사인가 ("[프로배구 전적]")
 
 
 @dataclass(frozen=True)
@@ -119,7 +135,48 @@ def build_rules(stocks: dict[str, str], cfg: dict, dart_names: set[str] = frozen
                  sports_names=set(cfg.get("sports_names") or []) & set(names),
                  sports_words=tuple(cfg.get("sports_words") or ()),
                  prefix_check={n for n in names if len(n) <= int(cfg.get("prefix_check_max_len", 3)) or n in groups},
-                 title_only={n for n in names if any(w in n for w in (cfg.get("title_only_words") or []))})
+                 title_only=({n for n in names if any(w in n for w in (cfg.get("title_only_words") or []))}
+                             | (set(cfg.get("title_only_names") or []) & set(names))),
+                 context_after_window=int(cfg.get("context_after_window", 10)),
+                 skip_title=tuple(re.compile(p) for p in (cfg.get("skip_title_patterns") or [])),
+                 group_list_words=tuple(sorted(set(cfg.get("group_list_words") or []), key=len, reverse=True)),
+                 group_list_tail=tuple(cfg.get("group_list_tail") or ()),
+                 sports_re=re.compile("|".join(f"(?:{w})" for w in (cfg.get("sports_words") or []))) if cfg.get("sports_words") else None,
+                 name_suffix_block=tuple(cfg.get("name_suffix_block") or ()),
+                 spaced_suffix_re=_words_re(cfg.get("spaced_suffix_block"), r"\s"),
+                 group_product_re=_words_re(cfg.get("group_product_words"), r"\s?"),
+                 body_with_stock_words=set(cfg.get("title_only_names") or []) & set(names),
+                 person_role_re=_role_re(cfg.get("person_role_words")),
+                 former_role_re=_role_re(cfg.get("former_role_words")),
+                 career_after_re=(re.compile("|".join(f"(?:{p})" for p in cfg["career_after_patterns"]))
+                                  if cfg.get("career_after_patterns") else None),
+                 sports_title_re=(re.compile("|".join(f"(?:{w})" for w in cfg["sports_title_words"]))
+                                  if cfg.get("sports_title_words") else None))
+
+
+# 이름과 직함 사이 (2026-11-19): 이름에 붙은 말(4자, 뒤가 띄어쓰기 "한화생명보험 CIO") → 띄어 쓴 낱말 두 개까지("건설부문")
+# → 직함 앞에 붙은 말 4자까지("전략사업실장"). 낱말 단위로만 건너므로 "커뮤니케이션실장"처럼 긴 붙은 말은 가르지 않는다
+_ROLE_GAP = r"(?:[가-힣]{1,4}(?=\s))?(?:\s[가-힣0-9]{1,8}(?=\s)){0,2}?\s?[가-힣]{0,4}?"
+_ROLE_END = r"(?=$|[^가-힣A-Za-z]|[이가을를은는의에과와으로도만께])"
+_ROLE_LOOKBEHIND = {"차장": "(?<![주정승하])"}               # "주차장"·"정차장"은 직함이 아니다
+
+
+def _role_re(words) -> re.Pattern | None:
+    """이름 바로 뒤(낱말 두 개까지 건너) 직함 낱말로 끝나는 꼴. 직함 뒤는 끝·조사·한글 아닌 글자만 ("부장판사"는 아니다)."""
+    if not words:
+        return None
+    alts = [_ROLE_LOOKBEHIND.get(w, "") + re.escape(w) for w in sorted(words, key=len, reverse=True)]
+    return re.compile(_ROLE_GAP + "(?:" + "|".join(alts) + ")" + _ROLE_END)
+
+
+def _former_at(text: str, a: int) -> bool:
+    """이름 바로 앞이 "전 "·"前"인가 (인물 경력 "신민식 전 한화생명보험 CIO")."""
+    return text[max(0, a - 2):a] in ("전 ", "前 ") or text[max(0, a - 1):a] == "前"
+
+
+def _words_re(words, prefix: str) -> re.Pattern | None:
+    """prefix + (낱말 중 하나). 낱말이 없으면 None."""
+    return re.compile(prefix + "(?:" + "|".join(map(re.escape, sorted(words, key=len, reverse=True))) + ")") if words else None
 
 
 def _latin_ok(text: str, a: int, b: int, name: str) -> bool:
@@ -149,25 +206,78 @@ def find(text: str, rules: Rules) -> list[tuple[int, int, str]]:
     return sorted(out)
 
 
-def _valid(text: str, a: int, b: int, name: str, rules: Rules) -> bool:
+_CODE_AFTER = re.compile(r"\s*[(\[]\s*\d{6}\s*[)\]]")      # "대상(001680)"
+
+
+def _sports_at(text: str, a: int, b: int, rules: Rules) -> bool:
+    """이 자리 앞뒤 context_window자 안에 스포츠 낱말이 있는가."""
+    w = rules.context_window
+    around = text[max(0, a - w):a] + " " + text[b:b + w]
+    return bool(rules.sports_re.search(around)) if rules.sports_re else any(word in around for word in rules.sports_words)
+
+
+def _stock_after(text: str, b: int, rules: Rules) -> bool:
+    """이름 바로 뒤 context_after_window자 안에 주식 낱말이나 종목코드가 있는가 ("네이버 주가", "네이버(035420)")."""
+    return bool(_CODE_AFTER.match(text, b)) or any(w in text[b:b + rules.context_after_window] for w in rules.context_words)
+
+
+def _group_talk(text: str, a: int, b: int, name: str, rules: Rules) -> bool:
+    """그룹 이름 자리가 그룹 이야기인가 (2026-11-18): 뒤에 영문 계열사 낱말 / 그룹 이름 나열 / 나열 끝의 그룹·대기업."""
+    after = text[b:b + 30]
+    if re.match(r"\s?[A-Za-z]", after):
+        return True                                          # "LG CNS", "SK C&C", "SK AX", "SK u타워": 영문 계열사·시설
+    if rules.group_product_re and rules.group_product_re.match(after):
+        return True                                          # "LG 올레드 TV", "LG 베스트샵": 계열사 제품·매장 브랜드
+    if text[max(0, a - 1):a] == "범":
+        return True                                          # "범LG家": 그룹 일가
+    words = "|".join(map(re.escape, rules.group_list_words))
+    if words and (re.search(rf"(?:{words})\s*[·・,]\s*$", text[max(0, a - 8):a])
+                  or re.match(rf"\s*[·・,]\s*(?:{words})(?![가-힣])", after)):
+        return True                                          # "삼성·LG", "삼성·SK·LG"
+    tail = "|".join(map(re.escape, rules.group_list_tail))
+    return bool(tail and re.match(rf"(?:\s*[·・,/]\s*[가-힣A-Za-z]{{1,6}}?)*\s*(?:등\s*)?(?:주요\s*)?(?:{tail})", after))
+
+
+def _valid(text: str, a: int, b: int, name: str, rules: Rules, in_title: bool = True) -> bool:
     if name in rules.prefix_check and b < len(text) and _HANGUL.match(text[b]) and text[b] not in _PARTICLE_START:
         return False                                         # "LS오토", "두산인베스트먼트", "기아대책": 다른 이름의 앞부분
     if name in rules.prefix_check and _HANGUL.match(name[0]) and a > 0 and _HANGUL.match(text[a - 1]):
         return False                                         # "경영인대상", "평생학습대상": 다른 낱말의 뒷부분
-    if name in rules.sports_names:
-        w = rules.context_window
-        around = text[max(0, a - w):a] + " " + text[b:b + w]
-        if any(word in around for word in rules.sports_words):
-            return False                                     # 프로야구·농구 구단
+    if any(text.startswith(s, b) for s in rules.name_suffix_block):
+        return False                                         # "한국공항공사", "IBK기업은행챔버홀": 다른 기관·시설
+    if rules.spaced_suffix_re and rules.spaced_suffix_re.match(text, b):
+        return False                                         # "IBK기업은행 챔버홀", "LG 시그니처홀": 띄어 쓴 시설 이름
+    if b < len(text) and text[b].isdigit() and not name[-1].isdigit():
+        return False                                         # "이마트24": 숫자가 붙은 다른 회사 이름
+    if b < len(text) and _HANGUL.match(name[-1]) and re.match(r"[A-Za-z]", text[b]):
+        return False                                         # "신세계I&C": 한글 이름 바로 뒤 영문이면 더 긴 다른 회사 이름
+    if rules.person_role_re and rules.person_role_re.match(text, b):
+        return False                                         # "우리금융지주 홍보실장", "한샘 출신 대표": 인물 직함·경력
+    if rules.former_role_re and _former_at(text, a) and rules.former_role_re.match(text, b):
+        return False                                         # "전 한화생명보험 CIO", "前 삼성전자 부사장": 인물 경력
+    if rules.career_after_re and rules.career_after_re.match(text, b):
+        return False                                         # "현대차 1차 협력사인 화신으로 이직": 다른 회사·이직
+    if name in rules.sports_names and _sports_at(text, a, b, rules):
+        return False                                         # 프로야구·농구·배구 구단
     if name in rules.group_names:
         after = text[b:b + 6].lstrip()
         if any(after.startswith(s) for s in rules.group_suffixes):
             return False                                     # "SK그룹", "LG家", "한화 회장" → 그룹 이야기
-    if name in rules.require_context:
-        w = rules.context_window
-        around = text[max(0, a - w):a] + " " + text[b:b + w]
-        if not any(word in around for word in rules.context_words):
+        if _group_talk(text, a, b, name, rules):
             return False
+    if name in rules.require_context:
+        if a > 0 and text[a - 1].isalnum():
+            return False                                     # "한국PR대상": 영문·숫자 바로 뒤에 붙은 흔한 단어 이름
+        if in_title:
+            w = rules.context_window
+            around = text[max(0, a - w):a] + " " + text[b:b + w]
+            if not any(word in around for word in rules.context_words):
+                return False
+        else:                                                # 리드·본문: 바로 뒤 주식 낱말·종목코드·㈜만
+            after = text[b:b + rules.context_after_window]
+            if not (any(word in after for word in rules.context_words) or _CODE_AFTER.match(text, b)
+                    or "㈜" in text[max(0, a - 2):a] or "(주)" in text[max(0, a - 4):a]):
+                return False
     return True
 
 
@@ -178,15 +288,26 @@ def _snippet(text: str, a: int, b: int, width: int = 40) -> str:
 def match_article(title: str, body: str | None, rules: Rules) -> list[Hit]:
     """한 기사에 붙일 종목. 제목 규칙 → 리드 규칙 → 본문 2번 이상 순으로 강한 규칙 하나만 남긴다."""
     hits: dict[str, Hit] = {}
+    if any(p.search(title or "") for p in rules.skip_title):
+        return []                                            # [인사]·[부고]: 계열사를 여러 개 나열한다
+    # 스포츠 문맥이 한 자리라도 있는 구단 이름은 기사 전체에서 뺀다 (배구 기사 뒤쪽의 "현대건설도 분위기…")
+    # 제목이 경기 기사면("[프로배구 전적] 18일") 본문의 구단 이름은 앞뒤 낱말 없이도 뺀다 (2026-11-19).
+    # 제목은 확실한 경기 낱말(sports_title_words)만 본다 ("AI 3강"의 "N강"은 아니다)
+    sports_title = bool(rules.sports_title_re.search(title or "")) if rules.sports_title_re else False
+    sports = {name for text in (title or "", body or "") for a, b, name in find(text, rules)
+              if name in rules.sports_names and (sports_title or _sports_at(text, a, b, rules))}
     for a, b, name in find(title or "", rules):
         sym = rules.names[name]
-        if sym not in hits and _valid(title, a, b, name, rules):
+        if name not in sports and sym not in hits and _valid(title, a, b, name, rules):
             hits[sym] = Hit(sym, name, "title", 1, _snippet(title, a, b))
     if body:
         counts: Counter = Counter()
         first: dict[str, tuple[int, int, str]] = {}
         for a, b, name in find(body, rules):
-            if name in rules.title_only or not _valid(body, a, b, name, rules):
+            if name in sports or not _valid(body, a, b, name, rules, in_title=False):
+                continue
+            # 제목에서만 붙이는 이름: "증권"이 든 이름은 본문에서 빼고, 네이버는 바로 뒤 주식 낱말·종목코드가 있으면 붙인다
+            if name in rules.title_only and not (name in rules.body_with_stock_words and _stock_after(body, b, rules)):
                 continue
             sym = rules.names[name]
             counts[sym] += 1
@@ -283,6 +404,8 @@ def main(argv=None) -> int:
     ap.add_argument("--config", type=Path, default=CONFIG_PATH)
     ap.add_argument("--sample-out", type=Path, help="오탐 의심 표본 csv 경로")
     ap.add_argument("--sample", type=int, default=30)
+    ap.add_argument("--links-out", type=Path,
+                    help="새로 붙일 연결 전체(news_id, symbol, score, 규칙, 이름)를 csv로. --write 전에 남겨 두면 그대로 되돌릴 수 있다")
     ap.add_argument("--write", action="store_true", help="news_stocks에 실제로 더한다 (--target 필수)")
     ap.add_argument("--target", help="--write일 때 접속 대상 host:port. 다르면 쓰지 않고 멈춘다")
     args = ap.parse_args(argv)
@@ -303,8 +426,19 @@ def main(argv=None) -> int:
     with psycopg.connect(dsn) as conn:
         conn.read_only = not args.write
         rules = load_rules(conn, args.config)
-        stats = tag_window(conn, rules, since, until, write=args.write)
+        stats = tag_window(conn, rules, since, until, write=False)
         new = stats.pop("_new")
+        if args.links_out:                                   # 쓰기 전에 넣을 연결을 남긴다 (되돌리기: 이 파일의 쌍만 지운다)
+            args.links_out.parent.mkdir(parents=True, exist_ok=True)
+            with args.links_out.open("w", encoding="utf-8", newline="") as f:
+                w = csv.writer(f)
+                w.writerow(["news_id", "symbol", "score", "rule", "name"])
+                w.writerows((nid, h.symbol, h.score, h.rule, h.name) for nid, _, _, h in new)
+            print(f"넣을 연결 {len(new)}개 → {args.links_out}")
+        if args.write and new:
+            with conn.transaction(), conn.cursor() as cur:
+                cur.executemany(INSERT_SQL, [(nid, h.symbol, h.score) for nid, _, _, h in new])
+            stats["written"] = len(new)
         if not args.write:
             conn.rollback()
     print(f"이름 {len(rules.names)}개 (막는 긴 이름 포함 {len(rules.blockers)}), 문맥 필요 {len(rules.require_context)}개")

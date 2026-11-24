@@ -13,9 +13,13 @@ from .schemas import (
     MyStockResponse,
     StockCreateRequest,
     StockMasterResponse,
+    StockOrderRequest,
     StockUpdateRequest,
 )
 from .service import (
+    POPULAR_DEFAULT,
+    POPULAR_MAX,
+    InvalidStockOrderError,
     StockNotFoundError,
     StockService,
     UnsupportedStockTagsError,
@@ -62,6 +66,19 @@ def list_my_stocks(
     return service.list_mine(_user_id(current))
 
 
+@router.put("/order", response_model=list[MyStockResponse])
+def put_stock_order(
+    payload: StockOrderRequest,
+    current: dict = Depends(get_current_user),
+    service: StockService = Depends(get_command_service),
+):
+    """사이드바에서 끌어 옮긴 뒤 내 종목 전체 순서를 저장하고, 새 순서의 목록을 돌려준다 (0021)."""
+    try:
+        return service.reorder(_user_id(current), payload.codes)
+    except InvalidStockOrderError as exc:
+        raise HTTPException(422, detail=str(exc)) from exc
+
+
 @router.post("", response_model=MyStockResponse)
 def add_stock(
     payload: StockCreateRequest,
@@ -72,6 +89,16 @@ def add_stock(
         return service.add(_user_id(current), payload.code, payload.status)
     except StockNotFoundError as exc:
         raise _stock_not_found() from exc
+
+
+@router.get("/popular", response_model=list[StockMasterResponse])
+def popular_stocks(
+    limit: int = Query(default=POPULAR_DEFAULT, ge=1, le=POPULAR_MAX),
+    _current: dict = Depends(get_current_user),
+    service: StockService = Depends(get_query_service),
+):
+    """많이 찾는 종목 (온보딩). /{code} 보다 먼저 선언해야 종목코드로 잡히지 않는다."""
+    return service.popular(limit)
 
 
 @router.get("/{code}", response_model=StockMasterResponse)

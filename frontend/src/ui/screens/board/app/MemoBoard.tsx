@@ -1,0 +1,360 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { BackHandler, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
+import { Text } from '@/components/ui/AppText';
+import type { Checklist, Memo, MemoColor } from '@/types/models';
+import { Confetti } from '@/components/motion/Celebrate';
+import { FadeIn } from '@/ui/motion/Reveal';
+import { AppChecklistCard, AppChecklistRow } from '@/ui/shared/ChecklistCard';
+import { AppChips } from '@/ui/shared/Chips';
+import { FabFan } from '@/ui/shared/FabFan';
+import { AppMemoCard } from '@/ui/shared/MemoCard';
+import { AppMemoRow } from '@/ui/shared/MemoRow';
+import { Seg } from '@/ui/shared/Seg';
+import { AppSelectBar, AppSelectHeader, type AppSelAction } from '@/ui/shared/SelectBar';
+import { Sheet } from '@/ui/shared/Sheet';
+import { AppSnackbar } from '@/ui/shared/Snackbar';
+import { SpentBox } from '@/ui/shared/SpentBox';
+import { AppStockCard } from '@/ui/shared/StockHead';
+import { PriceNoteHead } from '../PriceNoteHead';
+import { SwipeRow } from '@/ui/shared/SwipeRow';
+import { AppViewToggle, type BoardView } from '@/ui/shared/ViewToggle';
+import { appColor, ft } from '@/ui/theme';
+import type { BoardFilter, MemoBoardProps } from '../MemoBoard.types';
+import { usePaper } from '@/ui/shared/Dark';
+
+const CL = 'cl';
+type Item = { key: string; memo?: Memo; checklist?: Checklist; pinned: boolean; at: string };
+type Snack = { id: number; msg: string; undo?: string[] };
+
+/* 원본 C 순서: 노랑 · 초록 · 파랑 · 보라 · 분홍 */
+const COLORS: MemoColor[] = ['yellow', 'green', 'blue', 'purple', 'pink'];
+/* 원본 빈 보드 예시 칩 */
+const EXAMPLES = ['실적 나오면 다시 보기', '많이 빠지면 다시 생각해 보기', '요즘 분위기 좋아 보여'];
+
+/**
+ * 앱 메모 보드 (원본 memo.html 의 보드 부분)
+ * 위에서부터: 종목 카드 (위 6 · 좌우 16) · [메모 보드 | 기업정보] (위 16) · '내 메모 N' 19px 800 (위 20 · 아래 10)
+ * · (사용량 소진 안내) · 칩 줄 + 2열/목록 전환 (좌우 16 · 아래 14 · 사이 6) · 카드 (아래 120)
+ * 2열: 왼쪽 16 · 칸 사이 12 · 줄 166 (카드 150 + 16) · 카드 폭 (화면폭 - 44) / 2 → 412 에서 184
+ * 목록: 줄 64 · 줄 밀기 (메모만) · 꾹 눌러 고르기 → 머리·막대 바뀜 (탭바는 부모가 숨김)
+ * 정렬: 고정 먼저 → 고친 날짜 최신 순 (원본 vis()). 원본 앱에는 끌어서 순서 바꾸기가 없음.
+ * header: 평소 상단 바 (라우트가 줌). 고르는 동안은 'N개 선택' 머리로 바꿔 끼움.
+ */
+export function AppMemoBoard(p: MemoBoardProps & { header: React.ReactNode }) {
+  const paper = usePaper();
+  const { width: W } = useWindowDimensions();
+  const cw = (W - 44) / 2;
+  const [filter, setFilter] = useState<BoardFilter>('all');
+  const [view, setView] = useState<BoardView>('grid');
+  const [sel, setSel] = useState<string[] | null>(null);
+  const [openRow, setOpenRow] = useState<string | null>(null);
+  const [fan, setFan] = useState(false);
+  const [colorFor, setColorFor] = useState<string[] | null>(null);
+  const [snack, setSnack] = useState<Snack | null>(null);
+
+  const items: Item[] = useMemo(() => {
+    const ms: Item[] = p.memos
+      .filter((m) => filter === 'all' || (filter === 'ai' ? m.ai_linked : m.unread_updates > 0))
+      .map((m) => ({ key: m.id, memo: m, pinned: m.pinned, at: m.updated_at }));
+    const cl: Item[] = filter === 'all' && p.checklist ? [{ key: CL, checklist: p.checklist, pinned: !!p.checklist.pinned, at: p.checklist.updated_at }] : [];
+    return [...ms, ...cl].sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.at.localeCompare(a.at));
+  }, [p.memos, p.checklist, filter]);
+
+  const memoCount = p.memos.length;
+  const newTotal = p.memos.reduce((n, m) => n + m.unread_updates, 0);
+  const empty = memoCount === 0 && !p.checklist;
+  const selecting = sel !== null;
+
+  /* 탭바 숨김을 부모에 알림 */
+  const onSel = p.onSelectionChange;
+  useEffect(() => {
+    onSel?.(sel ? sel.length : 0);
+  }, [sel, onSel]);
+
+  /* 스낵바: 되돌리기는 5초, 그 밖에는 2.4초 */
+  useEffect(() => {
+    if (!snack) return;
+    const t = setTimeout(() => setSnack((s) => (s && s.id === snack.id ? null : s)), snack.undo ? 5000 : 2400);
+    return () => clearTimeout(t);
+  }, [snack]);
+  const toast = (msg: string, undo?: string[]) => setSnack((s) => ({ id: (s?.id ?? 0) + 1, msg, undo }));
+  /* 축하: 화면 안 자리로 바꿔 색종이 · 스낵바 */
+  const rootRef = useRef<React.ComponentRef<typeof View>>(null);
+  const [cf, setCf] = useState<{ x: number; y: number; id: number } | null>(null);
+  const celebrate = (c: { x: number; y: number }) =>
+    rootRef.current?.measureInWindow((rx, ry) => {
+      setCf((o) => ({ x: c.x - rx, y: c.y - ry, id: (o?.id ?? 0) + 1 }));
+      toast('체크리스트를 모두 끝냈어요');
+    });
+  /* 돌아올 때 받은 알림 (새 메모 저장 · 빈 메모) */
+  const [noticeKey, setNoticeKey] = useState(p.notice?.key);
+  if (p.notice && p.notice.key !== noticeKey) {
+    setNoticeKey(p.notice.key);
+    toast(p.notice.message);
+  }
+
+  /* 안드로이드 뒤로: 시트(모달이 먼저 받음) → 열린 줄 → 부채꼴 → 고르기 → 화면 */
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (openRow) {
+        setOpenRow(null);
+        return true;
+      }
+      if (fan) {
+        setFan(false);
+        return true;
+      }
+      if (sel) {
+        setSel(null);
+        return true;
+      }
+      return false;
+    });
+    return () => sub.remove();
+  }, [openRow, fan, sel]);
+
+  const byId = (id: string) => p.memos.find((m) => m.id === id);
+  const enterSel = (key: string) => {
+    setOpenRow(null);
+    setSel([key]);
+  };
+  const toggleSel = (key: string) =>
+    setSel((s) => {
+      const cur = s ?? [];
+      const next = cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key];
+      return next.length ? next : null;
+    });
+  const tap = (it: Item) => {
+    if (sel) return toggleSel(it.key);
+    if (openRow) return setOpenRow(null);
+    if (it.checklist) return p.onOpenChecklist();
+    const m = it.memo!;
+    p.onOpenMemo(m.id, m.unread_updates > 0 && m.ai_linked ? 'ai' : 'memo');
+  };
+
+  /* 고르기 막대 */
+  const selMemos = (sel ?? []).filter((k) => k !== CL);
+  const one = sel?.length === 1;
+  const hasCk = (sel ?? []).includes(CL);
+  /* 원본 togglePin: 체크리스트도 메모처럼 고정 (③ 결정) */
+  const allPinned = (sel ?? []).length > 0 && (sel ?? []).every((k) => (k === CL ? !!p.checklist?.pinned : byId(k)?.pinned));
+  const onAction = (a: AppSelAction) => {
+    const ids = selMemos;
+    if (a === 'pin') {
+      if (ids.length) p.onPin(ids, !allPinned);
+      if (hasCk) p.onTogglePin?.(!allPinned);
+      const n = sel?.length ?? 0;
+      setSel(null);
+      if (n === 1 && hasCk) toast(allPinned ? '고정을 풀었어요' : '체크리스트를 고정했어요');
+      else toast(allPinned ? `${n}개 고정을 풀었어요` : `${n}개를 고정했어요`);
+    } else if (a === 'color') setColorFor(ids);
+    else if (a === 'ai') {
+      setSel(null);
+      p.onToggleAi(ids[0]);
+    } else if (a === 'copy') {
+      setSel(null);
+      p.onCopy(ids);
+      toast('내용을 복사했어요');
+    } else {
+      setSel(null);
+      p.onDelete(ids);
+      toast(ids.length > 1 ? `메모 ${ids.length}개를 휴지통으로 옮겼어요` : '메모를 휴지통으로 옮겼어요', ids);
+    }
+  };
+  const pickColor = (c: MemoColor) => {
+    if (!colorFor) return;
+    p.onChangeColor(colorFor, c);
+    setTimeout(() => {
+      setColorFor(null);
+      setSel(null);
+    }, 260);
+  };
+  const colorNow = colorFor && colorFor.every((id) => byId(id)?.color === byId(colorFor[0])?.color) ? byId(colorFor[0])?.color : null;
+
+  return (
+    <View ref={rootRef} collapsable={false} style={st.root}>
+      {sel ? <AppSelectHeader count={sel.length} allSelected={sel.length === items.length} onClose={() => setSel(null)} onToggleAll={() => setSel(sel.length === items.length ? null : items.map((i) => i.key))} /> : p.header}
+      <ScrollView style={st.flex} contentContainerStyle={st.content} showsVerticalScrollIndicator={false} onScrollBeginDrag={() => openRow && setOpenRow(null)}>
+        <View style={st.cardWrap}>
+          {p.priceNote ? <PriceNoteHead stock={p.stock} note={p.priceNote} variant="app" /> : <AppStockCard {...p.stock} />}
+        </View>
+        <View style={st.seg}>
+          <Seg variant="appBoard" value="board" onChange={(k) => k === 'company' && p.onChangeTab('company')} options={[{ key: 'board', label: '메모 보드' }, { key: 'company', label: '기업정보' }]} />
+        </View>
+        <Text style={st.mh}>내 메모 {memoCount}</Text>
+        {p.aiSpent ? (
+          <View style={st.spb}>
+            <SpentBox variant="app" title="AI 연결이 잠시 멈췄어요" body={`이번 달 AI 사용량을 다 썼어요.\n${p.aiRefill && p.aiRefill !== '—' ? p.aiRefill : '다음 달 1일'}에 다시 찾아요. 메모는 계속 쓸 수 있어요.`} onCredit={() => p.onSpentAction?.('credit')} onPlan={() => p.onSpentAction?.('plan')} />
+          </View>
+        ) : null}
+        <View style={st.frow}>
+          <AppChips
+            value={filter}
+            onChange={(f) => {
+              setSel(null);
+              setOpenRow(null);
+              setFilter(f);
+            }}
+            options={[{ key: 'all', label: '전체' }, { key: 'ai', label: 'AI 연결' }, ...(newTotal ? [{ key: 'new' as const, label: '새 소식', count: newTotal, dot: true }] : [])]}
+          />
+          <View style={st.vt}>
+            <AppViewToggle
+              value={view}
+              onChange={(v) => {
+                setOpenRow(null);
+                setView(v);
+              }}
+            />
+          </View>
+        </View>
+        {empty ? (
+          <EmptyBoard onExample={(t) => p.onNewMemo(t)} onFirst={() => p.onNewMemo()} />
+        ) : (
+          <FadeIn key={`${view}-${filter}`}>
+            {view === 'grid' ? (
+              <View style={st.grid}>
+                {items.map((it) =>
+                  it.checklist ? (
+                    <AppChecklistCard key={it.key} checklist={it.checklist} onAllDone={celebrate} width={cw} height={150} selecting={selecting} selected={!!sel?.includes(it.key)} onPress={() => tap(it)} onLongPress={() => enterSel(it.key)} onToggleItem={p.onToggleChecklistItem} />
+                  ) : (
+                    <AppMemoCard key={it.key} memo={it.memo!} width={cw} height={150} selecting={selecting} selected={!!sel?.includes(it.key)} aiSpent={p.aiSpent} onPress={() => tap(it)} onLongPress={() => enterSel(it.key)} />
+                  ),
+                )}
+              </View>
+            ) : (
+              <View style={st.list}>
+                {items.map((it) =>
+                  it.checklist ? (
+                    <AppChecklistRow key={it.key} checklist={it.checklist} width={W} selecting={selecting} selected={!!sel?.includes(it.key)} onPress={() => tap(it)} onLongPress={() => enterSel(it.key)} />
+                  ) : (
+                    <SwipeRow
+                      key={it.key}
+                      enabled={!selecting}
+                      open={openRow === it.key}
+                      onOpenChange={(o) => setOpenRow(o ? it.key : openRow === it.key ? null : openRow)}
+                      pinLabel={it.memo!.pinned ? '고정 해제' : '고정'}
+                      onPin={() => {
+                        p.onPin([it.key], !it.memo!.pinned);
+                        toast(it.memo!.pinned ? '고정을 풀었어요' : '메모를 고정했어요');
+                      }}
+                      aiLabel={it.memo!.ai_linked ? 'AI 끄기' : 'AI 연결'}
+                      onAi={() => {
+                        setOpenRow(null);
+                        p.onToggleAi(it.key);
+                      }}
+                      onDelete={() => {
+                        setOpenRow(null);
+                        p.onDelete([it.key]);
+                        toast('메모를 휴지통으로 옮겼어요', [it.key]);
+                      }}
+                    >
+                      <AppMemoRow memo={it.memo!} width={W} selecting={selecting} selected={!!sel?.includes(it.key)} onPress={() => tap(it)} onLongPress={() => enterSel(it.key)} />
+                    </SwipeRow>
+                  ),
+                )}
+              </View>
+            )}
+          </FadeIn>
+        )}
+        <View style={st.bottom} />
+      </ScrollView>
+      {!selecting ? (
+        <FabFan
+          open={fan}
+          onToggle={setFan}
+          up={!!snack}
+          onPick={(k) => (k === 'check' ? p.onNewChecklist() : p.onNewMemo())}
+        />
+      ) : null}
+      {/* 체크리스트를 모두 끝내면 카드 가운데서 색종이 (원본 memo.html confetti · Lucian #093) */}
+      <Confetti fire={cf} />
+      <AppSnackbar
+        visible={!!snack}
+        message={snack?.msg ?? ''}
+        onUndo={
+          snack?.undo
+            ? () => {
+                p.onUndoDelete(snack.undo!);
+                setSnack(null);
+              }
+            : undefined
+        }
+        style={st.snack}
+      />
+      <AppSelectBar
+        visible={selecting}
+        pinLabel={allPinned ? '고정 해제' : '고정'}
+        aiLabel={one && !hasCk && byId(sel![0])?.ai_linked ? 'AI 끄기' : 'AI 연결'}
+        disabled={{ pin: false, ai: !one || hasCk, color: hasCk, copy: !one || hasCk }}
+        onAction={onAction}
+      />
+      <Sheet open={!!colorFor} onClose={() => setColorFor(null)} title={colorFor && colorFor.length > 1 ? `${colorFor.length}개 메모 색상` : '메모 색상'} label="메모 색상">
+        <View style={st.colors}>
+          {COLORS.map((c) => (
+            <Pressable key={c} onPress={() => pickColor(c)} accessibilityRole="button" accessibilityLabel={paper[c].label} style={[st.cdotRing, colorNow === c && { borderColor: paper[c].accent }]}>
+              <View style={[st.cdot, { backgroundColor: paper[c].bg }]} />
+            </Pressable>
+          ))}
+        </View>
+      </Sheet>
+    </View>
+  );
+}
+
+/**
+ * 빈 보드 (원본 .bempty: 좌우 14 · 메모지 그림 56 (라운드 14 14 4 14 · 접힌 24) · '투자가 막연하세요?' 20px 800
+ * 설명 14px 줄 1.65 #6B7684 (위 8 · 아래 16) · 예시 칩 38 라운드 19 13.5px 500 (사이 6 · 아래 18) · [첫 메모 쓰기] 48 라운드 14 15.5px 800)
+ */
+function EmptyBoard({ onExample, onFirst }: { onExample: (t: string) => void; onFirst: () => void }) {
+  return (
+    <FadeIn style={st.empty}>
+      <Svg width={56} height={56} viewBox="0 0 56 56" style={st.bic}>
+        {/* 종이: 오른쪽 아래 62% 지점에서 잘림 */}
+        <Path d="M14 0H42A14 14 0 0 1 56 14V34.72L34.72 56H14A14 14 0 0 1 0 42V14A14 14 0 0 1 14 0Z" fill="#FCEAAA" />
+        <Path d="M32 38A6 6 0 0 1 38 32H56L32 56Z" fill="#EFBF2A" />
+      </Svg>
+      <Text style={st.eT}>투자가 막연하세요?</Text>
+      <Text style={st.eP}>{'떠오른 생각 한 줄부터 적어 보세요.\nAI 연결을 켜 두면 관련 공시·뉴스를 대신 확인해 드려요.'}</Text>
+      <View style={st.bch}>
+        {EXAMPLES.map((t) => (
+          <Pressable key={t} onPress={() => onExample(t)} accessibilityRole="button" style={({ pressed }) => [st.ex, pressed && { backgroundColor: '#F6F7F9' }]}>
+            <Text style={st.exT}>{t}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <Pressable onPress={onFirst} accessibilityRole="button" style={st.go}>
+        <Text style={st.goT}>첫 메모 쓰기</Text>
+      </Pressable>
+    </FadeIn>
+  );
+}
+
+const st = StyleSheet.create({
+  root: { flex: 1, backgroundColor: appColor.surface },
+  flex: { flex: 1 },
+  content: { paddingBottom: 0 },
+  cardWrap: { marginTop: 6, marginHorizontal: 16, shadowColor: '#000000', shadowOpacity: 0.25, shadowRadius: 10, shadowOffset: { width: 0, height: 8 }, elevation: 3, borderRadius: 24, backgroundColor: '#ECEDF1' },
+  seg: { marginTop: 16, marginHorizontal: 16 },
+  mh: { ...ft(19), fontWeight: '800', color: appColor.ink, marginTop: 20, marginHorizontal: 16, marginBottom: 10 },
+  spb: { marginTop: 2, marginHorizontal: 16, marginBottom: 12 },
+  frow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingBottom: 14 },
+  vt: { marginLeft: 'auto' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 12, rowGap: 16, paddingHorizontal: 16, paddingTop: 10 },
+  list: {},
+  bottom: { height: 120 },
+  snack: { position: 'absolute', left: 14, right: 14, bottom: 14 },
+  colors: { flexDirection: 'row', gap: 16, paddingTop: 16, paddingHorizontal: 22, paddingBottom: 10 },
+  /* 원본 .cdot.on: 0 0 0 2px #fff, 0 0 0 4px 접힌 색 */
+  cdotRing: { width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: 'transparent', alignItems: 'center', justifyContent: 'center', margin: -4 },
+  cdot: { width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: 'rgba(0,0,0,0.07)' },
+  empty: { alignItems: 'center', paddingHorizontal: 14, marginTop: 20 },
+  bic: { marginBottom: 14 },
+  eT: { ...ft(20), fontWeight: '800', color: appColor.ink, textAlign: 'center' },
+  eP: { ...ft(14, 1.65), color: '#6B7684', textAlign: 'center', marginTop: 8, marginBottom: 16 },
+  bch: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6, marginBottom: 18 },
+  ex: { minHeight: 38, borderRadius: 19, paddingHorizontal: 13, paddingVertical: 9, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E7EB', justifyContent: 'center' },
+  exT: { ...ft(13.5), fontWeight: '500', color: appColor.ink },
+  go: { minHeight: 48, borderRadius: 14, paddingHorizontal: 24, paddingVertical: 13, backgroundColor: appColor.ink, justifyContent: 'center' },
+  goT: { ...ft(15.5), fontWeight: '800', color: '#FFFFFF' },
+});

@@ -29,6 +29,14 @@ def _user_id(current: dict) -> int:
         raise HTTPException(401, detail="유효하지 않은 인증 사용자입니다.") from exc
 
 
+@router.get("/updates")
+def list_market_updates(stock_code: str | None = Query(None, pattern=r"^[0-9A-Z]{6}$"),
+                        limit: int | None = Query(None, ge=1, le=500), current: dict = Depends(get_current_user),
+                        service: UpdatesService = Depends(get_query_service)):
+    """최신 업데이트 피드 (계약 listUpdates → MarketUpdate[]): 지금 내 종목의 최근 30일 카드, 최신순."""
+    return service.market_updates(_user_id(current), stock_code, limit)
+
+
 @router.get("/stocks/{code}/ai-updates")
 def list_stock_ai_updates(code: str, limit: int = Query(100, ge=1, le=500), current: dict = Depends(get_current_user),
                           service: UpdatesService = Depends(get_query_service)):
@@ -58,4 +66,15 @@ def mark_ai_update_read(update_id: int, current: dict = Depends(get_current_user
         service.mark_read(_user_id(current), update_id)
     except UpdateNotFoundError as exc:
         raise HTTPException(404, detail="업데이트를 찾을 수 없습니다.") from exc
+    return Response(status_code=204)
+
+
+@router.post("/memos/{memo_id}/ai-updates/read", status_code=204)
+def mark_memo_ai_updates_read(memo_id: int, current: dict = Depends(get_current_user),
+                              service: UpdatesService = Depends(get_command_service)):
+    """메모 창에서 AI 업데이트를 봤을 때: 그 메모에 붙은 안 읽은 카드를 모두 읽음으로 (보드 배지 unread_updates 가 0 이 됨)."""
+    try:
+        service.mark_memo_read(_user_id(current), memo_id)
+    except MemoNotFoundError as exc:
+        raise HTTPException(404, detail="메모를 찾을 수 없습니다.") from exc
     return Response(status_code=204)

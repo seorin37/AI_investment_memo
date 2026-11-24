@@ -113,6 +113,8 @@ export const fonts = {
   medium: 'Pretendard-Medium',
   semibold: 'Pretendard-SemiBold',
   bold: 'Pretendard-Bold',
+  /* 11.19 UI v2: 원본 굵기 800 (Pretendard v1.3.9 정적 otf, OFL) */
+  extrabold: 'Pretendard-ExtraBold',
 } as const;
 
 export type FontWeightKey = keyof typeof fonts;

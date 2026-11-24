@@ -35,8 +35,29 @@ log = logging.getLogger(__name__)
 
 TEST_HOSTS = ("127.0.0.1", "localhost")
 TEST_PORT = 5433
-SHARED_TARGETS = {("192.168.0.105", 15432, "memos")}          # 공용 DB (host, port, db). --allow-shared-write일 때만
+# 공용 DB (host, port, db). --allow-shared-write일 때만. 2026-11-24 강사님 서버로 이전 (옛 192.168.0.105:15432는 백업용이라 쓰기 금지)
+SHARED_TARGETS = {("220.121.144.76", 25432, "memos")}
 _CHUNKS = re.compile(r"^\[청크 ([\d,]+)\]\s*")
+
+
+UNTITLED = "제목 없음"                                         # 웹이 빈 제목 대신 보내는 값 (web/src/api/sync.ts)
+
+
+def memo_full_text(title: str | None, content: str | None) -> str:
+    """메모 분석·업데이트 판정에 넣는 메모 글 = 제목 + 줄바꿈 + 본문 (2026-11-18).
+
+    웹 메모는 아이폰 메모처럼 첫 줄이 제목, 나머지가 본문이라 한 줄 메모는 본문이 비어 있다. 그래서 제목도 함께 본다.
+    - 제목이 비었거나 '제목 없음'이면 본문만
+    - 본문이 제목으로 시작하면 본문만 (첫 줄 중복 방지 — 앱 빠른 메모는 제목=첫 줄(길면 …로 자름), 본문=전체 글)
+    - 본문이 비면 제목만
+    메모 분석(app/board/service.py)과 매일 업데이트(load_items)가 같은 규칙을 쓴다. 표준 라이브러리만 써서 배치 환경에서도 가볍게 부른다."""
+    t, body = (title or "").strip(), content or ""
+    if not t or t == UNTITLED:
+        return body
+    head = t.rstrip("…").rstrip()
+    if head and body.lstrip().startswith(head):
+        return body
+    return f"{t}\n{body}" if body.strip() else t
 
 
 class NotTestDatabase(RuntimeError):
@@ -169,7 +190,7 @@ def enable_test_memos_ai(dst) -> int:
 
 # ------------------------------------------------------------------ 항목 읽기
 ITEMS_SQL = """SELECT ti.id, btrim(m.symbol), ti.type::text, COALESCE(r.description, ti.description),
-       COALESCE(r.keywords, ti.keywords), COALESCE(r.price_threshold, ti.price_threshold), m.content
+       COALESCE(r.keywords, ti.keywords), COALESCE(r.price_threshold, ti.price_threshold), m.content, m.title
 FROM tracking_items ti
 JOIN memos m ON m.id = ti.memo_id
 LEFT JOIN LATERAL (SELECT description, keywords, price_threshold FROM tracking_item_revisions
@@ -184,13 +205,16 @@ REVISIONS_SQL = """SELECT
 
 
 def load_items(conn, symbols) -> list[TrackingItem]:
-    """AI가 켜진 note 메모의 활성 추적 항목 (최신 버전의 설명·핵심어·조건가). item_id는 tracking_items.id 문자열."""
+    """AI가 켜진 note 메모의 활성 추적 항목 (최신 버전의 설명·핵심어·조건가). item_id는 tracking_items.id 문자열.
+    memo_text = 제목 + 본문 (memo_full_text, 메모 분석과 같은 규칙). 2026-11-18 전에는 본문만이라 한 줄 메모는 빈 값이었다."""
     out = []
     params = {"all": symbols is None, "symbols": list(symbols or [])}     # symbols None = 전체 활성 항목
-    for iid, sym, typ, desc, kw, threshold, content in conn.execute(ITEMS_SQL, params).fetchall():
+    for iid, sym, typ, desc, kw, threshold, content, title in conn.execute(ITEMS_SQL, params).fetchall():
         keywords = tuple(k.strip() for k in re.split(r"[,\n]", kw or "") if k.strip())
-        out.append(TrackingItem(item_id=str(iid), symbol=sym, type=typ, description=desc, keywords=keywords,
-                                price_threshold=None if threshold is None else int(threshold), memo_text=content or ""))
+        ask = typ == "ask"                                      # 질문(0019): 주제 항목처럼 근거를 찾되 '한 번 답하기'로 처리
+        out.append(TrackingItem(item_id=str(iid), symbol=sym, type="topic" if ask else typ, description=desc, keywords=keywords,
+                                price_threshold=None if threshold is None else int(threshold),
+                                category="ask" if ask else "", memo_text=memo_full_text(title, content)))
     return out
 
 
@@ -353,13 +377,43 @@ class DbCardWriter:
             return row[0]
         rows = source_rows(draft)
         utype = "disclosure" if any(r["rcept"] for r in rows) else "news"
+        if item.category == "ask":                              # 질문 답(0019): 종류 answer, 답하면 질문 항목을 닫는다
+            utype = "answer"
+            base["details"] = json.dumps({**card, "answer_status": "answer", "question": item.description,
+                                          "run_id": self.run_id}, ensure_ascii=False, default=str)
         update_id = self.conn.execute(INSERT_UPDATE, {**base, "type": utype}).fetchone()[0]
         for r in rows:
             self.conn.execute(INSERT_SOURCE, {"update": update_id, **r})
         self.written["update_card"] += 1
         self.written["sources"] += len(rows)
         self.manifest["tracking_updates"].append(update_id)       # update_sources는 카드를 지우면 함께 지워진다 (ON DELETE CASCADE)
+        if item.category == "ask" or draft.merged_items:         # 질문이거나 합친 카드면: 그 안의 질문(ask)도 답을 받았다
+            self._close_asks([item.item_id, *(m["item_id"] for m in draft.merged_items)])
         return update_id
+
+    def write_no_answer(self, item: TrackingItem, response: Response) -> int:
+        """질문에 답할 자료를 못 찾았을 때도 '확인되지 않았어요' 답을 남기고 질문을 닫는다 (사용자가 처리된 줄 알게).
+        시스템 실패(호출·파싱 실패)는 여기 오지 않는다 → 질문은 active로 남아 다음 실행에서 다시 본다."""
+        with self.conn.transaction():
+            memo_rev, track_rev = latest_revisions(self.conn, item.item_id)
+            details = {"answer_status": "no_answer", "reason": response.reason, "question": item.description,
+                       "run_id": self.run_id}
+            update_id = self.conn.execute(INSERT_UPDATE, {
+                "item": int(item.item_id), "type": "answer", "title": (item.description or "")[:200],
+                "summary": response.message, "reason": None,
+                "details": json.dumps(details, ensure_ascii=False, default=str),
+                "memo_rev": memo_rev, "track_rev": track_rev}).fetchone()[0]
+            self.written["no_answer"] = self.written.get("no_answer", 0) + 1
+            self.manifest["tracking_updates"].append(update_id)
+            self._close_asks([item.item_id])
+            return update_id
+
+    def _close_asks(self, item_ids) -> None:
+        """질문(type=ask) 항목만 done으로 (한 번 답하면 끝). 주제·가격 항목은 그대로 둔다."""
+        rows = self.conn.execute("""UPDATE tracking_items SET status = 'done', updated_at = now()
+            WHERE id = ANY(%(ids)s) AND type = 'ask' AND status = 'active' RETURNING id""",
+                                 {"ids": [int(i) for i in item_ids]}).fetchall()
+        self.manifest.setdefault("asks_done", []).extend(r[0] for r in rows)
 
     def write_matches(self, item: TrackingItem, labels: dict[str, tuple[bool, str]], similarity: dict[str, float]) -> int:
         """관련성 판정한 뉴스 후보 전체 → tracking_matches. labels: ref → (관련, 이유 코드)."""

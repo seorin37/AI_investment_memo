@@ -1,0 +1,22 @@
+# AWS API 서버용 (BGE-M3 관련 FlagEmbedding/transformers/datasets/huggingface-hub/torch, pytest 제외)
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg[binary]
+alembic
+pgvector
+python-dotenv
+filelock
+requests
+httpx
+PyJWT[crypto]>=2.10,<3
+pyarrow==19.0.1
+exchange-calendars==4.13.2
+PyYAML==6.0.3
+pandas==3.0.6
+numpy==1.26.4
+scikit-learn==1.9.1
+scipy==1.17.1
+feedparser==6.0.11
+beautifulsoup4==4.13.4
+lxml==5.4.0

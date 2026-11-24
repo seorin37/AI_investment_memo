@@ -1,0 +1,30 @@
+import React from 'react';
+import { Platform } from 'react-native';
+import { Redirect, useRouter } from 'expo-router';
+import { useStudioPlayer } from '@/store/studioPlayer';
+import { reportView, useWatchToMemo } from '@/ui/screens/studio/reportView';
+import { WebReportDetail } from '@/ui/screens/studio/web/Report';
+
+/** 웹 주간보고서 자세히 보기 (가운데 860 · 원본 screens/report.tsx). 앱은 스튜디오 › 주간보고서 화면 */
+export default function ReportScreen() {
+  const router = useRouter();
+  const made = useStudioPlayer((s) => s.made);
+  const toMemo = useWatchToMemo();
+  const cur = useStudioPlayer((s) => s.curReport);
+  if (Platform.OS !== 'web') return <Redirect href="/studio-report" />;
+  const item = made.find((m) => m.id === cur && m.kind === 'report') ?? made.find((m) => m.kind === 'report');
+  /* 서버 보고서면 그 내용, 아니면 mock 예시 (2026-11-23) */
+  const v = reportView(item);
+  return (
+    <WebReportDetail
+      rep={v.rep}
+      item={item}
+      stocks={v.stocks}
+      market={v.market}
+      allDefault={v.allDefault}
+      onMemo={(code) => router.navigate({ pathname: '/stocks/[code]', params: { code } })}
+      onWatch={(s, w) => toMemo(s, w, item?.server ? item.id : undefined)}
+      onOpenMemo={(code, memoId) => router.navigate({ pathname: '/stocks/[code]', params: { code, memo: memoId } })}
+    />
+  );
+}

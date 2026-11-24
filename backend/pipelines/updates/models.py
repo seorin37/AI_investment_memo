@@ -29,6 +29,10 @@ class TrackingItem:
 
     @property
     def query_text(self) -> str:
+        if self.category == "ask" and self.memo_text:
+            # 실험(2026-11-17): 질문은 메모 원문 + 종목명으로 검색한다. 메모 분석이 질문을 실행마다 다르게 정리해
+            # ("실적에 회계상…" / "연결 재무제표와 실적에…") 검색 후보가 바뀌고 답이 나왔다 안 나왔다 했다 (N09)
+            return " ".join(x for x in (self.company_name, self.memo_text) if x).strip()
         return " ".join([self.description, *self.keywords]).strip()
 
 
@@ -44,6 +48,8 @@ class Candidate:
     source: str                       # 매체명 또는 "DART"
     similarity: float
     doc: str = ""                     # 공시: periodic(정기보고서) | event(수시공시), 뉴스: chunk(원문 청크 검색) | ""(제목+요약). 임계값을 따로 쓴다
+    retrieval_score: float | None = None  # 하이브리드 검색 점수. 없으면 similarity를 순위·기준값에 쓴다
+    retrieval: str = ""                  # "hybrid": dense 기준 대신 관련성 판정이 통과 여부를 정한다
 
 
 @dataclass(frozen=True)
@@ -75,6 +81,8 @@ class CardV2:
     memo_link: str = ""
     sources: list[str] = field(default_factory=list)                 # facts에서 쓴 evidence_id
     confidence: float = 0.0
+    explanation: str = ""            # 설명 문단 (topic.explanation.enabled일 때만, 2026-11-12 시험)
+    calc: list[dict] = field(default_factory=list)   # 실험(2026-11-17) ask: 코드가 계산할 두 값·근거 번호 (calc.py)
 
     @property
     def title(self) -> str:
@@ -123,7 +131,11 @@ class UpdateDraft:
     when: str = ""
     facts: list[dict] = field(default_factory=list)          # {text, ref}. ref ""는 코드가 붙인 "비교 자료 없음"
     merged_items: list[dict] = field(default_factory=list)   # 같은 메모·같은 근거라 이 카드로 합친 다른 항목 {item_id, description}
+    explanation: str = ""                                     # 설명 문단 (topic.explanation 켰을 때만)
     coverage: str = ""                                        # 자료 범위 문구 ("10월 28일 이후 기사 기준", 뉴스를 쓴 v2 카드만)
+    calculations: list[dict] = field(default_factory=list)   # 실험(2026-11-17) ask: 코드가 검증·계산한 값 (calc.compute)
+    source_list: list[dict] = field(default_factory=list)    # 실험(2026-11-18) ask: 답 아래에 모아 보일 출처 (topic.source_list)
+    decision_note: str = ""                                    # 2026-11-23 판단 질문 답 끝에 코드가 붙인 문장 (decision_note.py)
 
 
 @dataclass
@@ -159,3 +171,5 @@ class TopicOutcome:
     retried: bool = False            # 형식 오류로 한 번 다시 요청했는지
     verify_notes: list[str] = field(default_factory=list)   # 검수 호출이 막은 문장과 이유 (보고서용)
     grouped: list = field(default_factory=list)              # (기사 Candidate, 공시 접수번호): 같은 사건으로 묶여 근거에서 뺀 기사
+    checks: list[dict] = field(default_factory=list)         # v2 검사 기록 {stage: card|format_retry|verify, card, codes}
+                                                             # (topic._judge_v2, 2026-11-17. 실행 결과 outcomes.jsonl에만 쓴다)

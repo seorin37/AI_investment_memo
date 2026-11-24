@@ -43,6 +43,9 @@ class Judgment:
     merge_into: dict | None = None    # 앞 문장 항목에 합칠 때 {"sentence_index", "item_index"}
     sub_sentences: list[str] = field(default_factory=list)  # 덜 나뉜 조각을 LLM이 다시 나눈 결과 (화면 표시용)
     confidence: float | None = None
+    # 실험(2026-11-16, docs/memo-intent-redesign-proposal.md): 한 번 답하면 끝나는 질문 [{"question", "kind": explain|check}].
+    # 추적 항목(items)과 따로 둔다. 지시문 configs/tracking_judge_prompt_intent.md가 채운다 (기존 지시문은 비워 둔다)
+    asks: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         data = asdict(self)

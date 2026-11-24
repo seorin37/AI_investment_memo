@@ -23,6 +23,11 @@ def disc(ref="disc:R1#0", sim=0.7):
     return Candidate(ref, "disclosure", "000660", "2026-10-28", "공시", "본문", None, "DART", sim, "event")
 
 
+def hybrid_disc(ref="disc:H1#0", sim=0.43, score=0.9):
+    return Candidate(ref, "disclosure", "000660", "2026-10-28", "HBM3E 12H", "HBM 연구개발실적", None, "DART",
+                     sim, "periodic", score, "hybrid")
+
+
 def answer(verdicts: dict[str, bool], scope="industry"):
     """프롬프트의 후보 줄(C1 [kind] 날짜 · 제목)에서 제목으로 판정을 정한다 (섞인 순서와 관계없이)."""
     def call(prompt):
@@ -86,6 +91,12 @@ class RelevanceTest(unittest.TestCase):
             raise CreditsExhausted("0")
         with self.assertRaises(CreditsExhausted):
             judge_news(ITEM, cands, credits, "p")
+
+    def test_hybrid_disclosure_bypasses_dense_floor_and_is_judged(self):
+        h = hybrid_disc()
+        cfg = {**config(None), "include_disclosures": True}
+        kept, rel, stop = filter_candidates(ITEM, [h], FLOOR, answer({"HBM3E 12H": True}), cfg, "p")
+        self.assertEqual(([c.ref for c in kept], rel.judged, rel.below_floor, stop), ([h.ref], 1, 0, None))
 
     def test_parse_scope(self):
         self.assertEqual(parse_scope('{"scope":"company","labels":[]}'), "company")

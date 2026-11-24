@@ -10,14 +10,18 @@ import type { BoardItem, ChartRange, FeedbackPayload, HomeLayout, Settings, Stoc
 export const qk = {
   stocks: ['stocks'] as const,
   stockSearch: (q: string) => ['stockSearch', q] as const,
+  popularStocks: (limit: number) => ['popularStocks', limit] as const,
   stock: (code: string) => ['stock', code] as const,
   quote: (code: string) => ['quote', code] as const,
+  quotes: (codes: string) => ['quotes', codes] as const,
+  macro: ['macro'] as const,
   candles: (code: string, range: ChartRange) => ['candles', code, range] as const,
   profile: (code: string) => ['profile', code] as const,
   financials: (code: string) => ['financials', code] as const,
   board: (code: string) => ['board', code] as const,
   boardItem: (id: string) => ['boardItem', id] as const,
   timeline: (memoId: string) => ['timeline', memoId] as const,
+  answers: (memoId: string) => ['answers', memoId] as const,
   stockAiUpdates: (code: string) => ['stockAiUpdates', code] as const,
   updates: (code?: string) => ['updates', code ?? 'all'] as const,
   journal: ['journal'] as const,
@@ -25,6 +29,7 @@ export const qk = {
   market: ['market'] as const,
   calendar: (month: string) => ['calendar', month] as const,
   news: ['news'] as const,
+  homeNews: ['homeNews'] as const,
   pinned: ['pinned'] as const,
   homeChecklist: ['homeChecklist'] as const,
   priceConditions: ['priceConditions'] as const,
@@ -35,11 +40,15 @@ export const qk = {
   trash: ['trash'] as const,
   settings: ['settings'] as const,
   aiStats: ['aiStats'] as const,
+  aiTracking: ['aiTracking'] as const,
+  todayQuiz: ['todayQuiz'] as const,
+  studioItems: ['studioItems'] as const,
+  usage: ['usage'] as const,
   dataStats: ['dataStats'] as const,
 };
 
 /** 메모/보드가 바뀌면 함께 갱신해야 하는 홈 위젯 키 */
-const memoDependents = [qk.pinned, qk.homeChecklist, qk.priceConditions, qk.memoUpdateSummary, qk.backtests, qk.compare, qk.conclude, qk.aiStats, qk.dataStats];
+const memoDependents = [qk.aiTracking, qk.pinned, qk.homeChecklist, qk.priceConditions, qk.memoUpdateSummary, qk.backtests, qk.compare, qk.conclude, qk.aiStats, qk.dataStats];
 
 function useInvalidate() {
   const qc = useQueryClient();
@@ -49,13 +58,35 @@ function useInvalidate() {
 // ─── 종목 ────────────────────────────────────────────────────
 export const useMyStocks = () => useQuery({ queryKey: qk.stocks, queryFn: api.listMyStocks });
 
+/** 많이 찾는 종목 (온보딩). 자주 바뀌지 않아 10분 동안은 다시 묻지 않음. enabled=false 면 부르지 않음(mock 화면) */
+export const usePopularStocks = (limit = 12, enabled = true) =>
+  useQuery({ queryKey: qk.popularStocks(limit), queryFn: () => api.getPopularStocks(limit), staleTime: 10 * 60_000, enabled });
+
 export const useStockSearch = (q: string) =>
   useQuery({ queryKey: qk.stockSearch(q), queryFn: () => api.searchStocks(q), enabled: q.trim().length > 0, placeholderData: keepPreviousData });
 
 export const useStock = (code: string) =>
   useQuery({ queryKey: qk.stock(code), queryFn: () => api.getStock(code), enabled: code.length > 0 });
 
-export const useQuote = (code: string) => useQuery({ queryKey: qk.quote(code), queryFn: () => api.getQuote(code), refetchInterval: 60_000 });
+/** enabled: 기본 true (기업정보처럼 늘 읽음). mock 화면을 그대로 두는 곳은 false 로 끈다 */
+export const useQuote = (code: string, enabled = true) =>
+  useQuery({ queryKey: qk.quote(code), queryFn: () => api.getQuote(code), refetchInterval: 60_000, enabled: enabled && code.length > 0 });
+
+/** 여러 종목 시세 한 번에 (GET /quotes). 받은 값은 종목별 useQuote 캐시에도 넣어 같은 값을 쓰게 한다 */
+export function useQuotes(codes: string[], enabled = true) {
+  const qc = useQueryClient();
+  const sorted = [...new Set(codes)].sort();
+  return useQuery({
+    queryKey: qk.quotes(sorted.join(',')),
+    queryFn: async () => {
+      const res = await api.getQuotes(sorted);
+      for (const q of res.quotes) qc.setQueryData(qk.quote(q.code), q);
+      return res;
+    },
+    enabled: enabled && sorted.length > 0,
+    staleTime: 60_000,
+  });
+}
 
 export const useCandles = (code: string, range: ChartRange) =>
   useQuery({ queryKey: qk.candles(code, range), queryFn: () => api.getCandles(code, range), placeholderData: keepPreviousData });
@@ -177,11 +208,80 @@ export function useSetBoardChecklistItem() {
   });
 }
 
-export function useMarkAiUpdateRead(code?: string) {
+/** 사이드바 내 종목 순서 저장 (PUT /stocks/order). 화면 순서를 먼저 바꾸고, 실패하면 되돌린다 */
+export function useReorderStocks() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (codes: string[]) => api.reorderStocks(codes),
+    onMutate: async (codes) => {
+      await qc.cancelQueries({ queryKey: qk.stocks });
+      const prev = qc.getQueryData<Awaited<ReturnType<typeof api.listMyStocks>>>(qk.stocks);
+      if (prev) qc.setQueryData(qk.stocks, [...prev].sort((a, b) => codes.indexOf(a.code) - codes.indexOf(b.code)));
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => ctx?.prev && qc.setQueryData(qk.stocks, ctx.prev),
+    onSuccess: (rows) => qc.setQueryData(qk.stocks, rows),
+  });
+}
+
+/** 보드 카드 순서 저장 (PUT /stocks/{code}/board-order). 화면 순서를 먼저 바꾸고, 실패하면 되돌린다 */
+export function useReorderBoard(code: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => api.reorderBoard(code, ids),
+    onMutate: async (ids) => {
+      await qc.cancelQueries({ queryKey: qk.board(code) });
+      const prev = qc.getQueryData<BoardItem[]>(qk.board(code));
+      if (prev) qc.setQueryData(qk.board(code), ids.map((id) => prev.find((b) => b.id === id)).filter(Boolean).map((b, i) => ({ ...(b as BoardItem), position: i })));
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => ctx?.prev && qc.setQueryData(qk.board(code), ctx.prev),
+    onSuccess: (rows) => qc.setQueryData(qk.board(code), rows),
+  });
+}
+
+/** AI 확인 질문 답 (POST /memos/{id}/confirmations) */
+export function useAnswerConfirmation(code: string) {
   const inv = useInvalidate();
   return useMutation({
-    mutationFn: (id: string) => api.markAiUpdateRead(id),
-    onSuccess: () => inv(qk.stocks, qk.memoUpdateSummary, ...(code ? [qk.stockAiUpdates(code), qk.board(code)] : [])),
+    mutationFn: (v: { memoId: string; optionId: string }) => api.answerConfirmation(v.memoId, v.optionId),
+    onSuccess: (_d, v) => inv(qk.board(code), qk.boardItem(v.memoId), qk.timeline(v.memoId), qk.answers(v.memoId)),
+  });
+}
+
+/** 메모 질문과 답 (GET /memos/{id}/answers) */
+export const useMemoAnswers = (memoId: string, enabled = true) =>
+  useQuery({ queryKey: qk.answers(memoId), queryFn: () => api.listMemoAnswers(memoId), enabled: enabled && memoId.length > 0 });
+
+/**
+ * 읽음 처리 뒤 빨간 점·숫자를 다시 읽을 곳 (2026-11-23).
+ * 종목 숫자(stocks) · 홈 업데이트 위젯(memoUpdateSummary · updates) · 업데이트 화면(updates 모든 종목) · 메모 보드 배지(board 모든 종목) · 보드 패널(stockAiUpdates)
+ * 열려 있는 메모 창의 소식(timeline · boardItem)은 '새 소식' 표시가 바로 사라지지 않게 다시 부르지 않고 '오래됨'만 표시 → 다음에 열 때 새로 받음
+ */
+function useInvalidateRead() {
+  const qc = useQueryClient();
+  return () =>
+    Promise.all([
+      ...[qk.stocks, qk.memoUpdateSummary, ['updates'], ['board'], ['stockAiUpdates']].map((queryKey) => qc.invalidateQueries({ queryKey })),
+      ...[['timeline'], ['boardItem']].map((queryKey) => qc.invalidateQueries({ queryKey, refetchType: 'none' })),
+    ]);
+}
+
+/** 카드 여러 개 읽음 (업데이트 화면 · 모두 읽음). 다 보낸 뒤 한 번만 다시 읽음 */
+export function useMarkAiUpdateRead() {
+  const refresh = useInvalidateRead();
+  return useMutation({
+    mutationFn: (ids: string[]) => Promise.all(ids.map((id) => api.markAiUpdateRead(id))),
+    onSettled: refresh,
+  });
+}
+
+/** 메모 하나의 소식을 모두 읽음 (메모 창에서 AI 업데이트를 봤을 때) */
+export function useMarkMemoUpdatesRead() {
+  const refresh = useInvalidateRead();
+  return useMutation({
+    mutationFn: (memoId: string) => api.markMemoUpdatesRead(memoId),
+    onSettled: refresh,
   });
 }
 
@@ -222,7 +322,10 @@ export function useSaveHomeLayout() {
   });
 }
 
-export const useMarketOverview = () => useQuery({ queryKey: qk.market, queryFn: api.getMarketOverview, refetchInterval: 60_000 });
+export const useMarketOverview = (enabled = true) =>
+  useQuery({ queryKey: qk.market, queryFn: api.getMarketOverview, refetchInterval: 60_000, enabled });
+/** 거시 지표 (GET /market/macro). 관측값은 하루 한 번 바뀌어 5분 동안 다시 읽지 않는다 */
+export const useMacro = (enabled = true) => useQuery({ queryKey: qk.macro, queryFn: api.getMacro, staleTime: 5 * 60_000, enabled });
 export const useCalendar = (month: string) =>
   useQuery({ queryKey: qk.calendar(month), queryFn: () => api.listCalendar(month), placeholderData: keepPreviousData });
 
@@ -235,6 +338,8 @@ export function useCreateCalendarEvent() {
 }
 
 export const useNews = () => useQuery({ queryKey: qk.news, queryFn: api.listNews, refetchInterval: 5 * 60_000 });
+/** 홈 뉴스 위젯 (웹 9개 · 앱 5개만 그림). 수집이 30분마다라 5분마다 다시 받는다 */
+export const useHomeNews = () => useQuery({ queryKey: qk.homeNews, queryFn: () => api.getHomeNews(9), refetchInterval: 5 * 60_000 });
 export const usePinnedMemos = () => useQuery({ queryKey: qk.pinned, queryFn: api.listPinnedMemos });
 export const useHomeChecklist = () => useQuery({ queryKey: qk.homeChecklist, queryFn: api.listHomeChecklist });
 export const usePriceConditions = () => useQuery({ queryKey: qk.priceConditions, queryFn: api.listPriceConditions });
@@ -307,6 +412,10 @@ export function useDisconnectMcpApp() {
 }
 
 export const useAiStats = () => useQuery({ queryKey: qk.aiStats, queryFn: api.getAiStats });
+/** 오늘의 퀴즈 — 하루 한 문제라 10분 동안은 다시 묻지 않음. 404(문제 없음)는 재시도하지 않음 */
+export const useTodayQuiz = (enabled = true) =>
+  useQuery({ queryKey: qk.todayQuiz, queryFn: api.getTodayQuiz, staleTime: 10 * 60_000, retry: false, enabled });
+export const useUsage = () => useQuery({ queryKey: qk.usage, queryFn: api.getUsage });
 export const useDataStats = () => useQuery({ queryKey: qk.dataStats, queryFn: api.getDataStats });
 
 export function useUpdateMe() {
@@ -316,3 +425,15 @@ export function useUpdateMe() {
 export function useSendFeedback() {
   return useMutation({ mutationFn: (p: FeedbackPayload) => api.sendFeedback(p) });
 }
+
+/** 스튜디오 만든 항목 (GET /studio/items, 2026-11-23). 실제 모드·로그인 뒤에만 */
+export const useStudioItems = (enabled = true) =>
+  useQuery({ queryKey: qk.studioItems, queryFn: api.listStudioItems, staleTime: 60_000, enabled });
+
+export function useDeleteStudioItem() {
+  const inv = useInvalidate();
+  return useMutation({ mutationFn: (id: string) => api.deleteStudioItem(id), onSuccess: () => inv(qk.studioItems) });
+}
+
+/** 설정 사용량 탭 종목별 추적 현황 (GET /ai/tracking, 2026-11-23) */
+export const useAiTracking = (enabled = true) => useQuery({ queryKey: qk.aiTracking, queryFn: api.getAiTracking, enabled });

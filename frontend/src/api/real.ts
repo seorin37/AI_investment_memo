@@ -19,10 +19,14 @@ export const realApi: Api = {
   me: () => http.get('/auth/me'),
   updateMe: (patch) => http.patch('/me', patch),
   logout: (refreshToken) => http.post('/auth/logout', refreshToken ? { refresh_token: refreshToken } : undefined),
+  getPopularStocks: (limit) => http.get('/stocks/popular', { limit }),
+  getTerms: () => http.get('/me/terms'),
+  agreeTerms: (items) => http.post('/me/terms', { items }),
 
   // 종목
   ...realStockApi,
   getQuote: (code) => http.get(`/stocks/${code}/quote`),
+  getQuotes: (codes) => http.get('/quotes', { codes: codes.join(',') }),
   getCandles: (code, range) => http.get(`/stocks/${code}/candles`, { range }),
   getProfile: (code) => http.get(`/stocks/${code}/profile`),
   getFinancials: (code) => http.get(`/stocks/${code}/financials`),
@@ -30,8 +34,10 @@ export const realApi: Api = {
   // 메모 보드
   ...realBoardApi,
   getMemoTimeline: (memoId) => http.get(`/memos/${memoId}/timeline`),
+  listMemoAnswers: (memoId) => http.get(`/memos/${memoId}/answers`),
   listStockAiUpdates: (code) => http.get(`/stocks/${code}/ai-updates`),
   markAiUpdateRead: (id) => http.post(`/ai-updates/${id}/read`),
+  markMemoUpdatesRead: (memoId) => http.post(`/memos/${memoId}/ai-updates/read`),
   async uploadFile(file) {
     const form = new FormData();
     if (Platform.OS === 'web' && file.file) form.append('file', file.file, file.name);
@@ -52,9 +58,16 @@ export const realApi: Api = {
   getHomeLayout: () => http.get('/home/layout'),
   saveHomeLayout: (layout) => http.put('/home/layout', layout),
   getMarketOverview: () => http.get('/market/overview'),
+  getMacro: () => http.get('/market/macro'),
+  runLab: (input) => http.post('/studio/lab', input, { timeoutMs: 70_000 }),
+  listStudioItems: () => http.get('/studio/items'),
+  deleteStudioItem: (id) => http.del(`/studio/items/${id}`),
+  markReportWatch: (itemId, key, memoId) => http.post(`/studio/items/${itemId}/watch`, { key, memo_id: memoId }),
+  createReport: (input) => http.post('/studio/reports', input),
   listCalendar: (month) => http.get('/calendar', { month }),
   createCalendarEvent: (input) => http.post('/calendar', input),
   listNews: () => http.get('/news/headlines'),
+  getHomeNews: (limit) => http.get('/news/home', { limit }),
   listPinnedMemos: () => http.get('/memos/pinned'),
   listHomeChecklist: () => http.get('/checklist-items'),
   setChecklistItem: (checklistId, itemId, done) =>
@@ -77,6 +90,9 @@ export const realApi: Api = {
   updateSettings: (patch) => http.patch('/settings', patch),
   disconnectMcpApp: (appId) => http.del(`/mcp/apps/${appId}`),
   getAiStats: () => http.get('/ai/stats'),
+  getAiTracking: () => http.get('/ai/tracking'),
+  getUsage: () => http.get('/me/usage'),
+  getTodayQuiz: () => http.get('/quiz/today'),
   getDataStats: () => http.get('/data/stats'),
   exportData: (format) => http.post('/data/export', { format }),
   deleteAllData: () => http.del('/data'),

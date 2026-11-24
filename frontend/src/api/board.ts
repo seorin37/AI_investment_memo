@@ -47,12 +47,14 @@ export function normalizeBoardItem(row: RawBoardItem): BoardItem {
       ai_linked_at: row.ai_linked_at == null ? null : text(row.ai_linked_at),
       price_conditions: Array.isArray(row.price_conditions) ? (row.price_conditions as Memo['price_conditions']) : [],
       unread_updates: number(row.unread_updates),
+      analysis: (row.analysis as Memo['analysis']) ?? null,
     };
   }
   if (row.kind === 'checklist') {
     return {
       ...common(row),
       kind: 'checklist',
+      pinned: Boolean(row.pinned), // 2026-11-20 백엔드가 체크리스트 고정(테이프)을 저장·응답
       items: Array.isArray(row.items)
         ? row.items.map((item) => {
             const value = item as Record<string, unknown>;
@@ -85,12 +87,6 @@ export function normalizeBoardItem(row: RawBoardItem): BoardItem {
   throw new Error(`지원하지 않는 보드 유형입니다: ${text(row.kind) || 'unknown'}`);
 }
 
-function rejectUnsupportedPosition(patch: BoardItemPatch) {
-  if ('position' in patch && patch.position !== undefined) {
-    throw new Error('실제 메모 보드는 순서 변경 저장을 아직 지원하지 않습니다.');
-  }
-}
-
 export function createRealBoardApi(http: BoardHttp) {
   return {
     async listBoard(code: string): Promise<BoardItem[]> {
@@ -110,7 +106,6 @@ export function createRealBoardApi(http: BoardHttp) {
       return normalizeBoardItem(await http.post<RawBoardItem>(`/stocks/${code}/references`, input)) as ReferenceBoard;
     },
     async updateBoardItem(id: string, patch: BoardItemPatch): Promise<BoardItem> {
-      rejectUnsupportedPosition(patch);
       return normalizeBoardItem(await http.patch<RawBoardItem>(`/board-items/${id}`, patch));
     },
     deleteBoardItem: (id: string) => http.del<void>(`/board-items/${id}`),
@@ -118,6 +113,13 @@ export function createRealBoardApi(http: BoardHttp) {
       return normalizeBoardItem(
         await http.put<RawBoardItem>(`/memos/${memoId}/ai-link`, { enabled }),
       ) as Memo;
+    },
+    async reorderBoard(code: string, ids: string[]): Promise<BoardItem[]> {
+      const rows = await http.put<RawBoardItem[]>(`/stocks/${code}/board-order`, { ids: ids.map(Number) });
+      return rows.map(normalizeBoardItem);
+    },
+    async answerConfirmation(memoId: string, optionId: string): Promise<Memo> {
+      return normalizeBoardItem(await http.post<RawBoardItem>(`/memos/${memoId}/confirmations`, { option_id: optionId })) as Memo;
     },
     async setBoardChecklistItem(checklistId: string, itemId: string, done: boolean): Promise<void> {
       await http.patch<RawBoardItem>(`/checklists/${checklistId}/items/${itemId}`, { done });

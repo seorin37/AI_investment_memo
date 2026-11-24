@@ -221,6 +221,44 @@ class StateTest(unittest.TestCase):
         self.assertTrue(all(c[0].startswith("UPDATE tracking_items SET last_checked_at") for c in conn.calls))
 
 
+class LoadItemsMemoTextTest(unittest.TestCase):
+    """2026-11-18: 매일 업데이트 판정에 넣는 메모 문장 = 제목 + 본문 (메모 분석과 같은 memo_full_text)."""
+
+    class ItemsConn:
+        def __init__(self, rows):
+            self.rows, self.sql = rows, ""
+
+        def execute(self, sql, params=None):
+            self.sql = sql
+            return Cur(rows=self.rows)
+
+    def load(self, title, content):
+        from pipelines.updates.db_store import load_items
+        conn = self.ItemsConn([(42, "005930", "topic", "HBM 소식", "HBM, 실적", None, content, title)])
+        items = load_items(conn, ("005930",))
+        self.assertIn("m.title", conn.sql)
+        return items[0]
+
+    def test_one_line_memo_uses_title_not_none(self):
+        from pipelines.updates.judge import build_prompt
+        item = self.load("HBM 공급 소식 나오면 다시 보기", "")                    # 웹 한 줄 메모: 본문 빈 값
+        self.assertEqual(item.memo_text, "HBM 공급 소식 나오면 다시 보기")
+        prompt = build_prompt(item, [], guide="지침")
+        self.assertIn("HBM 공급 소식 나오면 다시 보기", prompt)                   # 판정 프롬프트의 메모 문장이 '없음'이 아니라 제목
+        from dataclasses import replace
+        before = build_prompt(replace(item, memo_text=""), [], guide="지침")      # 이전 동작(본문만 → 빈 값)이면 메모 문장 자리가 '없음'
+        self.assertEqual(before.count("없음") - prompt.count("없음"), 1)
+
+    def test_title_and_body_rules(self):
+        self.assertEqual(self.load("7만원 밑이면", "HBM 소식").memo_text, "7만원 밑이면\nHBM 소식")
+        self.assertEqual(self.load("제목 없음", "HBM 소식").memo_text, "HBM 소식")
+        self.assertEqual(self.load(None, "HBM 소식").memo_text, "HBM 소식")
+        self.assertEqual(self.load("HBM 소식", "HBM 소식\n7만원 밑이면").memo_text, "HBM 소식\n7만원 밑이면")
+        self.assertEqual(self.load("HBM 소식 나오면 실적 발표 전에 다시 확인하…", "HBM 소식 나오면 실적 발표 전에 다시 확인하기").memo_text,
+                         "HBM 소식 나오면 실적 발표 전에 다시 확인하기")
+        self.assertEqual(self.load("", "").memo_text, "")
+
+
 class MemoAnalysisTest(unittest.TestCase):
     def test_returns_only_confirmations_and_memo_scope(self):
         from types import SimpleNamespace
@@ -237,3 +275,49 @@ class MemoAnalysisTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AskAnswerTest(unittest.TestCase):
+    """질문(0019 type=ask): 답은 tracking_updates.type='answer', 답하면(합친 카드 포함) 질문 항목을 닫는다."""
+
+    ASK = TrackingItem("50", "005930", "topic", "3분기 영업이익률 얼마인지", category="ask")
+
+    def test_load_items_maps_ask_to_one_time_topic(self):
+        from pipelines.updates.db_store import load_items
+        conn = LoadItemsMemoTextTest.ItemsConn([(50, "005930", "ask", "영업이익률 얼마인지", None, None, "얼마야?", "실적")])
+        item = load_items(conn, ("005930",))[0]
+        self.assertEqual((item.type, item.category), ("topic", "ask"))
+
+    def test_answer_card_and_close_merged_asks(self):
+        conn = Conn()
+        w = DbCardWriter(conn)
+        d = UpdateDraft(self.ASK, "disclosure", "영업이익률 55%", "사실.", "연결", [("disc:R1#0", "사실")], card_schema="v2",
+                        merged_items=[{"item_id": "51"}])
+        w.write(self.ASK, d, {"headline": "영업이익률 55%"})
+        _, p = next(c for c in conn.calls if c[0].lstrip().startswith("INSERT INTO tracking_updates"))
+        self.assertEqual(p["type"], "answer")
+        self.assertEqual(json.loads(p["details"])["answer_status"], "answer")
+        sql, p = next(c for c in conn.calls if c[0].lstrip().startswith("UPDATE tracking_items SET status = 'done'"))
+        self.assertIn("type = 'ask'", sql)                                  # 주제 항목은 닫지 않는다
+        self.assertEqual(p["ids"], [50, 51])
+
+    def test_topic_card_still_closes_merged_ask(self):
+        conn = Conn()
+        d = UpdateDraft(ITEM, "disclosure", "실적", "사실.", "연결", [("disc:R1#0", "사실")], card_schema="v2",
+                        merged_items=[{"item_id": "51"}])
+        DbCardWriter(conn).write(ITEM, d, {})
+        _, p = next(c for c in conn.calls if c[0].lstrip().startswith("INSERT INTO tracking_updates"))
+        self.assertEqual(p["type"], "disclosure")
+        _, p = next(c for c in conn.calls if c[0].lstrip().startswith("UPDATE tracking_items SET status = 'done'"))
+        self.assertEqual(p["ids"], [42, 51])
+
+    def test_no_answer_is_saved_and_closes(self):
+        from pipelines.updates.response import ASK_NO_ANSWER, ASK_NO_ANSWER_TEXT
+        conn = Conn()
+        w = DbCardWriter(conn)
+        w.write_no_answer(self.ASK, Response(ASK_NO_ANSWER, "item", item_id="50", reason="no_candidates",
+                                             message=ASK_NO_ANSWER_TEXT))
+        _, p = next(c for c in conn.calls if c[0].lstrip().startswith("INSERT INTO tracking_updates"))
+        self.assertEqual((p["type"], p["summary"]), ("answer", ASK_NO_ANSWER_TEXT))
+        self.assertEqual(json.loads(p["details"])["answer_status"], "no_answer")
+        self.assertEqual(w.written["no_answer"], 1)

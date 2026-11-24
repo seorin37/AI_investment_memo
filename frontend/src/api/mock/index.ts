@@ -4,6 +4,10 @@
  */
 import { env } from '@/config/env';
 import { uid, ymd } from '@/lib/format';
+import { mockLabStocks } from '@/ui/screens/studio/Studio.mock';
+import { labGroups } from '@/ui/screens/studio/labParts';
+import { toServerQuiz } from '@/ui/screens/studio/quizBank';
+import { ApiError } from '../http';
 import type {
   AiUpdate,
   BoardItem,
@@ -17,14 +21,22 @@ import type {
   ReferenceBoard,
   Settings,
   StockProfile,
+  TermsItem,
+  TermsStatus,
   TimelineEntry,
   TrashItem,
 } from '@/types/models';
 import type { Api, DeepPartial, PinnedMemo } from '../types';
 import * as seed from './seed';
+import { mockFinancials } from './financials';
+import { HOME_NEWS, HOME_NEWS_DAY_TOTAL } from '@/ui/screens/home/homeData.mock';
+import { mockAppPopularStocks } from '@/ui/screens/onboarding/Onboarding.mock';
 
 const clone = <T>(v: T): T => (v === undefined ? v : JSON.parse(JSON.stringify(v)));
 const wait = <T>(v: T, ms = env.mockLatency): Promise<T> => new Promise((r) => setTimeout(() => r(clone(v)), ms));
+
+const MOCK_TERMS_VERSION = 'mock-v1';
+const MOCK_TERMS_REQUIRED = ['age', 'service', 'invest'];
 
 // 가변 DB
 const db = {
@@ -42,11 +54,42 @@ const db = {
   layout: { mode: 'unset', widgets: [] } as HomeLayout,
   trashPayload: new Map<string, { kind: TrashItem['kind']; data: unknown }>(),
   candles: new Map<string, Candle[]>(),
+  /* 약관 동의: mock 사용자는 이미 동의한 상태로 시작 (지금 mock 흐름 = 홈 바로 감 그대로) */
+  terms: MOCK_TERMS_SEED(),
 };
+
+/* mock 약관 — 서버 흉내만. 버전 값은 mock 전용 (실제 버전은 backend/app/account/defaults.py 한 곳) */
+function MOCK_TERMS_SEED(): (TermsItem & { agreed_at: string })[] {
+  return MOCK_TERMS_REQUIRED.map((kind) => ({ kind, version: MOCK_TERMS_VERSION, agreed_at: '2026-11-01T09:00:00+09:00' }));
+}
+
+function termsStatus(): TermsStatus {
+  return {
+    required: MOCK_TERMS_REQUIRED.map((kind) => ({ kind, version: MOCK_TERMS_VERSION })),
+    agreed: db.terms,
+    complete: MOCK_TERMS_REQUIRED.every((k) => db.terms.some((t) => t.kind === k && t.version === MOCK_TERMS_VERSION)),
+  };
+}
 
 function candlesOf(code: string) {
   if (!db.candles.has(code)) db.candles.set(code, seed.genCandles(code));
   return db.candles.get(code)!;
+}
+
+/** 실제 GET /stocks/{code}/quote 와 같은 모양 (원시 종가 · trade_date) */
+function quoteOf(code: string) {
+  const c = candlesOf(code);
+  const last = c[c.length - 1];
+  const prev = c[c.length - 2];
+  return {
+    code,
+    price: last.close,
+    change: last.close - prev.close,
+    change_pct: Math.round(((last.close - prev.close) / prev.close) * 10000) / 100,
+    as_of: new Date(last.date + 'T15:30:00+09:00').toISOString(),
+    trade_date: last.date,
+    spark: c.slice(-24).map((x) => x.close),
+  };
 }
 
 const stockName = (code: string) =>
@@ -55,6 +98,10 @@ const stockName = (code: string) =>
 function recountUnread() {
   for (const s of db.stocks) {
     s.unread_updates = db.aiUpdates.filter((u) => u.stock_code === s.code && !u.read).length;
+    /* 서버 GET /stocks 와 같은 뜻: 일반 메모 수 · AI 연결 메모 수 (mock 보드에는 휴지통 항목이 없음) */
+    const memos = db.board.filter((b): b is Memo => b.kind === 'memo' && b.stock_code === s.code);
+    s.memo_count = memos.length;
+    s.ai_count = memos.filter((m) => m.ai_linked).length;
   }
   for (const it of db.board) {
     if (it.kind === 'memo') it.unread_updates = db.aiUpdates.filter((u) => u.memo_id === it.id && !u.read).length;
@@ -123,12 +170,28 @@ export const mockApi: Api = {
     return wait(db.user);
   },
   logout: async () => wait(undefined),
+  getTerms: async () => wait(termsStatus()),
+  agreeTerms: async (items) => {
+    /* 서버(backend/app/account agree_terms)와 같은 검사: 모르는 종류 · 다른 버전 · 필수 빠짐 → 422 */
+    const required = new Set(MOCK_TERMS_REQUIRED);
+    const bad = items.find((i) => !required.has(i.kind) || i.version !== MOCK_TERMS_VERSION);
+    const missing = MOCK_TERMS_REQUIRED.filter((k) => !items.some((i) => i.kind === k));
+    if (bad || missing.length) throw new ApiError(422, bad ? `현재 약관이 아닙니다: ${bad.kind}` : `필수 약관 동의가 빠졌습니다: ${missing.join(', ')}`);
+    const now = new Date().toISOString();
+    for (const k of MOCK_TERMS_REQUIRED) {
+      if (!db.terms.some((t) => t.kind === k && t.version === MOCK_TERMS_VERSION)) db.terms.push({ kind: k, version: MOCK_TERMS_VERSION, agreed_at: now });
+    }
+    return wait(termsStatus());
+  },
 
   // ─── 종목
   listMyStocks: async () => {
     recountUnread();
     return wait(db.stocks);
   },
+  /* 지금 앱 온보딩 mock 목록 그대로 (화면과 같은 종목 · 순서) */
+  getPopularStocks: async (limit = 12) =>
+    wait(mockAppPopularStocks.slice(0, limit).map((s) => ({ code: s.stock_code, name: s.name, market: s.market }))),
   searchStocks: async (q) => {
     const k = q.trim().toLowerCase();
     if (!k) return wait([]);
@@ -165,20 +228,8 @@ export const mockApi: Api = {
     }
     return wait(undefined);
   },
-  getQuote: async (code) => {
-    const c = candlesOf(code);
-    const last = c[c.length - 1];
-    const prev = c[c.length - 2];
-    const asOf = new Date(last.date + 'T15:30:00+09:00');
-    return wait({
-      code,
-      price: last.close,
-      change: last.close - prev.close,
-      change_pct: Math.round(((last.close - prev.close) / prev.close) * 10000) / 100,
-      as_of: asOf.toISOString(),
-      spark: c.slice(-24).map((x) => x.close),
-    });
-  },
+  getQuote: async (code) => wait(quoteOf(code)),
+  getQuotes: async (codes) => wait({ quotes: [...new Set(codes)].map(quoteOf), missing: [] }),
   getCandles: async (code, range) => {
     const n = { '1W': 5, '1M': 22, '3M': 64, '1Y': 250 }[range];
     return wait(candlesOf(code).slice(-n));
@@ -206,9 +257,28 @@ export const mockApi: Api = {
     };
     return wait(profile);
   },
-  getFinancials: async (code) => wait(seed.financials[code] ?? seed.financials['000660']),
+  getFinancials: async (code) => wait(mockFinancials(code)),
+
+  reorderStocks: async (codes) => {
+    const rank = (c: string) => (codes.includes(c) ? codes.indexOf(c) : codes.length + db.stocks.findIndex((s) => s.code === c));
+    db.stocks.sort((a, b) => rank(a.code) - rank(b.code));
+    return wait(db.stocks);
+  },
 
   // ─── 메모 보드
+  reorderBoard: async (code, ids) => {
+    db.board.filter((b) => b.stock_code === code).forEach((b) => {
+      const i = ids.indexOf(b.id);
+      if (i >= 0) b.position = i;
+    });
+    return wait(db.board.filter((b) => b.stock_code === code).sort((a, b) => a.position - b.position));
+  },
+  answerConfirmation: async (memoId) => {
+    const m = memosOf().find((x) => x.id === memoId);
+    if (!m) throw new Error('메모를 찾을 수 없어요');
+    return wait(m);
+  },
+  listMemoAnswers: async () => wait([]),
   listBoard: async (code) => {
     recountUnread();
     return wait(db.board.filter((b) => b.stock_code === code).sort((a, b) => a.position - b.position));
@@ -313,6 +383,13 @@ export const mockApi: Api = {
     recountUnread();
     return wait(undefined);
   },
+  markMemoUpdatesRead: async (memoId) => {
+    db.aiUpdates.forEach((u) => {
+      if (u.memo_id === memoId) u.read = true;
+    });
+    recountUnread();
+    return wait(undefined);
+  },
   uploadFile: async (file) => wait({ url: file.uri, name: file.name }),
 
   // ─── 최신 업데이트
@@ -327,7 +404,7 @@ export const mockApi: Api = {
   listJournal: async () => wait([...db.journal].sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at))),
   createJournal: async (input) => {
     const now = new Date().toISOString();
-    const entry: JournalEntry = { id: uid('j'), ...input, stock_name: input.stock_code ? stockName(input.stock_code) : null, created_at: now, updated_at: now };
+    const entry: JournalEntry = { id: uid('j'), ...input, pinned: input.pinned ?? false, stock_name: input.stock_code ? stockName(input.stock_code) : null, created_at: now, updated_at: now };
     db.journal.unshift(entry);
     return wait(entry);
   },
@@ -354,6 +431,22 @@ export const mockApi: Api = {
     return wait(layout);
   },
   getMarketOverview: async () => wait(seed.marketOverview),
+  getMacro: async () => wait(seed.macroOverview),
+  runLab: async ({ stock_code, dirs }) =>
+    wait({
+      stock_code,
+      name: mockLabStocks.find((s) => s.stock_code === stock_code)?.name ?? stock_code,
+      groups: labGroups(stock_code, dirs),
+      source: 'rules' as const,
+      credits_used: 0,
+      item_id: null,
+    }, 1400),
+  /* mock 모드의 만든 항목은 store 초기값(mockMade)이 보여 준다 — 서버 목록과 합치지 않게 비워 둔다 */
+  listStudioItems: async () => wait([]),
+  deleteStudioItem: async () => wait(undefined),
+  markReportWatch: async () => wait(undefined),
+  /* mock 모드 보고서는 store 타이머(startReport)가 만든다 — 부르지 않는다 */
+  createReport: async () => wait({ item_id: 'mock', status: 'ready' as const, reused: false }),
   listCalendar: async (month) => wait(db.calendar.filter((e) => e.date.startsWith(month))),
   createCalendarEvent: async (input) => {
     const e = { id: uid('e'), date: input.date, title: input.title, category: 'mine' as const, stock_code: null };
@@ -361,6 +454,8 @@ export const mockApi: Api = {
     return wait(e);
   },
   listNews: async () => wait(seed.news),
+  getHomeNews: async (limit = 9) =>
+    wait({ day: HOME_NEWS[0]?.at.slice(0, 10) ?? null, day_total: HOME_NEWS_DAY_TOTAL, items: HOME_NEWS.slice(0, limit) }),
   listPinnedMemos: async () =>
     wait(
       memosOf()
@@ -498,12 +593,32 @@ export const mockApi: Api = {
     db.settings.mcp.apps = db.settings.mcp.apps.filter((a) => a.id !== appId);
     return wait(db.settings);
   },
+  getTodayQuiz: async () => wait(toServerQuiz()),
+  /* mock 화면은 My.mock(mockTracked)을 그대로 보여 준다 (useTrackedView) */
+  getAiTracking: async () => wait([]),
   getAiStats: async () => {
     const linked = memosOf().filter((m) => m.ai_linked);
     return wait({
       linked_memos: linked.length,
       updates_this_month: db.aiUpdates.filter((u) => new Date(u.published_at).getMonth() === new Date().getMonth()).length,
       linked_stocks: new Set(linked.map((m) => m.stock_code)).size,
+    });
+  },
+  getUsage: async () => {
+    // 실제 규칙(backend/app/credits): 매달 1일 0시(한국 시간)에 갱신, 사용량 % = 쓴 양 ÷ (쓴 양 + 남은 양)
+    const now = new Date();
+    const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const last = new Date(next.getTime() - 86_400_000);
+    const used = Math.min(30, db.aiUpdates.length);
+    const balance = 30 - used;
+    return wait({
+      usage_percent: Math.round((used * 100) / 30),
+      used,
+      balance,
+      period_start: ymd(new Date(now.getFullYear(), now.getMonth(), 1)),
+      renews_at: next.toISOString(),
+      renew_label: `${String(last.getMonth() + 1).padStart(2, '0')}.${String(last.getDate()).padStart(2, '0')} 갱신`,
+      paused: balance <= 0,
     });
   },
   getDataStats: async () => wait({ memos: memosOf().length, journals: db.journal.length, stocks: db.stocks.length }),

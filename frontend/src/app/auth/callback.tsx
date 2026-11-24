@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
+import { api } from '@/api';
 import { Button, Loading } from '@/components/ui/primitives';
+import { routeAfterLogin, type AfterLoginRoute } from '@/lib/afterLogin';
 import { T } from '@/components/ui/Text';
 import { useAuth } from '@/store/auth';
 import { colors } from '@/theme/tokens';
@@ -17,11 +19,23 @@ export default function AuthCallback() {
   const [signInError, setSignInError] = useState<string | null>(null);
   const failed = error ?? (callbackStatus !== 'success' ? '로그인 결과를 확인할 수 없어요.' : signInError);
 
+  /* 로그인 뒤 갈 곳: 약관 동의 판별 (lib/afterLogin — 필수 약관 미동의면 /terms, 동의했으면 /, 조회 실패면 /) */
+  const [next, setNext] = useState<AfterLoginRoute | null>(null);
+
   useEffect(() => {
     if (callbackStatus === 'success' && status !== 'signedIn') completeWebLogin().catch(() => setSignInError('로그인 정보를 확인하지 못했어요.'));
   }, [callbackStatus, status, completeWebLogin]);
 
-  if (status === 'signedIn') return <Redirect href="/" />;
+  useEffect(() => {
+    if (status !== 'signedIn') return;
+    let alive = true;
+    void routeAfterLogin(api.getTerms).then((r) => alive && setNext(r));
+    return () => {
+      alive = false;
+    };
+  }, [status]);
+
+  if (status === 'signedIn') return next ? <Redirect href={next} /> : <Loading height={400} />;
   if (failed)
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.page }}>

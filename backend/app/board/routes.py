@@ -12,6 +12,7 @@ from .repository import BoardRepository
 from .schemas import (
     AiLinkPatch,
     BoardItemPatch,
+    BoardOrderPut,
     BoardResponse,
     ChecklistCreate,
     ConfirmationAnswer,
@@ -60,6 +61,14 @@ def _handle_error(exc: Exception) -> None:
     raise exc
 
 
+@router.get("/memos/pinned")
+def list_pinned_memos(
+    current: dict = Depends(get_current_user),
+    service: BoardService = Depends(get_query_service),
+):
+    return service.list_pinned(_user_id(current))
+
+
 @router.get("/stocks/{code}/board", response_model=list[BoardResponse])
 def list_board(
     code: str,
@@ -68,6 +77,20 @@ def list_board(
 ):
     try:
         return service.list_board(_user_id(current), code)
+    except (StockBoardNotFoundError, InvalidBoardPatchError) as exc:
+        _handle_error(exc)
+
+
+@router.put("/stocks/{code}/board-order", response_model=list[BoardResponse])
+def put_board_order(
+    code: str,
+    payload: BoardOrderPut,
+    current: dict = Depends(get_current_user),
+    service: BoardService = Depends(get_command_service),
+):
+    """끌어서 옮긴 뒤 보드 카드 전체 순서를 저장하고, 새 순서의 보드를 돌려준다."""
+    try:
+        return service.reorder(_user_id(current), code, payload.ids)
     except (StockBoardNotFoundError, InvalidBoardPatchError) as exc:
         _handle_error(exc)
 

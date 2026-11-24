@@ -64,8 +64,11 @@ class FakeBoardService:
 
     def update(self, user_id: int, memo_id: int, values: dict):
         row = self.get(user_id, memo_id)
+        values = dict(values)
         if "position" in values:
-            raise InvalidBoardPatchError("position unsupported")
+            row["position"] = values.pop("position")
+            if not values:
+                return row
         allowed = {
             "memo": {"title", "body", "tags", "color", "pinned"},
             "checklist": {"title", "items"},
@@ -101,6 +104,14 @@ class FakeBoardService:
             raise InvalidBoardPatchError("일반 메모만 AI 추적 가능")
         row["ai_linked"] = enabled
         return row
+
+    def reorder(self, user_id: int, symbol: str, ids: list[int]):
+        mine = {int(row["id"]) for (owner, _), row in self.rows.items() if owner == user_id and row["stock_code"] == symbol}
+        if len(set(ids)) != len(ids) or set(ids) - mine:
+            raise InvalidBoardPatchError("bad order")
+        for index, memo_id in enumerate(ids):
+            self.rows[(user_id, memo_id)]["position"] = index
+        return sorted(self.list_board(user_id, symbol), key=lambda row: row["position"])
 
     def delete(self, user_id: int, memo_id: int):
         if self.rows.pop((user_id, memo_id), None) is None:
@@ -187,5 +198,20 @@ def test_unauthenticated_and_invalid_patch_are_rejected():
     memo_id = client.post("/api/v1/stocks/005930/memos", json={
         "title": "메모", "body": "body", "tags": [], "color": "yellow", "ai_linked": False,
     }).json()["id"]
-    assert client.patch(f"/api/v1/board-items/{memo_id}", json={"position": 3}).status_code == 422
+    assert client.patch(f"/api/v1/board-items/{memo_id}", json={"position": -1}).status_code == 422
     assert client.patch(f"/api/v1/board-items/{memo_id}", json={"items": []}).status_code == 422
+
+
+def test_board_order_put_and_position_patch():
+    client, _service, user, _app = _client()
+    ids = [client.post("/api/v1/stocks/005930/memos", json={
+        "title": f"메모 {n}", "body": "b", "tags": [], "color": "yellow", "ai_linked": False,
+    }).json()["id"] for n in range(3)]
+    reordered = client.put("/api/v1/stocks/005930/board-order", json={"ids": [int(ids[2]), int(ids[0]), int(ids[1])]})
+    assert reordered.status_code == 200
+    assert [row["id"] for row in reordered.json()] == [ids[2], ids[0], ids[1]]
+    assert client.put("/api/v1/stocks/005930/board-order", json={"ids": [int(ids[0]), int(ids[0])]}).status_code == 422
+    assert client.put("/api/v1/stocks/005930/board-order", json={"ids": ["x"]}).status_code == 422
+    assert client.patch(f"/api/v1/board-items/{ids[1]}", json={"position": 0}).json()["position"] == 0
+    user["id"] = "2"
+    assert client.put("/api/v1/stocks/005930/board-order", json={"ids": [int(ids[0])]}).status_code == 422

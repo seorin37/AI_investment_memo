@@ -44,6 +44,9 @@ class FakeRepo:
                      "news_url": None, "published_at": None, "news_source": None, "disclosure_title": "현금배당결정",
                      "rcept_dt": date(2026, 10, 29)}]}
 
+    def recent_closes(self, symbol, until, n=10):
+        return [(date(2026, 11, 6), 69000.0), (date(2026, 11, 7), 70500.0), (date(2026, 11, 10), 71000.0)]
+
     def similarities(self, pairs):
         return {(7, 55): 0.71}
 
@@ -64,8 +67,17 @@ class FakeRepo:
     def mark_read(self, user_id, update_id):
         return update_id == 1
 
+    def mark_memo_read(self, user_id, memo_id):
+        if self.memo(user_id, memo_id) is None:
+            return None
+        hit = [r for r in self.rows if r["memo_id"] == memo_id and not r["is_read"]]
+        for r in hit:
+            r["is_read"] = True
+        return len(hit)
+
 
 ROWS = [card(1, "news"), card(2, "price_condition", title="조건가에 도달했어요", price_state="reached", observed_value=71000,
+                               item_type="price_above", price_threshold=70000,
                                observed_trade_date=date(2026, 11, 10), is_read=True),
         card(4, "disclosure", memo_id=5, symbol="105560", stock_name="KB금융")]
 
@@ -81,7 +93,10 @@ class ServiceTest(unittest.TestCase):
         self.assertEqual(news["card"]["coverage"], "10월 28일 이후 기사 기준")
         self.assertEqual(news["item"]["last_checked_at"], T)
         self.assertEqual((price["type"], price["title"], price["source"], price["read"]), ("price", "종가 71,000원", "KRX", True))
-        self.assertEqual(price["price"], {"state": "reached", "observed_value": 71000.0, "observed_trade_date": date(2026, 11, 10)})
+        self.assertEqual(price["price"], {"state": "reached", "observed_value": 71000.0, "observed_trade_date": date(2026, 11, 10),
+                                          "threshold": 70000.0, "direction": "above", "closes": [69000.0, 70500.0, 71000.0],
+                                          "closes_from": date(2026, 11, 6)})
+        self.assertEqual((news["memo_color"], news["price"]), ("green", None))
         self.assertEqual((disc["source"], disc["url"], disc["relevance"]),
                          ("DART", "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=R1", 1.0))
         for key in ("id", "stock_code", "stock_name", "type", "title", "source", "url", "published_at", "memo_id",
@@ -104,12 +119,21 @@ class ServiceTest(unittest.TestCase):
         with self.assertRaises(UpdateNotFoundError):
             self.s.mark_read(1, 2)
 
+    def test_mark_memo_read(self):
+        rows = [dict(r) for r in ROWS]
+        s = UpdatesService(FakeRepo(rows))
+        self.assertEqual(s.mark_memo_read(1, 3), 1)                    # 메모 3의 안 읽은 카드(1번)만 읽음으로
+        self.assertEqual([r["is_read"] for r in rows], [True, True, False])  # 다른 메모(5) 카드는 그대로
+        self.assertEqual(s.mark_memo_read(1, 3), 0)                    # 다시 불러도 괜찮음
+        with self.assertRaises(MemoNotFoundError):
+            s.mark_memo_read(1, 99)
+
 
 class RouteTest(unittest.TestCase):
     def setUp(self):
         app = FastAPI()
         app.include_router(router)
-        svc = UpdatesService(FakeRepo(ROWS))
+        svc = UpdatesService(FakeRepo([dict(r) for r in ROWS]))
         app.dependency_overrides[get_current_user] = lambda: {"id": 1}
         app.dependency_overrides[get_query_service] = lambda: svc
         app.dependency_overrides[get_command_service] = lambda: svc
@@ -123,6 +147,8 @@ class RouteTest(unittest.TestCase):
         self.assertEqual(self.c.get("/api/v1/ai-updates/summary").status_code, 200)
         self.assertEqual(self.c.post("/api/v1/ai-updates/1/read").status_code, 204)
         self.assertEqual(self.c.post("/api/v1/ai-updates/2/read").status_code, 404)
+        self.assertEqual(self.c.post("/api/v1/memos/3/ai-updates/read").status_code, 204)
+        self.assertEqual(self.c.post("/api/v1/memos/99/ai-updates/read").status_code, 404)
 
 
 if __name__ == "__main__":

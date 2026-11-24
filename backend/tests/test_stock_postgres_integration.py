@@ -219,3 +219,35 @@ def test_postgres_transaction_rollback_and_foreign_keys(isolated_db):
             ).scalars()
         )
         assert {"PRIMARY KEY", "FOREIGN KEY"}.issubset(constraints)
+
+
+def test_postgres_sidebar_stock_order(isolated_db):
+    """사이드바 내 종목 순서 (0021 user_stocks.position): 새 종목은 맨 뒤, 전체 순서 저장, 지웠다 다시 추가하면 맨 뒤."""
+    engine, (user_a, user_b) = isolated_db
+    current = {"id": str(user_a)}
+    client = _client(engine, current)
+    with engine.connect() as c:
+        if not c.execute(text("SELECT count(*) FROM information_schema.columns WHERE table_name = 'user_stocks' "
+                              "AND column_name = 'position'")).scalar():
+            pytest.skip("0021 전 DB")
+    first = client.post("/api/v1/stocks", json={"code": SYMBOL, "status": "watching"}).json()
+    second = client.post("/api/v1/stocks", json={"code": SECOND_SYMBOL, "status": "holding"}).json()
+    assert (first["position"], second["position"]) == (0, 1)                  # 새 종목은 맨 뒤
+    codes = lambda: [s["code"] for s in client.get("/api/v1/stocks").json()]
+    assert codes() == [SYMBOL, SECOND_SYMBOL]
+
+    saved = client.put("/api/v1/stocks/order", json={"codes": [SECOND_SYMBOL]})
+    assert saved.status_code == 200
+    assert [(s["code"], s["position"]) for s in saved.json()] == [(SECOND_SYMBOL, 0), (SYMBOL, 1)]   # 빠진 종목은 뒤에
+    assert client.patch(f"/api/v1/stocks/{SYMBOL}", json={"status": "holding"}).json()["position"] == 1  # 상태만 바꾸면 자리 그대로
+
+    assert client.put("/api/v1/stocks/order", json={"codes": [SYMBOL, SYMBOL]}).status_code == 422     # 중복
+    assert client.put("/api/v1/stocks/order", json={"codes": ["005930"]}).status_code == 422           # 내 종목 아님
+
+    assert client.delete(f"/api/v1/stocks/{SECOND_SYMBOL}").status_code == 204
+    assert client.put("/api/v1/stocks/order", json={"codes": [SECOND_SYMBOL]}).status_code == 422      # 지운 종목
+    again = client.post("/api/v1/stocks", json={"code": SECOND_SYMBOL, "status": "watching"}).json()
+    assert again["position"] == 1 and codes() == [SYMBOL, SECOND_SYMBOL]      # 다시 추가하면 맨 뒤
+
+    current["id"] = str(user_b)
+    assert client.get("/api/v1/stocks").json() == []                         # 다른 사용자와 섞이지 않음

@@ -10,6 +10,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable
 
+from pipelines.updates.db_store import memo_full_text
+
 from .analysis import AnalysisError, analyze_memo, default_llm, next_update_at, read_option
 from .repository import BoardRepository
 from .schemas import ChecklistCreate, MemoCreate, ReferenceCreate
@@ -47,6 +49,13 @@ class BoardService:
         self._require_stock(user_id, symbol)
         return [self._response(row) for row in self.repository.list_board(user_id, symbol)]
 
+    def list_pinned(self, user_id: int) -> list[dict[str, Any]]:
+        """PinnedMemo = Memo + stock_name (frontend/src/api/types.ts)."""
+        return [
+            {**self._response(row), "stock_name": row["stock_name"]}
+            for row in self.repository.list_pinned(user_id)
+        ]
+
     def get(self, user_id: int, memo_id: int) -> dict[str, Any]:
         return self._response(self._require_item(user_id, memo_id))
 
@@ -63,9 +72,10 @@ class BoardService:
             ai_linked=payload.ai_linked,
         )
         self.repository.replace_tags(user_id, int(row["id"]), payload.tags)
+        self._place(user_id, symbol, int(row["id"]), front=payload.pinned)
         self._commit()                                          # 메모 저장을 먼저 확정한다 (분석 실패와 무관하게)
         analysis = self._analyze(row) if payload.ai_linked else self._skipped("ai_off")
-        return {**self._response(row), "analysis": analysis}
+        return {**self.get(user_id, int(row["id"])), "analysis": analysis}
 
     def create_checklist(
         self, user_id: int, symbol: str, payload: ChecklistCreate
@@ -81,7 +91,8 @@ class BoardService:
         self.repository.replace_checklist(
             int(row["id"]), [item.model_dump(exclude={"id"}) for item in payload.items]
         )
-        return self._response(row)
+        self._place(user_id, symbol, int(row["id"]))
+        return self.get(user_id, int(row["id"]))
 
     def create_reference(
         self, user_id: int, symbol: str, payload: ReferenceCreate
@@ -97,18 +108,55 @@ class BoardService:
         self.repository.replace_links(
             int(row["id"]), [link.model_dump(exclude={"id"}) for link in payload.links]
         )
-        return self._response(row)
+        self._place(user_id, symbol, int(row["id"]))
+        return self.get(user_id, int(row["id"]))
+
+    # ---------------------------------------------------------------- 보드 순서 (2026-11-20, 0019 memos.position)
+    # 새 카드는 맨 앞, 단 테이프(고정) 붙인 카드들 뒤. 테이프를 붙이면 맨 앞, 떼면 고정 카드들 바로 뒤.
+    # 끌어서 옮긴 순서는 reorder(보드 전체 순서)나 PATCH position(카드 하나)으로 저장한다.
+    def reorder(self, user_id: int, symbol: str, ids: list[int]) -> list[dict[str, Any]]:
+        """보드 전체 순서 저장. 빠진 카드는 지금 순서대로 맨 뒤에 붙인다. 이 보드에 없는 id(다른 사람·종목·삭제)는 거절."""
+        self._require_stock(user_id, symbol)
+        if len(set(ids)) != len(ids):
+            raise InvalidBoardPatchError("같은 카드가 순서에 두 번 들어 있습니다.")
+        current = [entry["id"] for entry in self.repository.board_order(user_id, symbol, lock=True)]
+        unknown = [memo_id for memo_id in ids if memo_id not in set(current)]
+        if unknown:
+            raise InvalidBoardPatchError(f"이 보드에 없는 카드입니다: {', '.join(map(str, unknown))}")
+        given = set(ids)
+        self.repository.write_order(user_id, symbol, ids + [memo_id for memo_id in current if memo_id not in given])
+        return self.list_board(user_id, symbol)
+
+    def _move(self, user_id: int, symbol: str, memo_id: int, position: int) -> None:
+        """카드 하나를 position 자리로 (범위를 넘으면 맨 뒤)."""
+        rest = [e["id"] for e in self.repository.board_order(user_id, symbol, lock=True) if e["id"] != memo_id]
+        rest.insert(min(position, len(rest)), memo_id)
+        self.repository.write_order(user_id, symbol, rest)
+
+    def _place(self, user_id: int, symbol: str, memo_id: int, *, front: bool = False) -> None:
+        """front=True: 맨 앞. False: 맨 앞에 모여 있는 고정 카드들 바로 뒤."""
+        rest = [e for e in self.repository.board_order(user_id, symbol, lock=True) if e["id"] != memo_id]
+        index = 0
+        if not front:
+            while index < len(rest) and rest[index]["pinned"]:
+                index += 1
+        ids = [e["id"] for e in rest]
+        ids.insert(index, memo_id)
+        self.repository.write_order(user_id, symbol, ids)
 
     def update(self, user_id: int, memo_id: int, values: dict[str, Any]) -> dict[str, Any]:
         row = self._require_item(user_id, memo_id)
-        if "position" in values:
-            raise InvalidBoardPatchError(
-                "현재 DB 스키마에는 메모 순서 저장 컬럼이 없어 position 변경을 지원하지 않습니다."
-            )
+        values = dict(values)
+        position = values.pop("position", None)
+        symbol = str(row["symbol"]).strip()
+        if position is not None:
+            self._move(user_id, symbol, memo_id, int(position))
+            if not values:
+                return self.get(user_id, memo_id)
         kind = str(row["kind"])
         allowed = {
             "note": {"title", "body", "tags", "color", "pinned"},
-            "checklist": {"title", "items"},
+            "checklist": {"title", "items", "pinned"},              # 2026-11-20 체크리스트도 테이프(고정)
             "reference": {"title", "links"},
         }[kind]
         unsupported = set(values) - allowed
@@ -118,9 +166,14 @@ class BoardService:
             )
 
         base = {key: value for key, value in values.items() if key in {"title", "body", "color", "pinned"}}
-        body_changed = kind == "note" and "body" in values and (values["body"] or "") != (row.get("content") or "")
+        # 분석 입력(제목 + 본문)이 실제로 바뀐 경우만 다시 분석. 제목만 바뀌어도 입력이 바뀌면 다시 분석한다 (2026-11-18)
+        text_changed = kind == "note" and ("title" in values or "body" in values) and memo_full_text(
+            values.get("title", row.get("title")), values.get("body", row.get("content"))
+        ) != memo_full_text(row.get("title"), row.get("content"))
         if base and not self.repository.update_base(user_id, memo_id, base):
             raise BoardItemNotFoundError(memo_id)
+        if position is None and "pinned" in base and bool(base["pinned"]) != bool(row.get("is_pinned")):
+            self._place(user_id, symbol, memo_id, front=bool(base["pinned"]))   # 테이프 붙이면 맨 앞, 떼면 고정 카드들 뒤
         children_changed = False
         if "tags" in values:
             self.repository.replace_tags(user_id, memo_id, values["tags"])
@@ -139,7 +192,7 @@ class BoardService:
         fresh = self._require_item(user_id, memo_id)
         if not fresh.get("ai_linked"):
             analysis = self._skipped("ai_off")
-        elif body_changed:                                      # 내용이 실제로 바뀐 경우만 다시 분석
+        elif text_changed:                                      # 제목 + 본문이 실제로 바뀐 경우만 다시 분석
             analysis = self._analyze(fresh)
         else:
             analysis = self._unchanged(memo_id)
@@ -228,7 +281,7 @@ class BoardService:
                                "out_of_scope": False, "next_update_at": None}
         try:
             rev = self.tracking.latest_revision(memo_id)
-            result = analyze_memo(memo_id, rev["revision_no"] if rev else 1, row.get("content") or "", symbol,
+            result = analyze_memo(memo_id, rev["revision_no"] if rev else 1, memo_full_text(row.get("title"), row.get("content")), symbol,
                                   self.tracking.stock_name(symbol), self._llm_call(), self.tracking.price_window(symbol))
         except AnalysisError as exc:
             log.warning("memo analysis failed memo=%s code=%s detail=%s", memo_id, exc.code, exc)
@@ -237,7 +290,7 @@ class BoardService:
             log.exception("memo analysis error memo=%s", memo_id)
             return failed(f"internal_error:{type(exc).__name__}")
         try:
-            changes = self.tracking.sync(memo_id, result.items, result.confirmations)
+            changes = self.tracking.sync(memo_id, result.items, result.confirmations, result.questions)
             self._commit()
         except Exception as exc:
             self.repository.db.rollback()                       # 메모는 이미 커밋돼 있다
@@ -249,12 +302,15 @@ class BoardService:
                 "items": [self._item_out(e) for e in self.tracking.items(memo_id, ("active",))],
                 "created": len(changes["created"]), "done": len(changes["done"]),
                 "confirmations": result.confirmations, "out_of_scope": result.out_of_scope,
+                "questions": result.questions,                  # 한 번 답할 질문 (type=ask 항목으로 저장, 다음 매일 실행에서 답)
                 "next_update_at": next_update_at()}
 
     def delete(self, user_id: int, memo_id: int) -> None:
-        self._require_item(user_id, memo_id)
+        row = self._require_item(user_id, memo_id)
         if not self.repository.soft_delete(user_id, memo_id):
             raise BoardItemNotFoundError(memo_id)
+        symbol = str(row["symbol"]).strip()                    # 남은 카드 순서를 0부터 다시 (빈 번호 없이)
+        self.repository.write_order(user_id, symbol, [e["id"] for e in self.repository.board_order(user_id, symbol, lock=True)])
 
     def _require_stock(self, user_id: int, symbol: str) -> None:
         if not self.repository.owns_stock(user_id, symbol):
@@ -292,7 +348,8 @@ class BoardService:
                 "unread_updates": self.tracking.unread_updates(memo_id),
             }
         if kind == "checklist":
-            return {**common, "kind": "checklist", "items": self.repository.checklist_items(memo_id)}
+            return {**common, "kind": "checklist", "items": self.repository.checklist_items(memo_id),
+                    "pinned": bool(row.get("is_pinned"))}
         if kind == "reference":
             return {**common, "kind": "reference", "links": self.repository.links(memo_id)}
         raise InvalidBoardPatchError(f"지원하지 않는 메모 유형입니다: {kind}")

@@ -41,8 +41,9 @@ def usd(model: str | None, prompt_tokens: int, output_tokens: int) -> float | No
 class UsageTracker:
     """LLM 호출 함수를 감싸 항목·단계별로 client.calls에 새로 붙은 기록을 모은다. 호출 자체는 그대로 한다."""
 
-    def __init__(self):
+    def __init__(self, keep_io: bool = False):
         self.rows: list[dict] = []
+        self.io: list[dict] | None = [] if keep_io else None    # keep_io면 프롬프트·응답 원문도 모은다 (experiment --save-llm-io)
 
     def caller(self, client, item, stage: str | None = None):
         if client is None:
@@ -50,11 +51,16 @@ class UsageTracker:
 
         def call(prompt: str) -> str:
             before = len(client.calls)
+            raw = None
             try:
-                return client(prompt)
+                raw = client(prompt)
+                return raw
             except CreditsExhausted:
                 raise
             finally:
+                if self.io is not None:
+                    self.io.append({"item_id": item.item_id, "stage": stage or stage_of(prompt), "model": client.model,
+                                    "prompt": prompt, "response": raw})
                 for c in client.calls[before:]:
                     self.rows.append({"item_id": item.item_id, "symbol": item.symbol, "item_type": item.type,
                                       "stage": stage or stage_of(prompt), "model": client.model,

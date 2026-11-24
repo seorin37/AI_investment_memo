@@ -158,3 +158,22 @@ def test_day_window_is_kst():
     from datetime import date
     start, end = ft.day_window(date(2026, 11, 5))
     assert start.isoformat() == "2026-11-04T15:00:00+00:00" and end.isoformat() == "2026-11-05T15:00:00+00:00"
+
+
+def test_record_from_page_matches_fetch_one(tmp_path):
+    """판정 함수(record_from_page)는 fetch_one이 같은 페이지를 받았을 때와 같은 기록을 만든다 (백필 목록 단계가 재사용)."""
+    config = cfg()
+    src = config.sources["hankyung"]
+    version = ft.extractor_version(src)
+    fixed = lambda: __import__("datetime").datetime(2026, 11, 12, 10, 0, tzinfo=ft.KST)   # noqa: E731
+    for i, page in enumerate([PAGE, PAID, SHORT, "<html><body><div id=b></div></body></html>"], 1):
+        r = row(i, f"https://www.hankyung.com/article/{i}")
+        get = http({r.url: Resp(200, page)})
+        from backend.pipelines.news import lead_fetcher as lf
+        throttle = lf.Throttle(4.0, lambda s: None, lambda: 0.0)
+        fetched = ft.fetch_one(r, src, config, get, lf.RobotsCache(get, config.user_agent, throttle), throttle, version,
+                               sleep=lambda s: None, now=fixed)
+        judged = ft.record_from_page(r, src, config, version, 200, page, 1, fixed)
+        assert judged == fetched
+    assert ft.precheck_reason(row(9, "https://www.hankyung.com/article/9", title="[포토] 코스피"), src).startswith("포토")
+    assert ft.precheck_reason(row(9, "https://www.hankyung.com/article/9"), src) is None

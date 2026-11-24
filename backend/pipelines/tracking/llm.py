@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from functools import lru_cache
 from typing import Callable, Protocol
@@ -21,6 +22,13 @@ CATEGORIES = {f"A{i}" for i in range(1, 6)} | {f"B{i}" for i in range(1, 11)} | 
 ITEM_TYPES = {"topic", "price_below", "price_above"}
 
 PROMPT_PATH = "configs/tracking_judge_prompt.md"
+# 실험(2026-11-16): 환경변수로 지시문을 바꿔 끼운다 (예: configs/tracking_judge_prompt_intent.md). 없으면 기존 지시문.
+PROMPT_ENV = "TRACKING_PROMPT_PATH"
+ASK_KINDS = {"explain", "check"}
+
+
+def prompt_path() -> str:
+    return os.getenv(PROMPT_ENV) or PROMPT_PATH
 
 
 @lru_cache(maxsize=4)
@@ -34,7 +42,7 @@ class LLMJudge(Protocol):
 
 
 def build_prompt(memo_symbol: str, stock_name: str, judgments: list[Judgment], guide: str | None = None) -> str:
-    lines = [guide or load_guide(), "", f"메모 종목: {stock_name} ({memo_symbol})", "문장 (판정 대상은 [판정], 나머지는 맥락):"]
+    lines = [guide or load_guide(prompt_path()), "", f"메모 종목: {stock_name} ({memo_symbol})", "문장 (판정 대상은 [판정], 나머지는 맥락):"]
     for j in judgments:
         mark = "[판정]" if j.decision == PENDING else "[맥락]"
         lines.append(f"{j.sentence_index}. {mark} {j.cleaned_text}")
@@ -58,7 +66,11 @@ def _expand(row: dict) -> dict:
               "keywords": it.get("k") or it.get("keywords"), "price_threshold": it.get("price_threshold"),
               "time_hint": it.get("t") or it.get("time_hint")} for it in row.get("items") or [] if isinstance(it, dict)]
     merge = row.get("merge")
+    asks = [{"question": str(a.get("q") or a.get("question") or "").strip(), "kind": a.get("kind")}
+            for a in row.get("ask") or [] if isinstance(a, dict)]
+    asks = [a for a in asks if a["question"] and a["kind"] in ASK_KINDS]
     return {"sentence_index": row.get("i"), "category": row.get("cat"), "decision": row.get("dec"), "items": items,
+            "asks": asks,
             "merge_into": {"sentence_index": merge.get("s"), "item_index": merge.get("n", 0)} if isinstance(merge, dict) else None,
             "resolved_reference": row.get("ref"), "context_note": row.get("note"), "sub_sentences": row.get("subs"),
             "confidence": row.get("conf", 0)}
@@ -139,6 +151,7 @@ def apply_llm(judgments: list[Judgment], rows: list[dict], min_confidence: float
         if any(_missing_threshold(it) for it in j.items):
             j.decision, j.reason_code = "needs_confirmation", "PRICE_THRESHOLD_MISSING"
         j.context_note, j.judged_by = row.get("context_note") or j.context_note, "llm"
+        j.asks = list(row.get("asks") or [])
         j.resolved_reference, j.confidence = row.get("resolved_reference"), float(row.get("confidence", 0))
         merge = row.get("merge_into")
         j.merge_into = merge if merge and merge["sentence_index"] < j.sentence_index else None

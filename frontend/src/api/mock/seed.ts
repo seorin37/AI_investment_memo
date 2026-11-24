@@ -8,9 +8,10 @@ import type {
   CalendarEvent,
   Candle,
   CompareMemoCard,
-  Financials,
   JournalEntry,
   MarketIndex,
+  MacroIndicator,
+  MacroOverview,
   MarketOverview,
   MarketUpdate,
   MemoVersion,
@@ -158,52 +159,6 @@ export const profiles: Record<string, Omit<StockProfile, 'prev_close' | 'open' |
     eps: 8_670,
     bps: 139_000,
     shares_outstanding: 158_437_008,
-  },
-};
-
-const T = 1e12;
-export const financials: Record<string, Financials> = {
-  '000660': {
-    code: '000660',
-    basis: '2026년 06월 기준 · 연결재무제표',
-    annual: [
-      { period: '2019-12', revenue: 26.99 * T, operating_income: 2.71 * T, net_income: 2.01 * T, operating_margin: 10.0, net_margin: 7.4, roe: 4.2 },
-      { period: '2020-12', revenue: 31.9 * T, operating_income: 5.01 * T, net_income: 4.76 * T, operating_margin: 15.7, net_margin: 14.9, roe: 7.0 },
-      { period: '2021-12', revenue: 42.99 * T, operating_income: 12.41 * T, net_income: 9.62 * T, operating_margin: 28.9, net_margin: 22.4, roe: 18.0 },
-      { period: '2022-12', revenue: 44.62 * T, operating_income: 7.01 * T, net_income: 2.24 * T, operating_margin: 15.7, net_margin: 5.0, roe: 5.0 },
-      { period: '2023-12', revenue: 32.77 * T, operating_income: -7.73 * T, net_income: -9.14 * T, operating_margin: -23.6, net_margin: -27.9, roe: -15.0 },
-      { period: '2024-12', revenue: 66.194 * T, operating_income: 23.4672 * T, net_income: 19.796 * T, operating_margin: 35.5, net_margin: 29.9, roe: 20.0 },
-      { period: '2025-12', revenue: 97.1467 * T, operating_income: 47.2063 * T, net_income: 42.9479 * T, operating_margin: 48.6, net_margin: 44.2, roe: 33.0 },
-    ],
-    stability: { as_of: '2026-06', debt_ratio: 58, current_ratio: 170, quick_ratio: 125, interest_coverage: 25, reserve_ratio: 1750 },
-  },
-  '005930': {
-    code: '005930',
-    basis: '2026년 06월 기준 · 연결재무제표',
-    annual: [
-      { period: '2019-12', revenue: 230.4 * T, operating_income: 27.77 * T, net_income: 21.74 * T, operating_margin: 12.1, net_margin: 9.4, roe: 8.7 },
-      { period: '2020-12', revenue: 236.8 * T, operating_income: 35.99 * T, net_income: 26.41 * T, operating_margin: 15.2, net_margin: 11.2, roe: 9.9 },
-      { period: '2021-12', revenue: 279.6 * T, operating_income: 51.63 * T, net_income: 39.91 * T, operating_margin: 18.5, net_margin: 14.3, roe: 13.9 },
-      { period: '2022-12', revenue: 302.2 * T, operating_income: 43.38 * T, net_income: 55.65 * T, operating_margin: 14.4, net_margin: 18.4, roe: 17.1 },
-      { period: '2023-12', revenue: 258.9 * T, operating_income: 6.57 * T, net_income: 15.49 * T, operating_margin: 2.5, net_margin: 6.0, roe: 4.1 },
-      { period: '2024-12', revenue: 300.9 * T, operating_income: 32.73 * T, net_income: 34.45 * T, operating_margin: 10.9, net_margin: 11.4, roe: 9.0 },
-      { period: '2025-12', revenue: 318.2 * T, operating_income: 34.71 * T, net_income: 29.37 * T, operating_margin: 10.9, net_margin: 9.2, roe: 8.1 },
-    ],
-    stability: { as_of: '2026-06', debt_ratio: 27, current_ratio: 245, quick_ratio: 190, interest_coverage: 48, reserve_ratio: 38_200 },
-  },
-  '035420': {
-    code: '035420',
-    basis: '2026년 06월 기준 · 연결재무제표',
-    annual: [
-      { period: '2019-12', revenue: 6.59 * T, operating_income: 1.15 * T, net_income: 0.4 * T, operating_margin: 17.4, net_margin: 6.1, roe: 7.2 },
-      { period: '2020-12', revenue: 5.3 * T, operating_income: 1.22 * T, net_income: 1.0 * T, operating_margin: 23.0, net_margin: 18.9, roe: 11.3 },
-      { period: '2021-12', revenue: 6.82 * T, operating_income: 1.33 * T, net_income: 16.48 * T, operating_margin: 19.5, net_margin: 241.6, roe: 98.0 },
-      { period: '2022-12', revenue: 8.22 * T, operating_income: 1.3 * T, net_income: 0.76 * T, operating_margin: 15.8, net_margin: 9.2, roe: 3.5 },
-      { period: '2023-12', revenue: 9.67 * T, operating_income: 1.49 * T, net_income: 1.01 * T, operating_margin: 15.4, net_margin: 10.4, roe: 4.6 },
-      { period: '2024-12', revenue: 10.74 * T, operating_income: 1.98 * T, net_income: 1.89 * T, operating_margin: 18.4, net_margin: 17.6, roe: 7.9 },
-      { period: '2025-12', revenue: 11.62 * T, operating_income: 2.21 * T, net_income: 1.97 * T, operating_margin: 19.0, net_margin: 17.0, roe: 7.8 },
-    ],
-    stability: { as_of: '2026-06', debt_ratio: 49, current_ratio: 132, quick_ratio: 128, interest_coverage: 18, reserve_ratio: 13_900 },
   },
 };
 
@@ -424,7 +379,7 @@ export function seededTimeline(memoId: string): TimelineEntry[] | null {
 export const journal: JournalEntry[] = [
   {
     id: 'j1', title: '10/13 투자 복기', stock_code: '000660', stock_name: 'SK하이닉스',
-    created_at: '2026-10-13T18:20:00+09:00', updated_at: '2026-10-13T18:20:00+09:00',
+    created_at: '2026-10-13T18:20:00+09:00', updated_at: '2026-10-13T18:20:00+09:00', pinned: false,
     blocks: [
       { id: 'b1', type: 'paragraph', text: '오늘 반도체 업종이 강세를 보였다. SK하이닉스는 HBM4 공급 확대 기대감에 상승했고, 삼성전자는 장 초반 약세 뒤 회복했다.' },
       { id: 'b2', type: 'paragraph', text: '잘한 점: 급등 구간에서 추격 매수를 하지 않았다.' },
@@ -436,17 +391,17 @@ export const journal: JournalEntry[] = [
   },
   {
     id: 'j2', title: '10/08 실적 발표 전 점검', stock_code: '000660', stock_name: 'SK하이닉스',
-    created_at: '2026-10-08T21:00:00+09:00', updated_at: '2026-10-08T21:00:00+09:00',
+    created_at: '2026-10-08T21:00:00+09:00', updated_at: '2026-10-08T21:00:00+09:00', pinned: false,
     blocks: [{ id: 'b1', type: 'paragraph', text: '발표일 확인하고 체크리스트 정리.' }],
   },
   {
     id: 'j3', title: '10/01 매수 전략 메모', stock_code: '005930', stock_name: '삼성전자',
-    created_at: '2026-10-01T20:00:00+09:00', updated_at: '2026-10-01T20:00:00+09:00',
+    created_at: '2026-10-01T20:00:00+09:00', updated_at: '2026-10-01T20:00:00+09:00', pinned: false,
     blocks: [{ id: 'b1', type: 'paragraph', text: '급하게 따라 사지 않기.' }],
   },
   {
     id: 'j4', title: '09/25 손절 기준 정리', stock_code: '000660', stock_name: 'SK하이닉스',
-    created_at: '2026-09-25T22:00:00+09:00', updated_at: '2026-09-25T22:00:00+09:00',
+    created_at: '2026-09-25T22:00:00+09:00', updated_at: '2026-09-25T22:00:00+09:00', pinned: false,
     blocks: [{ id: 'b1', type: 'paragraph', text: '지지선 근처에서 분할 매수 고민.' }],
   },
 ];
@@ -484,6 +439,28 @@ export const marketOverview: MarketOverview = {
     { key: 'GOLD', label: '금', value: 2415.3, unit: '$', change: 0.6 },
     { key: 'WTI', label: 'WTI 유가', value: 78.4, unit: '$', change: -0.9 },
   ],
+};
+
+/** GET /market/macro 예시 (실험실 mockLabVars 와 같은 숫자 · 11.18 기준) */
+const mi = (key: string, label: string, unit: string, value: number, prev: number, source: string, series_code: string | null = null): MacroIndicator => ({
+  key, label, unit, value, prev_value: prev, change: Math.round((value - prev) * 10000) / 10000,
+  change_pct: Math.round(((value - prev) / prev) * 10000) / 100, observed_date: '2026-11-18', prev_date: '2026-11-17', source, series_code,
+});
+export const macroOverview: MacroOverview = {
+  indicators: [
+    mi('USD_KRW', '원/달러 환율', '원', 1350.2, 1347.0, 'ECOS'),
+    mi('KR_POLICY_RATE', '한국 기준금리', '%', 2.5, 2.5, 'ECOS'),
+    mi('KR_GOV_3Y', '국고채 3년', '%', 2.61, 2.63, 'ECOS'),
+    mi('KR_GOV_10Y', '국고채 10년', '%', 2.89, 2.9, 'ECOS'),
+    mi('KR_GOV_30Y', '국고채 30년', '%', 2.71, 2.72, 'ECOS'),
+    mi('US_TREASURY_2Y', '미국 국채 2년', '%', 4.05, 4.03, 'FRED', 'DGS2'),
+    mi('US_TREASURY_10Y', '미국 국채 10년', '%', 4.32, 4.29, 'FRED', 'DGS10'),
+    mi('US_TREASURY_30Y', '미국 국채 30년', '%', 4.51, 4.5, 'FRED', 'DGS30'),
+    mi('WTI_SPOT', 'WTI 유가', '달러/배럴', 71.2, 71.9, 'FRED', 'DCOILWTICO'),
+    mi('GOLD', '금 99.99K', '원/g', 191900, 190000, 'KRX', '04020000'),
+  ],
+  missing: [],
+  as_of: '2026-11-18',
 };
 
 export const calendar: CalendarEvent[] = [

@@ -68,13 +68,30 @@ app.add_middleware(
 | POST | `/auth/logout` | 웹: 쿠키 / Android: `{refresh_token}` | 204 |
 | GET | `/auth/me` | – | `User` |
 | PATCH | `/me` | `{name?, bio?}` | `User` |
+| GET | `/me/terms` | – | `TermsStatus` |
+| POST | `/me/terms` | `{items: [{kind, version}]}` | `TermsStatus` (422: 모르는 종류 · 현재 버전 아님 · 필수 빠짐) |
 
 ```json
 // AuthToken
 { "access_token": "eyJ...", "refresh_token": "Android 응답에만 포함", "expires_in": 900, "token_type": "bearer",
   "user": { "id": "u_1", "name": "김나라", "bio": "대학생", "avatar_url": null, "email": "nara@kakao.example",
-            "providers": [{ "provider": "kakao", "email": "nara@kakao.example", "connected": true, "current": true }] } }
+            "providers": [{ "provider": "kakao", "email": "nara@kakao.example", "connected": true, "current": true }],
+            "plan": "free" } }
 ```
+
+`User.plan`: `free` · `plus` · `pro` (users.plan 그대로, 없으면 `free`). `GET /auth/me` · `GET/PATCH /me` · 로그인 응답의 `user` 모두 같은 모양.
+
+```json
+// TermsStatus (GET /me/terms · POST /me/terms 응답) — 0022 user_terms_consents
+{ "required": [{ "kind": "age", "version": "2026-11-22" }, { "kind": "service", "version": "2026-11-22" }, { "kind": "invest", "version": "2026-11-22" }],
+  "agreed":   [{ "kind": "age", "version": "2026-11-22", "agreed_at": "2026-11-22T05:10:00+00:00" }, …],
+  "complete": true }
+```
+
+- 현재 버전 · 필수 종류는 서버 한 곳(`backend/app/account/defaults.py` `TERMS_VERSION` · `REQUIRED_TERMS`). 프론트는 `required` 를 그대로 POST 한다 (버전을 들고 있지 않음).
+- `agreed` 는 철회하지 않은 동의 (옛 버전 포함). `complete` 는 현재 버전 필수 약관을 모두 동의했을 때만 true.
+- POST 는 같은 사용자·종류·버전이 이미 있으면 그대로 (두 번 보내도 한 행). 철회 API 는 아직 없다.
+- 로그인 뒤 갈 곳: `complete` 가 false 면 `/terms`, true 면 `/` (frontend `lib/afterLogin.ts`).
 
 ## 2. 종목 (사이드바 · 종목 추가 · 헤더 · 기업정보)
 
@@ -82,6 +99,7 @@ app.add_middleware(
 |---|---|---|---|
 | GET | `/stocks` | 내 종목(보유/관심) + 안 읽은 AI 업데이트 수 | `MyStock[]` |
 | GET | `/stocks/search?q=삼성` | 종목 마스터 검색 (KRX 상장사) | `StockMaster[]` (최대 8개) |
+| GET | `/stocks/popular?limit=12` | 많이 찾는 종목 (온보딩). 담은 사람 3명 이상 종목을 많은 순 → 모자라면 최신 시총 순으로 채움. KOSPI 만. 인원 수 · 시총은 응답에 없음 | `StockMaster[]` (기본 12 · 최대 30) |
 | POST | `/stocks` | `{code, status: "holding"\|"watching"}` 이미 있으면 구분만 변경 | `MyStock` |
 | PATCH | `/stocks/{code}` | `{status?, tags?}` | `MyStock` |
 | DELETE | `/stocks/{code}` | 휴지통으로 이동 | 204 |
@@ -92,7 +110,11 @@ app.add_middleware(
 
 ```json
 // MyStock
-{ "code": "000660", "name": "SK하이닉스", "market": "KOSPI", "status": "holding", "tags": [], "unread_updates": 3, "added_at": "2026-09-20T10:00:00+09:00" }
+{ "code": "000660", "name": "SK하이닉스", "market": "KOSPI", "status": "holding", "tags": [], "unread_updates": 3,
+  "memo_count": 5, "ai_count": 3, "position": 0, "added_at": "2026-09-20T10:00:00+09:00" }
+// memo_count: 휴지통 제외 일반 메모 수 (체크리스트 · 참고자료 제외)
+// ai_count:   AI 연결 메모 수 — GET /ai/stats 의 linked_memos 와 같은 조건(휴지통 제외 · ai_linked)을 이 종목만.
+//             내 종목 목록의 ai_count 합은 linked_memos 와 같다 (목록에서 뺀 종목에 남은 AI 메모가 없을 때)
 // Quote
 { "code": "000660", "price": 180500, "change": 4200, "change_pct": 2.38, "as_of": "2026-10-21T15:30:00+09:00", "spark": [171200, 172900, ...] }
 // Financials.annual[i]
