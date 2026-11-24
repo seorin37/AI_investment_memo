@@ -14,7 +14,7 @@ import { CloseX, type Hover } from './parts';
  * 머리(22 · 17) · 검색 48 · [유형 ⌄] 고르기(전체·메모·투자 기록·종목·체크리스트) · '삭제한 항목 N' · 줄 72(아이콘 24 · 제목 17 · 'sub · 언제 삭제' · 복원 · 영구 삭제)
  * 아래: '휴지통 항목은 직접 지우기 전까지 보관돼요.' · [휴지통 비우기] — 영구 삭제·비우기는 확인창까지만
  */
-const TYPES = ['전체', '메모', '투자 기록', '종목', '체크리스트'] as const;
+const TYPES = ['전체', '메모', '투자 기록', '종목', '체크리스트', '스튜디오'] as const;
 type Ty = (typeof TYPES)[number];
 
 export function WebTrash({ open, items, onClose, onRestore, onPurge }: TrashProps & { open: boolean; onClose: () => void }) {
@@ -143,6 +143,8 @@ function KindIcon({ kind }: { kind: TrashItem['kind'] }) {
     <Svg width={24} height={24} viewBox="0 0 22 22" fill="none">
       {kind === '메모' ? (
         <><Path d="M4.39984 14.1768L3.6665 18.3324L7.82206 17.599L18.0887 7.33238L14.6665 3.91016L4.39984 14.1768Z" {...p} /><Path d="M12.7109 5.86719L16.1332 9.28941" {...p} /></>
+      ) : kind === '스튜디오' ? (
+        <><Path d="M11 3.5l1.9 4.6 4.6 1.9-4.6 1.9L11 16.5l-1.9-4.6L4.5 10l4.6-1.9L11 3.5z" {...p} /><Path d="M17 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8z" {...p} /></>
       ) : kind === '종목' ? (
         <><Path d="M18.9446 7.33203H3.05566V18.332H18.9446V7.33203Z" {...p} /><Path d="M7.94434 7.33507V4.89062H14.0554V7.33507" {...p} /><Path d="M3.05566 12.2227H18.9446" {...p} /></>
       ) : (

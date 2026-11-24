@@ -26,13 +26,15 @@ class FakeDb:
     def execute(self, stmt, params):
         sql = str(stmt).lstrip()
         if sql.startswith("SELECT"):
-            mine = [r for r in self.rows if r["user_id"] == params["uid"] and r["expires_at"] > NOW]
+            mine = [r for r in self.rows if r["user_id"] == params["uid"] and r["expires_at"] > NOW and r.get("deleted_at") is None]
             mine.sort(key=lambda r: (r["created_at"], r["id"]), reverse=True)
             return _Result(rows=mine)
-        if sql.startswith("DELETE"):
-            before = len(self.rows)
-            self.rows = [r for r in self.rows if not (r["id"] == params["id"] and r["user_id"] == params["uid"])]
-            return _Result(rowcount=before - len(self.rows))
+        if sql.startswith("UPDATE"):                          # 삭제 = 휴지통 (deleted_at, 0025)
+            hit = [r for r in self.rows if r["id"] == params["id"] and r["user_id"] == params["uid"]
+                   and r.get("deleted_at") is None and r["expires_at"] > NOW]
+            for r in hit:
+                r["deleted_at"] = NOW
+            return _Result(rowcount=len(hit))
         if sql.startswith("INSERT"):
             if self.fail_insert:
                 raise RuntimeError("db down")
@@ -104,12 +106,15 @@ def client(monkeypatch, db: FakeDb, answer=GOOD, user=7):
     return TestClient(app)
 
 
-def test_delete_only_mine(monkeypatch):
+def test_delete_moves_only_mine_to_trash(monkeypatch):
     db = FakeDb([_item(1, 7, 0, 30), _item(2, 8, 0, 30)])
     api = client(monkeypatch, db)
     assert api.delete("/api/v1/studio/items/2").status_code == 404      # 남의 것
     assert api.delete("/api/v1/studio/items/1").status_code == 204
-    assert [r["id"] for r in db.rows] == [2]
+    assert [r["id"] for r in db.rows] == [1, 2]                         # 줄은 남고 (휴지통)
+    assert db.rows[0]["deleted_at"] == NOW and db.rows[1].get("deleted_at") is None
+    assert api.get("/api/v1/studio/items").json() == []                 # 목록에서는 빠짐
+    assert api.delete("/api/v1/studio/items/1").status_code == 404      # 이미 휴지통
 
 
 def test_lab_saves_item_and_lists_it(monkeypatch):

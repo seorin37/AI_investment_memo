@@ -7,6 +7,7 @@ import { FeatIcon } from '@/ui/layout/web/StudioColumnFrame';
 import { SpentBox } from '@/ui/shared/SpentBox';
 import { studioFeature } from '@/ui/theme';
 import type { MadeItem, StudioFeatureItem, StudioKind } from '../Studio.types';
+import { useRemoveMade } from '../studioItems';
 
 type Hover = { hovered?: boolean; pressed?: boolean };
 
@@ -28,6 +29,7 @@ export function WebStudioHome({ features, made, spent, refill, bottomPad = 0, on
   onBuyCredit: () => void;
   onChangePlan: () => void;
 }) {
+  const remove = useRemoveMade();
   const z = useShellSize();
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={[st.page, { paddingHorizontal: z.homePadX, paddingBottom: 24 + bottomPad }]} showsVerticalScrollIndicator={false}>
@@ -56,6 +58,9 @@ export function WebStudioHome({ features, made, spent, refill, bottomPad = 0, on
               </View>
               {m.kind !== 'audio' ? <Text style={st.mS}>{m.left}</Text> : null}
             </Pressable>
+            <Pressable onPress={() => remove(m)} accessibilityRole="button" accessibilityLabel={`${m.title} 휴지통으로`} hitSlop={6} style={({ hovered }: Hover) => [st.del, hovered && { backgroundColor: '#FBEFEF' }]}>
+              {({ hovered }: Hover) => <TrashGlyph color={hovered ? '#E45D6A' : '#B0B5BD'} />}
+            </Pressable>
             {m.kind === 'audio' ? (
               <Pressable onPress={() => onQuickPlay(m)} accessibilityRole="button" accessibilityLabel="바로 재생" style={({ hovered }: Hover) => [st.qp, hovered && { backgroundColor: '#2A2A2A' }]}>
                 <Svg width={14} height={14} viewBox="0 0 14 14" fill="#FFFFFF"><Path d="M4 2.5v9l7.5-4.5z" /></Svg>
@@ -66,6 +71,15 @@ export function WebStudioHome({ features, made, spent, refill, bottomPad = 0, on
       </View>
       <Text style={st.disc}>스튜디오는 투자 권유나 주가 예측을 하지 않아요.</Text>
     </ScrollView>
+  );
+}
+
+/** 휴지통 아이콘 (만든 항목 삭제 = 휴지통, 2026-11-24) */
+function TrashGlyph({ color }: { color: string }) {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
+      <Path d="M2.5 4h11M6 4V2.75h4V4M4 4l.6 9.25h6.8L12 4" stroke={color} strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
   );
 }
 
@@ -87,6 +101,7 @@ const st = StyleSheet.create({
   mi: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   mT: { fontSize: 17, lineHeight: 26, fontWeight: '500', color: '#16171A' },
   mS: { fontSize: 14, lineHeight: 21, color: '#9A9EA7' },
+  del: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   qp: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#15171A', alignItems: 'center', justifyContent: 'center' },
   disc: { paddingTop: 4, textAlign: 'center', fontSize: 13, lineHeight: 20, color: '#9A9EA7' },
 });

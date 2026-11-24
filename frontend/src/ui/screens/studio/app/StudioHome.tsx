@@ -8,6 +8,7 @@ import { Reveal } from '@/ui/motion/Reveal';
 import { useCoachRef } from '@/ui/shared/Coach';
 import { Sheet } from '@/ui/shared/Sheet';
 import type { MadeItem, StudioHomeProps, StudioKind } from '../Studio.types';
+import { useRemoveMade } from '../studioItems';
 
 /**
  * 앱 스튜디오 홈 = 원본 app/studio.html #vst (11.17 웹 통일 순서: 오디오 · 주간보고서 · 실험실 · 퀴즈)
@@ -51,6 +52,7 @@ export function AppStudioHome({ header, job, onJob, bottomPad = 0, ...p }: Studi
   /** 미니 플레이어가 떠 있으면 스크롤 끝 빈 자리 (원본 .withmini) */
   bottomPad?: number;
 }) {
+  const remove = useRemoveMade();
   const [sheet, setSheet] = useState(false);
   const featRef = useCoachRef('studio');
   const full = p.usage_pct >= 100;
@@ -117,6 +119,9 @@ export function AppStudioHome({ header, job, onJob, bottomPad = 0, ...p }: Studi
                   <Text style={st.miS} numberOfLines={1}>{m.sub}</Text>
                 </View>
                 <Text style={st.miR}>{m.left}</Text>
+                <Pressable onPress={() => remove(m)} accessibilityRole="button" accessibilityLabel={`${m.title} 휴지통으로`} hitSlop={10} style={st.del}>
+                  <Svg width={16} height={16} viewBox="0 0 16 16" fill="none"><Path d="M2.5 4h11M6 4V2.75h4V4M4 4l.6 9.25h6.8L12 4" stroke="#B0B5BD" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" /></Svg>
+                </Pressable>
               </Pressable>
             ))}
           </View>
@@ -189,6 +194,7 @@ const st = StyleSheet.create({
   miB: { fontSize: 14.5, lineHeight: 20, fontWeight: '700', color: C.ink },
   miS: { fontSize: 12, lineHeight: 17, color: C.ink3 },
   miR: { fontSize: 12, lineHeight: 17, color: C.ink3 },
+  del: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   failIc: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#FFE4E4', alignItems: 'center', justifyContent: 'center' },
   pbar: { height: 6, borderRadius: 3, backgroundColor: '#ECEDF1', marginTop: 7, overflow: 'hidden', width: 180 },
   pbarI: { height: '100%', borderRadius: 3, backgroundColor: C.a },

@@ -544,7 +544,7 @@ export interface ConcludeCandidate {
 }
 
 // ─── 휴지통 · 설정 · 피드백 ──────────────────────────────────
-export type TrashKind = 'memo' | 'checklist' | 'reference' | 'journal' | 'stock';
+export type TrashKind = 'memo' | 'checklist' | 'reference' | 'journal' | 'stock' | 'studio';
 
 export interface TrashItem {
   id: string;

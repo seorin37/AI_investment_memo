@@ -7,10 +7,11 @@ from typing import Any
 
 from .repository import TrashRepository
 
-_ID = re.compile(r"^(memo|journal)-(\d{1,18})$|^(stock)-([0-9A-Z]{6})$")
+_ID = re.compile(r"^(memo|journal|studio)-(\d{1,18})$|^(stock)-([0-9A-Z]{6})$")
 
 _KIND = {"note": "memo", "checklist": "checklist", "reference": "reference"}
 _KIND_LABEL = {"memo": "메모", "checklist": "체크리스트", "reference": "참고자료"}
+_STUDIO_LABEL = {"report": "주간보고서", "audio": "AI 오디오", "lab": "투자 실험실"}
 
 
 class TrashItemNotFoundError(LookupError):
@@ -81,6 +82,18 @@ class TrashService:
                     "deleted_at": row["deleted_at"],
                 }
             )
+        for row in self.repo.deleted_studio(user_id):            # 스튜디오 만든 항목 (0025)
+            made = row.get("created_at")
+            when = f" · {made.month}.{made.day:02d}" if hasattr(made, "month") else ""
+            items.append(
+                {
+                    "id": f"studio-{row['id']}",
+                    "kind": "studio",
+                    "title": (row.get("title") or "").strip() or _STUDIO_LABEL.get(row["kind"], "스튜디오"),
+                    "context": f"{_STUDIO_LABEL.get(row['kind'], '스튜디오')}{when}",
+                    "deleted_at": row["deleted_at"],
+                }
+            )
         items.sort(key=lambda item: item["deleted_at"], reverse=True)
         return [{**item, "deleted_at": _iso(item["deleted_at"])} for item in items]
 
@@ -90,6 +103,8 @@ class TrashService:
             ok = self.repo.restore_memo(user_id, int(key)) is not None
         elif kind == "journal":
             ok = self.repo.restore_journal(user_id, int(key))
+        elif kind == "studio":
+            ok = self.repo.restore_studio(user_id, int(key))
         else:
             ok = self.repo.restore_stock(user_id, key)
         if not ok:
@@ -103,6 +118,10 @@ class TrashService:
             return
         if kind == "journal":
             if not self.repo.purge_journal(user_id, int(key)):
+                raise TrashItemNotFoundError(trash_id)
+            return
+        if kind == "studio":
+            if not self.repo.purge_studio(user_id, int(key)):
                 raise TrashItemNotFoundError(trash_id)
             return
         memo_id = int(key)

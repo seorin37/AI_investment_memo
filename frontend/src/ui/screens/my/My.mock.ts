@@ -59,7 +59,7 @@ export const mockPlanDefault = 'PLUS';
 /* ---------- ⑨-3c ---------- */
 
 /** 휴지통 (원본 my.html TR · 11.17 웹 통일: 웹 휴지통과 같은 4개) */
-export interface TrashItem { id: string; kind: '메모' | '투자 기록' | '종목'; title: string; /** 어느 종목 · 무엇 */ sub: string; ago: string; stock_code?: string }
+export interface TrashItem { id: string; kind: '메모' | '투자 기록' | '종목' | '스튜디오'; title: string; /** 어느 종목 · 무엇 */ sub: string; ago: string; stock_code?: string }
 export const mockTrash: TrashItem[] = [
   { id: 't1', kind: '메모', title: '20만원 밑으로 오면 다시 생각', sub: 'SK하이닉스 · 메모', ago: '2시간 전', stock_code: '000660' },
   { id: 't2', kind: '투자 기록', title: '10/08 실적 발표 전 점검', sub: '투자 기록', ago: '어제' },
