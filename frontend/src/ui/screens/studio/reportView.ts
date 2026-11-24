@@ -112,7 +112,10 @@ export function useCreateReport() {
     } catch (e) {
       throw new Error(e instanceof ApiError ? e.message : '보고서를 만들지 못했어요');
     }
-    for (let k = 0; k < 60; k++) {
+    /* 4종목 + 국내 증시면 2분을 넘기기도 해서(11-24 2분 17초) 6분까지 기다린다. 그래도 안 끝나면 실패가 아니라
+       '아직 만드는 중'으로 (서버는 계속 만들고, 끝나면 만든 항목에 생긴다) */
+    const until = Date.now() + 6 * 60_000;
+    while (Date.now() < until) {
       const items = await api.listStudioItems();
       const it = items.find((x) => x.id === res.item_id);
       if (it?.status === 'ready') {
@@ -123,7 +126,10 @@ export function useCreateReport() {
       if (it?.status === 'failed') throw new Error('보고서를 만들지 못했어요');
       await sleep(2000);
     }
-    throw new Error('보고서가 아직 만들어지는 중이에요. 잠시 뒤 만든 항목에서 확인해 주세요');
+    const pending = new Error('보고서가 아직 만들어지는 중이에요. 잠시 뒤 만든 항목에서 확인해 주세요');
+    pending.name = 'ReportPending';
+    for (const ms of [30_000, 90_000, 180_000]) setTimeout(() => void qc.invalidateQueries({ queryKey: qk.studioItems }), ms);   // 끝나면 만든 항목에 보이게
+    throw pending;
   };
 }
 
