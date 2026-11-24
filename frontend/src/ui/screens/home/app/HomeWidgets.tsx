@@ -69,6 +69,7 @@ export function HeroCard({ name, total, counts, editing, ready, onCta }: { name:
             ) : (
               <View style={st.htBox}>
                 <Text style={st.ht}>{'오늘은 내 생각에\n붙은 새 소식이 없어요'}</Text>
+                <Text keepAll style={st.htSub}>AI가 매일 확인하고 있어요. 새 소식이 오면 알려 드릴게요.</Text>
               </View>
             )}
             <View style={st.stats}>
@@ -429,6 +430,7 @@ const st = StyleSheet.create({
   hg: { ...ft(13), color: appColor.ink2 },
   htBox: { marginTop: 4, marginBottom: 14 },
   ht: { ...ft(21, 1.4), fontWeight: '800', color: appColor.ink },
+  htSub: { ...ft(13), color: appColor.ink2, marginTop: 4 },
   htRow: { flexDirection: 'row', alignItems: 'center' },
   htOdo: { fontSize: 21, fontWeight: '800', color: appColor.ink },
   stats: { flexDirection: 'row', gap: 8 },
