@@ -357,7 +357,7 @@ function StockView({ p, s, kind, setKind, openId, onOpen }: { p: AppUpdatesProps
           <View style={st.gc}>
             {list.map((u, i) => (
               <ReadSwipe key={u.id} line={i > 0} open={openId === u.id} read={!u.unread} onToggle={() => p.onMarkRead([u.id], u.unread)}>
-                <NewsRow u={u} open={openId === u.id} onToggle={() => onOpen(u)} onOpenSource={() => p.onOpenSource(u)} onOpenBoard={() => p.onOpenBoard(s.stock_code)} />
+                <NewsRow u={u} onOpenEvidence={() => p.onOpenEvidence(u)} open={openId === u.id} onToggle={() => onOpen(u)} onOpenSource={() => p.onOpenSource(u)} onOpenBoard={() => p.onOpenBoard(s.stock_code)} />
               </ReadSwipe>
             ))}
           </View>
@@ -368,7 +368,7 @@ function StockView({ p, s, kind, setKind, openId, onOpen }: { p: AppUpdatesProps
 }
 
 /** 종목별 소식 한 줄: 태그 · 제목 · 안 읽음 점 · ⌄ / 내 메모 / 출처 · 시간 */
-function NewsRow({ u, open, onToggle, onOpenSource, onOpenBoard }: { u: UpdateItem; open: boolean; onToggle: () => void; onOpenSource: () => void; onOpenBoard: () => void }) {
+function NewsRow({ u, open, onToggle, onOpenSource, onOpenBoard, onOpenEvidence }: { u: UpdateItem; onOpenEvidence: () => void; open: boolean; onToggle: () => void; onOpenSource: () => void; onOpenBoard: () => void }) {
   return (
     <View>
       <Pressable onPress={onToggle} accessibilityRole="button" accessibilityState={{ expanded: open }} style={st.nr}>
@@ -395,7 +395,7 @@ function NewsRow({ u, open, onToggle, onOpenSource, onOpenBoard }: { u: UpdateIt
         <Text style={st.nrSrc}>{sourceLine(u.source)}</Text>
       </Pressable>
       <Collapse open={open} duration={420}>
-        <NewsBody u={u} onOpenSource={onOpenSource} onOpenBoard={onOpenBoard} />
+        <NewsBody u={u} onOpenEvidence={onOpenEvidence} onOpenSource={onOpenSource} onOpenBoard={onOpenBoard} />
       </Collapse>
     </View>
   );
@@ -414,7 +414,7 @@ function MemoIcon({ size, color }: { size: number; color: string }) {
 const CITE = ON_DOM ? '1' : '\u00A01\u00A0';
 
 /** 펼친 내용: 공시 = AI 요약 · 원문 인용 / 뉴스 = 기사 상자 / 주가 = 요약. 공통: 내 메모 · 버튼 */
-function NewsBody({ u, onOpenSource, onOpenBoard }: { u: UpdateItem; onOpenSource: () => void; onOpenBoard: () => void }) {
+function NewsBody({ u, onOpenSource, onOpenBoard, onOpenEvidence }: { u: UpdateItem; onOpenEvidence: () => void; onOpenSource: () => void; onOpenBoard: () => void }) {
   const [cite, setCite] = useState(false);
   const ver = versionsOf(u.memo_id).find((v) => v.version === u.memo_version);
   const memo = ver?.title || u.memo_title;
@@ -471,6 +471,11 @@ function NewsBody({ u, onOpenSource, onOpenBoard }: { u: UpdateItem; onOpenSourc
             <Text style={st.mmH}>연결된 내 메모{ver ? ` · ${kstMd(ver.saved_at)} 작성 당시` : ''}</Text>
           </View>
           <Text style={st.mmT}>{memo}</Text>
+          {u.memo_id ? (
+            <Pressable onPress={onOpenEvidence} accessibilityRole="link" hitSlop={8} style={({ pressed }) => [st.evl, pressed && { opacity: 0.6 }]}>
+              <Text style={st.evlT}>근거 자세히 보기 ›</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
       <View style={st.nbBtns}>
@@ -719,6 +724,8 @@ const st = StyleSheet.create({
   mmTop: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 },
   mmH: { ...ft(11), fontWeight: '700', color: '#A0802A' },
   mmT: { ...ft(12.5), color: '#5B4A1A' },
+  evl: { alignSelf: 'flex-end', marginTop: 6 },
+  evlT: { ...ft(12.5), fontWeight: '700', color: '#7A5A10' },
   nbBtns: { flexDirection: 'row', gap: 8, marginTop: 10 },
   nbBtn: { flex: 1, height: 38, backgroundColor: '#F2F2F5', borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   nbBtnT: { ...ft(13), fontWeight: '700', color: appColor.ink },
