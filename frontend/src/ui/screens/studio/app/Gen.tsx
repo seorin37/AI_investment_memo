@@ -20,7 +20,7 @@ const LABEL: Record<StepState, string> = { wait: '대기', run: '진행 중', do
 const TEXT: Record<GenKind, { head: string; ing: string; bad: string; bg: string }> = {
   audio: { head: 'AI 오디오', ing: '오디오를 만드는 중이에요', bad: '오디오를 만들지 못했어요', bg: '#DCE7FF' },
   report: { head: 'AI 주간보고서', ing: '보고서를 만드는 중이에요', bad: '보고서를 만들지 못했어요', bg: '#FFE1E1' },
-  lab: { head: '투자 실험실', ing: '실험 결과를 만드는 중이에요', bad: '실험 결과를 만들지 못했어요', bg: '#FFEDB8' },
+  lab: { head: '투자 실험실', ing: '실험을 하는 중이에요', bad: '실험 결과를 만들지 못했어요', bg: '#FFEDB8' },
 };
 /** 이 시간을 넘기면 오래 걸린다는 안내 */
 const LONG_MS = 30_000;

@@ -7,12 +7,13 @@ import { PressScale } from '@/ui/motion/PressScale';
 import { Head } from '../../my/app/parts';
 import type { mockLabStocks, mockLabVars } from '../Studio.mock';
 import type { LabGroup } from '../labParts';
+import { labWatchItems } from '../useLabWatch';
 import { Keep } from '@/ui/shared/Dark';
 
 /**
  * 앱 실험 결과 = 원본 studio.html #pgLr renderLabRes (20)
  * 종목 · 가정 칩 · 영향 경로 지도(조건 → 중간 → 끝 항목 ①② · 공시 근거는 보라 · 이론은 점선) · 항목별 설명(공시/이론 근거) ·
- * 내 메모와 연결 · 추가로 확인할 것 · 안내 · 아래 [조건 바꿔 다시 실험]
+ * 앞으로 지켜볼 것 · 내 메모와 연결 · 안내 · 아래 [조건 바꿔 다시 실험]
  */
 type Stock = (typeof mockLabStocks)[number];
 type Vars = typeof mockLabVars;
@@ -21,12 +22,13 @@ const C = { ink: '#16171A', ink2: '#575B63', ink3: '#9A9EA7' };
 export function AppLabResult({ stock, vars, groups, disclaimer, onBack, onOpenMemo, onAgain, onWatch, isAdded }: {
   stock: Stock; vars: Vars; groups: LabGroup[]; disclaimer: string;
   onBack: () => void; onOpenMemo: () => void; onAgain: () => void;
-  /** '메모에 추가' (2026-11-24, 주간보고서와 같게): i = 추가로 확인할 것 순번 */
+  /** '메모에 추가' (2026-11-24, 주간보고서와 같게): i = 앞으로 지켜볼 것 순번 */
   onWatch?: (check: string, why: string, i: number) => void; isAdded?: (i: number) => boolean;
 }) {
   const insets = useSafeAreaInsets();
   const all = groups.flatMap((g) => g.leaves);
-  const chk = all.filter((l) => l.check).slice(0, 3);
+  /* 웹과 같은 규칙 (같은 문장은 하나로 · 최대 3개) — '추가됨' 순번이 웹과 맞아야 함 */
+  const chk = labWatchItems(groups);
   return (
     <View style={[st.root, { paddingTop: insets.top }]}>
       <Head title="실험 결과" onBack={onBack} />
@@ -81,15 +83,15 @@ export function AppLabResult({ stock, vars, groups, disclaimer, onBack, onOpenMe
           <View style={{ marginBottom: 12 }}>
             <View style={st.chkH}>
               <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#5B3BD1" strokeWidth={2}><Path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><Circle cx={12} cy={12} r={3} /></Svg>
-              <Text style={st.chkHT}>추가로 확인할 것</Text>
+              <Text style={st.chkHT}>앞으로 지켜볼 것</Text>
             </View>
-            {chk.map((l, i) => (
-              <View key={l.no} style={[st.it, { flexDirection: 'row', alignItems: 'center', gap: 10 }]}>
-                <View style={{ flex: 1, minWidth: 0 }}><Text style={st.itB}>{l.check}</Text><Text style={st.itS}>근거 · {l.no} {l.check_why}</Text></View>
+            {chk.map((w, i) => (
+              <View key={w.check} style={[st.it, { flexDirection: 'row', alignItems: 'center', gap: 10 }]}>
+                <View style={{ flex: 1, minWidth: 0 }}><Text keepAll style={st.itB}>{w.check}</Text>{w.why ? <Text keepAll style={st.itS}>{w.why}</Text> : null}</View>
                 {isAdded?.(i) ? (
                   <View style={st.wDone}><Text style={st.wDoneT}>✓ 추가됨</Text></View>
                 ) : onWatch ? (
-                  <Pressable onPress={() => onWatch(l.check ?? '', l.check_why ?? '', i)} accessibilityRole="button" style={st.wBtn}><Text style={st.wBtnT}>메모에 추가</Text></Pressable>
+                  <Pressable onPress={() => onWatch(w.check, w.why, i)} accessibilityRole="button" style={st.wBtn}><Text style={st.wBtnT}>메모에 추가</Text></Pressable>
                 ) : null}
               </View>
             ))}

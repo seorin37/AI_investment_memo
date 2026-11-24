@@ -16,11 +16,11 @@ import { fromServerItem } from './studioItems';
 /**
  * 앱 스튜디오 만들기 (store/genJobs 가 실행).
  * - 주간보고서: 서버가 세부 단계를 주지 않아 첫 단계만 '진행 중', 완성되면 끝. 시간 제한 없이 서버 상태를 기다림
- * - 투자 실험실: 요청 하나로 답을 받음 → 조건 정리 완료 · 공시에서 경로 찾기 '진행 중' → 답이 오면 결과 정리
+ * - 투자 실험실: 요청 하나로 답을 받음 → 조건 읽기 완료 · 영향 경로 찾기 '진행 중' → 답이 오면 결과 정리
  * - 오디오: 만들기 API 가 없어 예시 (mock 시간)
  * - mock 시간: EXPO_PUBLIC_MOCK_GEN_SECONDS (기본 5.5초)
  */
-export const LAB_STEPS = ['조건 정리하기', '회사 공시에서 경로 찾기', '결과 정리하기'];
+export const LAB_STEPS = ['조건 읽기', '영향 경로 찾기', '결과 정리하기'];
 const POLL_MS = 3000;
 /* 서버는 15분 넘게 멈춘 항목을 버린 것으로 봄 (studio_report/routes.py SAME_SQL) */
 const RESTORE_MS = 15 * 60_000;
