@@ -17,11 +17,11 @@ import { usePaper } from '@/ui/shared/Dark';
  * 노란 종이 (최소 250) + 예시 글(비면 보임: 제목 21px · 본문 15.5px 줄 1.8 · 점선 아래 안내 12.5px) · 안내 12.5px #9A9EA7
  * AI 연결 칸 (#F6F6F8 라운드 16 · 안쪽 14·16 · 위 14). 저장: 첫 줄 = 제목 (splitMemo)
  */
-export function AppNewMemo({ stockName, initialText, initialAi, onCancel, onEmpty, onSave }: NewMemoProps) {
+export function AppNewMemo({ stockName, initialText, initialAi, aiSpent, onCancel, onEmpty, onSave }: NewMemoProps) {
   const paper = usePaper();
   const insets = useSafeAreaInsets();
   const [text, setText] = useState(initialText ? `${initialText}\n` : '');
-  const [ai, setAi] = useState(!!initialAi);
+  const [ai, setAi] = useState(!!initialAi && !aiSpent);
   const ed = useRef<{ focus: () => void; blur: () => void }>(null);
   const pc = paper.yellow;
   const empty = !text.trim();
@@ -78,9 +78,9 @@ export function AppNewMemo({ stockName, initialText, initialAi, onCancel, onEmpt
           <View style={st.aisw}>
             <View style={st.flex}>
               <Text style={st.aiswB}>AI 연결</Text>
-              <Text style={st.aiswS}>켜 두면 하루 한 번 공시·뉴스를 대신 확인해 여기에 붙여 드려요</Text>
+              <Text style={st.aiswS}>{aiSpent ? 'AI 사용량을 다 써서 일반 메모로만 저장돼요' : '켜 두면 하루 한 번 공시·뉴스를 대신 확인해 여기에 붙여 드려요'}</Text>
             </View>
-            <Toggle variant="app" on={ai} onChange={setAi} label="AI 연결" />
+            <Toggle variant="app" on={ai} onChange={(v) => setAi(v && !aiSpent)} label="AI 연결" />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

@@ -17,7 +17,7 @@ import { useMyProfile } from '@/ui/screens/my/useMyProfile';
 import { planKey, withCurrentPlan } from '@/ui/screens/my/planLabel';
 import { useUsageView } from '@/ui/screens/my/useUsageView';
 import { useTrackedView } from '@/ui/screens/my/useTrackedView';
-import { useAiStats, useMyStocks } from '@/hooks/queries';
+import { useAiOffAll, useAiStats, useMyStocks } from '@/hooks/queries';
 import Constants from 'expo-constants';
 import { legalDocument } from '@/ui/screens/auth/Auth.mock';
 import { mockCreditDefault, mockCreditPacks, mockPayMethods, mockDataSources, mockOss, mockPlanCompare, mockPlanDefault, mockPlanNotes, mockPlans, mockReportKinds, mockWithdrawCounts } from '@/ui/screens/my/My.mock';
@@ -43,7 +43,7 @@ import { labWatchDraft, labWatchItems, labWatchKey } from '@/ui/screens/studio/u
 import { useLabVars } from '@/ui/screens/studio/useLabVars';
 import { WebAudioPopup } from '@/ui/screens/studio/web/AudioPopup';
 import type { StudioKind } from '@/ui/screens/studio/Studio.types';
-import { WebChargePopup, WebCreditPopup, WebUsageSheet } from '@/ui/screens/studio/web/Credit';
+import { WebAiOffChoice, WebChargePopup, WebCreditPopup, WebUsageSheet } from '@/ui/screens/studio/web/Credit';
 import { WebStudioHome } from '@/ui/screens/studio/web/StudioHome';
 import { useUI } from '@/store/ui';
 import { ConfirmDialog } from '@/ui/shared/ConfirmDialog';
@@ -156,12 +156,23 @@ export default function MainLayout() {
   const usageSpent = usage.paused || usage.usage_pct >= 100;
   /* 보드·메모 창의 'AI 사용량 다 씀' 버튼: 스튜디오와 같게 충전 창 · 설정 사용량 탭 (2026-11-24) */
   const spentReq = useUI((s) => s.spentReq);
+  const [aiChoice, setAiChoice] = useState(false);
   const [spentSeen, setSpentSeen] = useState<number | null>(null);
   if (spentReq && spentReq.id !== spentSeen) {                 // 렌더 중 상태 맞추기 (새 요청 id일 때만 한 번)
     setSpentSeen(spentReq.id);
     if (spentReq.kind === 'credit') setStudioPop('charge');
+    else if (spentReq.kind === 'choice') setAiChoice(true);
     else setSettings('사용량');
   }
+  /* 2026-11-24 크레딧을 다 썼고 AI 연결 메모가 남아 있으면(끄기 대기) 'AI 연결 모두 끄기' 선택 창. 화면을 연 뒤 한 번 묻고,
+     닫으면 다음에 다시 묻는다(그동안 매일 확인은 멈춤). 스위치·보드 안내에서도 연다 (spentReq 'choice') */
+  const aiPending = usageSpent && usage.ai_count > 0;
+  const [aiAsked, setAiAsked] = useState(false);
+  if (aiPending && !aiAsked) {
+    setAiAsked(true);
+    setAiChoice(true);
+  }
+  const aiOff = useAiOffAll();
   /* 보고서·오디오 창에서 미리 고를 종목 (넛지에서 열 때만 · 다른 길로 열면 비워서 전체) */
   const [popPreset, setPopPreset] = useState<string[] | undefined>(undefined);
   const studioFeat = (k: StudioKind, codes?: string[]) => {
@@ -562,6 +573,18 @@ export default function MainLayout() {
       }}
     />
     <WebUsageSheet open={studioPop === 'usage'} pct={usage.usage_pct} refill={usage.usage_refill} onClose={() => setStudioPop(null)} onBuyCredit={() => setStudioPop('charge')} onChangePlan={() => setSettings('사용량')} />
+    <WebAiOffChoice
+      open={aiChoice && aiPending}
+      count={usage.ai_count}
+      busy={aiOff.isPending}
+      onClose={() => setAiChoice(false)}
+      onCharge={() => { setAiChoice(false); setStudioPop('charge'); }}
+      onPlan={() => { setAiChoice(false); setSettings('사용량'); }}
+      onOff={() => aiOff.mutate(undefined, {
+        onSuccess: (r) => { setAiChoice(false); say({ msg: `AI 연결 메모 ${r.turned_off}개를 껐어요. 메모는 그대로 남아 있어요`, check: true }); },
+        onError: () => say({ msg: 'AI 연결을 끄지 못했어요. 잠시 뒤 다시 해 주세요' }),
+      })}
+    />
     <WebCreditPopup open={studioPop === 'credit'} onClose={() => setStudioPop(null)} onPlan={() => { setStudioPop(null); setSettings('사용량'); }} onCharge={() => setStudioPop('charge')} />
     <WebChargePopup open={studioPop === 'charge'} packs={mockCreditPacks} default_credits={mockCreditDefault} methods={mockPayMethods} onClose={() => setStudioPop(null)} onPay={() => say({ msg: '결제는 아직 연결되지 않았어요' })} />
     <WebFeedback open={fbOpen} kinds={mockReportKinds} onClose={() => setFbOpen(false)} onSend={() => say({ msg: '아직 연결되지 않았어요' })} />

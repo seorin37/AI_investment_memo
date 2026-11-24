@@ -62,6 +62,26 @@ export function WebCreditPopup({ open, onClose, onPlan, onCharge }: { open: bool
 }
 
 /**
+ * 웹 'AI 사용량을 다 썼어요' 선택 창 (2026-11-24 서린 님 결정). 크레딧이 0이고 AI 연결 메모가 남아 있으면 뜬다.
+ * 충전하거나 플랜을 업그레이드하지 않으면 AI 연결 메모를 모두 끈다. 닫으면 다음에 다시 묻는다 (그동안 매일 확인은 멈춤).
+ */
+export function WebAiOffChoice({ open, count, busy, onClose, onCharge, onPlan, onOff }: { open: boolean; count: number; busy?: boolean; onClose: () => void; onCharge: () => void; onPlan: () => void; onOff: () => void }) {
+  return (
+    <Sheet open={open} onClose={onClose} width={420} scrim={SCRIM} label="AI 사용량을 다 썼어요">
+      <View style={[st.pop, { width: 420, gap: 14 }]}>
+        <View style={[st.ic, { width: 52, height: 52, borderRadius: 16 }]}><Bolt s={26} c="#FFFFFF" /></View>
+        <Text style={st.popH}>AI 사용량을 다 썼어요</Text>
+        <Text keepAll style={st.popP}>{`크레딧을 충전하거나 플랜을 업그레이드하지 않으면 AI 연결 메모 ${count}개가 모두 꺼져요.\n메모는 그대로 남고, 꺼진 메모는 나중에 하나씩 다시 켤 수 있어요.`}</Text>
+        <View style={st.btns}><GBtn h={48} flex onPress={onCharge}>크레딧 충전</GBtn><GBtn h={48} flex dark onPress={onPlan}>플랜 업그레이드</GBtn></View>
+        <Pressable disabled={busy} onPress={onOff} accessibilityRole="button" style={{ alignSelf: 'stretch' }}>
+          {({ hovered }: Hover) => <Text style={[st.link, hovered && { color: '#15171A' }]}>{busy ? '끄는 중…' : 'AI 연결 모두 끄기'}</Text>}
+        </Pressable>
+      </View>
+    </Sheet>
+  );
+}
+
+/**
  * 웹 크레딧 충전 창 = 원본 studio.tsx ChargePopup (468 · 라운드 28 · 24/22)
  * 상품 고르기 · 결제 수단 · 약관 동의 · [N 크레딧 결제하기] · 'Google Play' 안내
  * 원본 '상품 구성·가격은 팀 확정 전 임시예요.' 는 미정 안내라 뺌. 결제는 연결 안 됨 → onPay 에서 안내만

@@ -14,6 +14,7 @@ import { useBoardData } from '@/ui/screens/board/useBoardData';
 import { useMemoTimeline } from '@/hooks/queries';
 import { useBoardStock } from '@/ui/screens/board/useBoardStock';
 import { useUsageView } from '@/ui/screens/my/useUsageView';
+import { useAiOffChoice } from '@/ui/shared/useAiOffChoice';
 import { env } from '@/config/env';
 import { mockBoardChecklist, mockBoardMemos, mockBoardStock, mockEmptyStock } from '@/ui/screens/board/MemoBoard.mock';
 
@@ -42,6 +43,9 @@ export default function StockDetail() {
   const bd = useBoardData(code, null);
   /* AI 사용량을 다 쓰면 보드 안내 상자 (스튜디오와 같은 기준, 2026-11-24) */
   const usage = useUsageView();
+  const spent = usage.paused || usage.usage_pct >= 100;
+  const toast = useUI((s) => s.showToast);
+  const askAiOff = useAiOffChoice();
   const [seenVersion, setSeenVersion] = useState(0);
   if (bd.data && bd.version !== seenVersion) {
     setSeenVersion(bd.version);
@@ -89,7 +93,9 @@ export default function StockDetail() {
       onToggleAi={(id) => {
         const m = memos.find((x) => x.id === id);
         /* 원본 aiToggle: 켜져 있으면 해제 확인 시트, 꺼져 있으면 AI 연결 창 */
-        if (m?.ai_linked) setOffFor(m);
+        if (m?.ai_linked && spent) askAiOff();               // 끄기 대기: '모두 끄기' 선택
+        else if (m?.ai_linked) setOffFor(m);
+        else if (m && spent) toast('AI 사용량을 다 써서 AI 연결을 켤 수 없어요. 일반 메모로는 계속 쓸 수 있어요');
         else if (m) router.push({ pathname: '/memo/link', params: { id: m.id } });
       }}
       onDelete={(ids) => {
@@ -111,9 +117,10 @@ export default function StockDetail() {
       onReorder={() => {}}
       onChangeTab={setTab}
       onSelectionChange={onSelectionChange}
-      aiSpent={usage.paused || usage.usage_pct >= 100}
+      aiSpent={spent}
       aiRefill={usage.usage_refill}
-      onSpentAction={(a) => router.push(a === 'credit' ? '/studio-charge' : '/my-plans')}
+      aiCount={usage.ai_count}
+      onSpentAction={(a) => (a === 'choice' ? askAiOff() : router.push(a === 'credit' ? '/studio-charge' : '/my-plans'))}
     />
     <AiOffSheet
       open={!!offFor}

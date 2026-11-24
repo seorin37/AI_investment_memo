@@ -134,6 +134,8 @@ export interface WebMemoCardProps {
   onToggleAi: () => void;
   onMenu: (at: { x: number; y: number }) => void;
   onPick: () => void;
+  /** 크레딧을 다 써서 멈춤(끄기 대기): AI 플러그를 꺼진 모양으로 (2026-11-24) */
+  aiSpent?: boolean;
 }
 
 type HoverState = { pressed: boolean; hovered?: boolean };
@@ -152,7 +154,8 @@ function Tip({ children, style }: { children: string; style: object }) {
  * 테이프 84×34 (위 -16): 고정이면 붙은 테이프 (hover 시 떼려는 모양) · 아니면 hover 시 점선 · 배지 24 (위 -10 · 오른쪽 -10) · ⋯ 메뉴 hover (아래 8 · 왼쪽 12)
  * hover: 종이가 위로 3 · -.3° 기울고 그림자
  */
-export function WebMemoCard({ memo: m, selecting, selected, onOpen, onPin, onToggleAi, onMenu, onPick }: WebMemoCardProps) {
+export function WebMemoCard({ memo: m, selecting, selected, onOpen, onPin, onToggleAi, onMenu, onPick, aiSpent }: WebMemoCardProps) {
+  const aiOn = m.ai_linked && !aiSpent;
   const paper = usePaper();
   const p = paper[m.color];
   const [hov, setHov] = useState(false);
@@ -179,11 +182,11 @@ export function WebMemoCard({ memo: m, selecting, selected, onOpen, onPin, onTog
               onHoverIn={() => setPlug(true)}
               onHoverOut={() => setPlug(false)}
               accessibilityRole="button"
-              accessibilityLabel={m.ai_linked ? 'AI 연결 끄기' : 'AI 연결 켜기'}
-              accessibilityState={{ selected: m.ai_linked }}
-              style={[st.webPlug, { backgroundColor: m.ai_linked ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.4)' }, plug && st.webPlugHover]}
+              accessibilityLabel={aiOn ? 'AI 연결 끄기' : 'AI 연결 켜기'}
+              accessibilityState={{ selected: aiOn }}
+              style={[st.webPlug, { backgroundColor: aiOn ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.4)' }, plug && st.webPlugHover]}
             >
-              <WebPlug on={m.ai_linked} />
+              <WebPlug on={aiOn} />
             </Pressable>
           </View>
           <Text style={st.webTitle} numberOfLines={2}>
@@ -199,7 +202,7 @@ export function WebMemoCard({ memo: m, selecting, selected, onOpen, onPin, onTog
         {m.pinned ? <WebTape color={p.accent} state={tape ? 'lift' : 'on'} /> : hov ? <WebTape color={p.accent} state="dash" /> : null}
       </Pressable>
       {tape ? <Tip style={st.tipTape}>{m.pinned ? '눌러서 테이프 떼기' : '눌러서 테이프 붙이기 · 칸 맨 위로'}</Tip> : null}
-      {plug && !m.ai_linked ? <Tip style={st.tipPlug}>AI 연결 켜기</Tip> : null}
+      {plug && !aiOn ? <Tip style={st.tipPlug}>{m.ai_linked ? 'AI 사용량을 다 써서 멈췄어요' : 'AI 연결 켜기'}</Tip> : null}
       {m.unread_updates > 0 ? (
         <View style={st.webBadgeAt} pointerEvents="none">
           <NumBadge n={m.unread_updates} variant="web" />

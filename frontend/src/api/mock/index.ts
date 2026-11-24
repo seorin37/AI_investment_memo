@@ -351,6 +351,11 @@ export const mockApi: Api = {
     }
     return wait(undefined);
   },
+  aiOffAll: async () => {
+    const on = memosOf().filter((m) => m.ai_linked);
+    on.forEach((m) => { m.ai_linked = false; m.ai_linked_at = null; });
+    return wait({ turned_off: on.length });
+  },
   setAiLink: async (memoId, enabled) => {
     const m = memosOf().find((x) => x.id === memoId);
     if (!m) throw new Error('메모를 찾을 수 없어요');

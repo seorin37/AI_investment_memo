@@ -80,6 +80,8 @@ export interface MemoDetailProps {
   aiSpent?: boolean;
   /** 사용량이 다시 채워지는 날 ('12월 1일', GET /me/usage) */
   aiRefill?: string;
+  /** 지금 AI 연결이 켜진 메모 수. 크레딧 0이고 이 값이 있으면 '충전하지 않으면 N개가 모두 꺼져요' (끄기 대기, 2026-11-24) */
+  aiCount?: number;
   /** 보드 이름 (앱 뒤로 버튼 옆 글자 · 알림에서 열면 '알림') */
   backLabel?: string;
   /** 머리에 붙는 칩 (사용법 안내 예시 화면의 '예시' — 실제 데이터로 보이지 않게) */
@@ -104,7 +106,7 @@ export interface MemoDetailProps {
   onOpenEvidence?: (item: MemoFeedItem) => void;
   /** 넛지: 이 메모에 붙은 소식을 주간보고서로 */
   onNudge?: () => void;
-  onSpentAction?: (a: 'credit' | 'plan') => void;
+  onSpentAction?: (a: 'credit' | 'plan' | 'choice') => void;
 }
 
 /** 근거 상세 (원본 memo.html 13.1 공시 · 13.2 뉴스 · 13.3 가격 조건) */
@@ -139,6 +141,8 @@ export interface NewMemoProps {
   initialText?: string;
   /** AI 연결 스위치 처음 값 (주간보고서 '메모에 추가'로 열면 켬, 2026-11-24) */
   initialAi?: boolean;
+  /** AI 사용량(크레딧)을 다 씀 → AI 연결 스위치를 켤 수 없고 일반 메모로만 저장 (2026-11-24) */
+  aiSpent?: boolean;
   onCancel: () => void;
   /** 빈 채로 완료 (원본: 닫고 '빈 메모는 저장하지 않았어요' 스낵바) */
   onEmpty?: () => void;

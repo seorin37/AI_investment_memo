@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { Linking } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMockNotice } from '@/components/layout/MobileScreen';
+import { useUI } from '@/store/ui';
 import type { MemoVersion } from '@/types/models';
 import { AppMemoDetail } from '@/ui/screens/memo/app/MemoDetail';
 import { mockToday } from '@/ui/screens/memo/MemoDetail.mock';
 import { useMemoScreen } from '@/ui/screens/memo/useMemoScreen';
 import { useUsageView } from '@/ui/screens/my/useUsageView';
+import { useAiOffChoice } from '@/ui/shared/useAiOffChoice';
 
 /**
  * 앱 메모 상세 = UI v2 (ui/screens/memo/app).
@@ -21,6 +23,9 @@ export default function MemoDetailScreen() {
   const { data, ops, setMockMemo } = useMemoScreen(id);
   /* AI 사용량을 다 쓰면 안내 상자 (스튜디오와 같은 기준: 정지 또는 100% 이상, 2026-11-24) */
   const usage = useUsageView();
+  const spent = usage.paused || usage.usage_pct >= 100;
+  const toast = useUI((s) => s.showToast);
+  const askAiOff = useAiOffChoice();
   /* mock 모드에서만 쓰는 화면 안 상태 (수정 이력 · 소식 읽음) */
   const [mockVersions, setMockVersions] = useState<MemoVersion[] | null>(null);
   const [mockSeen, setMockSeen] = useState(false);
@@ -52,15 +57,16 @@ export default function MemoDetailScreen() {
         else router.back();
       }}
       onCopy={() => {}}
-      onConnectAi={() => router.push({ pathname: '/memo/link', params: { id: memo.id } })}
+      onConnectAi={() => (spent ? toast('AI 사용량을 다 써서 AI 연결을 켤 수 없어요. 일반 메모로는 계속 쓸 수 있어요') : router.push({ pathname: '/memo/link', params: { id: memo.id } }))}
       onDisconnectAi={() => (ops ? void ops.aiOff() : patch({ ai_linked: false }))}
       onSeenUpdates={() => (ops ? ops.seenUpdates() : setTimeout(() => setMockSeen(true), 4000))}
       onOpenSource={(f) => (f.url ? Linking.openURL(f.url) : notice('원문 열기'))}
       onOpenEvidence={(f) => router.push({ pathname: '/memo/evidence', params: { id: memo.id, fid: f.id } })}
       onNudge={() => notice('주간보고서')}
-      aiSpent={memo.ai_linked && (usage.paused || usage.usage_pct >= 100)}
+      aiSpent={memo.ai_linked && spent}
       aiRefill={usage.usage_refill}
-      onSpentAction={(a) => router.push(a === 'credit' ? '/studio-charge' : '/my-plans')}
+      aiCount={usage.ai_count}
+      onSpentAction={(a) => (a === 'choice' ? askAiOff() : router.push(a === 'credit' ? '/studio-charge' : '/my-plans'))}
     />
   );
 }

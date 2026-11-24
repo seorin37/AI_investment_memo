@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import type { BoardItemKind } from '@/types/models';
 
+/** 크레딧 다 씀 안내의 버튼: 충전 · 플랜 · 'AI 연결 모두 끄기' 선택 창 (2026-11-24) */
+export type SpentAction = 'credit' | 'plan' | 'choice';
+
 export type SettingsSection = 'profile' | 'display' | 'notifications' | 'ai' | 'usage' | 'mcp' | 'data' | 'about';
 
 /** 전역 모달 상태 (옛 웹 셸 ModalHost 가 쓰던 값 · 11/21 옛 셸 삭제 뒤에는 렌더링하는 곳 없음 · 연결 단계에서 정리) */
@@ -23,8 +26,8 @@ interface UIState {
   tabBarHidden: boolean;
   setTabBarHidden(hidden: boolean): void;
   /** 웹 보드·메모 창의 'AI 사용량 다 씀' 버튼 → 셸(_layout)이 충전 창·설정 사용량 탭을 연다 (2026-11-24) */
-  spentReq: { kind: 'credit' | 'plan'; id: number } | null;
-  requestSpent(kind: 'credit' | 'plan'): void;
+  spentReq: { kind: SpentAction; id: number } | null;
+  requestSpent(kind: SpentAction): void;
   toggleSidebar(): void;
   setDrawer(open: boolean): void;
   openModal(m: NonNullable<ModalState>): void;

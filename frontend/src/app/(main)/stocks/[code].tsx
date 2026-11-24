@@ -163,6 +163,7 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, pre, stockName, on
     });
   };
   const startConnect = (c: Connect) => {
+    if (real && aiSpent) return toast('AI 사용량을 다 써서 AI 연결을 켤 수 없어요. 일반 메모로는 계속 쓸 수 있어요');     // 크레딧 0: AI 켜기 막음 (서버도 402)
     setCState('loading');
     setConnect(c);
     /* 실제 모드: 연결 창이 열릴 때 AI 켜기 → 분석 결과 (결정 7 임시안) */
@@ -211,6 +212,7 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, pre, stockName, on
     <WebMemoBoard
       aiSpent={aiSpent}
       aiRefill={usage.usage_refill}
+      aiCount={usage.ai_count}
       onSpentAction={requestSpent}
       stock={stock}
       priceNote={priceNote}
@@ -247,6 +249,7 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, pre, stockName, on
       onToggleAi={(id) => {
         const m = memos.find((x) => x.id === id);
         if (!m) return;
+        if (m.ai_linked && real && aiSpent) return requestSpent('choice');   // 끄기 대기: 플러그를 누르면 '모두 끄기' 선택 창
         if (m.ai_linked) {
           bd.ops.aiOff(id);
           patch(id, (x) => ({ ...x, ai_linked: false }));
@@ -279,6 +282,7 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, pre, stockName, on
         open={dlg}
         aiSpent={aiSpent}
         aiRefill={usage.usage_refill}
+        aiCount={usage.ai_count}
         onSpentAction={(a) => {
           setDlg(false);
           requestSpent(a);
@@ -335,6 +339,7 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, pre, stockName, on
       stockName={stock.name}
       initialText={preNew?.text ?? first}
       initialAi={!!preNew}
+      aiSpent={real && aiSpent}
       tab0={newTab}
       checklist={checklist}
       onSaveChecklist={saveChecklist}
