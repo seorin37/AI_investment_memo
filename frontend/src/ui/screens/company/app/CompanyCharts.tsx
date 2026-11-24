@@ -264,7 +264,8 @@ export function ProfitChart({ series, labels, width, visible }: { series: { name
 
 /* ---------- 건전성 레이더 (원본 drawRadar: 가운데 (가로 가운데, 118) · 반지름 82 · 고리 1 · .66 · .33 · 가운데서 퍼짐 .7s spring) ---------- */
 export const RADAR_H = 230;
-export function Radar({ labels, scores, width, visible }: { labels: string[]; scores: number[]; width: number; visible: boolean }) {
+/** missing[i]가 true면 값이 없는 지표: 점은 가운데(점 표시 없음), 라벨은 흐리게 */
+export function Radar({ labels, scores, missing, width, visible }: { labels: string[]; scores: number[]; missing?: boolean[]; width: number; visible: boolean }) {
   const t = useProgress(visible && width > 0, 900);
   const sc = springE(seg(t * 900, 200, 700));
   const cx = width / 2;
@@ -286,16 +287,14 @@ export function Radar({ labels, scores, width, visible }: { labels: string[]; sc
             return (
               <G key={l}>
                 <Line x1={cx} y1={cy} x2={p[0]} y2={p[1]} stroke="#EEECF6" />
-                <SvgText x={q[0]} y={q[1] + 4} fontSize={11} fill="#575B63" textAnchor="middle">
+                <SvgText x={q[0]} y={q[1] + 4} fontSize={11} fill={missing?.[i] ? '#B0B8C1' : '#575B63'} textAnchor="middle">
                   {l}
                 </SvgText>
               </G>
             );
           })}
           <Polygon points={ps.map((p) => p.join(',')).join(' ')} fill="rgba(133,105,227,0.18)" stroke="#7046F5" strokeWidth={2} />
-          {ps.map((p, i) => (
-            <Circle key={i} cx={p[0]} cy={p[1]} r={3.5} fill="#7046F5" />
-          ))}
+          {ps.map((p, i) => (missing?.[i] ? null : <Circle key={i} cx={p[0]} cy={p[1]} r={3.5} fill="#7046F5" />))}
         </Svg>
       ) : null}
     </View>

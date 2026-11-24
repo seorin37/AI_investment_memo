@@ -208,7 +208,6 @@ export default function MainLayout() {
         /* 설정에서 바꾼 이름·소개를 사이드바 프로필에도 (mock 상태) */
         profile: { ...mockSideProfile, name: myProfile.name, job: myProfile.intro, photoUrl: myProfile.photoUrl ?? null },
         unreadNotifs: unreadShown,
-        dark,
         recentSearches: mockRecentSearches,
         popular: mockPopular,
         onSearch: search,
@@ -235,7 +234,6 @@ export default function MainLayout() {
           }),
         onAddStock: () => setAddOpen(true),
         onBell: () => setInboxOpen((o) => !o),
-        onToggleDark: () => setDark(!dark),
         onTrash: () => setTrashOpen(true),
         onSettings: () => setSettings('내 프로필'),
         onFeedback: () => setFbOpen(true),
@@ -420,6 +418,8 @@ export default function MainLayout() {
       }}
       onPhoto={() => say({ msg: '아직 연결되지 않았어요 · 데이터는 그대로예요' })}
       onPhotoDelete={() => say({ msg: '지울 사진이 없어요' })}
+      dark={dark}
+      onToggleDark={() => setDark(!dark)}
       onLogout={() => { setSettings(null); logout(); }}
       onWithdraw={() => say({ msg: '아직 탈퇴 기능은 연결되지 않았어요 · 데이터는 그대로예요' })}
       noti={myNoti}
