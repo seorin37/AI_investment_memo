@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { Badge } from '@/components/ui/primitives';
@@ -61,6 +61,14 @@ export function WebMemoDialog(p: MemoDetailProps & { open: boolean }) {
     setTab(i);
     if (i === 1) p.onSeenUpdates?.();
   };
+  /* 새 소식이 있는 메모는 처음부터 AI 업데이트 탭으로 열림 → 탭을 누르지 않아도 본 것으로 (2026-11-23) */
+  const onSeen = p.onSeenUpdates;
+  const openedOnAi = p.open && tab === 1;
+  useEffect(() => {
+    if (openedOnAi) onSeen?.();
+    // 열릴 때 한 번만 (탭을 눌러 바꾸는 건 pickTab 이 부름)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.open]);
   const items: MenuItem[] = [
     { label: m.pinned ? '테이프 떼기' : '테이프 붙여 맨 위로', icon: 'pin', run: () => p.onTogglePin(!m.pinned) },
     { label: '내용 복사', icon: 'copy', run: p.onCopy },

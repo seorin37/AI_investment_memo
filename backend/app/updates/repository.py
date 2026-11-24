@@ -107,3 +107,13 @@ class UpdatesRepository:
             WHERE tu.id = :update_id AND ti.id = tu.tracking_item_id AND m.user_id = :user_id AND m.deleted_at IS NULL
             RETURNING tu.id"""), {"update_id": update_id, "user_id": user_id}).first()
         return row is not None
+
+    def mark_memo_read(self, user_id: int, memo_id: int) -> int | None:
+        """메모 하나에 붙은 안 읽은 카드를 모두 읽음으로 (2026-11-23). 내 메모가 아니거나 지운 메모면 None, 아니면 바꾼 수."""
+        if self.memo(user_id, memo_id) is None:
+            return None
+        rows = self.db.execute(text("""UPDATE tracking_updates tu SET is_read = true
+            FROM tracking_items ti
+            WHERE ti.id = tu.tracking_item_id AND ti.memo_id = :memo_id AND NOT tu.is_read
+            RETURNING tu.id"""), {"memo_id": memo_id}).all()
+        return len(rows)

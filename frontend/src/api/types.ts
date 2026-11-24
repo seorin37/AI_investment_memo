@@ -146,6 +146,8 @@ export interface Api {
   listMemoAnswers(memoId: string): Promise<MemoAnswer[]>;
   listStockAiUpdates(code: string): Promise<AiUpdate[]>;
   markAiUpdateRead(id: string): Promise<void>;
+  /** 메모 하나의 안 읽은 AI 업데이트를 모두 읽음으로 (POST /memos/{id}/ai-updates/read) — 메모 창에서 소식을 봤을 때 */
+  markMemoUpdatesRead(memoId: string): Promise<void>;
   uploadFile(file: UploadFile): Promise<{ url: string; name: string }>;
 
   // 최신 업데이트

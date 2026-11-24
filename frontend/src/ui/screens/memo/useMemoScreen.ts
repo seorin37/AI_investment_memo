@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api';
 import { env } from '@/config/env';
-import { qk, useBoardItem, useDeleteBoardItem, useMemoTimeline, useStock, useUpdateBoardItem } from '@/hooks/queries';
+import { qk, useBoardItem, useDeleteBoardItem, useMarkMemoUpdatesRead, useMemoTimeline, useStock, useUpdateBoardItem } from '@/hooks/queries';
 import type { Memo, MemoColor, MemoVersion } from '@/types/models';
 import { connectResult, detailFrom, type ConnectResult } from '@/ui/screens/board/useBoardData';
 import { mockDetailStockName, mockLastChecked, mockTrackItems } from './MemoDetail.mock';
@@ -45,6 +45,7 @@ export function useMemoScreen(id: string) {
   const code = memo?.stock_code ?? '';
   const update = useUpdateBoardItem(code);
   const del = useDeleteBoardItem(code);
+  const markSeen = useMarkMemoUpdatesRead();
   const [mockMemo, setMockMemo] = useState<Memo | null>(() => (real ? null : findMemo(id)));
 
   const refresh = () => {
@@ -81,6 +82,10 @@ export function useMemoScreen(id: string) {
     color: (color: MemoColor) => update.mutate({ id, patch: { color } }),
     pin: (pinned: boolean) => update.mutate({ id, patch: { pinned } }),
     remove: () => del.mutateAsync(id),
+    /** AI 업데이트 탭을 봤을 때: 이 메모 소식을 서버에서 읽음으로 (안 읽은 게 있을 때만) */
+    seenUpdates: () => {
+      if (realId && (memo?.unread_updates ?? 0) > 0) markSeen.mutate(id);
+    },
     aiOff: () => api.setAiLink(id, false).finally(refresh),
     async aiOn(): Promise<ConnectResult> {
       try {

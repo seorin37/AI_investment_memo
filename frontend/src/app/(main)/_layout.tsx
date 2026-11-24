@@ -20,9 +20,10 @@ import { useTrackedView } from '@/ui/screens/my/useTrackedView';
 import { useAiStats, useMyStocks } from '@/hooks/queries';
 import Constants from 'expo-constants';
 import { legalDocument } from '@/ui/screens/auth/Auth.mock';
-import { mockCreditDefault, mockCreditPacks, mockPayMethods, mockDataSources, mockInbox, mockOss, mockPlanCompare, mockPlanDefault, mockPlanNotes, mockPlans, mockReportKinds, mockWithdrawCounts } from '@/ui/screens/my/My.mock';
+import { mockCreditDefault, mockCreditPacks, mockPayMethods, mockDataSources, mockOss, mockPlanCompare, mockPlanDefault, mockPlanNotes, mockPlans, mockReportKinds, mockWithdrawCounts } from '@/ui/screens/my/My.mock';
 import { WebFeedback } from '@/ui/screens/my/web/Feedback';
 import { WebInbox } from '@/ui/screens/my/web/Inbox';
+import { useInboxData } from '@/ui/screens/my/useInboxData';
 import { WebSettings, type SettingsTab } from '@/ui/screens/my/web/Settings';
 import { useTodayQuizView } from '@/ui/screens/studio/useTodayQuiz';
 import { useTrashData } from '@/ui/screens/my/useTrashData';
@@ -143,9 +144,9 @@ export default function MainLayout() {
   const [trashOpen, setTrashOpen] = useState(false);
   const [fbOpen, setFbOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
-  const unread = useMyMock((s) => s.unread);
-  const readNotif = useMyMock((s) => s.read);
-  const readAll = useMyMock((s) => s.readAll);
+  /* 알림함: 실제 모드면 내 종목 AI 업데이트(서버 읽음 상태), mock 모드면 예시 (useInboxData, 2026-11-23) */
+  const inbox = useInboxData();
+  const unread = inbox.unread;
   const uiToast = useUI((s) => s.toast);
   /* ⑧-8a 스튜디오: 사용량 창 · PLUS 창(다 쓴 뒤 만들기) · 충전 창. 결제·만들기는 연결 안 됨 */
   const [studioPop, setStudioPop] = useState<'usage' | 'credit' | 'charge' | 'audio' | 'report' | null>(null);
@@ -170,7 +171,7 @@ export default function MainLayout() {
   const reportPick = useReportPickStocks();
   const createReport = useCreateReport();
   const { studio_fail } = useGlobalSearchParams<{ studio_fail?: string }>();
-  const unreadShown = mockInbox.filter((n) => unread.includes(n.id) && (n.kind === 'ai' ? myNoti.ai : myNoti.studio)).length;
+  const unreadShown = inbox.items.filter((n) => unread.includes(n.id) && (n.kind === 'ai' ? myNoti.ai : myNoti.studio)).length;
   const say = (x: { msg: string; undo?: () => void; check?: boolean }) => {
     setSnack(x);
     setTimeout(() => setSnack((c) => (c === x ? null : c)), 4000);
@@ -493,17 +494,19 @@ export default function MainLayout() {
     <WebInbox
       open={inboxOpen}
       left={(sideOpen ? 250 : 72) + 8}
-      items={mockInbox}
+      items={inbox.items}
       unread={unread}
       noti={myNoti}
       onClose={() => setInboxOpen(false)}
       onOpen={(n) => {
         setInboxOpen(false);
-        readNotif(n.id);
-        if (n.kind === 'ai' && n.stock_code) openStock(n.stock_code);
+        inbox.read(n.id);
+        /* 실제 알림(memo_id 있음)은 그 메모 창을 그 소식 근거로 열기, 예시 알림은 종목 보드 */
+        if (n.kind === 'ai' && n.stock_code && n.memo_id) router.navigate({ pathname: '/stocks/[code]', params: { code: n.stock_code, memo: n.memo_id, ev: n.id } });
+        else if (n.kind === 'ai' && n.stock_code) openStock(n.stock_code);
         else setStudioOpen(true);
       }}
-      onReadAll={readAll}
+      onReadAll={inbox.readAll}
       onSettings={() => { setInboxOpen(false); setSettings('알림'); }}
     />
     <ConfirmDialog

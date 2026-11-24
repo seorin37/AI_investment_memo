@@ -170,3 +170,10 @@ class UpdatesService:
     def mark_read(self, user_id: int, update_id: int) -> None:
         if not self.repository.mark_read(user_id, update_id):
             raise UpdateNotFoundError(update_id)
+
+    def mark_memo_read(self, user_id: int, memo_id: int) -> int:
+        """메모 창에서 AI 업데이트를 봤을 때: 그 메모의 안 읽은 카드를 모두 읽음으로. 바꾼 수를 돌려준다."""
+        changed = self.repository.mark_memo_read(user_id, memo_id)
+        if changed is None:
+            raise MemoNotFoundError(memo_id)
+        return changed

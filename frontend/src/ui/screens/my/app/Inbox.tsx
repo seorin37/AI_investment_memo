@@ -26,7 +26,7 @@ export function AppInbox({ items, unread, noti, onBack, onOpen, onReadAll, onSet
   }, [onBack]);
   const fv: F = f !== 'all' && !noti[f] ? 'all' : f;
   const on = items.filter((n) => noti[n.kind] && (fv === 'all' || fv === n.kind));
-  const groups = (['오늘', '어제'] as const).map((g) => [g, on.filter((n) => n.day === g)] as const).filter(([, l]) => l.length);
+  const groups = (['오늘', '어제', '이전'] as const).map((g) => [g, on.filter((n) => n.day === g)] as const).filter(([, l]) => l.length);
   const anyOn = noti.ai || noti.studio;
   return (
     <View style={[st.root, { paddingTop: insets.top }]}>

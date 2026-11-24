@@ -71,7 +71,8 @@ export const mockTrash: TrashItem[] = [
  * 알림함 (원본 my.html INB · web x.tsx InboxPanel — 같은 5개, 앞의 3개 안 읽음).
  * 문구 규칙: 권유·호재/악재·전망 없음, 주가는 'MM.DD 종가 기준' (원본 '전일 확정 종가 기준'을 바꿈)
  */
-export interface InboxItem { id: string; kind: 'ai' | 'studio'; day: '오늘' | '어제'; title: string; sub: string; when: string; stock_code?: string }
+/** day '이전' = 그저께보다 오래된 것 (실제 모드 알림함, useInboxData). memo_id: 누르면 그 메모를 열 때 씀 */
+export interface InboxItem { id: string; kind: 'ai' | 'studio'; day: '오늘' | '어제' | '이전'; title: string; sub: string; when: string; stock_code?: string; memo_id?: string }
 export const mockInbox: InboxItem[] = [
   { id: 'n1', kind: 'ai', day: '오늘', title: 'SK하이닉스 · 실적 나오면 다시 보기', sub: '메모에 새 소식이 연결됐어요 · HBM4 공급 확대', when: '10분 전', stock_code: '000660' },
   { id: 'n2', kind: 'studio', day: '오늘', title: '내 종목 라디오가 다 만들어졌어요', sub: '오디오 · 6:42 · 눌러서 듣기', when: '1시간 전' },

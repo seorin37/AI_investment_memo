@@ -253,11 +253,35 @@ export function useAnswerConfirmation(code: string) {
 export const useMemoAnswers = (memoId: string, enabled = true) =>
   useQuery({ queryKey: qk.answers(memoId), queryFn: () => api.listMemoAnswers(memoId), enabled: enabled && memoId.length > 0 });
 
-export function useMarkAiUpdateRead(code?: string) {
-  const inv = useInvalidate();
+/**
+ * 읽음 처리 뒤 빨간 점·숫자를 다시 읽을 곳 (2026-11-23).
+ * 종목 숫자(stocks) · 홈 업데이트 위젯(memoUpdateSummary · updates) · 업데이트 화면(updates 모든 종목) · 메모 보드 배지(board 모든 종목) · 보드 패널(stockAiUpdates)
+ * 열려 있는 메모 창의 소식(timeline · boardItem)은 '새 소식' 표시가 바로 사라지지 않게 다시 부르지 않고 '오래됨'만 표시 → 다음에 열 때 새로 받음
+ */
+function useInvalidateRead() {
+  const qc = useQueryClient();
+  return () =>
+    Promise.all([
+      ...[qk.stocks, qk.memoUpdateSummary, ['updates'], ['board'], ['stockAiUpdates']].map((queryKey) => qc.invalidateQueries({ queryKey })),
+      ...[['timeline'], ['boardItem']].map((queryKey) => qc.invalidateQueries({ queryKey, refetchType: 'none' })),
+    ]);
+}
+
+/** 카드 여러 개 읽음 (업데이트 화면 · 모두 읽음). 다 보낸 뒤 한 번만 다시 읽음 */
+export function useMarkAiUpdateRead() {
+  const refresh = useInvalidateRead();
   return useMutation({
-    mutationFn: (id: string) => api.markAiUpdateRead(id),
-    onSuccess: () => inv(qk.stocks, qk.memoUpdateSummary, ...(code ? [qk.stockAiUpdates(code), qk.board(code)] : [])),
+    mutationFn: (ids: string[]) => Promise.all(ids.map((id) => api.markAiUpdateRead(id))),
+    onSettled: refresh,
+  });
+}
+
+/** 메모 하나의 소식을 모두 읽음 (메모 창에서 AI 업데이트를 봤을 때) */
+export function useMarkMemoUpdatesRead() {
+  const refresh = useInvalidateRead();
+  return useMutation({
+    mutationFn: (memoId: string) => api.markMemoUpdatesRead(memoId),
+    onSettled: refresh,
   });
 }
 

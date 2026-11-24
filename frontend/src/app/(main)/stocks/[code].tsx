@@ -265,6 +265,7 @@ function BoardTab({ code, memoParam, ev, firstFlow, stockName, onboardingSelecte
           patch(opened.id, (m) => ({ ...m, ai_linked: false }));
         }}
         onSeenUpdates={() => {
+          if (opened.unread_updates > 0) bd.ops.seenUpdates(opened.id);
           setFeed((f) => ({ ...f, [opened.id]: (f[opened.id] ?? []).map((x) => ({ ...x, unread: false })) }));
           patch(opened.id, (m) => ({ ...m, unread_updates: 0 }));
         }}
