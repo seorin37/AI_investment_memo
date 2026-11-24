@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { useUI } from '@/store/ui';
 import { mockAudioEpisode, mockAudioGen, mockLabStocks, mockLabVars, mockMade, mockReport, type LabDir } from '@/ui/screens/studio/Studio.mock';
-import type { MadeItem } from '@/ui/screens/studio/Studio.types';
+import type { MadeItem, StudioKind } from '@/ui/screens/studio/Studio.types';
 import { registerUserReset } from '@/lib/sessionReset';
 import { env } from '@/config/env';
 
@@ -61,6 +61,10 @@ interface StudioPlayerState {
   labCode: string;
   labDirs: LabDir[];
   setLab(p: { code?: string; dirs?: LabDir[] }): void;
+  /** 넛지 → 스튜디오 기능 열기 요청 (원본 nudge.tsx useStudioOpen). codes: 보고서·오디오 창에서 미리 고를 종목. _layout 이 받아서 처리 후 비움 */
+  ask: { kind: StudioKind; codes?: string[] } | null;
+  askStudio(kind: StudioKind, codes?: string[]): void;
+  clearAsk(): void;
   /** 오늘의 퀴즈 제출 (화면 상태만) */
   quizPick: number | null;
   submitQuiz(i: number): void;
@@ -213,6 +217,9 @@ export const useStudioPlayer = create<StudioPlayerState>((set, get) => {
     labCode: mockLabStocks[0].stock_code,
     labDirs: mockLabVars.map((v) => v.def),
     setLab: (p) => set((s) => ({ labCode: p.code ?? s.labCode, labDirs: p.dirs ?? s.labDirs })),
+    ask: null,
+    askStudio: (kind, codes) => set({ ask: { kind, codes } }),
+    clearAsk: () => set({ ask: null }),
     quizPick: null,
     submitQuiz: (i) => set({ quizPick: i }),
     retry: () => {

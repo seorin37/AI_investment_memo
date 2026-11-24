@@ -14,7 +14,7 @@ type Hover = { hovered?: boolean; pressed?: boolean };
  * 웹 AI 오디오 만들기 창 = 원본 studio.tsx AudioPopup (468 · 라운드 28)
  * PopHead · 빠른 고르기(40 알약) · 종목 상자(줄 58 · 체크 24/8 · 새 업데이트 N건 · 보유/관심) · 증시 요약(+1) · 업데이트 기간 · (소식 없음 안내) · [취소][오디오 만들기]
  */
-export function WebAudioPopup({ open, stocks, periods, lastClose, onClose, onMake }: { open: boolean; stocks: AudioStock[]; periods: readonly string[]; lastClose: string; onClose: () => void; onMake: (p: { codes: string[]; period: string; market: boolean }) => void }) {
+export function WebAudioPopup({ open, stocks, periods, lastClose, onClose, onMake, preset }: { open: boolean; stocks: AudioStock[]; periods: readonly string[]; lastClose: string; onClose: () => void; onMake: (p: { codes: string[]; period: string; market: boolean }) => void; /** 넛지에서 열 때 미리 고를 종목 (목록에 있는 것만 · 없거나 0개면 전체) */ preset?: string[] }) {
   const all = stocks.map((s) => s.stock_code);
   const [sel, setSel] = useState<string[]>(all);
   const [sum, setSum] = useState(true);
@@ -22,7 +22,12 @@ export function WebAudioPopup({ open, stocks, periods, lastClose, onClose, onMak
   const [prev, setPrev] = useState(open);
   if (open !== prev) {
     setPrev(open);
-    if (open) { setSel(all); setSum(true); setPer(0); }
+    if (open) {
+      const pick = preset?.filter((c) => all.includes(c)) ?? [];
+      setSel(pick.length ? pick : all);
+      setSum(true);
+      setPer(0);
+    }
   }
   const n = (s: AudioStock) => s.news[per] ?? 0;
   const total = stocks.filter((s) => sel.includes(s.stock_code)).reduce((a, s) => a + n(s), 0);

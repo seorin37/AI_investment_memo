@@ -201,7 +201,7 @@ function TemplateHome(p: WebHomeProps) {
       </ScrollView>
       {nudge ? (
         <View style={st.nudge} pointerEvents="box-none">
-          <NudgePill text={nudge === 'lab' ? '환율이 바뀌면 내 종목은? 실험해 보기' : '이번 주 내 종목, 한 장으로 볼까요?'} onGo={() => p.onNudge(nudge)} onClose={() => setNudge(null)} />
+          <NudgePill text={nudge === 'lab' ? '환율이 바뀌면 내 종목은? 실험해 보기' : '이번 주 내 종목, 한 장으로 볼까요?'} onGo={() => { setNudge(null); p.onNudge(nudge); }} onClose={() => setNudge(null)} />
         </View>
       ) : null}
       <WebSnackbar visible={!!snack} message={snack?.msg ?? ''} onUndo={snack?.undo} check={snack?.check} style={[st.snack, { bottom: nudge ? 92 : 30 }]} />
