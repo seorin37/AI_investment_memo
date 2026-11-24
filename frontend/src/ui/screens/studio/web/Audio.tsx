@@ -23,15 +23,32 @@ const Ico = {
 /** 웹 만드는 중 = 원본 studio.tsx Gen (위 120 · 아이콘 72/22 · 제목 22 · 막대 200 · 단계 22 동그라미) */
 export function WebGen({ job, steps }: { job: GenJob; steps: string[] }) {
   const cur = job.steps.findIndex((s) => s !== 'done');
-  const at = cur < 0 ? steps.length : cur;
+  return (
+    <GenView
+      kind={job.kind}
+      title={job.kind === 'report' ? '주간보고서를 만드는 중이에요' : '오디오를 만드는 중이에요'}
+      sub={'다른 화면으로 가도 계속 만들어요.\n끝나면 알려 드릴게요.'}
+      pct={job.pct}
+      at={cur < 0 ? steps.length : cur}
+      steps={steps}
+    />
+  );
+}
+
+/** 웹 실험 중 = 원본 studio.tsx Gen 의 lab (GEN_T 48줄 · STEPS 53줄). at: 지금 단계 번호 (앞 단계는 완료) */
+export function WebLabGen({ pct, at }: { pct: number; at: number }) {
+  return <GenView kind="lab" title="실험을 하는 중이에요" sub="잠시만 기다려 주세요." pct={pct} at={at} steps={['조건 읽기', '영향 경로 찾기', '결과 정리하기']} />;
+}
+
+function GenView({ kind, title, sub, pct, at, steps }: { kind: 'audio' | 'report' | 'lab'; title: string; sub: string; pct: number; at: number; steps: string[] }) {
   return (
     <ScrollView contentContainerStyle={st.center}>
-      <View style={st.big}><FeatIcon f={job.kind} size={36} /></View>
+      <View style={st.big}><FeatIcon f={kind} size={36} /></View>
       <View style={{ alignItems: 'center', gap: 6, alignSelf: 'stretch' }}>
-        <Text style={st.h}>{job.kind === 'report' ? '주간보고서를 만드는 중이에요' : '오디오를 만드는 중이에요'}</Text>
-        <Text style={st.sub}>{'다른 화면으로 가도 계속 만들어요.\n끝나면 알려 드릴게요.'}</Text>
+        <Text style={st.h}>{title}</Text>
+        <Text style={st.sub}>{sub}</Text>
       </View>
-      <View style={st.bar}><View style={[st.barI, { width: `${job.pct}%` }]} /></View>
+      <View style={st.bar}><View style={[st.barI, { width: `${pct}%` }]} /></View>
       <View style={{ gap: 10, alignItems: 'flex-start' }}>
         {steps.map((t, i) => (
           <View key={t} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>

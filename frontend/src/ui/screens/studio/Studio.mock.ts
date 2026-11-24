@@ -92,7 +92,7 @@ export interface ReportStock {
   items: ReportItem[];
   /** linked_count: 메모 추적 항목에 그 주 붙은 소식 수 (서버 보고서, 없으면 종목 소식 전체 수) */
   memo?: { bg: string; ink: string; title: string; meta: string; body: string; memo_id?: string; linked_count?: number };
-  watch: { text: string; why: string }[];
+  watch: ReportWatch[];
   /** 서버 보고서 (2026-11-23): 이번 주 이슈 정리 7~8문장 (문단은 빈 줄로 나뉨) */
   issues?: string;
   /** PER·PBR·EPS·시가총액·52주 위치 (stock_fundamentals_snapshot) */
@@ -135,6 +135,13 @@ export const mockReportStocks: ReportStock[] = [
     watch: [{ text: '다음 주 새 공시·뉴스가 나오는지', why: '이번 주 소식 0건 · 추가하면 새 메모로 남겨요' }],
   },
 ];
+/** 앞으로 지켜볼 것 한 줄 (2026-11-24: 메모 제안). memo_title·memo_body가 있으면 '메모에 추가'로 종목 메모 창을 채워 연다.
+ *  tracked = 이미 추적 중인 내 메모 조건 (버튼 없음), added = 이 제안으로 메모를 저장함 (서버 content.added) */
+export type ReportWatch = {
+  text: string; why: string; sid?: string; kind?: 'follow' | 'schedule' | 'price' | 'tracking';
+  memo_title?: string; memo_body?: string; tracked?: boolean; added?: boolean;
+};
+
 export const mockReport = {
   week: '2026년 11월 2주',
   title: '11월 2주 주간 보고서',

@@ -26,10 +26,18 @@ URL = "https://api.openai.com/v1/chat/completions"
 WEEKDAYS = "월화수목금토일"
 SNIPPET_CHARS = 300
 
+SUGGEST_ITEM = {"type": "object", "additionalProperties": False,
+                "properties": {"text": {"type": "string"}, "memo_title": {"type": "string"}, "memo_body": {"type": "string"},
+                               "refs": {"type": "array", "items": {"type": "integer"}}},
+                "required": ["text", "memo_title", "memo_body", "refs"]}
 SCHEMA_STOCK = {"name": "report_stock", "strict": True,
                 "schema": {"type": "object", "additionalProperties": False,
-                           "properties": {"story": {"type": "string"}, "issues": {"type": "string"}},
-                           "required": ["story", "issues"]}}
+                           "properties": {"story": {"type": "string"}, "issues": {"type": "string"},
+                                          "suggest": {"type": "array", "items": SUGGEST_ITEM}},
+                           "required": ["story", "issues", "suggest"]}}
+# 다음에 추적해 볼 메모 제안 (2026-11-24): 예측·권유처럼 읽히는 말은 제안에서도 뺀다
+SUGGEST_BANNED = re.compile(r"전망|오를|내릴|반등|상승할|하락할|기대|목표가|목표주가|매수|매도|사야|팔아|사도|담아|손절|익절|추천")
+SUGGEST_ASK = re.compile(r"알려|챙겨|나오면|확인")
 
 BANNED = ["사세요", "파세요", "매수 기회", "매도 기회", "담을 때", "손절하", "호재", "악재", "긍정적", "부정적", "저평가", "고평가",
           "유망", "유리", "불리", "확실히", "반드시", "틀림없이", "추천", "수혜"]
@@ -157,6 +165,38 @@ def check_issues(issues: str, source: str, nos: set[int]) -> list[str]:
     return check_text(issues, source, nos, 3, 9, 1000, "issues")
 
 
+def check_suggestion(s: dict, nos: set[int]) -> list[str]:
+    """제안 하나의 문제 목록 (비어 있으면 통과). 걸린 제안만 빼고 보고서는 그대로 둔다."""
+    text, title, body = (s.get("text") or "").strip(), (s.get("memo_title") or "").strip(), (s.get("memo_body") or "").strip()
+    refs = [r for r in (s.get("refs") or []) if isinstance(r, int)]
+    probs = []
+    if not 6 <= len(text) <= 60:
+        probs.append("text 길이")
+    if not 2 <= len(title) <= 20:
+        probs.append("memo_title 길이")
+    if not 8 <= len(body) <= 140:
+        probs.append("memo_body 길이")
+    if not refs or any(r not in nos for r in refs):
+        probs.append("refs")
+    joined = " ".join((text, title, body))
+    if SUGGEST_BANNED.search(joined) or any(w in joined for w in BANNED):
+        probs.append("금지 표현")
+    if not SUGGEST_ASK.search(body):
+        probs.append("memo_body가 추적 요청으로 끝나지 않음")
+    return probs
+
+
+def clean_suggestions(raw, nos: set[int], limit: int = 2) -> list[dict]:
+    out = []
+    for s in raw or []:
+        if isinstance(s, dict) and not check_suggestion(s, nos):
+            out.append({"text": s["text"].strip(), "memo_title": s["memo_title"].strip(), "memo_body": s["memo_body"].strip(),
+                        "refs": sorted({r for r in s["refs"] if isinstance(r, int)})})
+        if len(out) >= limit:
+            break
+    return out
+
+
 def openai_call(messages: list[dict], schema: dict = SCHEMA_STOCK, model: str | None = None) -> dict:
     key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
     if not key:
@@ -261,6 +301,7 @@ def llm_stock(name: str, p: dict, items: list, call: LLMCall, fallback: str, ext
     if out is None:
         return fallback, "", {"source": "code", **meta, "removed": []}
     story, issues = out["story"].strip(), out["issues"].strip()
+    meta["suggest"] = clean_suggestions(out.get("suggest"), nos)
     removed: list[dict] = []
     if verify:
         cleaned, removed, vu = verify_texts(call, source, {"story": story, "issues": issues})
