@@ -37,6 +37,7 @@ import { labResultGroups } from '@/ui/screens/studio/labParts';
 import { labStockFor, useLabStocks, useRunLab } from '@/ui/screens/studio/useLabRun';
 import { useStudioItemsSync } from '@/ui/screens/studio/studioItems';
 import { reportView, useCreateReport, useReportPickStocks } from '@/ui/screens/studio/reportView';
+import { useLabMemo } from '@/ui/screens/studio/useLabMemo';
 import { useLabVars } from '@/ui/screens/studio/useLabVars';
 import { WebAudioPopup } from '@/ui/screens/studio/web/AudioPopup';
 import type { StudioKind } from '@/ui/screens/studio/Studio.types';
@@ -166,6 +167,8 @@ export default function MainLayout() {
   /* ⑧-8c 주간보고서: 스튜디오 열 요약 · 가운데 /report 자세히 */
   const repItem = sp.made.find((m) => m.id === sp.curReport && m.kind === 'report');
   const labItem = sp.made.find((m) => m.id === sp.curLab && m.kind === 'lab');
+  /* 실험 결과 '내 메모와 연결': 그 종목의 내 메모 1개 (실험 결과 화면일 때만 읽음 · 엑셀 웹 #11) */
+  const labMemo = useLabMemo(labItem?.lab?.code, sp.webView === 'labResult');
   /* 서버 보고서면 그 내용, 아니면 mock 예시 (reportView, 2026-11-23) */
   const repView = reportView(repItem);
   const reportPick = useReportPickStocks();
@@ -278,11 +281,12 @@ export default function MainLayout() {
               : sp.webView === 'labResult' && labItem?.lab ? (
                 <WebLabResult
                   stock={labStockFor(labStocks, labItem.lab)}
+                  memo={labMemo}
                   vars={labVars}
                   groups={labResultGroups(labItem.lab)}
                   disclaimer={mockLabDisclaimer}
                   onBack={() => sp.setWebView('home')}
-                  onMemo={() => openStock(labItem.lab?.code ?? '')}
+                  onMemo={(id) => router.navigate({ pathname: '/stocks/[code]', params: id ? { code: labItem.lab?.code ?? '', memo: id } : { code: labItem.lab?.code ?? '', new: '1' } })}
                   onAgain={() => { sp.setLab({ code: labItem.lab?.code, dirs: labItem.lab?.dirs }); sp.setWebView('lab'); }}
                 />
               )
