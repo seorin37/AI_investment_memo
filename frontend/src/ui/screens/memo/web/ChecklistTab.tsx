@@ -84,7 +84,7 @@ export function ChecklistTab({ initial, onCancel, onSave, onEmpty }: {
               </Pressable>
             </View>
           ))}
-          <View style={st.sep} />
+          {items.length > 0 ? <View style={st.sep} /> : null}
           <View style={st.item}>
             <View style={st.plus}>
               <Text style={st.plusT}>+</Text>
