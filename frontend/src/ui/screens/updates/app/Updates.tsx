@@ -108,7 +108,7 @@ export function AppUpdates(p: AppUpdatesProps) {
         </View>
         <View style={st.chipsBar}>
           <SlideChips
-            items={[{ key: 'all', label: '전체' }, ...p.stocks.map((s) => ({ key: s.stock_code, label: s.name, badge: unreadOf(byStock(p.items, s.stock_code)) }))]}
+            items={[{ key: 'all', label: '업데이트' }, ...p.stocks.map((s) => ({ key: s.stock_code, label: s.name, badge: unreadOf(byStock(p.items, s.stock_code)) }))]}
             value={code ?? 'all'}
             onChange={(c) => pick(c === 'all' ? undefined : c)}
           />
