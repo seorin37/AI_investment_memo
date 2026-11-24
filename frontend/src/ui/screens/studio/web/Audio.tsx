@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
 import { FeatIcon } from '@/ui/layout/web/StudioColumnFrame';
@@ -155,19 +155,27 @@ export function WebPlayer({ item, ep, t, playing, speed, onBack, onToggle, onSee
 /** 웹 미니 플레이어 = 원본 studio.tsx Mini (스튜디오 열 카드 안 아래 12 · 검정 · 라운드 18) */
 export function WebMini({ title, sub, progress, playing, onOpen, onToggle, onClose }: { title: string; sub: string; progress: number; playing: boolean; onOpen: () => void; onToggle: () => void; onClose: () => void }) {
   return (
-    <View style={st.mini}>
+    <View style={[st.mini, miniEnter]}>
       <Pressable onPress={onToggle} accessibilityRole="button" accessibilityLabel={playing ? '일시정지' : '재생'} style={st.miniP}>{playing ? Ico.pause(16, '#15171A') : Ico.play(16, '#15171A')}</Pressable>
       <Pressable onPress={onOpen} accessibilityRole="button" style={{ flex: 1, minWidth: 0, gap: 1 }}>
         <Text style={st.miniT} numberOfLines={1}>{title}</Text>
         <Text style={st.miniS} numberOfLines={1}>{sub}</Text>
       </Pressable>
-      <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="닫기" style={{ width: 18, height: 18 }}>
+      <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="닫기" style={{ width: 18, height: 18, flexShrink: 0 }}>
         <Svg width={18} height={18} viewBox="0 0 18 18" fill="none"><Path d="M4.5 4.5L13.5 13.5M13.5 4.5L4.5 13.5" stroke="white" strokeWidth={1.5} strokeLinecap="round" /></Svg>
       </Pressable>
       <View pointerEvents="none" style={[st.miniL, { width: `${Math.min(100, progress * 100)}%` }]} />
     </View>
   );
 }
+
+/* 원본 motion.css .st-mini: 아래에서 위로 등장 (--t-slow .45s · --spring · 동작 줄이기 설정이면 ×.01) */
+const miniEnter = {
+  animationKeyframes: { from: { transform: [{ translateY: '120%' }] } },
+  animationDuration: globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? '4.5ms' : '450ms',
+  animationTimingFunction: 'cubic-bezier(.34, 1.45, .64, 1)',
+  animationFillMode: 'both',
+} as unknown as ViewStyle;
 
 const st = StyleSheet.create({
   center: { alignItems: 'center', gap: 18, paddingHorizontal: 16, paddingBottom: 18, paddingTop: 120 },
@@ -205,8 +213,8 @@ const st = StyleSheet.create({
   chipT: { fontSize: 13, lineHeight: 16, fontWeight: '700', color: '#404752' },
   srcT: { flex: 1, minWidth: 0, fontSize: 15, lineHeight: 22, fontWeight: '700', color: '#15171A', ...TR },
   mini: { position: 'absolute', left: 12, right: 12, bottom: 12, zIndex: 20, flexDirection: 'row', alignItems: 'center', gap: 10, overflow: 'hidden', borderRadius: 18, backgroundColor: '#15171A', paddingVertical: 10, paddingLeft: 10, paddingRight: 8 },
-  miniP: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
-  miniT: { fontSize: 15, lineHeight: 20, fontWeight: '700', color: '#FFFFFF', ...TR },
-  miniS: { fontSize: 14, lineHeight: 18, color: '#B8BFC8', ...TR },
+  miniP: { width: 40, height: 40, flexShrink: 0, borderRadius: 20, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  miniT: { fontSize: 15, lineHeight: 19.5, fontWeight: '700', color: '#FFFFFF', ...TR },
+  miniS: { fontSize: 14, lineHeight: 18.2, color: '#B8BFC8', ...TR },
   miniL: { position: 'absolute', left: 0, bottom: 0, height: 3, backgroundColor: '#8E8A97' },
 });

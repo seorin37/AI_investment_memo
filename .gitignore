@@ -44,3 +44,7 @@ data/periodic_updates/
 data/periodic_updates_test/
 # 뉴스 원문 수집 결과 (fulltext.py, 원문은 커밋하지 않는다)
 data/news_raw/
+
+# 로컬 UI 비교 캡처·로그인 세션 (커밋 금지)
+.auth/
+compare/
