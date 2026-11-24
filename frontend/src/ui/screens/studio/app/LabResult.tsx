@@ -7,6 +7,7 @@ import { PressScale } from '@/ui/motion/PressScale';
 import { Head } from '../../my/app/parts';
 import type { mockLabStocks, mockLabVars } from '../Studio.mock';
 import type { LabGroup } from '../labParts';
+import type { LabMemo } from '../useLabMemo';
 import { labWatchItems } from '../useLabWatch';
 import { Keep } from '@/ui/shared/Dark';
 
@@ -19,9 +20,10 @@ type Stock = (typeof mockLabStocks)[number];
 type Vars = typeof mockLabVars;
 const C = { ink: '#16171A', ink2: '#575B63', ink3: '#9A9EA7' };
 
-export function AppLabResult({ stock, vars, groups, disclaimer, onBack, onOpenMemo, onAgain, onWatch, isAdded }: {
+export function AppLabResult({ stock, vars, groups, disclaimer, memo, onBack, onMemo, onAgain, onWatch, isAdded }: {
   stock: Stock; vars: Vars; groups: LabGroup[]; disclaimer: string;
-  onBack: () => void; onOpenMemo: () => void; onAgain: () => void;
+  onBack: () => void; /** 그 종목의 내 메모 (없으면 메모 쓰기) */
+  memo: LabMemo | null; onMemo: (id?: string) => void; onAgain: () => void;
   /** '메모에 추가' (2026-11-24, 주간보고서와 같게): i = 앞으로 지켜볼 것 순번 */
   onWatch?: (check: string, why: string, i: number) => void; isAdded?: (i: number) => boolean;
 }) {
@@ -72,13 +74,6 @@ export function AppLabResult({ stock, vars, groups, disclaimer, onBack, onOpenMe
             </View>
           ))}
         </View>
-        {stock.memo ? (
-          <View style={st.ymemo}>
-            <View style={st.yH}><Text style={st.yHT}>내 메모와 연결</Text><Pressable onPress={onOpenMemo} accessibilityRole="link"><Text style={[st.yHT, { fontWeight: '700', color: '#4A3800' }]}>원본 메모 보기 ›</Text></Pressable></View>
-            <Text style={st.yB}>{stock.memo}</Text>
-            <Text keepAll style={st.yP}>{stock.memo_text}</Text>
-          </View>
-        ) : null}
         {chk.length ? (
           <View style={{ marginBottom: 12 }}>
             <View style={st.chkH}>
@@ -97,6 +92,10 @@ export function AppLabResult({ stock, vars, groups, disclaimer, onBack, onOpenMe
             ))}
           </View>
         ) : null}
+        <View style={st.ymemo}>
+          <View style={st.yH}><Text style={st.yHT}>내 메모와 연결</Text><Pressable onPress={() => onMemo(memo?.id)} accessibilityRole="link" hitSlop={8}><Text style={[st.yHT, { fontWeight: '700', color: '#4A3800' }]}>{memo ? '원본 메모 보기 ›' : '메모 쓰기 ›'}</Text></Pressable></View>
+          <Text keepAll style={st.yP}>{memo ? `“${memo.title}” — 이번 실험은 시장 환경 경로예요. 메모에서 지켜보는 항목과 나눠서 보면 좋아요.` : `${stock.name}에 남긴 메모가 없어요. 실험에서 본 경로를 메모로 남겨 두면 관련 소식을 모아 드려요.`}</Text>
+        </View>
         <Text keepAll style={st.disc}>{disclaimer}</Text>
       </ScrollView>
       <View style={[st.bar, { paddingBottom: 26 + insets.bottom }]} pointerEvents="box-none">
@@ -145,7 +144,6 @@ const st = StyleSheet.create({
   ymemo: { backgroundColor: '#FCEAAA', borderRadius: 16, padding: 14, marginBottom: 12 },
   yH: { flexDirection: 'row', justifyContent: 'space-between' },
   yHT: { fontSize: 12.5, lineHeight: 18, color: '#6B5200' },
-  yB: { fontSize: 15, lineHeight: 21, fontWeight: '700', color: C.ink, marginTop: 6 },
   yP: { fontSize: 13, lineHeight: 21, color: '#3F3A2A', marginTop: 6 },
   chkH: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
   chkHT: { fontSize: 14, lineHeight: 20, fontWeight: '800', color: '#5B3BD1' },

@@ -6,6 +6,7 @@ import { mockLabDisclaimer, mockLabStocks, mockLabVars } from '@/ui/screens/stud
 import { AppLabResult } from '@/ui/screens/studio/app/LabResult';
 import { labResultGroups } from '@/ui/screens/studio/labParts';
 import { labStockFor, useLabStocks } from '@/ui/screens/studio/useLabRun';
+import { useLabMemo } from '@/ui/screens/studio/useLabMemo';
 import { useLabVars } from '@/ui/screens/studio/useLabVars';
 import { labWatchDraft, labWatchKey } from '@/ui/screens/studio/useLabWatch';
 import { useOpenMemoDraft } from '@/ui/screens/studio/reportView';
@@ -20,8 +21,9 @@ export default function StudioLabResultScreen() {
   const vars = useLabVars();
   const stocks = useLabStocks();
   const openDraft = useOpenMemoDraft();
-  if (Platform.OS === 'web') return <Redirect href="/" />;
   const item = made.find((m) => m.id === cur && m.kind === 'lab') ?? made.find((m) => m.kind === 'lab');
+  const memo = useLabMemo(item?.lab?.code ?? mockLabStocks[0].stock_code, true);
+  if (Platform.OS === 'web') return <Redirect href="/" />;
   const lab = item?.lab ?? { code: mockLabStocks[0].stock_code, dirs: mockLabVars.map((v) => v.def) };
   const stock = labStockFor(stocks, lab);
   return (
@@ -34,7 +36,8 @@ export default function StudioLabResultScreen() {
       isAdded={(i) => !!lab.added?.[labWatchKey(lab.code, i)]}
       onWatch={(check, why, i) => openDraft({ code: lab.code, name: stock.name, ...labWatchDraft({ check, why }, item?.title ?? '투자 실험'),
         itemId: item?.server ? item.id : undefined, key: labWatchKey(lab.code, i) })}
-      onOpenMemo={() => router.push({ pathname: '/stocks/[code]', params: { code: stock.stock_code } })}
+      memo={memo}
+      onMemo={(id) => (id ? router.push({ pathname: '/memo/[id]', params: { id } }) : router.push({ pathname: '/memo/new', params: { code: lab.code, name: stock.name } }))}
       onAgain={() => {
         setLab({ code: lab.code, dirs: lab.dirs });
         /* 실험실이 아래에 열려 있으면 그리로(원본 popPg), 없으면 실험실로 바꿔 열기 */
