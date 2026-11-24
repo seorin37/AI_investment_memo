@@ -48,12 +48,12 @@ export function Grp({ children, style }: { children: React.ReactNode; style?: St
   return <View style={[pt.grp, style]}>{children}</View>;
 }
 
-/* .it 최소 52 · 좌우 16 · 15px · 아래 선 #F1F2F4 (마지막 줄 없음) · .tw 위아래 12 · .v 13 ink3 + › */
+/* .it 최소 52 · 좌우 16 · 15px · 아래 선 #F1F2F4 (마지막 줄 없음) · .tw 위아래 12 · 높이 62 · .v 13 ink3 + › */
 export function Item({ title, sub, value, red, last, two, onPress, right, label }: { title: string; sub?: string; value?: string; red?: boolean; last?: boolean; two?: boolean; onPress?: () => void; right?: React.ReactNode; label?: string }) {
   const body = (
     <>
       <View style={pt.itMain}>
-        <Text style={[pt.itT, two && { fontWeight: '500' }, red && { color: MC.red }]}>{title}</Text>
+        <Text style={[pt.itT, two && pt.itT2, red && { color: MC.red }]}>{title}</Text>
         {sub ? <Text keepAll style={pt.itS}>{sub}</Text> : null}
       </View>
       {right ?? (
@@ -206,11 +206,13 @@ export const pt = StyleSheet.create({
   lbT: { fontSize: 12.5, lineHeight: 18, color: MC.ink3 },
   grp: { backgroundColor: '#FFFFFF', borderRadius: 18, overflow: 'hidden' },
   it: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 52, paddingHorizontal: 16 },
-  tw: { paddingVertical: 12 },
+  /* 62 = 12 + 18 + 2 + 17 + 12 + 선 1 (마지막 줄도 62) */
+  tw: { paddingVertical: 12, minHeight: 62 },
   itLine: { borderBottomWidth: 1, borderBottomColor: '#F1F2F4' },
   itMain: { flex: 1, minWidth: 0 },
   itT: { fontSize: 15, lineHeight: 22, color: MC.ink },
-  itS: { fontSize: 12, lineHeight: 17.4, color: MC.ink3, marginTop: 2 },
+  itT2: { lineHeight: 18, fontWeight: '500' },
+  itS: { fontSize: 12, lineHeight: 17, color: MC.ink3, marginTop: 2 },
   v: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 4 },
   vT: { fontSize: 13, lineHeight: 19, color: MC.ink3 },
   sh: { paddingHorizontal: 20, paddingBottom: 12 },

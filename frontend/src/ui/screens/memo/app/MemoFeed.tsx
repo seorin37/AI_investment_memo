@@ -170,7 +170,7 @@ function SkBar({ w, h }: { w: number; h: number }) {
   return <View style={{ width: w, maxWidth: '100%', height: h, borderRadius: 6, backgroundColor: '#E2E5EA' }} />;
 }
 
-/** 소식 카드 — 메모 상세 AI 탭 · 업데이트 탭(⑥)이 같이 씀 (원본 .uc: 라운드 18 · 안쪽 14·16 · 아래 10 · 종류별 바탕) */
+/** 소식 카드 — 메모 상세 AI 탭 (원본 .uc: 라운드 18 · 안쪽 14·16 · 아래 10 · 종류별 바탕) */
 export function FeedCard({ f, ver, open, onToggle, onOpenSource, onOpenEvidence }: { f: MemoFeedItem; ver?: MemoVersion; open: boolean; onToggle: () => void; onOpenSource?: (f: MemoFeedItem) => void; onOpenEvidence?: (f: MemoFeedItem) => void }) {
   const [bg, ic] = FK[f.kind];
   const [cite, setCite] = useState(false);
@@ -261,7 +261,7 @@ export function FeedCard({ f, ver, open, onToggle, onOpenSource, onOpenEvidence 
 }
 
 /* 공시 원문에서 밑줄 칠 부분을 나눔 */
-function splitMark(q: string, mark?: string) {
+export function splitMark(q: string, mark?: string) {
   if (!mark || !q.includes(mark)) return [{ t: q, mark: false }];
   const i = q.indexOf(mark);
   return [
@@ -302,7 +302,7 @@ function RevRow({ v, first, color, open, onToggle }: { v: MemoVersion; first: bo
 }
 
 /** 펼침 화살 돌기 (원본 .35s) */
-function Turn({ on, children }: { on: boolean; children: React.ReactNode }) {
+export function Turn({ on, children }: { on: boolean; children: React.ReactNode }) {
   const k = useMotionK();
   const [v] = useState(() => new Animated.Value(on ? 1 : 0));
   useEffect(() => {

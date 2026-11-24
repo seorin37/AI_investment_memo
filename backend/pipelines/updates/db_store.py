@@ -35,7 +35,8 @@ log = logging.getLogger(__name__)
 
 TEST_HOSTS = ("127.0.0.1", "localhost")
 TEST_PORT = 5433
-SHARED_TARGETS = {("192.168.0.105", 15432, "memos")}          # 공용 DB (host, port, db). --allow-shared-write일 때만
+# 공용 DB (host, port, db). --allow-shared-write일 때만. 2026-11-24 강사님 서버로 이전 (옛 192.168.0.105:15432는 백업용이라 쓰기 금지)
+SHARED_TARGETS = {("220.121.144.76", 25432, "memos")}
 _CHUNKS = re.compile(r"^\[청크 ([\d,]+)\]\s*")
 
 

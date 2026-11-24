@@ -77,6 +77,8 @@ export function healthScore(key: keyof CompanyHealth, v: number | null): number 
   return Math.max(0.3, Math.min(1, f[key](v)));
 }
 
+export const FINANCIAL_HEALTH_NOTE = '금융회사는 예금이 부채로 잡혀 부채비율이 높게 나와요.';
+
 /* ---------- 용어 설명 (원본 앱 TERMS: 풀이와 계산식만 · 좋다·나쁘다 판단 없음) ---------- */
 export type TermKey = 'per' | 'pbr' | 'eps' | 'bps' | 'mc' | 'sh' | 'debt' | 'cur' | 'quick' | 'icr' | 'ret' | 'opm' | 'npm' | 'roe';
 export const TERM_TIP = '업종마다 보통 수준이 달라서, 같은 업종끼리 비교하는 게 좋아요. 이 값만으로 좋다·나쁘다를 판단하지 않아요.';

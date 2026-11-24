@@ -1,8 +1,9 @@
-import React from 'react';
-import { Pressable, StyleSheet, View, type TextStyle } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Animated, Pressable, StyleSheet, View, type TextStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/AppText';
 import { Logo } from '@/ui/icons/Icon';
+import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { Avatar } from '@/ui/shared/Avatar';
 import { AppIconButton } from '@/ui/shared/IconButton';
 import { appColor, ft } from '@/ui/theme';
@@ -30,7 +31,7 @@ const TAB_TITLE: TextStyle = { ...ft(21), fontWeight: '800', color: appColor.ink
 const SPEC: Record<TopBarPreset, Spec> = {
   home: { h: 60, padL: 18, padR: 12, bg: appColor.bg, btn: 42, btnGap: 2, avatarGap: 6, logo: true },
   start: { h: 56, padL: 18, padR: 10, bg: appColor.bg, btn: 40, btnGap: 2, avatarGap: 6, logo: true },
-  updates: { h: 56, padL: 18, padR: 10, bg: appColor.bg, btn: 42, btnGap: 0, avatarGap: 4, title: TAB_TITLE },
+  updates: { h: 60, padL: 18, padR: 12, bg: appColor.bg, btn: 40, btnGap: 2, avatarGap: 6, title: TAB_TITLE },
   stocks: { h: 60, padL: 18, padR: 12, bg: appColor.bg, btn: 40, btnGap: 2, avatarGap: 6, title: TAB_TITLE },
   journal: { h: 60, padL: 18, padR: 12, bg: appColor.bg, btn: 40, btnGap: 6, avatarGap: 6, title: TAB_TITLE },
   studio: { h: 56, padL: 18, padR: 10, bg: appColor.bg, btn: 42, btnGap: 0, avatarGap: 6, title: TAB_TITLE },
@@ -50,7 +51,7 @@ export function TopBar({ preset, title, onBack, actions = [], avatar, showLine =
   const insets = useSafeAreaInsets();
   return (
     <View style={{ paddingTop: insets.top, backgroundColor: s.bg }}>
-      <View style={[st.row, { height: s.h, paddingLeft: s.padL, paddingRight: s.padR, backgroundColor: s.bg }, showLine && st.line]}>
+      <View style={[st.row, { height: s.h, paddingLeft: s.padL, paddingRight: s.padR, backgroundColor: s.bg }]}>
         {s.back ? <AppIconButton label="뒤로" size={s.back} icon={s.backIcon} iconSize={22} color={appColor.ink} onPress={onBack} /> : null}
         {s.logo ? (
           <View style={st.flex}>
@@ -73,14 +74,27 @@ export function TopBar({ preset, title, onBack, actions = [], avatar, showLine =
             <Avatar name={avatar.name} photoUrl={avatar.photoUrl} size={32} variant="app" />
           </Pressable>
         ) : null}
+        <BarLine on={showLine} />
       </View>
     </View>
   );
+}
+
+/** 아래 선: 0.25초 페이드 */
+function BarLine({ on }: { on: boolean }) {
+  const k = useMotionK();
+  const [v] = useState(() => new Animated.Value(on ? 1 : 0));
+  useEffect(() => {
+    const a = Animated.timing(v, { toValue: on ? 1 : 0, duration: 250 * k, useNativeDriver: NATIVE });
+    a.start();
+    return () => a.stop();
+  }, [on, v, k]);
+  return <Animated.View pointerEvents="none" style={[st.line, { opacity: v }]} />;
 }
 
 const st = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   flex: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' },
   shrink: { flexShrink: 1 },
-  line: { borderBottomWidth: 1, borderBottomColor: appColor.line },
+  line: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 1, backgroundColor: appColor.line },
 });

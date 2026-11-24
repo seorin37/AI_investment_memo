@@ -470,8 +470,8 @@ const st = StyleSheet.create({
   nr: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#EEF0F3' },
   nrT: { width: 38, ...ft(12.5), color: appColor.ink3, paddingTop: 2 },
   nrMid: { flex: 1, minWidth: 0 },
-  nrB: { ...ft(14.5), fontWeight: '600', color: appColor.ink },
-  nrS: { ...ft(12), color: appColor.ink3 },
+  nrB: { fontSize: 14.5, lineHeight: 18.42, fontWeight: '600', color: appColor.ink },
+  nrS: { ...ft(12), color: appColor.ink3, marginTop: 4 },
   nrAr: { marginLeft: 'auto', ...ft(14.5), color: appColor.ink2 },
   /* 체크리스트 */
   pbar: { height: 6, borderRadius: 3, backgroundColor: '#EEF0F3', overflow: 'hidden', marginTop: -4, marginBottom: 10 },

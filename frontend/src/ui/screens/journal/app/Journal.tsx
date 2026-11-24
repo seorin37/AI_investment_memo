@@ -476,13 +476,14 @@ function JRow({ j, q, first, selV, selecting, selected, hl, onPress, onLongPress
           <Text style={st.rT} numberOfLines={1}>
             {hit(appTitle(j), st.rT)}
           </Text>
-          <Text style={st.rS} numberOfLines={1}>
-            {j.date}
-            <Text style={st.rP}>
-              {'  '}
+          <View style={st.rSub}>
+            <Text style={st.rS} numberOfLines={1}>
+              {j.date}
+            </Text>
+            <Text style={[st.rP, st.rPv]} numberOfLines={1}>
               {pv ? hit(pv, st.rP) : '추가 텍스트 없음'}
             </Text>
-          </Text>
+          </View>
         </Animated.View>
       </Animated.View>
     </Pressable>
@@ -659,7 +660,9 @@ const st = StyleSheet.create({
   ckOn: { backgroundColor: appColor.accent, borderColor: appColor.accent },
   tx: { flex: 1, minWidth: 0 },
   rT: { ...ft(16), fontWeight: '800', color: appColor.ink },
-  rS: { ...ft(13.5), color: appColor.ink, marginTop: 3 },
+  rSub: { flexDirection: 'row', alignItems: 'center', marginTop: 3 },
+  rS: { ...ft(13.5), color: appColor.ink, flexShrink: 0 },
+  rPv: { flex: 1, minWidth: 0, marginLeft: 6 },
   rP: { ...ft(13.5), color: appColor.ink3 },
   mark: { color: A2, fontWeight: '800' },
   empty: { alignItems: 'center', paddingTop: 70, paddingHorizontal: 30 },

@@ -628,7 +628,7 @@ class ReadOnlyGuardTest(unittest.TestCase):
         from types import SimpleNamespace
 
         from pipelines.updates.db_store import DbCardWriter, DbItemStateStore, NotTestDatabase, finish
-        shared = SimpleNamespace(info=SimpleNamespace(host="192.168.0.105", port=15432, dbname="memos"))
+        shared = SimpleNamespace(info=SimpleNamespace(host="220.121.144.76", port=25432, dbname="memos"))
         for make in (DbCardWriter, DbItemStateStore, finish):
             with self.assertRaises(NotTestDatabase):
                 make(shared)
@@ -638,12 +638,13 @@ class ReadOnlyGuardTest(unittest.TestCase):
         cleanup = (self.PKG / self.CLEANUP).read_text(encoding="utf-8")
         self.assertIn("check_test_target(dsn, shared)", cleanup)
         self.assertIn("details->>'run_id' = %(run)s", cleanup)          # 그 실행의 카드만 지운다
-        shared_db = SimpleNamespace(info=SimpleNamespace(host="192.168.0.105", port=15432, dbname="memos"))
+        shared_db = SimpleNamespace(info=SimpleNamespace(host="220.121.144.76", port=25432, dbname="memos"))
         self.assertEqual(DbCardWriter(shared_db, "run_x", allow_shared=True).manifest["target"],
-                         "192.168.0.105:15432/memos")                   # 플래그가 있으면 공용 DB 연결을 받는다
-        with self.assertRaises(NotTestDatabase):
-            DbCardWriter(SimpleNamespace(info=SimpleNamespace(host="10.0.0.9", port=15432, dbname="memos")), "r",
-                         allow_shared=True)                             # 허용 목록에 없는 DB는 플래그가 있어도 안 된다
+                         "220.121.144.76:25432/memos")                  # 플래그가 있으면 공용 DB 연결을 받는다
+        for host, port in (("10.0.0.9", 25432), ("192.168.0.105", 15432)):   # 허용 목록에 없는 DB(옛 공용 DB 포함)는 플래그가 있어도 안 된다
+            with self.assertRaises(NotTestDatabase):
+                DbCardWriter(SimpleNamespace(info=SimpleNamespace(host=host, port=port, dbname="memos")), "r",
+                             allow_shared=True)
 
     def test_experiment_uses_read_only_connection(self):
         text = (self.PKG / "experiment.py").read_text(encoding="utf-8")
