@@ -48,3 +48,6 @@ data/news_raw/
 # 로컬 UI 비교 캡처·로그인 세션 (커밋 금지)
 .auth/
 compare/
+
+# AI 오디오 시험 결과·TTS 캐시 (음성 파일이 커서 커밋하지 않는다)
+results/studio_audio/
