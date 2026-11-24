@@ -14,7 +14,8 @@ import pytest
 from app.studio_audio.collect import card_window, day_label, period_range
 from app.studio_audio.episode import NoUpdatesError, estimate_starts, flatten, text_hash, to_content, write_script
 from app.studio_audio.fallback import fallback, josa
-from app.studio_audio.prompt import FEWSHOT_ANSWER, FEWSHOT_BRIEF, build_user, config, messages, target_chars
+from app.studio_audio.prompt import (FEWSHOT_ANSWER, FEWSHOT_BRIEF, FEWSHOT_RECAP, build_user, config, messages,
+                                     opening_topic, target_chars)
 from app.studio_audio.schema import AUDIO_SCHEMA, banned_hits, check
 from app.studio_audio.speech import native, sino, to_speech
 from app.studio_audio.tts import FakeTTS, FishTTS, TTSError, read_wav, synthesize
@@ -76,7 +77,7 @@ def test_pronounce_words_before_numbers():
 def test_schema_is_strict_and_prompt_has_rules():
     s = AUDIO_SCHEMA["schema"]
     assert AUDIO_SCHEMA["strict"] and s["additionalProperties"] is False
-    assert set(s["properties"]["segments"]["items"]["properties"]["kind"]["enum"]) == {"opening", "market", "stock", "no_news", "closing"}
+    assert set(s["properties"]["segments"]["items"]["properties"]["kind"]["enum"]) == {"opening", "market", "stock", "no_news", "recap", "closing"}
     msgs = messages(BRIEF, fix=["숫자가 틀렸어요"])
     assert msgs[0]["role"] == "system" and "쓰면 안 되는 말" in msgs[0]["content"] and "refs" in msgs[0]["content"]
     assert msgs[-1]["content"].endswith("- 숫자가 틀렸어요")
@@ -139,7 +140,7 @@ def test_check_structure_errors():
     for line in a["segments"][2]["lines"]:
         line["refs"] = [r for r in line["refs"] if r != "U2"]
     assert any("U2" in e for e in check(a, BRIEF))
-    a = answer(**{"4_1_text": "다음 방송에서 만나요."})
+    a = answer(**{"4_3_text": "다음 방송에서 만나요."})
     assert any("판단" in e for e in check(a, BRIEF))
     a = copy.deepcopy(GOOD)
     for line in a["segments"][2]["lines"]:
@@ -242,7 +243,7 @@ def test_read_wav_tolerates_streaming_header():
 
 def test_synthesize_timings(tmp_path):
     lines = flatten(GOOD)
-    cfg = {"lead": 0.3, "gap_line": 0.3, "gap_segment": 0.7}
+    cfg = {"lead": 0.3, "gap_line": 0.3, "gap_segment": 0.7}           # short_chars 없음 → 짧은 반응도 gap_line
     res = synthesize(lines, FakeTTS(cps=10, rate=8000), cfg, tmp_path)
     starts = res["starts"]
     assert starts[0] == 0.3 and starts == sorted(starts) and len(starts) == len(lines)
@@ -279,7 +280,7 @@ def test_fish_request_cache_and_errors(tmp_path, monkeypatch):
     assert len(sent) == 1 and tts.calls == {"api": 1, "cached": 1, "chars": 5}
     url, headers, body = sent[0]
     assert url.endswith("/v1/tts") and headers["model"] == cfg["model"] and headers["Authorization"] == "Bearer k"
-    assert body["reference_id"] == "voice-b" and body["format"] == "wav" and body["prosody"]["speed"] == 1.0
+    assert body["reference_id"] == "voice-b" and body["format"] == "wav" and body["prosody"]["speed"] == cfg["speed"]
 
     calls = []
 
@@ -344,16 +345,16 @@ def test_market_off_and_single_day():
     assert "[증시]" not in build_user(b) and "하루" in build_user(b)
     script = fallback(b)
     assert "market" not in [g["kind"] for g in script["segments"]]
-    assert script["segments"][0]["lines"][0]["text"].startswith("1월 11일,")
+    assert script["segments"][0]["lines"][1]["text"].startswith("1월 11일,")
     assert any("market" in e for e in check(GOOD, b))         # 증시를 껐는데 market 구간을 쓰면 걸린다
 
 
 # ───────── 감정·말투 태그 (S2 [대괄호] 지시)
 def test_tone_tags_go_to_tts_only():
     lines = flatten(GOOD)
-    assert [ln.tone for ln in lines][:4] == ["warm", "warm", "warm", "calm"]
+    assert [ln.tone for ln in lines][:4] == ["bright", "warm", "bright", "warm"]
     first = lines[0]
-    assert first.tag == config()["tts"]["tones"]["warm"] and first.tts_text.startswith("[warm")
+    assert first.tag == config()["tts"]["tones"]["bright"] and first.tts_text.startswith("[bright")
     assert "[" not in first.text and "[" not in first.speech            # 화면 대본·읽기 문장에는 태그가 없다
     off = flatten(GOOD, emotion=False)
     assert all(ln.tag == "" and ln.tts_text == ln.speech for ln in off)
@@ -381,4 +382,107 @@ def test_fish_receives_tag(tmp_path):
         return _Resp(200, _wav(0.2))
     cfg = {**config()["tts"], "voices": {"A": {"id": "a"}, "B": {"id": "b"}}}
     synthesize(flatten(GOOD)[:2], FishTTS(cfg, tmp_path, api_key="k", post=post), cfg, tmp_path)
-    assert sent[0].startswith("[warm, friendly radio host tone] ") and "[" not in sent[0][1:].split("] ", 1)[1]
+    assert sent[0].startswith("[bright, upbeat radio host tone] ") and "[" not in sent[0][1:].split("] ", 1)[1]
+
+
+# ───────── audio-v6 메모스 라디오 티키타카
+def _a_share(script):
+    lines = [ln for g in script["segments"] for ln in g["lines"]]
+    return sum(len(ln["text"]) for ln in lines if ln["speaker"] == "A") / sum(len(ln["text"]) for ln in lines)
+
+
+def test_fewshot_shape_v6():
+    assert 0.2 <= _a_share(GOOD) <= 0.5
+    kinds = [g["kind"] for g in GOOD["segments"]]
+    assert "recap" not in kinds and len(GOOD["segments"][0]["lines"]) <= 6       # 소식 종목 1개라 recap 없음
+    assert all("cue" in ln and "tone" in ln for g in GOOD["segments"] for ln in g["lines"])
+    assert "[오늘의 오프닝 소재] 요일 이야기" in build_user(BRIEF) and "- 오늘: 1월 12일(월)" in build_user(BRIEF)
+
+
+def test_recap_needed_only_with_two_news_stocks():
+    with_recap = copy.deepcopy(GOOD)
+    with_recap["segments"].insert(-1, copy.deepcopy(FEWSHOT_RECAP))
+    assert any("recap" in e for e in check(with_recap, BRIEF))                   # 소식 종목 1개인데 recap
+    from pipelines.studio_audio.smoke import sample_brief
+    b = sample_brief()                                                           # 소식 종목 2개
+    rules = fallback(b)
+    assert "recap" in [g["kind"] for g in rules["segments"]] and check(rules, b) == []
+    no_recap = copy.deepcopy(rules)
+    no_recap["segments"] = [g for g in no_recap["segments"] if g["kind"] != "recap"]
+    assert any("recap" in e for e in check(no_recap, b))
+
+
+def test_recap_numbers_are_checked():
+    from pipelines.studio_audio.smoke import sample_brief
+    b = sample_brief()
+    rules = fallback(b)
+    recap = next(g for g in rules["segments"] if g["kind"] == "recap")
+    recap["lines"][0]["text"] = "오늘 정리해 보면, 샘플바이오는 2,500억 원 유상증자가 있었어요."
+    assert any("입력에 없는 숫자" in e for e in check(rules, b))
+
+
+@pytest.mark.parametrize("path, value, word", [
+    ("2_3_tone", "bright", "bright"),                                  # bright는 opening·closing만
+    ("1_2_tone", "surprised", "surprised"),                            # 지수 등락에 surprised
+    ("2_16_tone", "surprised", "surprised"),                           # 종가 줄에 surprised
+    ("2_1_cue", "light_laugh", "light_laugh"),                         # refs 있는 줄에 웃음
+    ("0_1_text", "오늘 날씨가 참 좋아요.", "날씨"),
+    ("0_1_text", "비가 와서 그런지 조용하네요.", "날씨"),
+    ("2_11_text", "쉽게 말하면 거품 같은 거예요.", "비유"),
+    ("2_1_cue", "giggle", "cue"),
+])
+def test_v6_line_checks(path, value, word):
+    assert any(word in e for e in check(answer(**{path: value}), BRIEF))
+
+
+def test_weather_word_inside_other_words_is_ok():
+    a = answer(**{"2_11_text": "쉽게 말하면 공장 설비가 늘어나는 데 돈을 쓰는 거예요."})
+    assert check(a, BRIEF) == []
+    assert banned_hits("예시증권은 배당이 늘 수 있다고 전망했어요.") == [] and banned_hits("그 회사 망했어요.") != []
+
+
+def test_opening_line_limit_and_a_share():
+    a = copy.deepcopy(GOOD)
+    a["segments"][0]["lines"] += copy.deepcopy(a["segments"][0]["lines"][2:4])   # 8줄
+    assert any("opening" in e and "8줄" in e for e in check(a, BRIEF))
+    a = copy.deepcopy(GOOD)
+    for g in a["segments"]:                                                      # A가 거의 말하지 않게
+        for ln in g["lines"]:
+            if ln["speaker"] == "A":
+                ln["text"] = "네."
+    assert any("진행자 A" in e for e in check(a, BRIEF))
+
+
+def test_opening_topic_changes_per_broadcast():
+    b1, b2 = copy.deepcopy(BRIEF), copy.deepcopy(BRIEF)
+    b1.topic = b2.topic = ""
+    topics = config()["opening_topics"]
+    seen = set()
+    for minute in range(30):
+        b1.made_at = f"2026-11-24T09:{minute:02d}:00+09:00"
+        seen.add(opening_topic(b1))
+    assert seen <= set(topics) and len(seen) >= 3                                # 같은 날도 만든 시각에 따라 바뀐다
+    b2.made_at = b1.made_at
+    assert opening_topic(b1) == opening_topic(b2)                                # 같은 브리프는 같은 소재
+    assert opening_topic(BRIEF) == BRIEF.topic
+
+
+def test_cue_tag_follows_tone_tag():
+    lines = flatten(GOOD)
+    laugh = next(ln for ln in lines if ln.cue == "light_laugh")
+    tts = config()["tts"]
+    assert laugh.tts_text == f"{tts['tones'][laugh.tone]} {tts['cues']['light_laugh']} {laugh.speech}"
+    assert all(ln.tag == tts["tones"][ln.tone] for ln in lines if not ln.cue)
+
+
+def test_short_reaction_gap(tmp_path):
+    lines = flatten(GOOD)
+    cfg = {"lead": 0.3, "gap_line": 0.25, "gap_short": 0.15, "gap_segment": 0.7, "short_chars": 10}
+    res = synthesize(lines, FakeTTS(cps=10, rate=8000), cfg, tmp_path)
+    dur = lambda ln: max(0.4, len(ln.tts_text) / 10)
+    gaps = {}
+    for i in range(1, len(lines)):
+        if lines[i].seg == lines[i - 1].seg:
+            short = len(lines[i].text) <= 10 or len(lines[i - 1].text) <= 10
+            gaps.setdefault(short, set()).add(round(res["starts"][i] - res["starts"][i - 1] - dur(lines[i - 1]), 2))
+    assert gaps[True] == {0.15} and gaps[False] == {0.25}

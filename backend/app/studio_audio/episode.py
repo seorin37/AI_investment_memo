@@ -36,12 +36,25 @@ class Line:
     speech: str         # 읽기 문장 (숫자 → 한글)
     refs: list[str]
     tone: str = "calm"
-    tag: str = ""       # 감정 태그 ([calm, clear news anchor tone]). 켜져 있을 때만
+    tag: str = ""       # 말투 태그 + 효과 태그 ([calm, …] [light laugh]). 켜져 있을 때만
+    cue: str = ""       # "" | light_laugh | short_pause
 
     @property
     def tts_text(self) -> str:
-        """Fish Audio로 보내는 문장 = 태그 + 읽기 문장."""
+        """Fish Audio로 보내는 문장 = tone 태그 + cue 태그 + 읽기 문장."""
         return f"{self.tag} {self.speech}" if self.tag else self.speech
+
+
+def gap_before(prev: Line | None, ln: Line, tts: dict) -> float:
+    """줄 앞 쉼: 구간이 바뀌면 gap_segment, 앞이나 지금 줄이 짧은 반응(short_chars 이하)이면 gap_short, 아니면 gap_line."""
+    if prev is None:
+        return 0.0
+    if ln.seg != prev.seg:
+        return float(tts.get("gap_segment", 0.7))
+    short = int(tts.get("short_chars", 0))
+    if short and (len(prev.text) <= short or len(ln.text) <= short):
+        return float(tts.get("gap_short", tts.get("gap_line", 0.3)))
+    return float(tts.get("gap_line", 0.3))
 
 
 def write_script(brief: Brief, llm: LLMCall | None, cfg: dict | None = None) -> tuple[dict, dict]:
@@ -75,23 +88,25 @@ def write_script(brief: Brief, llm: LLMCall | None, cfg: dict | None = None) -> 
     return script, meta
 
 
-DEFAULT_TONE = {"opening": "warm", "market": "calm", "stock": "calm", "no_news": "calm", "closing": "gentle"}
+DEFAULT_TONE = {"opening": "warm", "market": "calm", "stock": "calm", "no_news": "calm", "recap": "calm", "closing": "gentle"}
 
 
 def flatten(script: dict, cfg: dict | None = None, emotion: bool | None = None) -> list[Line]:
-    """emotion: 감정 태그를 붙일지 (None이면 설정 tts.emotion). tone이 없는 예전 대본은 구간별 기본 톤."""
+    """emotion: 말투·효과 태그를 붙일지 (None이면 설정 tts.emotion). tone이 없는 예전 대본은 구간별 기본 톤, cue는 없음."""
     cfg = cfg or config()
     words = cfg.get("pronounce") or {}
     tts = cfg.get("tts") or {}
     on = tts.get("emotion", False) if emotion is None else emotion
-    tags = tts.get("tones") or {}
+    tones, cues = tts.get("tones") or {}, tts.get("cues") or {}
     out = []
     for i, g in enumerate(script["segments"]):
         for line in g["lines"]:
             text = " ".join(str(line["text"]).split())
             tone = line.get("tone") or DEFAULT_TONE.get(g["kind"], "calm")
+            cue = line.get("cue") or ""
+            tag = " ".join(x for x in (tones.get(tone, ""), cues.get(cue, "")) if x) if on else ""
             out.append(Line(i, g["kind"], g.get("stock_code") or "", line["speaker"], text, to_speech(text, words),
-                            list(line.get("refs") or []), tone, tags.get(tone, "") if on else ""))
+                            list(line.get("refs") or []), tone, tag, cue))
     return out
 
 
@@ -112,6 +127,8 @@ def chapter_label(brief: Brief, kind: str, code: str) -> str:
         return st.name if st else code
     if kind == "no_news":
         return " · ".join(s.name for s in brief.quiet_stocks) + " · 새 소식 없음"
+    if kind == "recap":
+        return "오늘 정리"
     return "마무리"
 
 
@@ -179,11 +196,10 @@ def estimate_starts(lines: list[Line], cfg: dict | None = None) -> tuple[list[fl
     tts = cfg.get("tts") or {}
     t, starts, prev = float(tts.get("lead", 0.3)), [], None
     for ln in lines:
-        if prev is not None:
-            t += float(tts.get("gap_segment", 0.7) if ln.seg != prev else tts.get("gap_line", 0.3))
+        t += gap_before(prev, ln, tts)
         starts.append(t)
         t += len(ln.speech) / cpm * 60
-        prev = ln.seg
+        prev = ln
     return starts, t
 
 

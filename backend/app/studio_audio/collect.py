@@ -90,6 +90,7 @@ class Brief:
     made_at: str
     stocks: list[StockIn]
     market: list[MarketRow]
+    topic: str = ""             # 오프닝 수다 소재. 비면 configs opening_topics에서 made_at으로 고른다 (prompt.opening_topic)
 
     def to_dict(self) -> dict:
         return asdict(self)

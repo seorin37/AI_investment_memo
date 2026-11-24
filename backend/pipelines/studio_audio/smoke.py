@@ -95,6 +95,8 @@ def main(argv: list[str] | None = None) -> int:
     out = (Path(args.out_dir) if args.out_dir else REPO_ROOT / "results/studio_audio") / f"smoke_{now:%Y%m%d_%H%M%S}"
     out.mkdir(parents=True)
     brief = sample_brief() if args.brief == "sample" else FEWSHOT_BRIEF
+    if args.brief == "sample" and not args.script:              # 만든 시각 = 지금 → 오프닝 소재가 방송마다 바뀐다
+        brief.made_at = now.isoformat(timespec="seconds")
     (out / "brief.txt").write_text(build_user(brief, cfg) + "\n", encoding="utf-8")
 
     if args.script:                                             # 이미 만든 대본으로 음성만 (LLM을 다시 부르면 대본이 바뀐다)

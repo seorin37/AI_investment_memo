@@ -47,7 +47,8 @@ def script_md(content: dict, lines: list[dict]) -> str:
         if t in chapters:
             out += ["", f"## {chapters.pop(t)} ({t // 60}:{t % 60:02d})"]
         refs = f"  `{', '.join(ln['refs'])}`" if ln["refs"] else ""
-        out.append(f"- **{sp}** `{ln.get('tone', '')}` {text}{refs}")
+        cue = f" `{ln['cue']}`" if ln.get("cue") else ""
+        out.append(f"- **{sp}** `{ln.get('tone', '')}`{cue} {text}{refs}")
         if ln["speech"] != text or ln.get("tag"):
             out.append(f"  - 읽기: {(ln.get('tag') + ' ') if ln.get('tag') else ''}{ln['speech']}")
     out += ["", "## 출처"] + [f"- [{s['kind']}] {s['text']} {('· ' + s['memo']) if s['memo'] else ''}" for s in content["sources"]]

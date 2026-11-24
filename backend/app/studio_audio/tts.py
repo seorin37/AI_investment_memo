@@ -202,17 +202,18 @@ def synthesize(lines: list[Line], synth: Synth, cfg: dict, out_dir: Path,
     base = parts[0]
     if any((p.rate, p.channels, p.width) != (base.rate, base.channels, base.width) for p in parts):
         raise TTSError("줄마다 오디오 형식이 달라요 (sample_rate 설정 확인)")
+    from .episode import gap_before
     chunks, starts = [silence(float(cfg.get("lead", 0.3)), base)], []
     t, prev = float(cfg.get("lead", 0.3)), None
     for ln, p in zip(lines, parts):
-        if prev is not None:
-            gap = float(cfg.get("gap_segment", 0.7) if ln.seg != prev else cfg.get("gap_line", 0.3))
+        gap = gap_before(prev, ln, cfg)
+        if gap:
             chunks.append(silence(gap, base))
             t += gap
         starts.append(round(t, 2))
         chunks.append(p.frames)
         t += p.seconds
-        prev = ln.seg
+        prev = ln
     chunks.append(silence(0.5, base))
     full = Pcm(base.rate, base.channels, base.width, b"".join(chunks))
     out_dir.mkdir(parents=True, exist_ok=True)

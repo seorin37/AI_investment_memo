@@ -12,8 +12,9 @@ from functools import lru_cache
 from .collect import Brief
 from .prompt import build_user, config, target_chars
 
-KINDS = ["opening", "market", "stock", "no_news", "closing"]
-TONES = ["warm", "calm", "curious", "serious", "gentle"]          # configs/studio_audio.yaml tts.tones 키와 같게
+KINDS = ["opening", "market", "stock", "no_news", "recap", "closing"]
+TONES = ["bright", "warm", "calm", "curious", "surprised", "serious", "gentle"]   # configs/studio_audio.yaml tts.tones 키와 같게
+CUES = ["", "light_laugh", "short_pause"]                                        # "" 말고는 tts.cues 키와 같게
 AUDIO_SCHEMA = {
     "name": "audio_script",
     "strict": True,
@@ -37,12 +38,13 @@ AUDIO_SCHEMA = {
                             "items": {
                                 "type": "object",
                                 "additionalProperties": False,
-                                "required": ["speaker", "text", "refs", "tone"],
+                                "required": ["speaker", "text", "refs", "tone", "cue"],
                                 "properties": {
                                     "speaker": {"type": "string", "enum": ["A", "B"]},
                                     "text": {"type": "string"},
                                     "refs": {"type": "array", "items": {"type": "string"}},
                                     "tone": {"type": "string", "enum": TONES},
+                                    "cue": {"type": "string", "enum": CUES},
                                 },
                             },
                         },
@@ -62,7 +64,12 @@ EXTRA_BANNED = [
     (re.compile(r"급등|급락|폭등|폭락"), "급등·급락 표현"),
     (re.compile(r"장중"), "'장중' 표현 (종가 기준으로만 말해요)"),
     (re.compile(r"주가[^.?!]{0,12}(오를|올라갈|내릴|떨어질|상승할|하락할)"), "주가 방향 예측"),
+    (re.compile(r"속\s*빈|녹슨|거품|폭탄|대박|쪽박|(?<!전)망했"), "종목·회사를 평가하는 비유"),   # '전망했'은 빼기
 ]
+# 오프닝 수다에서도 날씨는 말하지 않는다 (실제 날씨를 모른다). '설비가'·'준비가'처럼 낱말 안의 '비가'는 빼려고 앞 글자를 본다
+WEATHER = re.compile(r"날씨|(?<![가-힣])비가|(?<![가-힣])눈이|맑|흐리|덥|춥|미세먼지")
+# surprised 말투를 쓰면 안 되는 줄: 주가·지수 오르내림
+PRICE_MOVE = re.compile(r"%|퍼센트|종가|올랐|내렸|떨어|상승|하락|높아|낮아")
 FACT_OK = re.compile(r"(자사주|자기주식|지분|주식)\s*(을|를)?\s*(매수|매도)")
 # 말투: 두 DJ 모두 해요체 (audio-v3). 합니다체가 섞이면 라디오가 아니라 뉴스 낭독처럼 들린다
 FORMAL = re.compile(r"(습니다|습니까|합니다|입니다|됩니다|십시오)(?=[\s.?!,]|$)")
@@ -151,12 +158,20 @@ def check(raw: dict, brief: Brief, cfg: dict | None = None) -> list[str]:
         errors.append("새 소식이 없는 종목이 있는데 no_news 구간이 없어요")
     if not brief.quiet_stocks and "no_news" in kinds:
         errors.append("새 소식이 없는 종목이 없는데 no_news 구간을 썼어요")
+    need_recap = len(brief.news_stocks) >= 2
+    if need_recap and "recap" not in kinds:
+        errors.append("새 소식이 있는 종목이 2개 이상이면 closing 앞에 recap 구간을 써 주세요")
+    if not need_recap and "recap" in kinds:
+        errors.append("새 소식이 있는 종목이 2개 미만이면 recap 구간을 쓰지 마세요")
+    for g in segs:
+        if g.get("kind") == "opening" and len(g.get("lines") or []) > int(s.get("opening_max_lines", 6)):
+            errors.append(f"opening이 {len(g['lines'])}줄이에요 ({s.get('opening_max_lines', 6)}줄 이내)")
 
     whole = _allowed_numbers([build_user(brief)])
     all_uids = {c.uid for st in brief.stocks for c in st.cards}
     cited: set[str] = set()
     run_speaker, run = "", 0
-    total = 0
+    total, a_chars = 0, 0
     for g in segs:
         kind, code, lines = g.get("kind"), g.get("stock_code") or "", g.get("lines") or []
         if not lines:
@@ -175,13 +190,26 @@ def check(raw: dict, brief: Brief, cfg: dict | None = None) -> list[str]:
         for line in lines:
             t = str(line.get("text") or "").strip()
             total += len(t)
+            if line.get("speaker") == "A":
+                a_chars += len(t)
             if not t:
                 errors.append(f"{kind} 구간에 빈 줄이 있어요")
                 continue
             if len(t) > s["line_max_chars"]:
                 errors.append(f"한 줄이 {len(t)}자로 길어요 ({s['line_max_chars']}자 이내): \"{t[:25]}…\"")
-            if line.get("tone") is not None and line.get("tone") not in TONES:
+            tone, cue = line.get("tone"), line.get("cue")
+            if tone is not None and tone not in TONES:
                 errors.append(f"tone은 {TONES} 중 하나여야 해요: \"{t[:20]}\"")
+            if cue is not None and cue not in CUES:
+                errors.append(f"cue는 {CUES} 중 하나여야 해요: \"{t[:20]}\"")
+            if tone == "bright" and kind not in ("opening", "closing"):
+                errors.append(f"bright 말투는 opening·closing에서만 써요: \"{t[:20]}\"")
+            if tone == "surprised" and (kind == "market" or PRICE_MOVE.search(t)):
+                errors.append(f"surprised 말투는 주가·지수 오르내림에 쓰지 않아요 (금액·규모를 되물을 때만): \"{t[:20]}\"")
+            if cue == "light_laugh" and line.get("refs"):
+                errors.append(f"업데이트를 전하는 줄(refs 있음)에는 light_laugh를 쓰지 않아요: \"{t[:20]}\"")
+            if WEATHER.search(t):
+                errors.append(f"날씨 이야기는 하지 않아요: \"{t[:30]}\"")
             sp = line.get("speaker")
             run, run_speaker = (run + 1, sp) if sp == run_speaker else (1, sp)
             if run > s["max_same_speaker"]:
@@ -204,6 +232,9 @@ def check(raw: dict, brief: Brief, cfg: dict | None = None) -> list[str]:
         last = str((segs[-1].get("lines") or [{}])[-1].get("text") or "")
         if "판단" not in last and "직접" not in last:
             errors.append("마지막 줄에 '판단은 메모와 원문을 직접 보고' 안내가 없어요")
+    lo, hi = s.get("host_a_share", [0.2, 0.5])
+    if total and not lo <= a_chars / total <= hi:
+        errors.append(f"진행자 A의 말이 전체의 {a_chars / total:.0%}예요 ({lo:.0%}~{hi:.0%}: A는 묻고 정리, 사실은 주로 B)")
     goal = target_chars(brief, cfg)
     if total > goal * s["over_ratio"]:
         errors.append(f"대본이 {total}자로 너무 길어요 (목표 약 {goal}자)")
