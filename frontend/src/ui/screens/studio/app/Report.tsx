@@ -199,7 +199,7 @@ const st = StyleSheet.create({
   sm: { width: 104, backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: 10 },
   qn: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   smN: { fontSize: 12, lineHeight: 17, fontWeight: '700', color: '#FFFFFF' },
-  smV: { fontSize: 18, lineHeight: 24, fontWeight: '800', marginTop: 6 },
+  smV: { fontSize: 16, lineHeight: 24, fontWeight: '400', marginTop: 6 },
   smS: { marginTop: 4, fontSize: 11, lineHeight: 15, color: '#C9C3D9' },
   one: { marginTop: 14, backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', borderRadius: 16, paddingTop: 14, paddingHorizontal: 14, paddingBottom: 12 },
   oneN: { fontSize: 14, lineHeight: 19, fontWeight: '700', color: '#FFFFFF', marginLeft: 2 },
