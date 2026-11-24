@@ -314,7 +314,7 @@ export function Sidebar(p: SidebarProps) {
         <View style={[st.divider, { width: z.sideInner }]} />
         <View style={[st.profile, { width: z.sideInner }]}>
           <Pressable onPress={p.onProfile} accessibilityRole="button" accessibilityLabel="내 프로필" style={st.profileBtn}>
-            <Avatar name={p.profile.name} photoUrl={p.profile.photoUrl} size={48} fontSize={20} variant="web" />
+            <Avatar name={p.profile.name} photoUrl={p.profile.photoUrl} size={z.avatar} fontSize={z.avatarText} variant="web" />
             <View style={st.profileText}>
               <Text style={[LABEL, z.menuText, { maxWidth: z.profileText }]} numberOfLines={1}>
                 {p.profile.name}
