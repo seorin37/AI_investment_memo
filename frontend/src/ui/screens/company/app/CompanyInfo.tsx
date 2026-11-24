@@ -28,7 +28,7 @@ const GCOL = ['#B9AED8', '#51C38B', '#E8CF7E'];
 const GTABS: { key: FinKey; label: string }[] = [
   { key: 'revenue', label: '매출' },
   { key: 'op', label: '영업이익' },
-  { key: 'net', label: '순이익' },
+  { key: 'net', label: '당기순이익' },
 ];
 /* 11.18 결정: 앱 수익성은 ROA 빼고 3개 */
 const PROF: { name: string; color: string; key: 'op_margin' | 'net_margin' | 'roe'; term: TermKey }[] = [
@@ -41,7 +41,7 @@ const PROF: { name: string; color: string; key: 'op_margin' | 'net_margin' | 'ro
  * 앱 기업정보 (원본 company.html 09.1 · 11.17 웹 통일판)
  * 머리 56 (뒤로 · 이름 18px → 요약 카드가 지나가면 이름 15px + 가격 12px 로 바뀜 · 스크롤하면 아래 선)
  * 요약 카드 · [메모 보드 | 기업정보] · 주가·거래량 (캔들 · 누른 채 훑기 · 1주/1달/3달/1년) · 시세·투자정보 (52주 막대 · 12칸 · ?)
- * 기업 개요 · 재무 [분기] · 성장성 (막대 + 전년 동기 대비 선 · 칸 누르기) · 수익성 (범례 켜고 끄기) · 기업 건전성 (레이더 + 목록) · 출처
+ * 기업 개요 · 실적 (막대 + 전년 같은 분기 대비 선 · 칸 누르기) · 수익성 (범례 켜고 끄기) · 기업 건전성 (레이더 + 목록) · 출처
  * 카드는 화면에 들어올 때 아래 14에서 올라오고 그때 차트가 그려짐. ? 를 누르면 용어 시트.
  */
 export function AppCompanyInfo(p: CompanyInfoProps & {
@@ -93,6 +93,8 @@ export function AppCompanyInfo(p: CompanyInfoProps & {
   const gkey = GTABS[gtab].key;
   const gv = shown.map((q) => q[gkey]);
   const gi = Math.min(gsel, gv.length - 1);
+  /* 비교한 분기 이름 (웹과 같게 '2025년 3분기 대비') */
+  const yoyLabel = all[all.length - shown.length + gi - 4]?.label ?? '전년 동기';
   const Y = yoyAt(all, gkey, all.length - 8 + gi);
   const termCtx = { p: pr, price: p.stock.price, last, health: p.health };
   const compact = y > sumH - 10;
@@ -184,7 +186,7 @@ export function AppCompanyInfo(p: CompanyInfoProps & {
               {(seen) => (
                 <View style={st.cd}>
                   <View style={st.h3row}>
-                    <Text style={st.h3}>시세 · 투자정보</Text>
+                    <Text style={st.h3}>시세정보 · 투자정보</Text>
                     <Text style={st.h3small}>{asOf} 종가 기준</Text>
                   </View>
                   <View style={st.rng}>
@@ -215,26 +217,12 @@ export function AppCompanyInfo(p: CompanyInfoProps & {
                 </View>
               )}
             </Section>
-            {/* 재무 머리 */}
-            <Section i={3} scrollY={y} vh={VH}>
-              {() => (
-                <View>
-                  <View style={st.fh}>
-                    <Text style={st.h2}>재무</Text>
-                    <View style={st.fq}>
-                      <Text style={st.fqT}>분기</Text>
-                    </View>
-                  </View>
-                  <Text style={st.fsrc}>금융감독원 DART 정기보고서(사업·반기·분기) 기준 · 연결</Text>
-                  {p.financial ? <Text style={st.finfo}>금융업은 재무 구조가 달라 매출·이익률·유동비율 같은 지표를 따로 보여 드리지 않아요. 값이 없는 칸은 — 로 보여 드려요</Text> : null}
-                </View>
-              )}
-            </Section>
-            {/* 성장성 */}
+            {p.financial ? <Text style={[st.finfo, { marginTop: 4 }]}>금융업은 재무 구조가 달라 매출·이익률·유동비율 같은 지표를 따로 보여 드리지 않아요. 값이 없는 칸은 — 로 보여 드려요</Text> : null}
+            {/* 실적 */}
             <Section i={4} scrollY={y} vh={VH}>
               {(seen) => (
                 <View style={st.cd}>
-                  <Text style={st.h3}>성장성</Text>
+                  <Text style={st.h3}>실적</Text>
                   <PillSeg
                     options={GTABS.map((g, i) => ({ key: String(i), label: g.label }))}
                     value={String(gtab)}
@@ -255,14 +243,14 @@ export function AppCompanyInfo(p: CompanyInfoProps & {
                     <CountTo key={`${gtab}-${gi}`} to={gv[gi]} run={seen} />
                     {Y.t === 'none' ? null : Y.t === 'pct' ? (
                       <Text style={[st.bigS, { color: Y.v >= 0 ? appColor.up : appColor.down }]}>
-                        전년 동기 대비 {Y.v >= 0 ? '+' : ''}
+                        {yoyLabel} 대비 {Y.v >= 0 ? '+' : ''}
                         {Y.v.toFixed(1)}%
                       </Text>
                     ) : (
-                      <Text style={[st.bigS, { color: Y.t === '흑자 전환' ? appColor.up : appColor.down }]}>전년 동기 대비 {Y.t}</Text>
+                      <Text style={[st.bigS, { color: Y.t === '흑자 전환' ? appColor.up : appColor.down }]}>{yoyLabel} 대비 {Y.t}</Text>
                     )}
                   </View>
-                  <Text style={st.cap}>{shown[gi].label} 기준 · 꺾은선 = 전년 같은 분기 대비 증감률</Text>
+                  <Text style={st.cap}>{shown[gi].label} 기준 · 연결재무제표 · 분기</Text>
                   <GrowthChart
                     all={all}
                     k={gkey}
@@ -331,14 +319,18 @@ export function AppCompanyInfo(p: CompanyInfoProps & {
                     {healthKeys.map((h, i) => (
                       <View key={h.k} style={[st.hli, i === healthKeys.length - 1 && { borderBottomWidth: 0 }]}>
                         <View style={st.kvL}>
-                          <Text style={[st.hliT, p.health[h.key] == null && st.hliOff]}>{h.k}</Text>
+                          <Text onPress={() => setTerm(h.term)} style={[st.hliT, p.health[h.key] == null && st.hliOff]}>{h.k}</Text>
                           <Q onPress={() => setTerm(h.term)} label={h.k} />
                         </View>
                         <Text style={[st.hliV, p.health[h.key] == null && st.hliOff]}>{healthVal(h.key, p.health[h.key])}</Text>
                       </View>
                     ))}
                   </View>
-                  <Text style={st.note}>{p.financial ? FINANCIAL_HEALTH_NOTE : '바깥쪽으로 갈수록 재무가 안정적이에요.'}</Text>
+                  <Text style={st.note}>
+                    바깥쪽으로 갈수록 안정적이에요. 지표 이름을 누르면 설명이 나와요.{healthKeys.some((h) => p.health[h.key] == null) ? ' 값이 없는 지표는 가운데에 두고 흐리게 보여요.' : ''}
+                    {p.financial ? ` ${FINANCIAL_HEALTH_NOTE}` : ''}
+                    {'\n바깥 테두리는 메모스톡 자체 기준 · 최근 분기 재무제표'}
+                  </Text>
                 </View>
               )}
             </Section>
@@ -556,11 +548,6 @@ const st = StyleSheet.create({
   q: { width: 18, height: 18, borderRadius: 9, backgroundColor: appColor.accentSoft, alignItems: 'center', justifyContent: 'center' },
   qT: { ...ft(12, 1), fontWeight: '800', color: appColor.deepPurple },
   ov: { ...ft(14, 1.7), color: appColor.ink, marginTop: 10 },
-  fh: { flexDirection: 'row', alignItems: 'center', marginTop: 18, marginHorizontal: 18, marginBottom: 2 },
-  h2: { ...ft(19), fontWeight: '700', color: appColor.ink },
-  fq: { marginLeft: 6, backgroundColor: appColor.accentSoft, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
-  fqT: { ...ft(13), fontWeight: '700', color: appColor.deepPurple },
-  fsrc: { ...ft(11.5), color: appColor.ink3, marginHorizontal: 18, marginBottom: 10 },
   finfo: { backgroundColor: '#EAF1FF', color: appColor.down, ...ft(12.5, 1.55), borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginHorizontal: 16, marginBottom: 12, overflow: 'hidden' },
   big: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   bigB: { ...ft(24), fontWeight: '700', color: appColor.ink, letterSpacing: -0.3 },
