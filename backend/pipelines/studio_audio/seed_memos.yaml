@@ -1,0 +1,55 @@
+# AI 오디오 시험용 메모 (2026-11-23). 가상의 사용자 1명이 일주일 동안 4종목에 남긴 메모.
+# day: 기간 첫날(start)로부터 며칠째에 썼는지 (0 = 첫날). 그날 21시(한국 시간)에 쓴 것으로 날짜를 소급한다.
+# hold: 보유 | 관심 (user_stocks.status). 가격 조건은 지금 시세를 모르고 쓰면 확인 질문으로 빠지므로 넣지 않았다.
+stocks:
+  "000660": 보유
+  "005930": 관심
+  "035420": 관심
+  "105560": 보유
+memos:
+  - key: hynix-hbm
+    symbol: "000660"
+    day: 0
+    color: pink
+    title: HBM 수요 계속 확인
+    body: |-
+      HBM4 양산이랑 엔비디아 공급 관련 소식은 계속 보고 싶다.
+      실적 발표 전에 HBM 매출 얘기 나오면 체크하고, 설비투자 공시가 나오면 금액이랑 기간도 확인하기.
+  - key: hynix-fx
+    symbol: "000660"
+    day: 3
+    color: yellow
+    title: 환율 영향?
+    body: 환율이 많이 올랐다는데 수출 비중이 큰 회사라 실적에 어떤 영향이 있는지 관련 기사 나오면 보고 싶음.
+  - key: samsung-buyback
+    symbol: "005930"
+    day: 0
+    color: blue
+    title: 자사주 매입 나오면 다시 보기
+    body: 자사주 매입이나 소각 공시 나오면 규모랑 기간 확인. 파운드리 수주 소식도 같이 보기.
+  - key: samsung-hbm
+    symbol: "005930"
+    day: 2
+    color: purple
+    title: HBM 엔비디아 납품
+    body: 삼성 HBM이 엔비디아 품질 테스트를 통과했다거나 공급 계약을 했다는 기사 나오면 알려 줘.
+  - key: naver-ai
+    symbol: "035420"
+    day: 1
+    color: green
+    title: AI·커머스 실적 체크
+    body: 하이퍼클로바X 관련 사업 소식이랑 커머스 매출 성장 소식 보기. 웹툰 쪽 실적도 궁금하다.
+  - key: kb-dividend
+    symbol: "105560"
+    day: 0
+    color: yellow
+    title: 배당·주주환원 일정
+    body: |-
+      분기 배당 결정 공시랑 자사주 소각 일정 확인하기.
+      기준금리가 내려가면 이자이익이 줄어드는지 관련 기사도 보고 싶다.
+  - key: kb-valueup
+    symbol: "105560"
+    day: 4
+    color: blue
+    title: 밸류업 공시 확인
+    body: 기업가치 제고 계획(밸류업) 이행 공시가 나오면 무슨 내용인지 확인하고 싶음.
