@@ -11,7 +11,7 @@ import { useProgress } from '@/ui/motion/useProgress';
 import { StockLogo } from '@/ui/shared/StockLogo';
 import { appColor, curve, ft } from '@/ui/theme';
 import type { HomeNewsItem, HomeUpdateRow, HomeWidget, MarketIndex } from '../Home.types';
-import { APP_SPARK_N, ago, basisText, hm, mmdd, nf, spark } from '../homeFormat';
+import { ago, basisText, hm, mmdd, nf, spark, WEB_RANGES, mkData, type WebRange } from '../homeFormat';
 import { PopBurst } from '@/components/motion/Celebrate';
 
 /* 원본 home.html confetti 색 */
@@ -86,11 +86,13 @@ export function HeroCard({ name, total, editing, ready, onCta }: { name: string;
 /* ───────── 시장 한눈에 보기 (원본 .mk3: 3칸 · 사이 10 · .mc 104×46 선) ───────── */
 function MarketCell({ q, draw, onPress }: { q: MarketIndex; draw: boolean; onPress: () => void }) {
   const [w, setW] = useState(104);
-  const arr = q.closes.slice(-APP_SPARK_N);
-  const s = spark(arr, w, 46);
-  const col = q.change < 0 ? appColor.down : appColor.up;
+  /* 지수마다 1주 · 1달 · 1년 (웹 시장 카드와 같은 계산) */
+  const [r, setR] = useState<WebRange>('1주');
+  const md = mkData(q, r);
+  const s = spark(md.sr, w, 46);
+  const col = md.up ? appColor.up : appColor.down;
   /* 원본 .ln: dasharray 300 → 0 (1s ease) */
-  const t = useProgress(draw, 1000);
+  const t = useProgress(draw, 1000, r);
   const e = curve.ease(t);
   return (
     <View style={st.mcCol} onLayout={(ev) => setW(Math.max(40, Math.round(ev.nativeEvent.layout.width)))}>
@@ -103,8 +105,7 @@ function MarketCell({ q, draw, onPress }: { q: MarketIndex; draw: boolean; onPre
           {nf(q.value)}
         </Text>
         <Text style={[st.mcC, { color: col }]} numberOfLines={1}>
-          {q.change > 0 ? '+' : ''}
-          {nf(q.change)} ({Math.abs(q.pct).toFixed(2)}%)
+          {md.label}
         </Text>
         <Svg width={w} height={46} style={st.mcSvg}>
           <Path d={s.area} fill={col} opacity={0.1} />
@@ -113,6 +114,13 @@ function MarketCell({ q, draw, onPress }: { q: MarketIndex; draw: boolean; onPre
         </Svg>
         <Text style={st.mcT}>{basisText(q)}</Text>
       </Pressable>
+      <View style={st.rseg} accessibilityRole="tablist">
+        {WEB_RANGES.map((x) => (
+          <Pressable key={x} onPress={() => setR(x)} accessibilityRole="tab" accessibilityLabel={`${q.name} ${x}`} accessibilityState={{ selected: r === x }} style={[st.rsegB, r === x && st.rsegOn]}>
+            <Text style={[st.rsegT, r === x && st.rsegTOn]}>{x}</Text>
+          </Pressable>
+        ))}
+      </View>
     </View>
   );
 }
@@ -434,6 +442,11 @@ const st = StyleSheet.create({
   mcS: { ...ft(13), color: appColor.ink2 },
   mcB: { ...ft(18), fontWeight: '700', color: appColor.ink, marginTop: 4 },
   mcC: { ...ft(12) },
+  rseg: { flexDirection: 'row', marginTop: 12, padding: 2, borderRadius: 9, backgroundColor: '#F1F2F4' },
+  rsegB: { flex: 1, height: 26, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
+  rsegOn: { backgroundColor: appColor.surface },
+  rsegT: { ...ft(11), color: appColor.ink2 },
+  rsegTOn: { fontWeight: '700', color: appColor.ink },
   mcSvg: { marginTop: 8, overflow: 'visible' },
   mcT: { ...ft(11), color: appColor.ink3, marginTop: 4 },
   err: { alignItems: 'center', paddingTop: 10, paddingBottom: 4 },
