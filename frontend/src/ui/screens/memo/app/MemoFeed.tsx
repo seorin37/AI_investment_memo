@@ -186,7 +186,7 @@ export function FeedCard({ f, ver, open, onToggle, onOpenSource, onOpenEvidence 
         <View style={st.flex}>
           <View style={st.umRow}>
             <Text style={st.um}>
-              {f.kind} · {mmdd(f.at)}
+              {f.kind} · {mmdd(f.arrived ?? f.at)}
             </Text>
             {f.unread ? (
               <View style={st.new}>

@@ -12,6 +12,8 @@ export interface UsageWire {
   paused: boolean;
   ai_memo_count?: number;
   auto_off_count?: number;
+  used?: number;
+  balance?: number;
 }
 
 export interface UsageView {
@@ -23,10 +25,13 @@ export interface UsageView {
   ai_count: number;
   /** 갱신일에 자동으로 꺼진 메모 수 (안내 N) */
   auto_off: number;
+  /** 이번 기간 쓴 크레딧 · 남은 크레딧 (2026-11-25 사용량 화면 'n / m 크레딧'). 모르면 null */
+  credits_used: number | null;
+  credits_left: number | null;
 }
 
 /** 불러오지 못했을 때 (확인용 읽기 전용 서버에서 GET 이 쓰기를 못 해 실패 등) — 숫자를 지어내지 않음 */
-export const USAGE_UNKNOWN: UsageView = { usage_pct: 0, usage_renew: '—', usage_refill: '—', paused: false, ai_count: 0, auto_off: 0 };
+export const USAGE_UNKNOWN: UsageView = { usage_pct: 0, usage_renew: '—', usage_refill: '—', paused: false, ai_count: 0, auto_off: 0, credits_used: null, credits_left: null };
 
 const KST_MS = 9 * 60 * 60 * 1000;
 
@@ -45,9 +50,11 @@ export function toUsageView(u: UsageWire): UsageView {
   const md = kstMonthDay(u.renews_at);
   const ai_count = Math.max(0, Number(u.ai_memo_count) || 0);
   const auto_off = Math.max(0, Number(u.auto_off_count) || 0);
-  if (!md) return { ...USAGE_UNKNOWN, usage_pct: pct, paused: !!u.paused, ai_count, auto_off };
+  const credits_used = Number.isFinite(u.used) ? Math.max(0, Number(u.used)) : null;
+  const credits_left = Number.isFinite(u.balance) ? Math.max(0, Number(u.balance)) : null;
+  if (!md) return { ...USAGE_UNKNOWN, usage_pct: pct, paused: !!u.paused, ai_count, auto_off, credits_used, credits_left };
   const [m, d] = md;
-  return { usage_pct: pct, usage_renew: `${String(m).padStart(2, '0')}.${String(d).padStart(2, '0')}`, usage_refill: `${m}월 ${d}일`, paused: !!u.paused, ai_count, auto_off };
+  return { usage_pct: pct, usage_renew: `${String(m).padStart(2, '0')}.${String(d).padStart(2, '0')}`, usage_refill: `${m}월 ${d}일`, paused: !!u.paused, ai_count, auto_off, credits_used, credits_left };
 }
 
 function clampPct(n: number): number {

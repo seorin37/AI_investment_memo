@@ -12,6 +12,7 @@ import { SkySwitch } from '@/ui/shared/SkySwitch';
 import { WITHDRAW_REASONS, type InfoDoc, type MyProfile, type WithdrawProps } from '../My.types';
 import { SBtn } from './parts';
 import { DataTab, DocModal, InfoTab, NotiTab, PlanBar, PlanView, UsageTab, type WebSettingsExtra } from './SettingsTabs';
+import { startLabel } from '../planView';
 
 /**
  * 웹 설정 창 = 원본 web/src/screens/overlays.tsx Settings (1040×780 가운데 · 막 rgba(0,0,0,.32) · 라운드 20)
@@ -40,6 +41,8 @@ export interface WebSettingsProps extends WebSettingsExtra {
   onLogout: () => void;
   /** 탈퇴 마지막 확인까지 누른 뒤 (mock: 실제 삭제 없음) */
   onWithdraw: (reasons: string[]) => void;
+  /** '플랜 살펴보기'를 바로 열어 달라는 요청 번호 (2026-11-25: 사용량 창·크레딧 소진 창의 [플랜 변경]). 바뀔 때마다 사용량 탭의 플랜 화면을 연다 */
+  planReq?: number;
 }
 
 export function WebSettings(p: WebSettingsProps) {
@@ -50,6 +53,11 @@ export function WebSettings(p: WebSettingsProps) {
   /* 사용량 › 플랜 살펴보기 (탭을 바꾸면 닫힘) · 정보 › 문서 창 */
   const [planFor, setPlanFor] = useState<SettingsTab | null>(null);
   const plan = planFor === '사용량' && p.tab === '사용량';
+  const [planSeen, setPlanSeen] = useState(0);
+  if ((p.planReq ?? 0) > planSeen) {                       // 렌더 중 상태 맞추기 (새 요청 번호일 때만 한 번)
+    setPlanSeen(p.planReq ?? 0);
+    setPlanFor('사용량');
+  }
   const [pick, setPick] = useState(p.plan_default);
   const [doc, setDoc] = useState<InfoDoc | null>(null);
   const DANGER = {
@@ -109,7 +117,7 @@ export function WebSettings(p: WebSettingsProps) {
             {p.tab === '데이터' ? <DataTab counts={p.counts} onExport={p.onExport} onAskWipe={() => setDanger('wipe')} /> : null}
             {p.tab === '정보' ? <InfoTab version={p.version} sources={p.sources} onDoc={setDoc} onFeedback={p.onFeedback} onReplayGuide={p.onReplayGuide} /> : null}
           </ScrollView>
-          {plan ? <PlanBar pick={pick} free={pick === p.current_plan_key} onStart={() => p.onStartPlan(pick)} /> : null}
+          {plan ? <PlanBar pick={pick} free={pick === p.current_plan_key} label={startLabel(p.plans.find((x) => x.key === pick), pick)} onStart={() => p.onStartPlan(pick)} /> : null}
         </View>
       </View>
       <Withdraw open={wd} counts={p.counts} why={why} setWhy={setWhy} onClose={() => setWd(false)} onGo={() => { setWd(false); setDanger('withdraw'); }} />

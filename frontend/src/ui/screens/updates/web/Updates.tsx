@@ -304,7 +304,7 @@ function Row({ u, p, name, logo }: { u: UpdateItem; p: WebUpdatesProps; name: st
         <Text style={[st.rowT, { fontWeight: u.unread ? '700' : '500' }]} numberOfLines={1}>
           {u.headline}
         </Text>
-        <Text style={st.ago}>{ago(u.at, p.now)}</Text>
+        <Text style={st.ago}>{ago(u.arrived ?? u.at, p.now)}</Text>
         <View style={[st.dot, !u.unread && { opacity: 0 }]} accessibilityLabel={u.unread ? '안 읽음' : undefined} />
       </Pressable>
       <Collapse open={open} duration={450}>

@@ -20,7 +20,8 @@ import { useTrackedView } from '@/ui/screens/my/useTrackedView';
 import { useAiOffAll, useAiOffNoticeSeen, useAiStats, useMyStocks } from '@/hooks/queries';
 import Constants from 'expo-constants';
 import { legalDocument } from '@/ui/screens/auth/Auth.mock';
-import { mockCreditDefault, mockCreditPacks, mockPayMethods, mockDataSources, mockOss, mockPlanCompare, mockPlanDefault, mockPlanNotes, mockPlans, mockReportKinds, mockWithdrawCounts } from '@/ui/screens/my/My.mock';
+import { mockPayMethods, mockDataSources, mockOss, mockReportKinds, mockWithdrawCounts } from '@/ui/screens/my/My.mock';
+import { usePlanView } from '@/ui/screens/my/usePlanView';
 import { WebFeedback } from '@/ui/screens/my/web/Feedback';
 import { WebInbox } from '@/ui/screens/my/web/Inbox';
 import { useInboxData } from '@/ui/screens/my/useInboxData';
@@ -130,12 +131,20 @@ export default function MainLayout() {
   const [snack, setSnack] = useState<{ msg: string; undo?: () => void; check?: boolean; action?: { label: string; onPress: () => void } } | null>(null);
   /* ⑨-3a 설정 창(내 프로필) · 사이드바 로그아웃 확인 (mock: 프로필은 화면 상태만) */
   const [settings, setSettings] = useState<SettingsTab | null>(null);
+  /* [플랜 변경]은 설정 › 사용량 › 플랜 살펴보기까지 바로 연다 (2026-11-25) */
+  const [planReq, setPlanReq] = useState(0);
+  const openPlans = () => { setSettings('사용량'); setPlanReq((n) => n + 1); };
   const [logoutAsk, setLogoutAsk] = useState(false);
   const signOut = useAuth((s) => s.signOut);
   /* 내 프로필: 로그인한 사용자 (저장은 PATCH /me). mock 모드만 예시 프로필 */
   const { profile: myProfile, save: saveMyProfile, plan: myPlan } = useMyProfile();
   /* AI 사용량: 실제 모드면 GET /me/usage (2026-11-22), mock 모드면 My.mock */
   const usage = useUsageView();
+  /* 요금제 · 충전 화면 값: GET /plans (configs/credits.yaml, 2026-11-25) */
+  const planView = usePlanView();
+  const myPlanInfo = planView.catalog.plans.find((x) => x.code === (myPlan ?? 'free'));
+  /* 크레딧 소진 창에서 안내할 다음 플랜 (무료 → PLUS, PLUS → PRO) */
+  const nextPlan = planView.catalog.plans.find((x) => x.code === (myPlan === 'plus' ? 'pro' : 'plus'));
   /* 설정 사용량 탭 종목별 추적 현황 (설정 창이 열렸을 때만 부름) */
   const tracked = useTrackedView(settings !== null);
   /* 스튜디오 머리글 '내 종목 N · AI 연결 메모 N': 실제 모드는 GET /stocks · GET /ai/stats (홈 제목 줄과 같은 값, 2026-11-23) */
@@ -165,7 +174,7 @@ export default function MainLayout() {
     setSpentSeen(spentReq.id);
     if (spentReq.kind === 'credit') setStudioPop('charge');
     else if (spentReq.kind === 'choice') setAiChoice(true);
-    else setSettings('사용량');
+    else openPlans();
   }
   /* 2026-11-24 크레딧을 다 썼고 AI 연결 메모가 남아 있으면(끄기 대기) 'AI 연결 모두 끄기' 선택 창. 화면을 연 뒤 한 번 묻고,
      닫으면 다음에 다시 묻는다(그동안 매일 확인은 멈춤). 스위치·보드 안내에서도 연다 (spentReq 'choice') */
@@ -421,7 +430,7 @@ export default function MainLayout() {
                   }}
                   onQuickPlay={(m) => { if (sp.cur === m.id && sp.mini) sp.toggle(); else sp.play(m.id); sp.setMini(true); }}
                   onBuyCredit={() => setStudioPop('charge')}
-                  onChangePlan={() => setSettings('사용량')}
+                  onChangePlan={openPlans}
                 />
               )}
             </View>
@@ -496,6 +505,7 @@ export default function MainLayout() {
     />
     <WebSettings
       open={!!settings}
+      planReq={planReq}
       tab={settings ?? '내 프로필'}
       profile={myProfile}
       counts={mockWithdrawCounts}
@@ -523,13 +533,13 @@ export default function MainLayout() {
         say({ msg: on ? '알림을 켰어요 · 알림함에 다시 보여요' : '알림을 껐어요 · 알림함에서도 안 보여요', check: true });
       }}
       /* 사용량 % · 갱신일: GET /me/usage · 플랜 이름 · 현재 플랜: 로그인 사용자 plan */
-      usage={usage}
+      usage={{ ...usage, tracking_cap: myPlanInfo?.tracking_items ?? null }}
       tracked={tracked}
       onOpenMemo={(code) => { setSettings(null); openStock(code); }}
-      plans={withCurrentPlan(mockPlans, planKey(myPlan))}
-      compare={mockPlanCompare}
-      notes={mockPlanNotes}
-      plan_default={mockPlanDefault}
+      plans={withCurrentPlan(planView.plans, planKey(myPlan))}
+      compare={planView.compare}
+      notes={planView.notes}
+      plan_default={planView.default_key}
       current_plan_key={planKey(myPlan)}
       onStartPlan={() => say({ msg: '결제는 아직 연결되지 않았어요' })}
       onExport={() => say({ msg: '내보내기는 아직 연결되지 않았어요' })}
@@ -587,7 +597,7 @@ export default function MainLayout() {
           __DEV__ && studio_fail === '1', env.useMock ? undefined : () => createReport(codes, market));
       }}
     />
-    <WebUsageSheet open={studioPop === 'usage'} pct={usage.usage_pct} refill={usage.usage_refill} onClose={() => setStudioPop(null)} onBuyCredit={() => setStudioPop('charge')} onChangePlan={() => setSettings('사용량')} />
+    <WebUsageSheet open={studioPop === 'usage'} pct={usage.usage_pct} refill={usage.usage_refill} onClose={() => setStudioPop(null)} onBuyCredit={() => setStudioPop('charge')} onChangePlan={openPlans} />
     <WebAiOffNotice
       open={usage.auto_off > 0 && !aiNoticeClosed && !aiPending}
       count={usage.auto_off}
@@ -599,14 +609,20 @@ export default function MainLayout() {
       busy={aiOff.isPending}
       onClose={() => setAiChoice(false)}
       onCharge={() => { setAiChoice(false); setStudioPop('charge'); }}
-      onPlan={() => { setAiChoice(false); setSettings('사용량'); }}
+      onPlan={() => { setAiChoice(false); openPlans(); }}
       onOff={() => aiOff.mutate(undefined, {
         onSuccess: (r) => { setAiChoice(false); say({ msg: `AI 연결 메모 ${r.turned_off}개를 껐어요. 메모는 그대로 남아 있어요`, check: true }); },
         onError: () => say({ msg: 'AI 연결을 끄지 못했어요. 잠시 뒤 다시 해 주세요' }),
       })}
     />
-    <WebCreditPopup open={studioPop === 'credit'} onClose={() => setStudioPop(null)} onPlan={() => { setStudioPop(null); setSettings('사용량'); }} onCharge={() => setStudioPop('charge')} />
-    <WebChargePopup open={studioPop === 'charge'} packs={mockCreditPacks} default_credits={mockCreditDefault} methods={mockPayMethods} onClose={() => setStudioPop(null)} onPay={() => say({ msg: '결제는 아직 연결되지 않았어요' })} />
+    <WebCreditPopup
+      open={studioPop === 'credit'}
+      plan={myPlan ?? 'free'}
+      nextName={nextPlan?.name}
+      nextCredits={nextPlan?.monthly_credits}
+      packLabel={planView.packs[0] ? `${planView.packs[0].credits}개 ${planView.packs[0].price}` : undefined}
+      onClose={() => setStudioPop(null)} onPlan={() => { setStudioPop(null); openPlans(); }} onCharge={() => setStudioPop('charge')} />
+    <WebChargePopup open={studioPop === 'charge'} packs={planView.packs} default_credits={planView.default_credits} methods={mockPayMethods} onClose={() => setStudioPop(null)} onPay={() => say({ msg: '결제는 아직 연결되지 않았어요' })} />
     <WebFeedback open={fbOpen} kinds={mockReportKinds} onClose={() => setFbOpen(false)} onSend={() => say({ msg: '아직 연결되지 않았어요' })} />
     <WebInbox
       open={inboxOpen}

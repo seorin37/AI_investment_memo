@@ -189,6 +189,24 @@ class ServiceTest(unittest.TestCase):
             s.set_ai_link(1, int(linked["id"]), False)                                     # 끄기는 언제나 된다
         self.assertEqual(a.call_count, 1)
 
+    def test_plan_limit_blocks_new_ai_link_only(self):
+        """2026-11-25 추적 항목 상한: 새로 켤 때만 막는다. 새 메모는 일반 메모로(reason=plan_limit), AI 켜기는 PlanLimitError, 이미 켠 메모는 그대로."""
+        from app.board.service import PlanLimitError
+        s = self.svc()
+        room = {"ok": True}
+        s._credit_check = lambda uid: True
+        s._limit_check = lambda uid: room["ok"]
+        with mock.patch("app.board.service.analyze_memo", side_effect=fake_analyze) as a:
+            on = s.create_memo(1, "005930", MemoCreate(title="t", body="HBM 소식", ai_linked=True))
+            room["ok"] = False
+            new = s.create_memo(1, "005930", MemoCreate(title="t", body="HBM 소식", ai_linked=True))
+            self.assertEqual((new["analysis"]["status"], new["analysis"]["reason"]), ("skipped", "plan_limit"))
+            self.assertFalse(self.repo.rows[int(new["id"])]["ai_linked"])
+            with self.assertRaises(PlanLimitError):
+                s.set_ai_link(1, int(new["id"]), True)
+            self.assertEqual(s.update(1, int(on["id"]), {"body": "파운드리 소식"})["analysis"]["status"], "done")   # 이미 켠 메모는 그대로
+        self.assertEqual(a.call_count, 2)
+
     def test_analysis_failure_keeps_memo(self):
         s = self.svc()
         with mock.patch("app.board.service.analyze_memo", side_effect=AnalysisError("llm_failed", "x")):

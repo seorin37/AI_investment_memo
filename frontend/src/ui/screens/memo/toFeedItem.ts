@@ -64,6 +64,7 @@ export function toFeedItem(u: AiUpdate): MemoFeedItem {
     id: u.id,
     kind,
     at,
+    arrived: u.created_at ? fullIso(u.created_at) : undefined,
     headline: u.headline || u.title,
     summary: u.summary,
     source,

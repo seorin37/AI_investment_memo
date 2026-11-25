@@ -16,7 +16,7 @@ export function useUsageView(): UsageView & { plan_name: string; ready: boolean;
   const q = useUsage();
   const { plan } = useMyProfile();
   const plan_name = planName(plan);
-  if (!real) return { ...mockMyUsage, paused: mockMyUsage.usage_pct >= 100, ai_count: 0, auto_off: 0, plan_name, ready: true, failed: false };
+  if (!real) return { ...mockMyUsage, paused: mockMyUsage.usage_pct >= 100, ai_count: 0, auto_off: 0, credits_used: null, credits_left: null, plan_name, ready: true, failed: false };
   const view = q.data ? toUsageView(q.data) : USAGE_UNKNOWN;
   return { ...view, plan_name, ready: !!q.data, failed: q.isError && !q.data };
 }

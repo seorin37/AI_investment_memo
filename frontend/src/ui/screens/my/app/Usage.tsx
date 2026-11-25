@@ -43,7 +43,7 @@ export function AppUsage(p: UsageProps) {
           </View>
           <UsageBar pct={pct} delay={250} />
           <View style={st.m}>
-            <Text style={[st.mT, { color: st2 === 'er' ? MC.red : MC.ink2 }]}>남은 사용량 {Math.max(0, 100 - pct)}%</Text>
+            <Text style={[st.mT, { color: st2 === 'er' ? MC.red : MC.ink2 }]}>{p.credits_left != null ? `남은 크레딧 ${p.credits_left}개` : `남은 사용량 ${Math.max(0, 100 - pct)}%`}</Text>
             <Text style={[st.mT, { color: MC.ink3 }]}>다음 갱신 {p.usage_renew}</Text>
           </View>
         </Grp>

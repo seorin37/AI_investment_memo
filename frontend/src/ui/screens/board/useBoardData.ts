@@ -1,6 +1,8 @@
 import { useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api';
+import { ApiError } from '@/api/http';
+import { useUI } from '@/store/ui';
 import { env } from '@/config/env';
 import {
   qk,
@@ -123,7 +125,9 @@ export function useBoardData(code: string, openId: string | null) {
     async aiOn(id: string): Promise<ConnectResult> {
       try {
         return connectResult((await api.setAiLink(id, true)).analysis);
-      } catch {
+      } catch (e) {
+        /* 2026-11-25 크레딧 0(402) · 요금제 추적 항목 상한(409): 서버 문구를 그대로 안내 */
+        if (e instanceof ApiError && (e.status === 402 || e.status === 409)) useUI.getState().showToast(e.message);
         return { state: 'error', items: [] };
       } finally {
         void refresh();

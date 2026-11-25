@@ -21,6 +21,7 @@ export function AppCharge({ packs, default_credits, onBack, onPay }: ChargeProps
         <View>
           <PressScale onPress={() => onPay(n)} accessibilityRole="button" style={st.cta}><Text style={st.ctaT}>{cur?.label ?? ''} 결제하기</Text></PressScale>
           <Text style={st.cap}>스토어 결제 창이 열려요 · 결제 수단은 그 창에서 골라요</Text>
+          <Text style={st.cap}>1년 동안 쓸 수 있고 환불·양도는 안 돼요</Text>
         </View>
       }
     >

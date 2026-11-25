@@ -31,6 +31,7 @@ import * as seed from './seed';
 import { mockFinancials } from './financials';
 import { HOME_NEWS, HOME_NEWS_DAY_TOTAL } from '@/ui/screens/home/homeData.mock';
 import { mockAppPopularStocks } from '@/ui/screens/onboarding/Onboarding.mock';
+import { MOCK_PLAN_CATALOG } from '@/ui/screens/my/planView';
 
 const clone = <T>(v: T): T => (v === undefined ? v : JSON.parse(JSON.stringify(v)));
 const wait = <T>(v: T, ms = env.mockLatency): Promise<T> => new Promise((r) => setTimeout(() => r(clone(v)), ms));
@@ -351,6 +352,7 @@ export const mockApi: Api = {
     }
     return wait(undefined);
   },
+  getPlans: async () => wait({ ...MOCK_PLAN_CATALOG, current_plan: 'free', tracking_used: memosOf().filter((m) => m.ai_linked).length }),
   aiOffAll: async () => {
     const on = memosOf().filter((m) => m.ai_linked);
     on.forEach((m) => { m.ai_linked = false; m.ai_linked_at = null; });
