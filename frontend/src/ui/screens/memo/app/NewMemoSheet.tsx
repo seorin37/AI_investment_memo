@@ -20,7 +20,7 @@ export interface NewMemoTarget {
   text?: string;
   /** AI 연결을 켠 채로 */
   ai?: boolean;
-  /** 스튜디오 '메모에 추가': 저장해도 보던 화면에 그대로 두고 [보기] 안내. itemId·key 가 있으면 서버 항목에 '추가됨' */
+  /** 스튜디오 '메모에 추가' · 근거 상세 [알림 받기]: 저장해도 보던 화면에 그대로 두고 [보기] 안내. itemId·key 가 있으면 서버 항목에 '추가됨' */
   studio?: { itemId?: string; key?: string };
 }
 

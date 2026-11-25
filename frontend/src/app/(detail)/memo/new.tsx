@@ -12,13 +12,13 @@ import { AppFirstMemo } from '@/ui/screens/onboarding/app/FirstMemo';
  * 첫 메모(from_onboarding=1)는 원본 start.html #nm 화면(AppFirstMemo) — 머리 종목 칩으로 종목을 바꿀 수 있다.
  */
 export default function NewMemoScreen() {
-  const { code, name, first_line, from_onboarding, onboarding_selected } = useLocalSearchParams<{ code?: string; name?: string; first_line?: string; from_onboarding?: string; onboarding_selected?: string }>();
+  const { code, name, first_line, ai, from_onboarding, onboarding_selected } = useLocalSearchParams<{ code?: string; name?: string; first_line?: string; ai?: string; from_onboarding?: string; onboarding_selected?: string }>();
   const router = useRouter();
   const toast = useUI((s) => s.showToast);
   const cancel = useCallback(() => router.back(), [router]);
   const firstStocks = useMemo(() => (from_onboarding === '1' ? mockFirstHomeStocks(onboarding_selected) : []), [from_onboarding, onboarding_selected]);
 
-  const target = useMemo(() => ({ code: code || mockBoardStock.stock_code, name: name || mockDetailStockName, text: first_line || undefined }), [code, name, first_line]);
+  const target = useMemo(() => ({ code: code || mockBoardStock.stock_code, name: name || mockDetailStockName, text: first_line || undefined, ai: ai === '1' }), [code, name, first_line, ai]);
 
   if (from_onboarding === '1') {
     return (
