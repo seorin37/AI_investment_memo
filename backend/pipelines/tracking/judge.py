@@ -17,6 +17,12 @@ from .lexicon import Lexicon
 from .price import classify_rest, parse_conditions
 from .segment import split_sentences
 
+
+def _decision_question(text: str) -> bool:
+    """판단 질문 표지(tracking_lexicon.yaml decision_question_markers)가 있는지. 질문 답 단계(updates.decision_note)와 같은 목록."""
+    from ..updates.decision_note import is_decision_question
+    return is_decision_question(text)
+
 PENDING = "pending_llm"
 _URL = re.compile(r"https?://|www\.|bit\.ly", re.IGNORECASE)
 # 광고·범위 밖은 짧은 조각에서만 확정한다. 긴 조각은 문장 분리가 덜 돼 다른 내용이 섞였을 수 있어 LLM에 넘긴다.
@@ -117,7 +123,8 @@ def judge_sentence(index: int, text: str, span: tuple[int, int], memo_symbol: st
             and not cleaned.text.rstrip().endswith("?")
             and not any(m in cleaned.text for m in lex.intent_markers)
             and not any(w in cleaned.text for w in lex.finance_words)
-            and not has_domain_word(cleaned.text, lex.domain_vocab)):
+            and not has_domain_word(cleaned.text, lex.domain_vocab)
+            and not _decision_question(cleaned.text)):          # 2026-11-25: "사야하나 고민중이야"·"존버 vs 손절"은 물음표 없어도 판단 질문 → LLM
         j.flags.append("no_domain")
         return decide("full_fallback", "B5", "OUT_OF_SCOPE")
 
