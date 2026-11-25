@@ -1,0 +1,11 @@
+FROM python:3.11-slim
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    TZ=Asia/Seoul \
+    HF_HOME=/hf \
+    PYTHONPATH=/app:/app/backend
+WORKDIR /app
+# GPU가 없으므로 CPU용 PyTorch를 먼저 설치 (CUDA 버전보다 훨씬 작다)
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+COPY deploy/aws/requirements-worker.txt /tmp/requirements-worker.txt
+RUN pip install --no-cache-dir -r /tmp/requirements-worker.txt
