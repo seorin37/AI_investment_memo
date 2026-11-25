@@ -150,7 +150,12 @@ export function AppMemoDetail(p: MemoDetailProps) {
     } else if (a === 'ai') setTimeout(() => (paused ? p.onSpentAction?.('choice') : m.ai_linked ? setOff(true) : p.onConnectAi()), 200);
     else p.onDelete();
   };
-  const toggleAi = () => (paused ? p.onSpentAction?.('choice') : m.ai_linked ? setOff(true) : p.onConnectAi());
+  const toggleAi = () => {
+    if (paused) return p.onSpentAction?.('choice');
+    if (m.ai_linked) return setOff(true);
+    if (editing) finishEdit();                                 // 고친 글을 먼저 저장 → 연결 화면이 저장 끝을 기다림 (2026-11-25)
+    p.onConnectAi();
+  };
   const changed = m.updated_at.slice(0, 10) !== m.created_at.slice(0, 10);
 
   return (

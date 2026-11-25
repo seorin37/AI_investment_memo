@@ -172,7 +172,11 @@ export function WebMemoDialog(p: MemoDetailProps & { open: boolean }) {
             /* 크레딧을 다 쓴 동안(끄기 대기)은 스위치가 꺼진 모양: 누르면 '충전 · 업그레이드 · 모두 끄기' 선택 창 (2026-11-24) */
             if (paused) return p.onSpentAction?.('choice');
             /* 꺼진 메모를 켜면 AI 연결 창 (원본 onConnect) */
-            if (v && !m.ai_linked) return p.onConnectAi();
+            /* 고친 글이 있으면 먼저 저장하고 연결 (2026-11-25: 저장 전 글로 분석해 '찾지 못했어요'가 나던 문제) */
+            if (v && !m.ai_linked) {
+              save();
+              return p.onConnectAi();
+            }
             setAi(v);
           }}
           sub={ai && paused ? 'AI 사용량을 다 써서 멈췄어요 · 충전하지 않으면 꺼져요' : ai ? (tab === 1 ? `이 메모를 AI가 지켜보고 있어요${tracks ? ` · ${tracks}` : ''}` : `이 메모에서 ${p.trackItems.length || 1}개 항목을 지켜봐요.`) : AI_OFF}

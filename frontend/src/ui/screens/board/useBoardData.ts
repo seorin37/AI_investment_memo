@@ -19,6 +19,7 @@ import type { BoardItem, Checklist, ChecklistItem, Memo, MemoAnalysis, MemoColor
 import type { AiTrackItem, MemoFeedItem } from '@/ui/screens/memo/MemoDetail.types';
 import type { BoardCards } from './boardCards';
 import { toFeedItem } from '@/ui/screens/memo/toFeedItem';
+import { trackSave, waitSave } from '@/lib/pendingSaves';
 
 /**
  * 메모 보드(③) · 메모 창(④) 실제 데이터 (2026-11-22, 업데이트 useUpdatesData 와 같은 틀).
@@ -101,7 +102,8 @@ export function useBoardData(code: string, openId: string | null) {
   const data = real && board.data ? boardFrom(board.data) : null;
   const detail = real && timeline.data ? detailFrom(timeline.data) : null;
   const ops = {
-    save: (id: string, p: { title: string; body: string }) => real && update.mutate({ id, patch: p }),
+    /* 저장은 trackSave 로 감싼다: 바로 AI를 켜면 aiOn 이 저장이 끝나기를 기다린다 (2026-11-25) */
+    save: (id: string, p: { title: string; body: string }) => real && trackSave(id, update.mutateAsync({ id, patch: p })),
     color: (ids: string[], color: MemoColor) => real && ids.forEach((id) => update.mutate({ id, patch: { color } })),
     pin: (ids: string[], pinned: boolean) => real && ids.forEach((id) => update.mutate({ id, patch: { pinned } })),
     checkItem: (checklistId: string, itemId: string, done: boolean) =>
@@ -124,6 +126,7 @@ export function useBoardData(code: string, openId: string | null) {
     /** AI 켜기 + 분석 결과 (연결 창) */
     async aiOn(id: string): Promise<ConnectResult> {
       try {
+        await waitSave(id);                                    // 방금 고친 글이 저장된 뒤에 분석 (2026-11-25)
         return connectResult((await api.setAiLink(id, true)).analysis);
       } catch (e) {
         /* 2026-11-25 크레딧 0(402) · 요금제 추적 항목 상한(409): 서버 문구를 그대로 안내 */
