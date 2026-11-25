@@ -1,35 +1,24 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import Svg, { Circle, Path } from 'react-native-svg';
 import { Text, TextInput } from '@/components/ui/AppText';
-import type { ChecklistItem } from '@/types/models';
-import { fpx } from '@/ui/theme';
-import type { ChecklistDraft } from '../web/ChecklistTab';
-import { Actions, INK } from '../web/parts';
+import { CheckMark } from '@/ui/icons/BoardGlyphs';
+import { useChecklistTone } from '@/ui/shared/Dark';
+import { appColor, ft } from '@/ui/theme';
+import { SheetActions } from './SheetActions';
 
-type Hover = { pressed: boolean; hovered?: boolean };
+export type ChecklistDraft = { title: string; items: { text: string; done: boolean }[] };
 
 /**
- * 앱 새 메모 시트의 [체크리스트] 탭: 웹 memo/web/ChecklistTab.tsx 와 같고 남는 높이를 채워 버튼을 아래에.
- * 원본: 웹 새 메모 창의 [체크리스트] 탭 (원본 web/src/screens/board.tsx NewDialog 6.2, 2026-11-22 연결)
- * 제목 칸 '체크리스트 제목 · 보드 카드 제목으로 보여요' · '확인할 항목 N / M 완료' + 고리
- * 항목 줄 44 (동그라미 · 글 · ×) · 아래 '항목 추가 · Enter로 바로 추가' · 'AI 연결 없음' 안내 · [취소] [체크리스트 저장]
- * 저장: 빈 글 항목은 빼고, 입력칸에 남은 글도 항목으로. 항목이 하나도 없으면 onEmpty (있던 체크리스트면 휴지통).
- * 2026-11-24: 만든 항목도 글을 바로 고칠 수 있게 (입력칸).
+ * 앱 새 메모 시트의 [체크리스트] 탭: 항목·문구·동작은 웹 새 메모 창과 같고, 모양은 앱 체크리스트(귤색 종이 · 줄 54 · 상자 24).
+ * Enter 로 항목 추가, 저장하면 빈 글은 빼고 입력 칸에 남은 글도 항목으로. 하나도 없으면 onEmpty.
  */
-export function ChecklistTab({ initial, onCancel, onSave, onEmpty }: {
-  initial: { title: string; items: ChecklistItem[] } | null;
-  onCancel: () => void;
-  onSave: (d: ChecklistDraft) => void;
-  onEmpty: () => void;
-}) {
-  const [title, setTitle] = useState(initial?.title ?? '체크리스트');
-  /* k: 화면용 고유 키 (새 항목은 서버 id가 없어서, 지우거나 고칠 때 입력칸이 섞이지 않게) */
-  const [items, setItems] = useState<{ k: string; id?: string; text: string; done: boolean }[]>(() => initial?.items.map((i) => ({ ...i, k: `s${i.id}` })) ?? []);
+export function ChecklistTab({ onCancel, onSave, onEmpty }: { onCancel: () => void; onSave: (d: ChecklistDraft) => void; onEmpty: () => void }) {
+  const tone = useChecklistTone();
+  const [title, setTitle] = useState('체크리스트');
+  const [items, setItems] = useState<{ k: string; text: string; done: boolean }[]>([]);
   const [add, setAdd] = useState('');
   const done = items.filter((i) => i.done).length;
-  /* Enter → 항목 추가. react-native-web 은 한글 조합 중 Enter(keyCode 229)를 무시해서 onSubmitEditing 으로는 두 번 눌러야 했음.
-     투자 기록 제목(#75)처럼 입력칸을 multiline 으로 두고 '줄바꿈이 들어왔는지'로 판단 → 한글도 Enter 한 번에 추가 (2026-11-24) */
+  /* 한글 조합 중 Enter 도 한 번에 (웹과 같은 방식: 줄바꿈이 들어왔는지로) */
   const typeAdd = (v: string) => {
     if (!v.includes('\n')) return setAdd(v);
     const t = v.replace(/\n/g, '').trim();
@@ -37,136 +26,61 @@ export function ChecklistTab({ initial, onCancel, onSave, onEmpty }: {
     setAdd('');
   };
   const save = () => {
-    const list: ChecklistDraft['items'] = items.map(({ id, text, done }) => ({ id, text: text.trim(), done })).filter((i) => i.text);
+    const list = items.map(({ text, done: d }) => ({ text: text.trim(), done: d })).filter((i) => i.text);
     if (add.trim()) list.push({ text: add.trim(), done: false });
     if (!list.length) return onEmpty();
     onSave({ title: title.trim() || '체크리스트', items: list });
   };
   return (
     <>
-      <ScrollView style={[st.body, { flexGrow: 1 }]} contentContainerStyle={st.bodyIn} showsVerticalScrollIndicator={false}>
-        <View style={st.row}>
-          <Text style={st.label}>체크리스트 제목</Text>
-          <Text style={st.hint}>보드 카드 제목으로 보여요</Text>
-        </View>
-        <TextInput value={title} onChangeText={setTitle} accessibilityLabel="체크리스트 제목" style={st.titleIn} />
-        <View style={st.row}>
-          <Text style={st.label}>확인할 항목</Text>
-          <View style={st.count}>
-            <Text style={st.hint}>
-              {done} / {items.length} 완료
-            </Text>
-            <Ring done={done} n={items.length} />
-          </View>
-        </View>
-        <View style={st.list}>
+      <ScrollView style={st.flex} contentContainerStyle={st.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <View style={[st.paper, { backgroundColor: tone.paper }]}>
+          <View style={st.lab}><Text style={st.labB}>체크리스트 제목</Text><Text style={st.labS}>보드 카드 제목으로 보여요</Text></View>
+          <TextInput value={title} onChangeText={setTitle} accessibilityLabel="체크리스트 제목" style={st.title} />
+          <View style={[st.lab, { marginTop: 14 }]}><Text style={st.labB}>확인할 항목</Text><Text style={[st.cnt, { color: tone.ink }]}>{done} / {items.length} 완료</Text></View>
           {items.map((c, i) => (
-            <View key={c.k} style={st.item}>
-              <Pressable
-                onPress={() => setItems((l) => l.map((x, j) => (j === i ? { ...x, done: !x.done } : x)))}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: c.done }}
-                accessibilityLabel={c.text}
-                hitSlop={8}
-              >
-                <Dot on={c.done} />
+            <View key={c.k} style={st.row}>
+              <Pressable onPress={() => setItems((l) => l.map((x, j) => (j === i ? { ...x, done: !x.done } : x)))} accessibilityRole="checkbox" accessibilityState={{ checked: c.done }} accessibilityLabel={c.text} hitSlop={8} style={[st.box, c.done ? { backgroundColor: tone.tape, borderColor: tone.tape } : { borderColor: tone.cardBox, backgroundColor: tone.cardBoxBg }]}>
+                {c.done ? <CheckMark size={14} /> : null}
               </Pressable>
-              <TextInput
-                value={c.text}
-                onChangeText={(v) => setItems((l) => l.map((x, j) => (j === i ? { ...x, text: v } : x)))}
-                maxLength={500}
-                accessibilityLabel={`항목 ${i + 1} 고치기`}
-                style={[st.itemT, c.done && st.itemDone]}
-              />
-              <Pressable onPress={() => setItems((l) => l.filter((_, j) => j !== i))} accessibilityRole="button" accessibilityLabel={`${c.text} 지우기`} hitSlop={6}>
-                {({ hovered }: Hover) => <Text style={[st.x, hovered && { color: INK }]}>×</Text>}
-              </Pressable>
+              <TextInput value={c.text} onChangeText={(v) => setItems((l) => l.map((x, j) => (j === i ? { ...x, text: v } : x)))} maxLength={500} accessibilityLabel={`항목 ${i + 1} 고치기`} style={[st.in, c.done && st.inDone]} />
+              <Pressable onPress={() => setItems((l) => l.filter((_, j) => j !== i))} accessibilityRole="button" accessibilityLabel={`${c.text} 지우기`} hitSlop={6} style={st.del}><Text style={st.delT}>×</Text></Pressable>
             </View>
           ))}
-          {items.length > 0 ? <View style={st.sep} /> : null}
-          <View style={st.item}>
-            <View style={st.plus}>
-              <Text style={st.plusT}>+</Text>
-            </View>
-            <TextInput
-              value={add}
-              onChangeText={typeAdd}
-              multiline
-              numberOfLines={1}
-              placeholder="항목 추가 · Enter로 바로 추가"
-              placeholderTextColor="#9AA3B2"
-              accessibilityLabel="항목 추가"
-              style={st.addIn}
-            />
+          <View style={[st.row, { borderBottomWidth: 0 }]}>
+            <View style={[st.box, st.plus, { borderColor: tone.cardBox }]}><Text style={[st.plusT, { color: tone.ink }]}>+</Text></View>
+            <TextInput value={add} onChangeText={typeAdd} multiline numberOfLines={1} placeholder="항목 추가 · Enter로 바로 추가" placeholderTextColor="#B49A8A" accessibilityLabel="항목 추가" style={[st.in, st.addIn]} />
           </View>
+        </View>
+        <View style={st.ai}>
+          <Text style={st.aiB}>AI 연결 없음</Text>
+          <Text style={st.aiS}>체크리스트는 보드에만 저장되고, 뉴스·공시와 연결되지 않아요.</Text>
         </View>
       </ScrollView>
-      <View style={st.aiWrap}>
-        <View style={st.ai}>
-          <View style={st.i}>
-            <Text style={st.iT}>i</Text>
-          </View>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={st.aiT}>AI 연결 없음</Text>
-            <Text style={st.aiS}>체크리스트는 보드에만 저장되고, 뉴스·공시와 연결되지 않아요.</Text>
-          </View>
-        </View>
-      </View>
-      <Actions note="저장 후에도 언제든 고칠 수 있어요" ok="체크리스트 저장" onCancel={onCancel} onOk={save} pl={24} />
+      <SheetActions note="저장 후에도 언제든 고칠 수 있어요" ok="체크리스트 저장" onCancel={onCancel} onOk={save} />
     </>
   );
 }
 
-/** 원본 CheckDot: 18 · 끔 테두리 #D1D6DE · 켬 #14171C 채움 + 흰 체크 */
-function Dot({ on }: { on: boolean }) {
-  return (
-    <Svg width={18} height={18} viewBox="0 0 18 18">
-      {on ? (
-        <>
-          <Circle cx={9} cy={9} r={9} fill="#14171C" />
-          <Path d="M5.2 9.2l2.4 2.4 5-5" stroke="#FFFFFF" strokeWidth={1.6} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-        </>
-      ) : (
-        <Circle cx={9} cy={9} r={8.3} stroke="#D1D6DE" strokeWidth={1.4} fill="none" />
-      )}
-    </Svg>
-  );
-}
-
-/** 원본 Ring (창 안 색: 바탕 #E8ECF3 · 진행 #14171C) */
-function Ring({ done, n }: { done: number; n: number }) {
-  const C = 2 * Math.PI * 7;
-  return (
-    <Svg width={18} height={18} viewBox="0 0 18 18">
-      <Circle cx={9} cy={9} r={7} stroke="#E8ECF3" strokeWidth={2.4} fill="none" />
-      {done ? (
-        <Circle cx={9} cy={9} r={7} stroke="#14171C" strokeWidth={2.4} fill="none" strokeLinecap="round" strokeDasharray={`${C}`} strokeDashoffset={C * (1 - (n ? done / n : 0))} transform="rotate(-90 9 9)" />
-      ) : null}
-    </Svg>
-  );
-}
-
 const st = StyleSheet.create({
-  body: { flexShrink: 1, minHeight: 0 },
-  bodyIn: { paddingTop: 8, paddingHorizontal: 24, paddingBottom: 16, gap: 12 },
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  label: { ...fpx(17, 26), fontWeight: '700', color: INK },
-  hint: { ...fpx(13, 20), fontWeight: '500', color: '#747D8D' },
-  count: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  titleIn: { height: 48, borderRadius: 12, borderWidth: 1, borderColor: '#E8ECF3', backgroundColor: '#FAFBFC', paddingHorizontal: 16, ...fpx(15, 23), fontWeight: '700', color: INK },
-  list: { borderRadius: 16, borderWidth: 1, borderColor: '#E8ECF3', backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingVertical: 4 },
-  item: { height: 44, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  itemT: { flex: 1, minWidth: 0, ...fpx(15, 23), color: '#333D4B', ...({ outlineStyle: 'none' } as object) },
-  itemDone: { color: '#9AA3B2', textDecorationLine: 'line-through' },
-  x: { ...fpx(20, 29), fontWeight: '500', color: '#9AA3B2' },
-  sep: { height: 1, backgroundColor: '#E8ECF3' },
-  plus: { width: 18, height: 18, borderRadius: 5, borderWidth: 1, borderStyle: 'dashed', borderColor: '#D1D6DE', alignItems: 'center', justifyContent: 'center' },
-  plusT: { ...fpx(13, 20), fontWeight: '500', color: '#9AA3B2' },
-  addIn: { flex: 1, minWidth: 0, height: 23, ...fpx(15, 23), color: '#333D4B', ...({ resize: 'none', overflow: 'hidden', outlineStyle: 'none' } as object) },
-  aiWrap: { paddingHorizontal: 24, paddingVertical: 12 },
-  ai: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 12, backgroundColor: '#F2F3F4', paddingHorizontal: 16, paddingVertical: 12 },
-  i: { width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: '#9AA3B2', alignItems: 'center', justifyContent: 'center' },
-  iT: { ...fpx(13, 20), fontWeight: '700', color: '#747D8D' },
-  aiT: { ...fpx(17, 26), fontWeight: '500', color: INK },
-  aiS: { ...fpx(14, 21), fontWeight: '500', color: '#4E5968' },
+  flex: { flex: 1, minWidth: 0 },
+  body: { paddingHorizontal: 16, paddingBottom: 16 },
+  paper: { borderRadius: 22, paddingTop: 20, paddingHorizontal: 18, paddingBottom: 8 },
+  lab: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  labB: { ...ft(13), fontWeight: '700', color: '#9A6B4F' },
+  labS: { ...ft(12), color: '#B49A8A' },
+  cnt: { ...ft(13), fontWeight: '800' },
+  title: { fontSize: 22, lineHeight: 30, fontWeight: '800', color: appColor.ink, letterSpacing: -0.4, padding: 0, paddingVertical: 4, ...({ outlineStyle: 'none' } as object) },
+  row: { minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(194,65,12,0.12)' },
+  box: { width: 24, height: 24, borderRadius: 8, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  plus: { borderStyle: 'dashed' },
+  plusT: { fontSize: 16, lineHeight: 18, fontWeight: '800' },
+  in: { flex: 1, minWidth: 0, fontSize: 15.5, lineHeight: 22.5, fontWeight: '600', color: appColor.ink, padding: 0, ...({ outlineStyle: 'none' } as object) },
+  inDone: { color: '#A89A92', textDecorationLine: 'line-through' },
+  addIn: { fontWeight: '400', height: 24, ...({ resize: 'none', overflow: 'hidden' } as object) },
+  del: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  delT: { fontSize: 20, lineHeight: 24, color: '#C9A792' },
+  ai: { backgroundColor: '#FFFFFF', borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16, marginTop: 12 },
+  aiB: { ...ft(15), fontWeight: '700', color: appColor.ink },
+  aiS: { ...ft(12, 1.4), color: appColor.ink3, marginTop: 2 },
 });

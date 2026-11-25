@@ -11,7 +11,7 @@ import type { MemoColor } from '@/types/models';
 import { mockBase, mockKey } from '@/ui/screens/board/useBoardCards';
 import { useUsageView } from '@/ui/screens/my/useUsageView';
 import { useMarkWatchAdded } from '@/ui/screens/studio/reportView';
-import type { ChecklistDraft } from '../web/ChecklistTab';
+import type { ChecklistDraft } from './ChecklistTab';
 import { AppNewMemoDialog } from './NewMemoDialog';
 
 export interface NewMemoTarget {
@@ -25,7 +25,7 @@ export interface NewMemoTarget {
 }
 
 /**
- * 앱 새 메모 = 웹 새 메모 창과 같은 화면(AppNewMemoDialog)을 아래에서 올라오는 전체 높이 시트로 (메모 쓰기 · 메모에 추가 같이 씀).
+ * 앱 새 메모 = AppNewMemoDialog (항목·동작은 웹 새 메모 창과 같음) 을 아래에서 올라오는 전체 높이 시트로 (메모 쓰기 · 메모에 추가 같이 씀).
  * 실제 모드: 일반 메모로 저장 → AI 를 켰으면 AI 연결 창(/memo/link). '메모에 추가'는 확인·취소 뒤 보던 화면으로 돌아와 안내.
  * mock 모드: 앱 보드와 같은 store/mockBoard. 체크리스트 탭은 새 체크리스트 (앱은 여러 개).
  */
@@ -114,7 +114,6 @@ export function NewMemoSheet({ target, onClose, onSaved }: { target: NewMemoTarg
       initialText={t.text}
       initialAi={t.ai}
       aiSpent={spent}
-      checklist={null}
       onSaveChecklist={saveChecklist}
       onEmptyChecklist={() => {
         onClose();

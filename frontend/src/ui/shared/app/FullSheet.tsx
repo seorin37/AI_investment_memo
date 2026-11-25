@@ -39,5 +39,5 @@ export function FullSheet({ open, onClose, children, label }: Pick<SheetProps, '
 }
 
 const st = StyleSheet.create({
-  full: { position: 'absolute', left: 0, right: 0, bottom: 0, overflow: 'hidden', backgroundColor: appColor.surface, borderTopLeftRadius: 26, borderTopRightRadius: 26 },
+  full: { position: 'absolute', left: 0, right: 0, bottom: 0, overflow: 'hidden', backgroundColor: appColor.bg, borderTopLeftRadius: 26, borderTopRightRadius: 26 },
 });
