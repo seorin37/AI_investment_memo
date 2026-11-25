@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, KeyboardAvoidingView, Modal, PanResponder, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Animated, Modal, PanResponder, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/AppText';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
@@ -13,7 +13,6 @@ import { DarkLayer, SCRIM_DARK, useDark } from '@/ui/shared/Dark';
  */
 /** 웹 창을 앱에서 그대로 쓸 때 (width 를 주는 웹 컴포넌트): 바텀 시트가 아니라 웹처럼 가운데 창 */
 export function Sheet(p: SheetProps) {
-  if (p.full) return <FullSheet {...p} />;
   return p.width && !p.title ? <CenterSheet {...p} /> : <BottomSheet {...p} />;
 }
 
@@ -44,38 +43,6 @@ function CenterSheet({ open, onClose, children, width, label, scrim }: SheetProp
           <ScrollView style={st.centerScroll} showsVerticalScrollIndicator={false}>{children}</ScrollView>
         </Animated.View>
       </View>
-      </DarkLayer>
-    </Modal>
-  );
-}
-
-/** 전체 높이 시트: 상태 바 아래부터 화면 끝까지 (키보드가 올라오면 그 위까지) */
-function FullSheet({ open, onClose, children, label, scrim }: SheetProps) {
-  const k = useMotionK();
-  const dark = useDark();
-  const insets = useSafeAreaInsets();
-  const { height } = useWindowDimensions();
-  const [shown, setShown] = useState(open);
-  const [y] = useState(() => new Animated.Value(height));
-  if (open && !shown) setShown(true);
-  useEffect(() => {
-    if (!shown) return;
-    const a = Animated.timing(y, { toValue: open ? 0 : height, duration: (open ? dur.sheet : dur.base) * k, easing: open ? curve.sheet : curve.ease, useNativeDriver: NATIVE });
-    a.start(({ finished }) => {
-      if (finished && !open) setShown(false);
-    });
-    return () => a.stop();
-  }, [open, shown, y, height, k]);
-  if (!shown) return null;
-  return (
-    <Modal transparent visible animationType="none" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
-      <DarkLayer>
-      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: scrim ?? 'rgba(0,0,0,0.45)' }, dark && { backgroundColor: SCRIM_DARK }, { opacity: y.interpolate({ inputRange: [0, height], outputRange: [1, 0] }) }]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="닫기" />
-      </Animated.View>
-      <Animated.View accessibilityViewIsModal accessibilityLabel={label} style={[st.full, { top: insets.top, paddingBottom: insets.bottom, transform: [{ translateY: y }] }]}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={insets.top}>{children}</KeyboardAvoidingView>
-      </Animated.View>
       </DarkLayer>
     </Modal>
   );
@@ -142,7 +109,6 @@ function BottomSheet({ open, onClose, title, children, label }: SheetProps) {
 
 const st = StyleSheet.create({
   center: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center', padding: 16 },
-  full: { position: 'absolute', left: 0, right: 0, bottom: 0, overflow: 'hidden', backgroundColor: appColor.surface, borderTopLeftRadius: 26, borderTopRightRadius: 26 },
   centerScroll: { flexGrow: 0, borderRadius: 28 },
   scrim: { backgroundColor: 'rgba(12,12,22,0.4)' },
   sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: appColor.surface, borderTopLeftRadius: 26, borderTopRightRadius: 26, ...shadow.sheet },

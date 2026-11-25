@@ -6,10 +6,10 @@ import { useStudioPlayer } from '@/store/studioPlayer';
 import { Head } from '@/ui/screens/my/app/parts';
 import { reportView } from '@/ui/screens/studio/reportView';
 import { NewMemoSheet, type NewMemoTarget } from '@/ui/screens/memo/app/NewMemoSheet';
-import { WebReportDetail } from '@/ui/screens/studio/web/Report';
+import { AppReportDetail } from '@/ui/screens/studio/app/ReportDetail';
 import { webColor } from '@/ui/theme';
 
-/** 앱 주간보고서 자세히 보기 = 웹 WebReportDetail (폰 폭). '메모에 추가'는 이동하지 않고 새 메모 시트를 채워 엶 (NewMemoSheet) */
+/** 앱 주간보고서 자세히 보기 (웹과 같은 내용 · 폰 폭). '메모에 추가'는 이동하지 않고 새 메모 시트를 채워 엶 (NewMemoSheet) */
 export default function StudioReportScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -22,8 +22,7 @@ export default function StudioReportScreen() {
   return (
     <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom, backgroundColor: webColor.page }}>
       <Head title="AI 주간보고서" onBack={() => router.back()} />
-      <WebReportDetail
-        mobile
+      <AppReportDetail
         rep={v.rep}
         item={item}
         stocks={v.stocks}

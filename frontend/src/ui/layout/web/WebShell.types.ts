@@ -68,10 +68,6 @@ export interface StudioColumnFrameProps {
   onFeature: (f: StudioFeature) => void;
   /** 접힘 열의 기능 버튼 배지 ('1' 또는 만드는 중 '·') */
   badges?: Partial<Record<StudioFeature, string>>;
-  /** 앱 (폰 폭): 카드 테두리·접기 없이 화면을 채움 */
-  mobile?: boolean;
-  /** 앱: 머리 오른쪽 (알림 · MY) */
-  right?: React.ReactNode;
   /** 카드 안 내용 (⑧ 스튜디오 묶음에서 채움) */
   children?: React.ReactNode;
 }

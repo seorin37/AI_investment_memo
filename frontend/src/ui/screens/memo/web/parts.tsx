@@ -41,7 +41,7 @@ export function Toggle45({ on, set }: { on: boolean; set: (v: boolean) => void }
 }
 
 /** 원본 AiFooter: 108 (좌우 24 · 위아래 12) · 회색 상자 84 라운드 12 · 'AI 연결' 17/26 500 · 설명 14/21 500 */
-export function AiFooter({ on, set, sub, lines = 1 }: { on: boolean; set: (v: boolean) => void; sub: string; lines?: number }) {
+export function AiFooter({ on, set, sub }: { on: boolean; set: (v: boolean) => void; sub: string }) {
   /* 사용법 안내 ② 대상 (원본 board.tsx data-coach="ai" 회색 상자) */
   const coachRef = useCoachRef('ai');
   return (
@@ -50,7 +50,7 @@ export function AiFooter({ on, set, sub, lines = 1 }: { on: boolean; set: (v: bo
         <View style={st.footRow}>
           <View style={st.flex}>
             <Text style={st.footT}>AI 연결</Text>
-            <Text style={[st.footS, { color: on ? '#57535F' : '#4E5968' }]} numberOfLines={lines}>
+            <Text style={[st.footS, { color: on ? '#57535F' : '#4E5968' }]} numberOfLines={1}>
               {sub}
             </Text>
           </View>

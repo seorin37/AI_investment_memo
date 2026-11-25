@@ -6,7 +6,6 @@ import { env } from '@/config/env';
 import { useAiStats, useMyStocks } from '@/hooks/queries';
 import { useStudioPlayer } from '@/store/studioPlayer';
 import { useUI } from '@/store/ui';
-import { StudioColumnFrame } from '@/ui/layout/web/StudioColumnFrame';
 import { mockStudioHead } from '@/ui/layout/web/WebShell.mock';
 import { useMyProfile } from '@/ui/screens/my/useMyProfile';
 import { mockPayMethods } from '@/ui/screens/my/My.mock';
@@ -29,17 +28,20 @@ import { useLabVars } from '../useLabVars';
 import { labWatchDraft, labWatchItems, labWatchKey } from '../useLabWatch';
 import { useQuizAnswer } from '../useQuizAnswer';
 import { useTodayQuizView } from '../useTodayQuiz';
-import { WebFail, WebGen, WebLabGen, WebPlayer } from '../web/Audio';
+import { WebFail, WebGen, WebLabGen } from '../web/Audio';
 import { WebAudioPopup } from '../web/AudioPopup';
 import { WebChargePopup, WebCreditPopup, WebUsageSheet } from '../web/Credit';
 import { WebLab, WebLabResult, WebQuiz } from '../web/QuizLab';
 import { WebReportPopup, WebReportSum } from '../web/Report';
-import { WebStudioHome } from '../web/StudioHome';
+import { AppPlayer } from './Player';
+import { StudioFrame } from './StudioFrame';
+import { AppStudioHome } from './StudioHome';
 
 const NOT_YET = '아직 연결되지 않았어요 · 데이터는 그대로예요';
 
 /**
- * 앱 스튜디오 탭 = 웹 스튜디오 열(app/(main)/_layout.tsx)의 컴포넌트와 상태(store/studioPlayer webView)를 그대로 씀.
+ * 앱 스튜디오 탭 = 웹 스튜디오 열(app/(main)/_layout.tsx)와 같은 화면 · 상태(store/studioPlayer webView).
+ * 바꿀 것이 없는 화면은 웹 컴포넌트를, 폰 배치 · 재생 막기가 필요한 화면은 앱 파일(StudioFrame · StudioHome · Player · ReportDetail)을 씀.
  * 웹과 다른 것: 폭 100% · 접기 없음 · 재생 모듈이 없는 동안 재생 막기(appAudio) · '메모에 추가'는 이동하지 않고 새 메모 시트(NewMemoSheet) ·
  * 요금제 화면과 메모 열기는 앱 화면으로. 미니 플레이어는 탭 레이아웃.
  */
@@ -175,7 +177,7 @@ export function StudioScreen() {
       return <WebReportSum rep={rep.rep} item={repItem} stocks={rep.stocks} allDefault={rep.allDefault} onBack={() => sp.setWebView('home')} onDetail={() => router.push('/studio-report')} />;
     if (sp.webView === 'player' && item)
       return (
-        <WebPlayer
+        <AppPlayer
           item={item}
           ep={ep}
           t={sp.t}
@@ -190,7 +192,7 @@ export function StudioScreen() {
         />
       );
     return (
-      <WebStudioHome
+      <AppStudioHome
         features={mockStudioFeatures}
         made={sp.made}
         bottomPad={0}
@@ -220,7 +222,7 @@ export function StudioScreen() {
 
   return (
     <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: webColor.surface }}>
-      <StudioColumnFrame mobile open onToggle={() => undefined} {...head} usagePct={usage.usage_pct} onUsage={() => setPop('usage')} onFeature={feature}
+      <StudioFrame {...head} usagePct={usage.usage_pct} onUsage={() => setPop('usage')}
         right={
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <AppIconButton label="알림" size={40} icon="bell" iconSize={22} color={appColor.ink} onPress={() => router.push('/my-inbox')} />
@@ -231,7 +233,7 @@ export function StudioScreen() {
         }
       >
         <View style={{ flex: 1, minHeight: 0, paddingBottom: mini ? 84 : 0 }}>{view()}</View>
-      </StudioColumnFrame>
+      </StudioFrame>
       <NewMemoSheet target={memoTo} onClose={() => setMemoTo(null)} />
       <WebAudioPopup
         open={pop === 'audio'}

@@ -13,6 +13,4 @@ export interface SheetProps {
   label: string;
   /** 웹: 막 색 (원본 메모 창 rgba(14,15,20,.32) · 기본 rgba(0,0,0,.45)) */
   scrim?: string;
-  /** 앱: 가운데 창 대신 아래에서 올라오는 전체 높이 시트 (웹은 안 씀) */
-  full?: boolean;
 }

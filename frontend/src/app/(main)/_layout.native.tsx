@@ -5,9 +5,9 @@ import { useCoach } from '@/store/coach';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/store/auth';
 import { chapterAt, fmt, useStudioPlayer } from '@/store/studioPlayer';
-import { audioOff, blockPlay } from '@/ui/screens/studio/appAudio';
+import { audioOff, blockPlay, useNoAutoplay } from '@/ui/screens/studio/appAudio';
 import { epOf } from '@/ui/screens/studio/audioEp';
-import { WebMini } from '@/ui/screens/studio/web/Audio';
+import { AppMini } from '@/ui/screens/studio/app/Player';
 import { size } from '@/ui/theme';
 import { useUI } from '@/store/ui';
 import { useStudioItemsSync } from '@/ui/screens/studio/studioItems';
@@ -30,6 +30,7 @@ export default function MainTabsLayout() {
   useStudioItemsSync();
   /* 크레딧을 다 썼고 AI 연결 메모가 남아 있으면 '충전 · 업그레이드 · 모두 끄기' 한 번 묻기 (2026-11-24) */
   useAiOffPrompt();
+  useNoAutoplay();
   /* 로그인한 채 다른 사용자로 바뀌면(A → B) 커짐 → 탭을 다시 마운트해 열린 화면을 새 사용자 값으로 (store/auth sessionKey) */
   const sessionKey = useAuth((s) => s.sessionKey);
   /* 메모 고르기 중 탭바 숨김 (옛 보드가 store/ui 로 알려 줌) */
@@ -133,7 +134,7 @@ function Mini({ hidden }: { hidden: boolean }) {
   if (!p.mini || !item || hidden || onPlayer) return null;
   return (
     <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, height: 84, bottom: 1 + 65 + Math.max(size.tabBarPadBottom, insets.bottom), zIndex: 44 }}>
-      <WebMini
+      <AppMini
         title={item.title}
         sub={`지금 · ${ep.chapters[chapterAt(p.t, ep)][1]} · ${fmt(p.t)}`}
         progress={p.t / ep.dur}

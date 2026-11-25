@@ -18,9 +18,7 @@ export type ChecklistDraft = { title: string; items: { id?: string; text: string
  * 저장: 빈 글 항목은 빼고, 입력칸에 남은 글도 항목으로. 항목이 하나도 없으면 onEmpty (있던 체크리스트면 휴지통).
  * 2026-11-24: 만든 항목도 글을 바로 고칠 수 있게 (입력칸).
  */
-export function ChecklistTab({ initial, onCancel, onSave, onEmpty, fill }: {
-  /** 앱 시트: 남는 높이를 채워 버튼을 아래에 */
-  fill?: boolean;
+export function ChecklistTab({ initial, onCancel, onSave, onEmpty }: {
   initial: { title: string; items: ChecklistItem[] } | null;
   onCancel: () => void;
   onSave: (d: ChecklistDraft) => void;
@@ -47,7 +45,7 @@ export function ChecklistTab({ initial, onCancel, onSave, onEmpty, fill }: {
   };
   return (
     <>
-      <ScrollView style={[st.body, fill && { flexGrow: 1 }]} contentContainerStyle={st.bodyIn} showsVerticalScrollIndicator={false}>
+      <ScrollView style={st.body} contentContainerStyle={st.bodyIn} showsVerticalScrollIndicator={false}>
         <View style={st.row}>
           <Text style={st.label}>체크리스트 제목</Text>
           <Text style={st.hint}>보드 카드 제목으로 보여요</Text>

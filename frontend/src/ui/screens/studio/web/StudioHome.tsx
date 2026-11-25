@@ -7,7 +7,6 @@ import { FeatIcon } from '@/ui/layout/web/StudioColumnFrame';
 import { SpentBox } from '@/ui/shared/SpentBox';
 import { studioFeature } from '@/ui/theme';
 import type { MadeItem, StudioFeatureItem, StudioKind } from '../Studio.types';
-import { AUDIO_OFF_BG } from '../appAudio';
 import { useRemoveMade } from '../studioItems';
 
 type Hover = { hovered?: boolean; pressed?: boolean };
@@ -17,11 +16,9 @@ type Hover = { hovered?: boolean; pressed?: boolean };
  * (다 썼으면 SpentBox) · 설명 14 · 기능 줄(아이콘 44/13 · 제목 17 · 설명 15 · ›) · '만든 항목' 17 + 30일 보관 ·
  * 목록(라운드 18 · 줄 72 · 오디오는 바로 재생 36) · 아래 안내 13
  */
-export function WebStudioHome({ features, made, spent, refill, bottomPad = 0, playOff, onFeature, onOpenMade, onQuickPlay, onBuyCredit, onChangePlan }: {
+export function WebStudioHome({ features, made, spent, refill, bottomPad = 0, onFeature, onOpenMade, onQuickPlay, onBuyCredit, onChangePlan }: {
   /** 미니 플레이어가 떠 있으면 아래 빈 자리 (원본 pb-[84px]) */
   bottomPad?: number;
-  /** 앱: 재생 모듈이 없는 동안 바로 재생을 못 누르는 색으로 */
-  playOff?: boolean;
   features: StudioFeatureItem[];
   made: MadeItem[];
   spent: boolean;
@@ -65,7 +62,7 @@ export function WebStudioHome({ features, made, spent, refill, bottomPad = 0, pl
               {({ hovered }: Hover) => <TrashGlyph color={hovered ? '#E45D6A' : '#B0B5BD'} />}
             </Pressable>
             {m.kind === 'audio' ? (
-              <Pressable onPress={() => onQuickPlay(m)} accessibilityRole="button" accessibilityLabel="바로 재생" style={({ hovered }: Hover) => [st.qp, hovered && { backgroundColor: '#2A2A2A' }, playOff && { backgroundColor: AUDIO_OFF_BG }]}>
+              <Pressable onPress={() => onQuickPlay(m)} accessibilityRole="button" accessibilityLabel="바로 재생" style={({ hovered }: Hover) => [st.qp, hovered && { backgroundColor: '#2A2A2A' }]}>
                 <Svg width={14} height={14} viewBox="0 0 14 14" fill="#FFFFFF"><Path d="M4 2.5v9l7.5-4.5z" /></Svg>
               </Pressable>
             ) : null}
