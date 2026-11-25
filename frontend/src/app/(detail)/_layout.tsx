@@ -22,8 +22,8 @@ export default function DetailLayout() {
         {/* 원본 openCheck: 보드에서 열면 밀려 들어오고, + 버튼으로 새로 만들면 아래에서 올라옴 */}
         <Stack.Screen name="checklist/[id]" options={({ route }) => ((route.params as { id?: string } | undefined)?.id === 'new' ? { animation: 'slide_from_bottom' } : {})} />
       </Stack>
-      {/* MY 는 아래 탭 바(80) 위 16 · 실험 결과는 아래 버튼 위 */}
-      <MobileToast bottom={pathname === '/my' || pathname === '/studio-lab-result' ? 96 : 32} />
+      {/* MY 는 아래 탭 바(80) 위 16 */}
+      <MobileToast bottom={pathname === '/my' ? 96 : 32} />
     </View>
   );
 }

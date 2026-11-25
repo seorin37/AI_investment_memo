@@ -5,6 +5,7 @@ import type { MadeItem, StudioKind } from '@/ui/screens/studio/Studio.types';
 import { epOf, type AudioEp } from '@/ui/screens/studio/audioEp';
 import { registerUserReset } from '@/lib/sessionReset';
 import { env } from '@/config/env';
+import { audioOff } from '@/ui/screens/studio/appAudio';
 import { audioEngine, canPlayFile } from './audioEngine';
 
 /**
@@ -149,9 +150,9 @@ export const useStudioPlayer = create<StudioPlayerState>((set, get) => {
           set({ made, job: null, curReport: item.id, openKind: 'report',
             webView: s.webView === 'gen' ? 'report' : s.webView, openPlayer: s.genVisible ? s.openPlayer + 1 : s.openPlayer });
         } else {
-          set({ made, job: null, cur: item.id, openKind: 'audio', t: 0, mini: !here, playing: here,
+          set({ made, job: null, cur: item.id, openKind: 'audio', t: 0, mini: !here, playing: here && !audioOff,
             webView: s.webView === 'gen' ? 'player' : s.webView, openPlayer: s.genVisible ? s.openPlayer + 1 : s.openPlayer });
-          runPlay(here);
+          runPlay(here && !audioOff);
         }
         if (!here) useUI.getState().showToast(KIND_T[kind].done);
       },

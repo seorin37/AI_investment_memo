@@ -6,6 +6,7 @@ import { FeatIcon } from '@/ui/layout/web/StudioColumnFrame';
 import { chapterAt, fmt, lineAt, type GenJob } from '@/store/studioPlayer';
 import type { MadeItem } from '../Studio.types';
 import type { AudioEp } from '../audioEp';
+import { AUDIO_OFF_BG } from '../appAudio';
 import { GBtn } from './Credit';
 
 type Hover = { hovered?: boolean; pressed?: boolean };
@@ -96,8 +97,8 @@ function Face({ dark }: { dark?: boolean }) {
  * ‹ 스튜디오 · 회색 카드(진행자 56 · 제목 22 · 진행 막대 6(누르면 그 위치) · 시간 · −10 · 재생 56 · +10 · 속도) ·
  * 챕터 · 대본(지금 줄 앞뒤 4줄) · 들은 소식의 출처 · 연결된 메모 · [조건 바꿔 새로 만들기]
  */
-export function WebPlayer({ item, ep, t, playing, speed, onBack, onToggle, onSeek, onSpeed, onRemake }: {
-  item: MadeItem; ep: Ep; t: number; playing: boolean; speed: number;
+export function WebPlayer({ item, ep, t, playing, speed, playOff, onBack, onToggle, onSeek, onSpeed, onRemake }: {
+  item: MadeItem; ep: Ep; t: number; playing: boolean; speed: number; /** 앱: 재생 모듈이 없는 동안 못 누르는 색 */ playOff?: boolean;
   onBack: () => void; onToggle: () => void; onSeek: (t: number) => void; onSpeed: () => void; onRemake: () => void;
 }) {
   const [w, setW] = useState(1);
@@ -137,7 +138,7 @@ export function WebPlayer({ item, ep, t, playing, speed, onBack, onToggle, onSee
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>
           <Pressable onPress={() => onSeek(t - 10)} accessibilityRole="button" accessibilityLabel="10초 뒤로"><Text style={st.jump}>-10</Text></Pressable>
-          <Pressable onPress={onToggle} accessibilityRole="button" accessibilityLabel={playing ? '일시정지' : '재생'} style={st.play}>{playing ? Ico.pause() : Ico.play(22)}</Pressable>
+          <Pressable onPress={onToggle} accessibilityRole="button" accessibilityLabel={playing ? '일시정지' : '재생'} style={[st.play, playOff && { backgroundColor: AUDIO_OFF_BG }]}>{playing ? Ico.pause() : Ico.play(22)}</Pressable>
           <Pressable onPress={() => onSeek(t + 10)} accessibilityRole="button" accessibilityLabel="10초 앞으로"><Text style={st.jump}>+10</Text></Pressable>
           <Pressable onPress={onSpeed} accessibilityRole="button" accessibilityLabel="재생 속도" style={st.spd}><Text style={st.spdT}>{speed.toFixed(1)}x</Text></Pressable>
         </View>
@@ -199,10 +200,10 @@ export function WebPlayer({ item, ep, t, playing, speed, onBack, onToggle, onSee
 }
 
 /** 웹 미니 플레이어 = 원본 studio.tsx Mini (스튜디오 열 카드 안 아래 12 · 검정 · 라운드 18) */
-export function WebMini({ title, sub, progress, playing, onOpen, onToggle, onClose }: { title: string; sub: string; progress: number; playing: boolean; onOpen: () => void; onToggle: () => void; onClose: () => void }) {
+export function WebMini({ title, sub, progress, playing, playOff, onOpen, onToggle, onClose }: { title: string; sub: string; progress: number; playing: boolean; playOff?: boolean; onOpen: () => void; onToggle: () => void; onClose: () => void }) {
   return (
     <View style={[st.mini, miniEnter]}>
-      <Pressable onPress={onToggle} accessibilityRole="button" accessibilityLabel={playing ? '일시정지' : '재생'} style={st.miniP}>{playing ? Ico.pause(16, '#15171A') : Ico.play(16, '#15171A')}</Pressable>
+      <Pressable onPress={onToggle} accessibilityRole="button" accessibilityLabel={playing ? '일시정지' : '재생'} style={[st.miniP, playOff && { backgroundColor: AUDIO_OFF_BG }]}>{playing ? Ico.pause(16, '#15171A') : Ico.play(16, '#15171A')}</Pressable>
       <Pressable onPress={onOpen} accessibilityRole="button" style={{ flex: 1, minWidth: 0, gap: 1 }}>
         <Text style={st.miniT} numberOfLines={1}>{title}</Text>
         <Text style={st.miniS} numberOfLines={1}>{sub}</Text>

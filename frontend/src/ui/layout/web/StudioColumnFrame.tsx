@@ -52,7 +52,7 @@ export function FeatIcon({ f, size = 20 }: { f: StudioFeature; size?: number }) 
  * 접힘: 바깥 96 · 카드 72 · 높이 800(최대 100%) · 기능 버튼 4개
  * 카드 안 내용은 ⑧ 스튜디오 묶음에서 children 으로.
  */
-export function StudioColumnFrame({ open, onToggle, stockCount, aiMemoCount, usagePct, onUsage, onFeature, badges, children }: StudioColumnFrameProps) {
+export function StudioColumnFrame({ open, onToggle, stockCount, aiMemoCount, usagePct, onUsage, onFeature, badges, mobile, children }: StudioColumnFrameProps) {
   /* 사용법 안내 ④ 대상 (원본 studio.tsx data-coach="studio") */
   const coachRef = useCoachRef('studio');
   const z = useShellSize();
@@ -76,8 +76,8 @@ export function StudioColumnFrame({ open, onToggle, stockCount, aiMemoCount, usa
     );
   const out = usagePct >= 100;
   return (
-    <View style={[st.col, { width: z.studioCol }]} accessibilityLabel="스튜디오">
-      <View ref={coachRef} collapsable={false} style={[st.card, { width: z.studioCard }]}>
+    <View style={[st.col, { width: z.studioCol }, mobile && st.mobileCol]} accessibilityLabel="스튜디오">
+      <View ref={coachRef} collapsable={false} style={[st.card, { width: z.studioCard }, mobile && st.mobileCard]}>
         <View style={[st.head, z.studioHead]}>
           <View style={st.star}>
             <WebIcon name="sparkleNudge" size={19} color="#FFFFFF" />
@@ -96,9 +96,11 @@ export function StudioColumnFrame({ open, onToggle, stockCount, aiMemoCount, usa
             </View>
             <Text style={[st.usageT, { color: out ? webColor.usageOutInk : webColor.ink }]}>AI 사용량 {usagePct}%</Text>
           </Pressable>
-          <Pressable onPress={onToggle} accessibilityRole="button" accessibilityLabel="스튜디오 접기" style={({ hovered }: HoverState) => [st.fold, hovered && { backgroundColor: webColor.hover }]}>
-            <WebIcon name="studioFold" size={18} />
-          </Pressable>
+          {mobile ? null : (
+            <Pressable onPress={onToggle} accessibilityRole="button" accessibilityLabel="스튜디오 접기" style={({ hovered }: HoverState) => [st.fold, hovered && { backgroundColor: webColor.hover }]}>
+              <WebIcon name="studioFold" size={18} />
+            </Pressable>
+          )}
         </View>
         <View style={st.body}>{children}</View>
       </View>
@@ -109,6 +111,8 @@ export function StudioColumnFrame({ open, onToggle, stockCount, aiMemoCount, usa
 const st = StyleSheet.create({
   col: { height: '100%', paddingTop: 24, paddingRight: 24, paddingBottom: 24 },
   card: { flex: 1, overflow: 'hidden', borderRadius: 22, borderWidth: 1, borderColor: webColor.studioLine, backgroundColor: webColor.surface },
+  mobileCol: { width: '100%', paddingTop: 0, paddingRight: 0, paddingBottom: 0 },
+  mobileCard: { width: '100%', borderRadius: 0, borderWidth: 0 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   star: { width: 32, height: 32, borderRadius: 10, backgroundColor: webColor.ink, alignItems: 'center', justifyContent: 'center' },
   headText: { flex: 1, minWidth: 0 },

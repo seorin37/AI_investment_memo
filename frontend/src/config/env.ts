@@ -23,7 +23,5 @@ export const env = {
   useRealBoard,
   // Any real user-owned endpoint requires the normal OAuth/JWT session.
   useMockAuth,
-  /** mock: 스튜디오(앱) 만들기에 걸리는 시간(초). 긴 로딩 확인용 */
-  mockGenSeconds: Number(process.env.EXPO_PUBLIC_MOCK_GEN_SECONDS) || 5.5,
   mockLatency: Number(process.env.EXPO_PUBLIC_MOCK_LATENCY ?? 250),
 } as const;

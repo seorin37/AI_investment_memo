@@ -5,12 +5,10 @@ import { useCoach } from '@/store/coach';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/store/auth';
 import { chapterAt, fmt, useStudioPlayer } from '@/store/studioPlayer';
-import { blockPlay } from '@/ui/screens/studio/appAudio';
+import { audioOff, blockPlay } from '@/ui/screens/studio/appAudio';
 import { epOf } from '@/ui/screens/studio/audioEp';
-import { AppMiniPlayer } from '@/ui/screens/studio/app/MiniPlayer';
+import { WebMini } from '@/ui/screens/studio/web/Audio';
 import { size } from '@/ui/theme';
-import { useGenJobs } from '@/store/genJobs';
-import { useGenRestore } from '@/ui/screens/studio/genRuns';
 import { useUI } from '@/store/ui';
 import { useStudioItemsSync } from '@/ui/screens/studio/studioItems';
 import { BottomTabBar } from '@/ui/layout/app/BottomTabBar';
@@ -30,8 +28,6 @@ export default function MainTabsLayout() {
   const status = useAuth((s) => s.status);
   /* 스튜디오 만든 항목: 실제 모드면 서버 목록으로 (2026-11-23) */
   useStudioItemsSync();
-  useGenRestore();
-  const studioDot = useGenJobs((s) => s.dot);
   /* 크레딧을 다 썼고 AI 연결 메모가 남아 있으면 '충전 · 업그레이드 · 모두 끄기' 한 번 묻기 (2026-11-24) */
   useAiOffPrompt();
   /* 로그인한 채 다른 사용자로 바뀌면(A → B) 커짐 → 탭을 다시 마운트해 열린 화면을 새 사용자 값으로 (store/auth sessionKey) */
@@ -50,7 +46,6 @@ export default function MainTabsLayout() {
             current={TAB_OF[state.routes[state.index]?.name ?? 'index'] ?? 'home'}
             hidden={hidden}
             badges={mockTabBadges}
-            dots={{ studio: studioDot }}
             onPress={(tab) => {
               const route = state.routes.find((r) => r.name === ROUTE_OF[tab]);
               if (route) navigateToTab(route.key);
@@ -131,20 +126,27 @@ function Mini({ hidden }: { hidden: boolean }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const p = useStudioPlayer();
+  const pathname = usePathname();
   const item = p.made.find((m) => m.id === p.cur);
   const ep = epOf(item);
-  const ch = ep.chapters[chapterAt(p.t, ep)][1].split(' ·')[0];
+  const onPlayer = pathname === '/studio' && p.webView === 'player';
+  if (!p.mini || !item || hidden || onPlayer) return null;
   return (
-    <AppMiniPlayer
-      visible={p.mini && !!item && !hidden}
-      bottom={1 + 65 + Math.max(size.tabBarPadBottom, insets.bottom) + 10}
-      title={item?.title ?? ''}
-      sub={`${ch} · ${fmt(p.t)} / ${fmt(ep.dur)}`}
-      progress={p.t / ep.dur}
-      playing={p.playing}
-      onOpen={() => router.push('/studio-player')}
-      onToggle={() => !blockPlay() && p.toggle()}
-      onClose={p.closeMini}
-    />
+    <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, height: 84, bottom: 1 + 65 + Math.max(size.tabBarPadBottom, insets.bottom), zIndex: 44 }}>
+      <WebMini
+        title={item.title}
+        sub={`지금 · ${ep.chapters[chapterAt(p.t, ep)][1]} · ${fmt(p.t)}`}
+        progress={p.t / ep.dur}
+        playing={p.playing}
+        playOff={audioOff}
+        onOpen={() => {
+          p.setMini(false);
+          p.setWebView('player');
+          router.navigate('/studio');
+        }}
+        onToggle={() => !blockPlay() && p.toggle()}
+        onClose={p.closeMini}
+      />
+    </View>
   );
 }
