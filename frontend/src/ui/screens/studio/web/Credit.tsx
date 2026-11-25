@@ -163,7 +163,7 @@ export function WebChargePopup({ open, packs, default_credits, methods, onClose,
           ) : (
             <Svg width={18} height={18} viewBox="0 0 18 18" fill="none"><Path d="M11.25 3.75H6.75C5.09315 3.75 3.75 5.09315 3.75 6.75V11.25C3.75 12.9069 5.09315 14.25 6.75 14.25H11.25C12.9069 14.25 14.25 12.9069 14.25 11.25V6.75C14.25 5.09315 12.9069 3.75 11.25 3.75Z" stroke="#d9d9d9" strokeWidth={1.5} fill="white" /></Svg>
           )}
-          <Text keepAll style={st.agreeT}>산 크레딧은 결제한 날부터 1년 동안 쓸 수 있고, 환불되지 않아요. 다른 사람에게 넘기거나 현금으로 바꿀 수 없어요. (약관 동의)</Text>
+          <Text keepAll style={st.agreeT}>1년 동안 쓸 수 있고 환불·양도는 안 돼요. (약관 동의)</Text>
         </Pressable>
         <View style={{ alignSelf: 'stretch' }}><GBtn h={48} dark disabled={!agree} onPress={() => onPay(n)}>{`${cur?.label ?? ''} 결제하기`}</GBtn></View>
         <Text style={[st.popP, { textAlign: 'center' }]}>앱에서는 Google Play 결제로 진행돼요.</Text>
