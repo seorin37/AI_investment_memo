@@ -7,6 +7,7 @@ import type { ChartRange } from '@/types/models';
 import { Skeleton } from '@/ui/motion/Skeleton';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { NudgePill } from '@/ui/shared/NudgePill';
+import { StockTabs } from '@/ui/screens/board/app/StockTabs';
 import { PillSeg } from '@/ui/shared/PillSeg';
 import { Sheet } from '@/ui/shared/Sheet';
 import { appColor, curve, ft } from '@/ui/theme';
@@ -98,21 +99,9 @@ export function AppCompanyInfo(p: CompanyInfoProps & {
   const asOf = mmddOf(p.quote_as_of);
 
   const tab = (
-    <PillSeg
-      options={[
-        { key: 'board', label: '메모 보드' },
-        { key: 'company', label: '기업정보' },
-      ]}
-      value="company"
-      onChange={(t) => t === 'board' && p.onChangeTab('board')}
-      bg="#E3E5EA"
-      pad={4}
-      radius={14}
-      pillRadius={11}
-      height={40}
-      fontSize={14.5}
-      style={st.seg2}
-    />
+    <View style={st.seg2}>
+      <StockTabs value="company" onChange={p.onChangeTab} />
+    </View>
   );
 
   return (

@@ -29,7 +29,7 @@ export function AppMy(p: AppMyProps) {
   return (
     <View style={[st.root, { paddingTop: insets.top }]}>
       <Head title="MY" onBack={p.onBack} />
-      <ScrollView style={st.sc} contentContainerStyle={st.w} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={st.w} showsVerticalScrollIndicator={false}>
         <Rv i={0}>
           <Pressable onPress={p.onProfile} style={({ pressed }) => [st.prof, pressed && { backgroundColor: '#F7F7F9' }]} accessibilityRole="button" accessibilityLabel={`${p.profile.name} 내 프로필`}>
             <Avatar name={p.profile.name} photoUrl={p.profile.photoUrl} size={50} variant="app" boxStyle={st.avb} textStyle={st.avbT} />
@@ -111,8 +111,6 @@ function MoonIcon() {
 const st = StyleSheet.create({
   root: { flex: 1, backgroundColor: MC.bg },
   flex: { flex: 1, minWidth: 0 },
-  /* 머리 58 중 4 만큼 올려 프로필 카드를 원본 위치로 */
-  sc: { marginTop: -4 },
   w: { paddingHorizontal: 16, paddingBottom: 28 },
   sec: { paddingTop: 16, paddingLeft: 4, paddingBottom: 7 },
   secT: { fontSize: 12.5, lineHeight: 15, color: MC.ink3 },

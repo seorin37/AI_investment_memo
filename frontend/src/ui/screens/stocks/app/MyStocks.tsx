@@ -490,7 +490,8 @@ const st = StyleSheet.create({
   gi: { width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   ghT: { ...ft(16), fontWeight: '800', color: appColor.ink },
   ghS: { marginLeft: 'auto', ...ft(12), fontWeight: '500', color: appColor.ink3 },
-  sr: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#F4F5F7', borderRadius: 14, padding: 12, marginBottom: 8, borderWidth: 1.5, borderColor: 'transparent' },
+  /* 원본 줄 66 (안쪽 12 + 손잡이 자리 40) */
+  sr: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 66, backgroundColor: '#F4F5F7', borderRadius: 14, padding: 12, marginBottom: 8, borderWidth: 1.5, borderColor: 'transparent' },
   srOn: { backgroundColor: '#F4F0FF', borderColor: appColor.accent },
   srNew: { borderColor: appColor.accent, backgroundColor: '#F7F4FF' },
   lift: { shadowColor: '#111111', shadowOpacity: 0.45, shadowRadius: 11, shadowOffset: { width: 0, height: 10 }, elevation: 8, borderRadius: 14, backgroundColor: '#FFFFFF' },

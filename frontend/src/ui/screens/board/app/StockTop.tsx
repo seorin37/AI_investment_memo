@@ -1,8 +1,8 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { AppStockCard } from '@/ui/shared/StockHead';
 import type { StockHeadProps } from '@/ui/shared/StockHead.types';
 import { PriceNoteHead } from '../PriceNoteHead';
+import { AppStockCard } from './StockCard';
 
 /**
  * 앱 종목 상세 위 카드 — 메모 보드 · 기업정보 탭이 같이 씀 (자리 · 그림자 · 시세가 같아서 탭을 바꿔도 그대로).
