@@ -33,6 +33,8 @@ export function toPlanInfos(cat: Pick<PlanCatalog, 'plans'>): PlanInfo[] {
     tag: p.recommended ? '추천' : '',
     features: features(p),
     first: p.first_month_price != null && p.first_month_price < p.price ? `첫 달 ${won(p.first_month_price)}` : undefined,
+    first_price: p.first_month_price != null && p.first_month_price < p.price ? won(p.first_month_price) : undefined,
+    first_pct: p.first_month_price != null && p.first_month_price < p.price ? Math.round((1 - p.first_month_price / p.price) * 100) : undefined,
   }));
 }
 
@@ -63,6 +65,11 @@ export function toPlanNotes(cat: Pick<PlanCatalog, 'costs'>): string[] {
 /** 추가 크레딧 상품 (충전 창) */
 export function toCreditPacks(cat: Pick<PlanCatalog, 'credit_packs'>): CreditPack[] {
   return cat.credit_packs.map((p) => ({ credits: p.credits, label: `${p.credits} 크레딧`, price: won(p.price) }));
+}
+
+/** 시작 버튼 문구: 첫 달 할인이 있으면 '첫 달 7,450원으로 PLUS 시작하기' (모든 사용자에게 첫 결제 한 번, 2026-11-25) */
+export function startLabel(plan: Pick<PlanInfo, 'key' | 'first_price'> | undefined, key: string): string {
+  return plan?.first_price ? `첫 달 ${plan.first_price}으로 ${key} 시작하기` : `${key} 시작하기`;
 }
 
 /** 처음 고를 카드 = 추천 플랜 (없으면 첫 유료) */

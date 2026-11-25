@@ -12,6 +12,7 @@ import { SkySwitch } from '@/ui/shared/SkySwitch';
 import { WITHDRAW_REASONS, type InfoDoc, type MyProfile, type WithdrawProps } from '../My.types';
 import { SBtn } from './parts';
 import { DataTab, DocModal, InfoTab, NotiTab, PlanBar, PlanView, UsageTab, type WebSettingsExtra } from './SettingsTabs';
+import { startLabel } from '../planView';
 
 /**
  * 웹 설정 창 = 원본 web/src/screens/overlays.tsx Settings (1040×780 가운데 · 막 rgba(0,0,0,.32) · 라운드 20)
@@ -116,7 +117,7 @@ export function WebSettings(p: WebSettingsProps) {
             {p.tab === '데이터' ? <DataTab counts={p.counts} onExport={p.onExport} onAskWipe={() => setDanger('wipe')} /> : null}
             {p.tab === '정보' ? <InfoTab version={p.version} sources={p.sources} onDoc={setDoc} onFeedback={p.onFeedback} onReplayGuide={p.onReplayGuide} /> : null}
           </ScrollView>
-          {plan ? <PlanBar pick={pick} free={pick === p.current_plan_key} onStart={() => p.onStartPlan(pick)} /> : null}
+          {plan ? <PlanBar pick={pick} free={pick === p.current_plan_key} label={startLabel(p.plans.find((x) => x.key === pick), pick)} onStart={() => p.onStartPlan(pick)} /> : null}
         </View>
       </View>
       <Withdraw open={wd} counts={p.counts} why={why} setWhy={setWhy} onClose={() => setWd(false)} onGo={() => { setWd(false); setDanger('withdraw'); }} />

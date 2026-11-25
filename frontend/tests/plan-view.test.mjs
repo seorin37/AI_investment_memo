@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { MOCK_PLAN_CATALOG, defaultPlanKey, toCreditPacks, toPlanCompare, toPlanInfos, toPlanNotes, won } from '../src/ui/screens/my/planView.ts';
+import { MOCK_PLAN_CATALOG, defaultPlanKey, startLabel, toCreditPacks, toPlanCompare, toPlanInfos, toPlanNotes, won } from '../src/ui/screens/my/planView.ts';
 
 /* 2026-11-25 확정안 ⑧: 무료 20 · 플러스 14,900원 80 · 프로 29,900원 160, 추가 50개 9,900원 */
 test('플랜 카드: 가격 · 첫 달 · 추천', () => {
@@ -25,4 +25,11 @@ test('비교표 · 안내 · 충전 상품 · 처음 고를 카드', () => {
   assert.deepEqual(toCreditPacks(MOCK_PLAN_CATALOG), [{ credits: 50, label: '50 크레딧', price: '9,900원' }]);
   assert.equal(defaultPlanKey(MOCK_PLAN_CATALOG), 'PLUS');
   assert.equal(won(29900), '29,900원');
+});
+
+test('첫 달 50% 강조 · 시작 버튼', () => {
+  const p = toPlanInfos(MOCK_PLAN_CATALOG);
+  assert.deepEqual(p.map((x) => [x.first_price, x.first_pct]), [[undefined, undefined], ['7,450원', 50], ['14,950원', 50]]);
+  assert.equal(startLabel(p[1], 'PLUS'), '첫 달 7,450원으로 PLUS 시작하기');
+  assert.equal(startLabel(p[0], '무료'), '무료 시작하기');
 });

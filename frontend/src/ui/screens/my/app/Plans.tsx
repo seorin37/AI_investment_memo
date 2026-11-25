@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import type { PlansProps } from '../My.types';
+import { startLabel } from '../planView';
 import { Foot, Grp, Lb, MC, OkIcon, Page, Rv } from './parts';
 
 /**
@@ -21,7 +22,7 @@ export function AppPlans(p: PlansProps) {
       bottom={
         <>
           <Pressable disabled={free} onPress={() => p.onStart(pick)} style={({ pressed }) => [st.cta, free && st.ctaDis, pressed && { opacity: 0.9 }]} accessibilityRole="button">
-            <Text style={[st.ctaT, free && { color: MC.ink3 }]}>{free ? '지금 쓰는 플랜이에요' : `${pick} 시작하기`}</Text>
+            <Text style={[st.ctaT, free && { color: MC.ink3 }]}>{free ? '지금 쓰는 플랜이에요' : startLabel(p.plans.find((x) => x.key === pick), pick)}</Text>
           </Pressable>
           <Text style={st.cap}>결제는 스토어 결제 창에서 진행돼요</Text>
         </>
@@ -38,8 +39,15 @@ export function AppPlans(p: PlansProps) {
                 {pl.tag === '추천' ? <View style={[st.bd2, { backgroundColor: MC.aSoft }]}><Text style={[st.bd2T, { color: MC.a2 }]}>추천</Text></View> : null}
                 <View style={[st.rd, on && st.rdOn]} />
               </View>
-              <Text style={st.pr}>{pl.price} <Text style={st.prS}>{pl.price === '0원' ? '' : '/ 월'}</Text></Text>
-              {pl.first ? <Text style={st.first}>{pl.first}</Text> : null}
+              {pl.first_price ? (
+                <>
+                  <View style={st.sale}><Text style={st.saleT}>첫 달 {pl.first_pct}% 할인</Text></View>
+                  <Text style={st.pr}>{pl.first_price} <Text style={st.strike}>{pl.price}</Text></Text>
+                  <Text style={st.prS}>둘째 달부터 {pl.price} / 월</Text>
+                </>
+              ) : (
+                <Text style={st.pr}>{pl.price} <Text style={st.prS}>{pl.price === '0원' ? '' : '/ 월'}</Text></Text>
+              )}
               <View style={st.ul}>{pl.features.map((f) => <View key={f} style={st.li}><OkIcon /><Text keepAll style={st.liT}>{f}</Text></View>)}</View>
             </Pressable>
           </Rv>
@@ -76,7 +84,9 @@ const st = StyleSheet.create({
   rdOn: { borderWidth: 7, borderColor: MC.ink },
   pr: { fontSize: 22, lineHeight: 30, fontWeight: '800', color: MC.ink, marginTop: 10, marginBottom: 2 },
   prS: { fontSize: 13, fontWeight: '500', color: MC.ink3 },
-  first: { fontSize: 13, lineHeight: 18, fontWeight: '700', color: MC.a2 },
+  sale: { alignSelf: 'flex-start', marginTop: 10, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: '#FDECEC' },
+  saleT: { fontSize: 12, lineHeight: 17, fontWeight: '800', color: '#D33A3A' },
+  strike: { fontSize: 14, fontWeight: '500', color: MC.ink3, textDecorationLine: 'line-through' },
   ul: { marginTop: 10, gap: 7 },
   li: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
   liT: { flex: 1, fontSize: 13.5, lineHeight: 19.6, color: '#33343A' },
