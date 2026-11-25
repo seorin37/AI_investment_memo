@@ -11,6 +11,7 @@ import { api } from '@/api';
 import { useQueryClient } from '@tanstack/react-query';
 import { connectResult } from '@/ui/screens/board/useBoardData';
 import { ApiError } from '@/api/http';
+import { waitSave } from '@/lib/pendingSaves';
 
 /**
  * 앱 AI 연결 창 = UI v2 (아래에서 올라옴). mock 단계: 분석 중 1.2초 (새 메모면 1.7초) → 항목 있음 / 항목 없음.
@@ -41,7 +42,8 @@ export default function AiLinkScreen() {
   const qc = useQueryClient();
   useEffect(() => {
     if (!real || state !== 'loading' || !id) return;
-    void api.setAiLink(id, true).then(
+    /* 메모 상세에서 방금 고친 글이 저장된 뒤에 AI 켜기·분석 (2026-11-25) */
+    void waitSave(id).then(() => api.setAiLink(id, true)).then(
       (m) => {
         void qc.invalidateQueries(); // 보드 · 메모 상세의 AI 연결 표시
         if (closed.current) return void api.setAiLink(id, false).finally(() => qc.invalidateQueries());
@@ -86,7 +88,15 @@ export default function AiLinkScreen() {
       fromNew={from === 'new'}
       onConfirm={confirm}
       onCancel={cancel}
-      onEditMemo={() => (isNew ? router.back() : router.replace({ pathname: '/memo/[id]', params: { id: id! } }))}
+      onEditMemo={() => {
+        /* 2026-11-25 못 찾았을 때 [메모 수정]: 일반 메모로 두고 고치러 간다 (AI 연결이 켜진 채 남던 문제. 서버도 끈다) */
+        if (real) {
+          closed.current = true;
+          void screen.ops!.aiOff();
+        }
+        if (isNew) router.back();
+        else router.replace({ pathname: '/memo/[id]', params: { id: id! } });
+      }}
       onRetry={() => {
         setFailed(false);
         setAsked((n) => n + 1);

@@ -146,7 +146,17 @@ def analyze_memo(memo_id: int, revision_no: int, text: str, symbol: str, stock_n
             options.append(option)
         confirmations.append({"sentence_index": r.sentence_index, "text": r.text, "question": r.question,
                               "reason": r.reason, "options": options})
-    questions = [{"sentence_index": j.sentence_index, "text": j.cleaned_text or j.text, **a}
-                 for j in judged for a in (getattr(j, "asks", None) or [])]
+    questions, seen_q = [], set()
+    for j in judged:
+        for a in (getattr(j, "asks", None) or []):
+            key = " ".join(str(a.get("question") or "").split())
+            if key and key in seen_q:                        # 2026-11-25: "살까 / 말까 / 고민중"처럼 쪼개진 문장이 같은 질문을 내면 하나만 (답·크레딧 한 번)
+                continue
+            seen_q.add(key)
+            q = {"sentence_index": j.sentence_index, "text": j.cleaned_text or j.text, **a}
+            alerts = getattr(j, "ask_alerts", None) or []
+            if alerts:                                       # 2026-11-25: 답 카드의 "○○원 넘으면 알려드릴까요?" 제안용
+                q["alert"] = {"type": alerts[0]["type"], "price_threshold": alerts[0]["price_threshold"]}
+            questions.append(q)
     return AnalysisResult(items, confirmations, any(r.type == "out_of_scope" and r.scope == "memo" for r in responses), calls,
                           questions)

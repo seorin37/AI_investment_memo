@@ -23,6 +23,19 @@ def item_key(item: dict) -> tuple:
             None if threshold is None else int(float(threshold)))
 
 
+ALERT_KEYWORD = "alert:"    # 질문 항목 핵심어 "alert:price_above" = 가격 칸의 값이 알림 제안 조건 (2026-11-25)
+
+
+def ask_item(question: dict) -> dict:
+    """메모 분석 질문 → type='ask' 항목. "140만원 넘으면 살까?"처럼 가격 조건이 전제면 가격 칸에 값을, 핵심어에 방향을 둔다.
+    가격 조건 항목(price_*)이 아니므로 추적·가격 카드는 생기지 않고, 답 카드의 새 메모 제안에만 쓰인다."""
+    item = {"type": "ask", "description": " ".join(str(question.get("question") or "").split()), "keywords": []}
+    alert = question.get("alert") or {}
+    if alert.get("type") in ("price_above", "price_below") and alert.get("price_threshold"):
+        item.update(keywords=[f"{ALERT_KEYWORD}{alert['type']}"], price_threshold=int(alert["price_threshold"]))
+    return item
+
+
 class TrackingRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -122,8 +135,7 @@ class TrackingRepository:
         by_key = {item_key(e): e for e in existing}
         answered = {item_key(e) for e in self.items(memo_id, ("done",)) if e["type"] == "ask"}
         option_keys = {item_key({**o["item"]}) for c in confirmations for o in c["options"] if o.get("item", {}).get("type")}
-        asks = [{"type": "ask", "description": " ".join(str(q.get("question") or "").split()), "keywords": []}
-                for q in (questions or [])]
+        asks = [ask_item(q) for q in (questions or [])]
         wanted, created, kept = set(), [], []
         for it in [*new_items, *(a for a in asks if a["description"])]:
             key = item_key(it)

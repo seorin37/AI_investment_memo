@@ -99,12 +99,12 @@ def item_response(item: TrackingItem, kind: str, fail_codes: list[str], card: di
         return Response("no_data", reason="no_price", message=NO_DATA, **base)
     if kind == "price_stale":                             # 마지막 종가가 3거래일 넘게 오래됨 (price.price_outcome)
         return Response("no_data", reason="stale_price", message=NO_DATA, **base)
+    if kind == "update" and card and card.get("origin", "llm") in ("llm", "code"):   # code: 판단 질문의 주가 사실만 답 (2026-11-25)
+        return Response("update_card", reason="card", message=card.get("title", ""), card=card, **base)
     if item.type == "topic" and has_data is False:
         if item.category == "ask":                            # 실험(2026-11-17): 질문이면 '자료 없음' 답
             return ask_no_answer(item, "no_source_data", base)
         return Response("no_data", reason="no_source_data", message=NO_DATA, **base)
-    if kind == "update" and card and card.get("origin", "llm") == "llm":
-        return Response("update_card", reason="card", message=card.get("title", ""), card=card, **base)
     if fail_codes or kind == "fixed_card":                 # 카드 실패: 고정 문구 카드(on_check_fail=fixed)여도 보이지 않는다
         reason = failure_reason(fail_codes) if fail_codes else "check_failed"
     else:

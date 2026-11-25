@@ -21,8 +21,10 @@ DECISIONS = {"normal", "partial", "full_fallback", "needs_confirmation"}
 CATEGORIES = {f"A{i}" for i in range(1, 6)} | {f"B{i}" for i in range(1, 11)} | {f"C{i}" for i in range(1, 6)}
 ITEM_TYPES = {"topic", "price_below", "price_above"}
 
-PROMPT_PATH = "configs/tracking_judge_prompt.md"
-# 실험(2026-11-16): 환경변수로 지시문을 바꿔 끼운다 (예: configs/tracking_judge_prompt_intent.md). 없으면 기존 지시문.
+# 2026-11-25 기본값을 v2로: '사야 되나·오르나·가격 괜찮아' 같은 판단 질문을 반려하지 않고 사실 질문(ask)으로 한 번 답한다
+# (팀장님 요청, docs/memo-decision-question-design.md). 운영 서버에 TRACKING_PROMPT_PATH가 없어 옛 지시문으로 돌며 질문을 버리고 있었다.
+PROMPT_PATH = "configs/tracking_judge_prompt_intent_v2.md"
+# 환경변수로 지시문을 바꿔 끼운다 (예: 옛 지시문 configs/tracking_judge_prompt.md). 없으면 위 기본값.
 PROMPT_ENV = "TRACKING_PROMPT_PATH"
 ASK_KINDS = {"explain", "check"}
 

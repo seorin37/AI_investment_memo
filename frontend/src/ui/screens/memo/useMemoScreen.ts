@@ -9,6 +9,7 @@ import { findMockMemo, useMockBoard } from '@/store/mockBoard';
 import { mockDetailStockName, mockLastChecked, mockTrackItems } from './MemoDetail.mock';
 import type { AiTrackItem, MemoFeedItem } from './MemoDetail.types';
 import { feedOf, findMemo, mockUpdateStocks, versionsOf } from '@/ui/screens/updates/Updates.mock';
+import { trackSave } from '@/lib/pendingSaves';
 
 /**
  * 앱 메모 화면들(상세 · 근거 · 수정 이력 · AI 연결) 데이터 (2026-11-22, 웹은 보드 안 창이라 useBoardData 를 씀).
@@ -82,7 +83,7 @@ export function useMemoScreen(id: string) {
     lastChecked: lastCheckedText(raw?.tracking_items),
   };
   const ops = {
-    save: (p: { title: string; body: string }) => update.mutate({ id, patch: p }),
+    save: (p: { title: string; body: string }) => trackSave(id, update.mutateAsync({ id, patch: p })),   // AI 연결 창이 저장 끝을 기다림 (2026-11-25)
     color: (color: MemoColor) => update.mutate({ id, patch: { color } }),
     pin: (pinned: boolean) => update.mutate({ id, patch: { pinned } }),
     remove: () => del.mutateAsync(id),

@@ -26,6 +26,8 @@ export default function EvidenceScreen() {
       onShowMemo={() => router.dismissTo({ pathname: '/memo/[id]', params: { id: memo.id, tab: 'memo', t: String(Date.now()) } })}
       onOpenSource={(f) => (f.url ? Linking.openURL(f.url) : notice('원문 열기'))}
       onOpenHistory={(v) => router.push({ pathname: '/memo/history', params: { id: memo.id, v: String(v) } })}
+      /* 답 카드 [알림 받기] (2026-11-25): 이 종목 새 메모를 글을 채우고 AI 연결을 켠 채로 연다. 저장하면 평소처럼 가격 알림이 잡힌다 */
+      onSuggestMemo={(text) => router.push({ pathname: '/memo/new', params: { code: memo.stock_code, name: data.stockName, first_line: text, ai: '1' } })}
     />
   );
 }

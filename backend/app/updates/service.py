@@ -90,6 +90,8 @@ class UpdatesService:
             "memo_color": r["color"] or "yellow",               # 2026-11-22 업데이트 화면 메모 색 (C-21)
             "card_type": r["type"],                             # DB 원래 종류 (answer 등). 계약 type 은 contract_type
             "answer_status": details.get("answer_status") if r["type"] == "answer" else None,
+            # 2026-11-25 "140만원 넘으면 살까?" 답 → "140만원 넘으면 알려드릴까요?" [알림 받기] → 미리 채운 새 메모 창
+            "suggest_memo": details.get("suggest_memo") if r["type"] == "answer" else None,
             "item": {"id": str(r["item_id"]), "type": r["item_type"], "description": r["item_description"],
                      "status": r["item_status"], "last_checked_at": r["last_checked_at"]},
             "sources": srcs,
