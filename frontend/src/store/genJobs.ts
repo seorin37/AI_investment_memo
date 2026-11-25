@@ -22,7 +22,6 @@ export type StepState = 'wait' | 'run' | 'done' | 'bad';
 export interface GenCtx {
   /** 로그아웃 · 다시 시도로 이 실행이 버려졌으면 false */
   alive: () => boolean;
-  step: (steps: StepState[]) => void;
   startedAt: number;
   /** 다시 시도한 실행 */
   again: boolean;
@@ -34,6 +33,8 @@ export interface AppGenJob {
   kind: GenKind;
   sub: string;
   labels: string[];
+  /** 시작부터 다음 단계로 넘어가는 때 (ms, 단계 수 - 1 개). 결과가 먼저 오면 남은 단계를 STEP_MS 씩 차례로, 늦으면 마지막 단계에서 기다림 */
+  pace: number[];
   steps: StepState[];
   status: 'run' | 'fail';
   startedAt: number;
@@ -56,7 +57,7 @@ interface GenJobsState {
   /** 스튜디오 탭 점 (완성된 것이 있고 아직 안 열어 봄) */
   dot: boolean;
   /** 시작하고 작업 id 를 돌려줌. 같은 조건을 만드는 중이면 그 작업 */
-  start(p: Pick<AppGenJob, 'key' | 'kind' | 'sub' | 'labels' | 'run'> & { startedAt?: number }): string;
+  start(p: Pick<AppGenJob, 'key' | 'kind' | 'sub' | 'labels' | 'pace' | 'run'> & { startedAt?: number }): string;
   retry(id: string): void;
   setViewing(id: string | null): void;
   setStudioOpen(v: boolean): void;
@@ -72,14 +73,46 @@ function choose(item: MadeItem, autoplay: boolean) {
   else s.select(item.id);
 }
 
+/** 한 단계가 화면에 보이는 가장 짧은 시간 */
+const STEP_MS = 300;
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
 let seq = 0;
 
 export const useGenJobs = create<GenJobsState>((set, get) => {
   const patch = (id: string, f: (j: AppGenJob) => AppGenJob) => set((s) => ({ jobs: s.jobs.map((j) => (j.id === id ? f(j) : j)) }));
   const exec = (job: AppGenJob) => {
     const alive = () => get().jobs.some((j) => j.id === job.id && j.attempt === job.attempt);
+    const ended = { v: false, bad: false };
+    const last = job.labels.length - 1;
+    /* at 단계가 진행 중 (last + 1 이면 모두 완료) */
+    const show = (at: number) => patch(job.id, (j) => ({ ...j, steps: j.steps.map((_, i) => (i < at ? 'done' : i === at ? 'run' : 'wait')) }));
+    /* 다시 시도는 지금부터 */
+    const from = job.attempt ? Date.now() : job.startedAt;
+    const steps = (async () => {
+      for (let i = 0; i <= last; i += 1) {
+        const began = Date.now();
+        const due = i < last ? from + (job.pace[i] ?? 0) : Infinity;
+        while (alive() && !ended.bad && (Date.now() - began < STEP_MS || (!ended.v && Date.now() < due))) await sleep(50);
+        if (!alive() || ended.bad) return;
+        show(i + 1);
+      }
+      /* 모두 완료 표시를 잠깐 보여 줌 */
+      await sleep(STEP_MS);
+    })();
     job
-      .run({ alive, step: (steps) => alive() && patch(job.id, (j) => ({ ...j, steps })), startedAt: job.startedAt, again: job.attempt > 0 })
+      .run({ alive, startedAt: job.startedAt, again: job.attempt > 0 })
+      .then(
+        async (item) => {
+          ended.v = true;
+          await steps;
+          return item;
+        },
+        (e: unknown) => {
+          ended.bad = true;
+          throw e;
+        },
+      )
       .then(
         (item) => {
           if (!alive()) return;

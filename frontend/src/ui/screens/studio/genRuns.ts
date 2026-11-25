@@ -17,10 +17,11 @@ import { fromServerItem } from './studioItems';
 
 /**
  * 앱 스튜디오 만들기 (store/genJobs 가 실행).
- * - 주간보고서: 서버가 세부 단계를 주지 않아 첫 단계만 '진행 중', 완성되면 끝. 기다리는 시간(웹과 같은 6분)을 넘기면 그 작업만 실패.
+ * - 단계 표시: 서버가 세부 단계를 주지 않아 시간으로 넘어가고(PACE) 마지막 단계에서 결과를 기다림 (store/genJobs)
+ * - 주간보고서: 기다리는 시간(웹과 같은 6분)을 넘기면 그 작업만 실패.
  *   서버는 계속 만들고, 다시 시도하면 서버가 같은 조건의 항목을 돌려줘 이어서 기다림 (studio_report/routes.py SAME_SQL)
- * - 투자 실험실: 요청 하나로 답을 받음 → 조건 읽기 완료 · 영향 경로 찾기 '진행 중' → 답이 오면 결과 정리
- * - 오디오: POST /studio/audio → GET /studio/audio/{id} 로 완성 확인 (웹과 같은 10분, 보고서처럼 첫 단계만 '진행 중'). mock 모드는 예시
+ * - 투자 실험실: 요청 하나로 답을 받음
+ * - 오디오: POST /studio/audio → GET /studio/audio/{id} 로 완성 확인 (웹과 같은 10분). mock 모드는 예시
  * - mock 시간: EXPO_PUBLIC_MOCK_GEN_SECONDS (기본 5.5초)
  */
 export const LAB_STEPS = ['조건 읽기', '영향 경로 찾기', '결과 정리하기'];
@@ -34,6 +35,9 @@ const RESTORE_MS = 15 * 60_000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const mockMs = () => env.mockGenSeconds * 1000;
 const isReal = !env.useMock;
+/* 다음 단계로 넘어가는 때 (ms). 보고서·오디오는 store/studioPlayer 의 SERVER_STEPS 와 같음 · mock 은 삼등분 */
+const PACE = { report: [2500, 9000], audio: [3000, 40_000], lab: [1200, 4000] };
+const pace = (kind: keyof typeof PACE) => (isReal ? PACE[kind] : [mockMs() / 3, (mockMs() * 2) / 3]);
 
 async function waitReport(id: string, c: GenCtx): Promise<MadeItem> {
   let missing = 0;
@@ -63,6 +67,7 @@ export function startReport(p: { sub: string; codes: string[]; market: boolean; 
     kind: 'report',
     sub: p.sub,
     labels: mockReport.steps,
+    pace: pace('report'),
     startedAt: restore?.startedAt,
     run: async (c) => {
       if (isReal) {
@@ -105,21 +110,17 @@ export function startAudio(p: { sub: string; codes: string[]; period: string; ma
     kind: 'audio',
     sub: p.sub,
     labels: mockAudioGen.steps,
+    pace: pace('audio'),
     run: async (c) => {
       if (isReal) {
         const res = await api.createAudio({ codes: p.codes, period: p.period as AudioPeriod, market: p.market });
         return waitAudio(res.item_id, c);
       }
-      const part = mockMs() / 3;
-      await sleep(part);
-      c.step(['done', 'run', 'wait']);
       if (p.fail && !c.again) {
-        await sleep(part);
+        await sleep((mockMs() * 2) / 3);
         throw new Error('failed');
       }
-      await sleep(part);
-      c.step(['done', 'done', 'run']);
-      await sleep(part);
+      await sleep(mockMs());
       const dur = fmt(mockAudioEpisode.dur);
       const meta = `오디오 · ${p.codes.length}종목 · ${dur}`;
       return { id: `m${Date.now()}`, kind: 'audio', title: mockAudioGen.result_title, sub: meta, meta, left: '30일 뒤 삭제', dur, foot: p.sub };
@@ -136,8 +137,8 @@ export function startLab(stock: LabStock, dirs: LabDir[]): string {
     kind: 'lab',
     sub: t.title,
     labels: LAB_STEPS,
+    pace: pace('lab'),
     run: async (c) => {
-      c.step(['done', 'run', 'wait']);
       /* 다시 시도: 앞 요청이 끊겼어도 서버가 만들어 뒀으면 그것을 씀 */
       if (isReal && c.again) {
         const items = await api.listStudioItems();
@@ -151,7 +152,6 @@ export function startLab(stock: LabStock, dirs: LabDir[]): string {
       }
       if (!isReal) await sleep(mockMs());
       const result = await api.runLab({ stock_code: stock.stock_code, dirs }, { timeoutMs: 300_000 });
-      c.step(['done', 'done', 'run']);
       void queryClient.invalidateQueries({ queryKey: qk.usage });
       if (result.item_id) void queryClient.invalidateQueries({ queryKey: qk.studioItems });
       return {
