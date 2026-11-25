@@ -8,7 +8,6 @@ import { useMockBoard } from '@/store/mockBoard';
 import { mockBase, mockKey } from '@/ui/screens/board/useBoardCards';
 import { useUI } from '@/store/ui';
 import { AppNewMemo } from '@/ui/screens/memo/app/NewMemo';
-import { useMarkWatchAdded } from '@/ui/screens/studio/reportView';
 import { mockDetailStockName } from '@/ui/screens/memo/MemoDetail.mock';
 import { mockFirstHomeStocks } from '@/ui/screens/onboarding/Onboarding.mock';
 import { AppFirstMemo } from '@/ui/screens/onboarding/app/FirstMemo';
@@ -19,9 +18,7 @@ import { useUsageView } from '@/ui/screens/my/useUsageView';
  * 첫 메모(from_onboarding=1)는 원본 start.html #nm 화면(AppFirstMemo) — 머리 종목 칩으로 종목을 바꿀 수 있다.
  */
 export default function NewMemoScreen() {
-  const { code, name, first_line, body: preBody, ai: preAi, wr, wk, from_onboarding, onboarding_selected } = useLocalSearchParams<{ code?: string; name?: string; first_line?: string; body?: string; ai?: string; wr?: string; wk?: string; from_onboarding?: string; onboarding_selected?: string }>();
-  /* 주간보고서 '메모에 추가'(2026-11-24): 제목·본문을 채우고 AI 연결을 켠 채로 연다. 저장하면 보고서에 '추가됨'(wr·wk) */
-  const markWatch = useMarkWatchAdded();
+  const { code, name, first_line, from_onboarding, onboarding_selected } = useLocalSearchParams<{ code?: string; name?: string; first_line?: string; from_onboarding?: string; onboarding_selected?: string }>();
   const router = useRouter();
   /* 크레딧을 다 쓰면 AI 연결 스위치를 막고 일반 메모로만 (2026-11-24) */
   const usage = useUsageView();
@@ -57,8 +54,7 @@ export default function NewMemoScreen() {
   return (
     <AppNewMemo
       stockName={name || mockDetailStockName}
-      initialText={first_line ? (preBody ? `${first_line}\n${preBody}` : first_line) : undefined}
-      initialAi={preAi === '1'}
+      initialText={first_line || undefined}
       aiSpent={usage.paused || usage.usage_pct >= 100}
       onCancel={cancel}
       onEmpty={() => (code ? router.dismissTo({ pathname: '/stocks/[code]', params: { code, notice: 'empty', t: String(Date.now()) } }) : cancel())}
@@ -68,7 +64,6 @@ export default function NewMemoScreen() {
           void api.createMemo(code, { title, body, color, tags: [], ai_linked: false }).then(
             (m) => {
               void qc.invalidateQueries({ queryKey: qk.board(code) });
-              markWatch(wr, wk, m.id);
               if (ai) router.replace({ pathname: '/memo/link', params: { id: m.id, from: 'new' } });
               else router.dismissTo({ pathname: '/stocks/[code]', params: { code, notice: 'saved', t: String(Date.now()) } });
             },

@@ -2,6 +2,7 @@ import React, { useImperativeHandle, useRef, useState } from 'react';
 import { StyleSheet, type TextInputInstance } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { appColor, ft, webColor } from '@/ui/theme';
+import { ON_DOM } from './onDom';
 import type { MemoEditorProps } from './MemoEditor.types';
 
 /**
@@ -36,6 +37,7 @@ export function MemoEditor({ value, onChangeText, editable, autoFocus, variant, 
     <TextInput
       ref={ref}
       multiline
+      {...(ON_DOM ? { value } : null)}
       autoFocus={autoFocus ?? true}
       onFocus={onFocus}
       onChangeText={onChangeText}
@@ -48,7 +50,8 @@ export function MemoEditor({ value, onChangeText, editable, autoFocus, variant, 
       accessibilityLabel={accessibilityLabel ?? '메모 (첫 줄은 제목)'}
       style={s.box}
     >
-      {lines}
+      {/* 브라우저 미리보기의 textarea 는 글자 묶음(children)을 못 받아 value 로 */}
+      {ON_DOM ? null : lines}
     </TextInput>
   );
 }

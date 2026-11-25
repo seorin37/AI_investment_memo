@@ -9,7 +9,7 @@ import { labStockFor, useLabStocks } from '@/ui/screens/studio/useLabRun';
 import { useLabMemo } from '@/ui/screens/studio/useLabMemo';
 import { useLabVars } from '@/ui/screens/studio/useLabVars';
 import { labWatchDraft, labWatchKey } from '@/ui/screens/studio/useLabWatch';
-import { useOpenMemoDraft } from '@/ui/screens/studio/reportView';
+import { useAddMemo } from '@/ui/screens/studio/useAddMemo';
 
 /** 앱 실험 결과 (원본 studio.html pgLr). '조건 바꿔 다시 실험'은 그 조건을 실험실에 넣고 실험실로 */
 export default function StudioLabResultScreen() {
@@ -20,7 +20,7 @@ export default function StudioLabResultScreen() {
   /* 변수 '지금 값': 실제 모드면 GET /market/macro (2026-11-21) */
   const vars = useLabVars();
   const stocks = useLabStocks();
-  const openDraft = useOpenMemoDraft();
+  const addMemo = useAddMemo();
   const item = made.find((m) => m.id === cur && m.kind === 'lab') ?? made.find((m) => m.kind === 'lab');
   const memo = useLabMemo(item?.lab?.code ?? mockLabStocks[0].stock_code, true);
   if (Platform.OS === 'web') return <Redirect href="/" />;
@@ -33,9 +33,9 @@ export default function StudioLabResultScreen() {
       groups={labResultGroups(lab)}
       disclaimer={mockLabDisclaimer}
       onBack={() => router.back()}
-      isAdded={(i) => !!lab.added?.[labWatchKey(lab.code, i)]}
-      onWatch={(check, why, i) => openDraft({ code: lab.code, name: stock.name, ...labWatchDraft({ check, why }, item?.title ?? '투자 실험'),
-        itemId: item?.server ? item.id : undefined, key: labWatchKey(lab.code, i) })}
+      isAdded={(i) => !!lab.added?.[labWatchKey(lab.code, i)] || addMemo.isAdded(item?.id, labWatchKey(lab.code, i))}
+      onWatch={(check, why, i) => addMemo.add({ code: lab.code, ...labWatchDraft({ check, why }, item?.title ?? '투자 실험'),
+        itemId: item?.id, key: labWatchKey(lab.code, i), server: item?.server })}
       memo={memo}
       onMemo={(id) => (id ? router.push({ pathname: '/memo/[id]', params: { id } }) : router.push({ pathname: '/memo/new', params: { code: lab.code, name: stock.name } }))}
       onAgain={() => {
