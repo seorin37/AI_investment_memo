@@ -17,7 +17,7 @@ type Filter = '전체' | TrashItem['kind'];
 export function AppTrash({ items, onBack, onRestore, onUndo, onPurge }: TrashProps) {
   const [q, setQ] = useState('');
   const [f, setF] = useState<Filter>('전체');
-  const [ask, setAsk] = useState<TrashItem | null>(null);
+  const [ask, setAsk] = useState<TrashItem | 'all' | null>(null);
   const [snack, setSnack] = useState<TrashItem | null>(null);
   useEffect(() => {
     if (!snack) return;
@@ -70,22 +70,26 @@ export function AppTrash({ items, onBack, onRestore, onUndo, onPurge }: TrashPro
             <View style={st.empt}>
               <View style={st.ok}><OkIcon size={28} /></View>
               <Text style={st.emptB}>{items.length ? '찾는 항목이 없어요' : '휴지통이 비어 있어요'}</Text>
-              <Text keepAll style={st.emptS}>{items.length ? '다른 말로 찾아보세요' : '삭제한 메모·기록·종목이 여기에 30일 동안 보관돼요'}</Text>
+              <Text keepAll style={st.emptS}>{items.length ? '다른 말로 찾아보세요' : '지운 메모·기록·종목이 여기에 모여요'}</Text>
             </View>
           )}
         </Rv>
-        <Rv i={3}><Foot>영구 삭제하기 전까지 복원할 수 있어요.</Foot></Rv>
+        <Rv i={3}>
+          <Foot>휴지통 항목은 직접 지우기 전까지 보관돼요.</Foot>
+          <Pressable disabled={!items.length} onPress={() => setAsk('all')} accessibilityRole="button" accessibilityState={{ disabled: !items.length }} style={({ pressed }) => [st.all, !items.length && { opacity: 0.4 }, pressed && { backgroundColor: '#FDF0F1' }]}>
+            <Text style={st.allT}>휴지통 비우기</Text>
+          </Pressable>
+        </Rv>
       </Page>
       <AppSnackbar visible={!!snack} message="원래 자리로 복원했어요" onUndo={() => { if (snack) onUndo(snack); setSnack(null); }} style={st.snack} />
       <ConfirmSheet
         open={!!ask}
         red
-        title="영구 삭제할까요?"
-        /* 종목: 원본 웹에 종목용 문구가 없어 새로 씀 */
-        body={ask?.kind === '종목' ? '이 종목과 메모를 영구 삭제할까요? 되돌릴 수 없어요.' : ask?.kind === '스튜디오' ? '삭제하면 되돌릴 수 없어요. 다시 보려면 새로 만들어야 해요.' : '삭제하면 되돌릴 수 없어요. 이 메모의 수정 이력과 받은 소식도 함께 지워져요.'}
-        ok="영구 삭제"
+        title={ask === 'all' ? '휴지통을 비울까요?' : '영구 삭제할까요?'}
+        body={ask === 'all' ? `${items.length}개 항목이 영구 삭제돼요. 되돌릴 수 없어요.` : ask ? `'${ask.title}'을(를) 영구 삭제하면 되돌릴 수 없어요.` : ''}
+        ok={ask === 'all' ? '비우기' : '영구 삭제'}
         onCancel={() => setAsk(null)}
-        onOk={() => { const t = ask; setAsk(null); onPurge(t); }}
+        onOk={() => { const t = ask; setAsk(null); onPurge(t === 'all' ? null : t); }}
       />
     </View>
   );
@@ -120,6 +124,8 @@ const st = StyleSheet.create({
   trS: { fontSize: 12, lineHeight: 17, color: MC.ink3 },
   acts: { flexDirection: 'row', gap: 4 },
   act: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  all: { alignSelf: 'center', minHeight: 40, justifyContent: 'center', paddingHorizontal: 16, marginTop: 10, borderRadius: 12 },
+  allT: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: MC.red },
   empt: { alignItems: 'center', paddingVertical: 26, paddingHorizontal: 20 },
   ok: { width: 70, height: 70, borderRadius: 35, backgroundColor: MC.aSoft, alignItems: 'center', justifyContent: 'center', marginBottom: 22 },
   emptB: { fontSize: 15, lineHeight: 22, fontWeight: '700', color: MC.ink },

@@ -7,7 +7,7 @@ export type BoardFilter = 'all' | 'ai' | 'new';
 /** 웹 보드 카드 순서의 키: 메모 id 또는 체크리스트 'cl' */
 export type BoardKey = string;
 
-/** 메모 보드 (웹·앱 같은 props) */
+/** 웹 메모 보드 (체크리스트 하나 · 카드 키 'cl') */
 export interface MemoBoardProps {
   stock: StockHeadProps;
   /** 시세가 없을 때 머리 숫자 대신 보여 줄 안내 (실제 API 모드, 2026-11-21). 없으면 숫자 머리 */
@@ -53,4 +53,14 @@ export interface MemoBoardProps {
   onSelectionChange?: (count: number) => void;
   /** 사용량 소진 안내의 버튼 (크레딧 구매 · 플랜 변경) */
   onSpentAction?: (a: 'credit' | 'plan' | 'choice') => void;
+}
+
+/** 앱 메모 보드: 체크리스트 여러 개 · 순서는 실제 id · 고정과 휴지통은 메모와 체크리스트를 같이 (웹과 규칙이 달라 따로) */
+export interface AppMemoBoardProps extends Omit<MemoBoardProps, 'checklist' | 'order' | 'orderCustomized' | 'notice' | 'onOpenChecklist' | 'onToggleChecklistItem' | 'onTogglePin'> {
+  checklists: Checklist[];
+  /** 카드 순서. 고정한 카드는 순서와 상관없이 맨 앞 (boardCards arrange) */
+  order: BoardKey[];
+  notice?: { message: string; key: string; undo?: BoardKey[] };
+  onOpenChecklist: (id: string) => void;
+  onToggleChecklistItem: (id: string, itemId: string) => void;
 }

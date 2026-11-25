@@ -24,7 +24,7 @@ const HIDE_MS = 350;
  * 높이 80 = 위 선 1 + 탭 65 + 아래 여백 14. 기기 아래 안전 영역이 14보다 크면 그만큼.
  * 숨기면 아래로 내려가면서 자리도 접혀 빈 공간이 남지 않음 (규칙 5).
  */
-export function BottomTabBar({ current, onPress, badges, hidden = false }: BottomTabBarProps) {
+export function BottomTabBar({ current, onPress, badges, dots, hidden = false }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const k = useMotionK();
   const padB = Math.max(size.tabBarPadBottom, insets.bottom);
@@ -42,10 +42,11 @@ export function BottomTabBar({ current, onPress, badges, hidden = false }: Botto
           const on = t.key === current;
           const ink = on ? appColor.deepPurple : appColor.tabInk;
           return (
-            <Pressable key={t.key} style={st.tab} onPress={() => onPress(t.key)} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={t.label}>
+            <Pressable key={t.key} style={st.tab} onPress={() => onPress(t.key)} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={dots?.[t.key] ? `${t.label} · 새로 완성된 항목` : t.label}>
               <View collapsable={false} style={[st.ic, on && st.icOn]}>
                 <AppIcon name={t.icon} color={ink} />
                 <CountBadge count={badges?.[t.key] ?? 0} style={st.badge} />
+                {dots?.[t.key] ? <View style={st.dot} /> : null}
               </View>
               <Text style={[st.label, { color: ink, fontWeight: on ? '700' : '400' }]} numberOfLines={1}>
                 {t.label}
@@ -65,5 +66,6 @@ const st = StyleSheet.create({
   ic: { width: 50, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
   icOn: { backgroundColor: appColor.accentSoft },
   badge: { position: 'absolute', top: -4, right: 4 },
+  dot: { position: 'absolute', top: 2, right: 9, width: 8, height: 8, borderRadius: 4, backgroundColor: '#E5484D' },
   label: { ...ft(11.5), textAlign: 'center', flexShrink: 1 },
 });

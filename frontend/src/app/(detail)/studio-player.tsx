@@ -2,6 +2,7 @@ import React from 'react';
 import { BackHandler, Platform } from 'react-native';
 import { Redirect, useFocusEffect, useRouter } from 'expo-router';
 import { useStudioPlayer } from '@/store/studioPlayer';
+import { blockPlay } from '@/ui/screens/studio/appAudio';
 import { epOf } from '@/ui/screens/studio/audioEp';
 import { AppPlayer, SPEEDS } from '@/ui/screens/studio/app/Player';
 
@@ -27,7 +28,7 @@ export default function StudioPlayerScreen() {
       playing={p.cur === item.id && p.playing}
       speed={p.speed}
       onBack={back}
-      onToggle={() => (p.cur === item.id ? p.toggle() : p.play(item.id, true))}
+      onToggle={() => !blockPlay() && (p.cur === item.id ? p.toggle() : p.play(item.id, true))}
       onSeek={(t) => { if (p.cur !== item.id) p.select(item.id); p.seek(t); }}
       onSpeed={() => p.nextSpeed(SPEEDS)}
       onOpenMemo={() => {

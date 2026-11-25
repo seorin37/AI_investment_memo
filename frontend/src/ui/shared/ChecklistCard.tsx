@@ -36,6 +36,8 @@ export interface AppChecklistCardProps {
   selected: boolean;
   onPress: () => void;
   onLongPress: () => void;
+  /** 꾹 누른 뒤 뗌 (끌기 · 고르기 구분) */
+  onPressOut?: () => void;
   onToggleItem: (id: string) => void;
 }
 
@@ -45,7 +47,7 @@ export interface AppChecklistCardProps {
  * 항목 (위 8 · 사이 6): 동그라미 17 (안쪽 1.6 #E9B48F · 흰 .7 / 한 것 #FF7A1A) · 12.5px · 한 것 #B49A8A 줄 긋기
  * 3개까지 + '+N개 더' 11.5px 600 #B07A55. 항목 줄을 누르면 체크, 그 밖을 누르면 체크리스트 화면)
  */
-export function AppChecklistCard({ checklist, width, height, selecting, selected, onPress, onLongPress, onToggleItem, onAllDone }: AppChecklistCardProps & { onAllDone?: (center: { x: number; y: number }) => void }) {
+export function AppChecklistCard({ checklist, width, height, selecting, selected, onPress, onLongPress, onPressOut, onToggleItem, onAllDone }: AppChecklistCardProps & { onAllDone?: (center: { x: number; y: number }) => void }) {
   const L = checklist.items.length;
   /* 축하 (원본 memo.html toggleCk: 체크할 때 점이 튀고 · 마지막 항목이면 .32초 뒤 카드 가운데서 색종이) */
   const outer = useRef<React.ComponentRef<typeof View>>(null);
@@ -64,7 +66,7 @@ export function AppChecklistCard({ checklist, width, height, selecting, selected
   const tone = useChecklistTone();
   return (
     <View ref={outer} collapsable={false} style={{ width, height }}>
-      <Pressable onPress={onPress} onLongPress={onLongPress} delayLongPress={480} accessibilityRole="button" accessibilityLabel={checklist.title || '체크리스트'} style={[st.face, { width, height, backgroundColor: tone.paper }, selected && st.faceSel]}>
+      <Pressable onPress={onPress} onLongPress={onLongPress} onPressOut={onPressOut} delayLongPress={480} accessibilityRole="button" accessibilityLabel={checklist.title || '체크리스트'} style={[st.face, { width, height, backgroundColor: tone.paper }, selected && st.faceSel]}>
         <View style={st.ckh}>
           <View style={st.cki}>
             <CkiMark size={14} />
@@ -79,7 +81,7 @@ export function AppChecklistCard({ checklist, width, height, selecting, selected
         <View style={st.ckl}>
           {L ? (
             ord.slice(0, 3).map((x) => (
-              <Pressable key={x.id} onPress={() => (selecting ? onPress() : toggle(x.id))} onLongPress={onLongPress} delayLongPress={480} accessibilityRole="checkbox" accessibilityState={{ checked: x.done }} accessibilityLabel={x.text} style={({ pressed }) => [st.cr, pressed && { backgroundColor: 'rgba(255,122,26,0.12)' }]}>
+              <Pressable key={x.id} onPress={() => (selecting ? onPress() : toggle(x.id))} onLongPress={onLongPress} onPressOut={onPressOut} delayLongPress={480} accessibilityRole="checkbox" accessibilityState={{ checked: x.done }} accessibilityLabel={x.text} style={({ pressed }) => [st.cr, pressed && { backgroundColor: 'rgba(255,122,26,0.12)' }]}>
                 <View style={[st.cc, x.done ? [st.ccOn, { backgroundColor: tone.tape }] : [st.ccOff, { borderColor: tone.cardBox, backgroundColor: tone.cardBoxBg }]]}>
                   {x.done ? <CheckMark kind="cki" size={11} stroke={1.9} /> : null}
                   <DotBurst fire={pop?.id === x.id ? pop.n : 0} size={17} />
@@ -103,12 +105,12 @@ export function AppChecklistCard({ checklist, width, height, selecting, selected
 }
 
 /** 앱 목록 체크리스트 줄 (원본 .list .item.ck: 흰 바탕 · 아래 선 · 표 36 (라운드 11) · 이름 15.5px 800 · 'n/N 완료 · 다음 항목' 12.5px) */
-export function AppChecklistRow({ checklist, width, selecting, selected, onPress, onLongPress }: Omit<AppChecklistCardProps, 'height' | 'onToggleItem'>) {
+export function AppChecklistRow({ checklist, width, selecting, selected, onPress, onLongPress, onPressOut }: Omit<AppChecklistCardProps, 'height' | 'onToggleItem'>) {
   const L = checklist.items.length;
   const d = checklist.items.filter((x) => x.done).length;
   const next = checklist.items.find((x) => !x.done)?.text ?? '모두 끝냈어요';
   return (
-    <Pressable onPress={onPress} onLongPress={onLongPress} delayLongPress={480} accessibilityRole="button" accessibilityLabel={checklist.title || '체크리스트'} style={({ pressed }) => [st.row, { width, backgroundColor: selected ? '#F4F0FF' : pressed ? '#F1F1F4' : '#FFFFFF' }]}>
+    <Pressable onPress={onPress} onLongPress={onLongPress} onPressOut={onPressOut} delayLongPress={480} accessibilityRole="button" accessibilityLabel={checklist.title || '체크리스트'} style={({ pressed }) => [st.row, { width, backgroundColor: selected ? '#F4F0FF' : pressed ? '#F1F1F4' : '#FFFFFF' }]}>
       <ListCheck visible={selecting} on={selected} />
       <View style={st.ckiBig}>
         <CkiMark size={18} />

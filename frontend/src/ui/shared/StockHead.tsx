@@ -1,5 +1,5 @@
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
 import { appColor, fpx, ft, webColor } from '@/ui/theme';
@@ -8,6 +8,9 @@ import type { StockHeadProps } from './StockHead.types';
 import { StockLogo } from './StockLogo';
 
 const won = (n: number) => Math.round(n).toLocaleString('ko-KR');
+/* 165deg */
+const SIN = Math.sin((165 * Math.PI) / 180);
+const COS = -Math.cos((165 * Math.PI) / 180);
 const pct = (n: number) => Math.abs(n).toFixed(2);
 
 /**
@@ -16,20 +19,33 @@ const pct = (n: number) => Math.abs(n).toFixed(2);
  * 2줄(위 12): 가격 27px 800 자간 -0.5 · 등락 13px (상승 #E5323B) · 오른쪽 작은 선 120×44
  * 3줄(위 12): 'MM.DD 종가 기준' 11.5px #9A9EA7). 바깥 여백(좌우 16)은 부모가.
  */
-export function AppStockCard(s: StockHeadProps) {
+export function AppStockCard({ loading, ...s }: StockHeadProps & { loading?: boolean }) {
+  const { width: W } = useWindowDimensions();
+  /* 첫 그림은 화면 폭으로 짐작하고, 재면 그 값으로 */
+  const [box, setBox] = useState({ w: W - 32, h: 178 });
+  /* CSS 165deg 선: 길이 = w·sin + h·cos (가운데 기준 반씩) */
+  const half = (box.w * SIN + box.h * COS) / 2;
+  const gx = half * SIN;
+  const gy = half * COS;
   const up = s.change >= 0;
   const c = up ? '#E5323B' : appColor.down;
   return (
-    <View style={st.card}>
-      <Svg style={StyleSheet.absoluteFill} preserveAspectRatio="none" viewBox="0 0 100 100">
+    <View
+      style={st.card}
+      onLayout={(e) => {
+        const { width: w, height: h } = e.nativeEvent.layout;
+        setBox((b) => (b.w === w && b.h === h ? b : { w, h }));
+      }}
+    >
+      <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
         <Defs>
           {/* 165deg: 위·약간 왼쪽 → 아래·약간 오른쪽 */}
-          <LinearGradient id="stockcard" x1="0.37" y1="0" x2="0.63" y2="1">
+          <LinearGradient id="stockcard" gradientUnits="userSpaceOnUse" x1={box.w / 2 - gx} y1={box.h / 2 - gy} x2={box.w / 2 + gx} y2={box.h / 2 + gy}>
             <Stop offset="0" stopColor="#F3F4F6" />
             <Stop offset="1" stopColor="#E2E4E9" />
           </LinearGradient>
         </Defs>
-        <Rect x="0" y="0" width="100" height="100" fill="url(#stockcard)" />
+        <Rect x="0" y="0" width="100%" height="100%" fill="url(#stockcard)" />
       </Svg>
       <View style={st.r1}>
         <StockLogo logo={s.logo} bg={s.logo_bg} ink={s.logo_ink} size={40} variant="app" />
@@ -45,7 +61,7 @@ export function AppStockCard(s: StockHeadProps) {
           <Text style={st.holdT}>{s.status === 'holding' ? '보유' : '관심'}</Text>
         </View>
       </View>
-      <View style={st.r2}>
+      <View style={[st.r2, loading && st.hide]}>
         <View style={st.flex}>
           <Text style={st.price} numberOfLines={1}>
             {won(s.price)}원
@@ -58,7 +74,7 @@ export function AppStockCard(s: StockHeadProps) {
         </View>
         <Sparkline data={s.closes} color={c} variant="appCard" />
       </View>
-      <Text style={st.note}>{s.as_of} 종가 기준</Text>
+      <Text style={[st.note, loading && st.hide]}>{s.as_of} 종가 기준</Text>
     </View>
   );
 }
@@ -116,6 +132,7 @@ const st = StyleSheet.create({
   code: { ...ft(12), color: appColor.ink2, marginTop: 4 },
   hold: { borderRadius: 7, backgroundColor: appColor.surface, paddingVertical: 3, paddingHorizontal: 8 },
   holdT: { ...ft(12), fontWeight: '600', color: appColor.ink },
+  hide: { opacity: 0 },
   r2: { flexDirection: 'row', alignItems: 'flex-end', marginTop: 12 },
   price: { ...ft(27), fontWeight: '800', letterSpacing: -0.5, color: appColor.ink },
   chg: { ...ft(13), marginTop: 2 },

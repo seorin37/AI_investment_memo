@@ -1,30 +1,28 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback } from 'react';
 import { Platform } from 'react-native';
-import { Redirect, useFocusEffect, useRouter } from 'expo-router';
-import { useStudioPlayer } from '@/store/studioPlayer';
-import { mockAudioGen, mockReport } from '@/ui/screens/studio/Studio.mock';
+import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useGenJobs } from '@/store/genJobs';
 import { AppGen } from '@/ui/screens/studio/app/Gen';
 
-/** 앱 만드는 중 (원본 studio.html pgGen · 오디오 · 주간보고서). 크레딧 차감 없음 · 다 되면 결과 화면으로 바꿔 열기 */
+/** 앱 만드는 중 (원본 studio.html pgGen · 오디오 · 주간보고서 · 투자 실험실). 다 되면 store/genJobs 가 결과 화면으로 바꿔 열기 */
 export default function StudioGenScreen() {
   const router = useRouter();
-  const job = useStudioPlayer((s) => s.job);
-  const openSig = useStudioPlayer((s) => s.openPlayer);
-  const setVisible = useStudioPlayer((s) => s.setGenVisible);
-  const retry = useStudioPlayer((s) => s.retry);
-  const first = useRef(openSig);
-  useFocusEffect(useCallback(() => { setVisible(true); return () => setVisible(false); }, [setVisible]));
-  useEffect(() => {
-    if (openSig === first.current) return;
-    router.replace(useStudioPlayer.getState().openKind === 'report' ? '/studio-report' : '/studio-player');
-  }, [openSig, router]);
-  /* 보고서가 기다리는 시간을 넘기면 job 이 비워진다 (안내 토스트) → 스튜디오로 돌아감 (2026-11-24) */
-  const hadJob = useRef(!!job);
-  useEffect(() => {
-    if (job) hadJob.current = true;
-    else if (hadJob.current && Platform.OS !== 'web') router.back();
-  }, [job, router]);
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const job = useGenJobs((s) => s.jobs.find((j) => j.id === id));
+  const setViewing = useGenJobs((s) => s.setViewing);
+  const retry = useGenJobs((s) => s.retry);
+  useFocusEffect(
+    useCallback(() => {
+      /* 이미 끝났거나 새로고침으로 없어진 작업 */
+      if (!useGenJobs.getState().jobs.some((j) => j.id === id)) {
+        router.dismissTo('/studio');
+        return;
+      }
+      setViewing(id);
+      return () => setViewing(null);
+    }, [id, router, setViewing]),
+  );
   if (Platform.OS === 'web') return <Redirect href="/" />;
   if (!job) return null;
-  return <AppGen job={job} steps={job.kind === 'report' ? mockReport.steps : mockAudioGen.steps} onBack={() => router.back()} onAway={() => router.back()} onRetry={retry} />;
+  return <AppGen job={job} onBack={() => router.back()} onAway={() => router.dismissTo('/studio')} onRetry={() => retry(job.id)} />;
 }

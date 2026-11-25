@@ -15,21 +15,31 @@ import {
 } from '@/hooks/queries';
 import type { BoardItem, Checklist, ChecklistItem, Memo, MemoAnalysis, MemoColor, MemoTimeline, MemoVersion } from '@/types/models';
 import type { AiTrackItem, MemoFeedItem } from '@/ui/screens/memo/MemoDetail.types';
+import type { BoardCards } from './boardCards';
 import { toFeedItem } from '@/ui/screens/memo/toFeedItem';
 
 /**
  * 메모 보드(③) · 메모 창(④) 실제 데이터 (2026-11-22, 업데이트 useUpdatesData 와 같은 틀).
- * - 보드: GET /stocks/{code}/board → 메모 · 체크리스트(화면은 1개, 첫 번째) · 카드 순서(position)
+ * - 보드: GET /stocks/{code}/board → 메모 · 체크리스트 여러 개 · 카드 순서(position)
  * - 메모 창: GET /memos/{id}/timeline → 수정 이력 · AI 소식 · 추적 항목
  * - 쓰기: 화면은 지금처럼 자기 상태를 먼저 바꾸고, 여기 함수가 서버에 보낸다 (mock 모드면 아무것도 안 함)
  * - AI 연결 (전수 검사 결정 7, 임시안 '저장 = 켜기'): 연결 창이 열릴 때 PUT ai-link(켜기) → 분석 결과를 창에 보여 줌,
  *   '일반 메모로 두기' = 끄기. 분석만 하는 API 는 없다
  */
-export function boardFrom(items: BoardItem[]): { memos: Memo[]; checklist: Checklist | null; order: string[] } {
+export function boardFrom(items: BoardItem[]): BoardCards & { checklist: Checklist | null; cardOrder: string[] } {
   const sorted = [...items].sort((a, b) => a.position - b.position);
   const memos = sorted.filter((b): b is Memo => b.kind === 'memo');
-  const checklist = sorted.find((b): b is Checklist => b.kind === 'checklist') ?? null;
-  return { memos, checklist, order: sorted.filter((b) => b.kind === 'memo' || b.id === checklist?.id).map((b) => b.id) };
+  const checklists = sorted.filter((b): b is Checklist => b.kind === 'checklist');
+  const checklist = checklists[0] ?? null;
+  return {
+    memos,
+    checklists,
+    /* 웹 보드: 체크리스트는 첫 번째 하나, 순서도 그 하나만 */
+    checklist,
+    order: sorted.filter((b) => b.kind === 'memo' || b.id === checklist?.id).map((b) => b.id),
+    /* 앱 보드: 체크리스트를 모두 넣은 순서 */
+    cardOrder: sorted.filter((b) => b.kind !== 'reference').map((b) => b.id),
+  };
 }
 
 const DIR: Record<string, '이하' | '이상'> = {
@@ -120,7 +130,7 @@ export function useBoardData(code: string, openId: string | null) {
       }
     },
     /**
-     * 체크리스트 저장 (웹 새 메모 창 [체크리스트] 탭, 2026-11-22). 종목당 하나: 있으면 PATCH(이름 · 항목 통째로), 없으면 POST.
+     * 체크리스트 저장 (웹 새 메모 창 [체크리스트] 탭, 2026-11-22). existingId 가 있으면 PATCH(이름 · 항목 통째로), 없으면 POST(새 카드).
      * 서버 id 가 있는 항목은 id 를 그대로 보내 체크 상태가 이어지고, 새 항목은 id 없이 보낸다.
      */
     async saveChecklist(existingId: string | null, d: { title: string; items: { id?: string; text: string; done: boolean }[] }): Promise<Checklist | null> {

@@ -4,14 +4,15 @@ import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-nativ
 import { AnimatedText, Text, TextInput } from '@/components/ui/AppText';
 import type { Checklist } from '@/types/models';
 import { CheckGlyph, CtaChevron, PlugGlyph, WIDGET_META, WidgetGlyph } from '@/ui/icons/HomeGlyphs';
-import { CountUp, Odometer } from '@/ui/motion/Numbers';
+import { Odometer } from '@/ui/motion/Numbers';
 import { Skeleton } from '@/ui/motion/Skeleton';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { useProgress } from '@/ui/motion/useProgress';
+import { usePaper } from '@/ui/shared/Dark';
 import { StockLogo } from '@/ui/shared/StockLogo';
 import { appColor, curve, ft } from '@/ui/theme';
 import type { HomeNewsItem, HomeUpdateRow, HomeWidget, MarketIndex } from '../Home.types';
-import { APP_SPARK_N, ago, basisText, hm, mmdd, nf, spark } from '../homeFormat';
+import { ago, basisText, hm, mmdd, nf, spark, WEB_RANGES, mkData, type WebRange } from '../homeFormat';
 import { PopBurst } from '@/components/motion/Celebrate';
 
 /* 원본 home.html confetti 색 */
@@ -33,7 +34,7 @@ export function WidgetTitle({ id, title, right }: { id: HomeWidget; title: strin
 }
 
 /* ───────── 인사 카드 (원본 .w.fixed: 165deg #EFF0F3 → #E3E5EA · 고정) ───────── */
-export function HeroCard({ name, total, counts, editing, ready, onCta }: { name: string; total: number; counts: { holding: number; watching: number; ai_memos: number }; editing: boolean; ready: boolean; onCta: () => void }) {
+export function HeroCard({ name, total, editing, ready, onCta }: { name: string; total: number; editing: boolean; ready: boolean; onCta: () => void }) {
   const [sz, setSz] = useState({ w: 0, h: 0 });
   return (
     <View style={[st.hero, editing && { opacity: 0.6 }]} onLayout={(e) => setSz({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
@@ -69,22 +70,9 @@ export function HeroCard({ name, total, counts, editing, ready, onCta }: { name:
             ) : (
               <View style={st.htBox}>
                 <Text style={st.ht}>{'오늘은 내 생각에\n붙은 새 소식이 없어요'}</Text>
+                <Text keepAll style={st.htSub}>AI가 매일 확인하고 있어요. 새 소식이 오면 알려 드릴게요.</Text>
               </View>
             )}
-            <View style={st.stats}>
-              {(
-                [
-                  ['보유', counts.holding],
-                  ['관심', counts.watching],
-                  ['AI 메모', counts.ai_memos],
-                ] as const
-              ).map(([l, n]) => (
-                <View key={l} style={st.st}>
-                  <Text style={st.stS}>{l}</Text>
-                  <CountUp to={n} style={st.stB} duration={600} />
-                </View>
-              ))}
-            </View>
             <Pressable onPress={onCta} accessibilityRole="button" style={({ pressed }) => [st.cta2, pressed && { opacity: 0.85 }]}>
               <Text style={st.cta2T}>업데이트 확인하기</Text>
               <CtaChevron />
@@ -99,22 +87,26 @@ export function HeroCard({ name, total, counts, editing, ready, onCta }: { name:
 /* ───────── 시장 한눈에 보기 (원본 .mk3: 3칸 · 사이 10 · .mc 104×46 선) ───────── */
 function MarketCell({ q, draw, onPress }: { q: MarketIndex; draw: boolean; onPress: () => void }) {
   const [w, setW] = useState(104);
-  const arr = q.closes.slice(-APP_SPARK_N);
-  const s = spark(arr, w, 46);
-  const col = q.change < 0 ? appColor.down : appColor.up;
+  /* 지수마다 1주 · 1달 · 1년 (웹 시장 카드와 같은 계산) */
+  const [r, setR] = useState<WebRange>('1주');
+  const md = mkData(q, r);
+  const s = spark(md.sr, w, 46);
+  const col = md.up ? appColor.up : appColor.down;
   /* 원본 .ln: dasharray 300 → 0 (1s ease) */
-  const t = useProgress(draw, 1000);
+  const t = useProgress(draw, 1000, r);
   const e = curve.ease(t);
   return (
     <View style={st.mcCol} onLayout={(ev) => setW(Math.max(40, Math.round(ev.nativeEvent.layout.width)))}>
       <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${q.name} 자세히`} style={({ pressed }) => [st.mc, pressed && { backgroundColor: '#F4F4F6' }]}>
-        <Text style={st.mcS}>{q.name}</Text>
+        <View style={st.mcTop}>
+          <Text style={[st.mcS, st.mcName]} numberOfLines={1}>{q.name}</Text>
+          <Text style={st.mcMore}>자세히 ›</Text>
+        </View>
         <Text style={st.mcB} numberOfLines={1}>
           {nf(q.value)}
         </Text>
         <Text style={[st.mcC, { color: col }]} numberOfLines={1}>
-          {q.change > 0 ? '+' : ''}
-          {nf(q.change)} ({Math.abs(q.pct).toFixed(2)}%)
+          {md.label}
         </Text>
         <Svg width={w} height={46} style={st.mcSvg}>
           <Path d={s.area} fill={col} opacity={0.1} />
@@ -123,6 +115,13 @@ function MarketCell({ q, draw, onPress }: { q: MarketIndex; draw: boolean; onPre
         </Svg>
         <Text style={st.mcT}>{basisText(q)}</Text>
       </Pressable>
+      <View style={st.rseg} accessibilityRole="tablist">
+        {WEB_RANGES.map((x) => (
+          <Pressable key={x} onPress={() => setR(x)} accessibilityRole="tab" accessibilityLabel={`${q.name} ${x}`} accessibilityState={{ selected: r === x }} style={[st.rsegB, r === x && st.rsegOn]}>
+            <Text style={[st.rsegT, r === x && st.rsegTOn]}>{x}</Text>
+          </Pressable>
+        ))}
+      </View>
     </View>
   );
 }
@@ -212,6 +211,7 @@ function NewBadge({ n, bye }: { n: number; bye: boolean }) {
 
 export function UpdatesWidget({ rows, ready, editing, onAll, onRow }: { rows: HomeUpdateRow[]; ready: boolean; editing: boolean; onAll: () => void; onRow: (code: string) => void }) {
   const [bye, setBye] = useState<string[]>([]);
+  const paper = usePaper();
   if (!ready)
     return (
       <View style={st.wb}>
@@ -240,18 +240,36 @@ export function UpdatesWidget({ rows, ready, editing, onAll, onRow }: { rows: Ho
             onRow(u.stock_code);
           }}
           accessibilityRole="button"
-          style={({ pressed }) => [st.ur, i === 0 && { marginTop: 0 }, pressed && { transform: [{ scale: 0.98 }] }]}
+          style={({ pressed }) => [st.urCol, i === 0 && { marginTop: 0 }, pressed && { transform: [{ scale: 0.98 }] }]}
         >
+          <View style={st.ur}>
           <StockLogo logo={u.logo} bg={u.logo_bg} ink={u.logo_ink} size={40} variant="app" />
           <View style={st.urMid}>
             <Text style={st.urB} numberOfLines={1}>
               {u.name}
             </Text>
             <Text style={st.urS} numberOfLines={1}>
-              {u.status === 'holding' ? '보유' : '관심'} · {u.new_count ? `새 업데이트 ${u.new_count}건` : '모두 확인했어요'}
+              {u.status === 'holding' ? '보유' : '관심'} · {u.new_count ? `새 업데이트 ${u.new_count}건` : u.latest ? '모두 확인했어요' : '연결된 소식 없음'}
             </Text>
           </View>
           {u.new_count ? <NewBadge n={u.new_count} bye={bye.includes(u.stock_code)} /> : <Text style={st.urChev}>›</Text>}
+          </View>
+          {/* 가장 새 소식 1건 · 연결된 내 메모 (웹 업데이트 위젯) */}
+          {u.latest ? (
+            <View style={st.urBox}>
+              <View style={st.urLine}>
+                <View style={st.urKind}><Text style={st.urKindT}>{u.latest.kind}</Text></View>
+                <Text style={st.urT} numberOfLines={1}>{u.latest.title}</Text>
+              </View>
+              {u.latest.memo_title ? (
+                <View style={st.urLine}>
+                  <Text style={st.urM}>↳</Text>
+                  <View style={[st.urDot, { backgroundColor: paper[u.latest.memo_color].bg }]} />
+                  <Text style={[st.urM, st.urMT]} numberOfLines={1}>{u.latest.memo_title}</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
         </Pressable>
       ))}
     </View>
@@ -429,21 +447,26 @@ const st = StyleSheet.create({
   hg: { ...ft(13), color: appColor.ink2 },
   htBox: { marginTop: 4, marginBottom: 14 },
   ht: { ...ft(21, 1.4), fontWeight: '800', color: appColor.ink },
+  htSub: { ...ft(13), color: appColor.ink2, marginTop: 4 },
   htRow: { flexDirection: 'row', alignItems: 'center' },
   htOdo: { fontSize: 21, fontWeight: '800', color: appColor.ink },
-  stats: { flexDirection: 'row', gap: 8 },
-  st: { flex: 1, backgroundColor: appColor.surface, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12 },
-  stS: { ...ft(12), color: appColor.ink3 },
-  stB: { ...ft(20), fontWeight: '700', color: appColor.ink, marginTop: 2 },
   cta2: { alignSelf: 'flex-start', marginTop: 14, minHeight: 38, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 19, backgroundColor: appColor.ink, flexDirection: 'row', alignItems: 'center', gap: 4 },
   cta2T: { ...ft(13.5), fontWeight: '700', color: '#FFFFFF' },
   /* 시장 */
   mk3: { flexDirection: 'row', gap: 10 },
   mcCol: { flex: 1, minWidth: 0 },
   mc: { marginHorizontal: -6, marginVertical: -6, paddingTop: 6, paddingHorizontal: 6, paddingBottom: 4, borderRadius: 14 },
+  mcTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4 },
+  mcName: { flexShrink: 1 },
+  mcMore: { ...ft(11), color: appColor.ink3 },
   mcS: { ...ft(13), color: appColor.ink2 },
   mcB: { ...ft(18), fontWeight: '700', color: appColor.ink, marginTop: 4 },
   mcC: { ...ft(12) },
+  rseg: { flexDirection: 'row', marginTop: 12, padding: 2, borderRadius: 9, backgroundColor: '#F1F2F4' },
+  rsegB: { flex: 1, height: 26, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
+  rsegOn: { backgroundColor: appColor.surface },
+  rsegT: { ...ft(11), color: appColor.ink2 },
+  rsegTOn: { fontWeight: '700', color: appColor.ink },
   mcSvg: { marginTop: 8, overflow: 'visible' },
   mcT: { ...ft(11), color: appColor.ink3, marginTop: 4 },
   err: { alignItems: 'center', paddingTop: 10, paddingBottom: 4 },
@@ -452,7 +475,16 @@ const st = StyleSheet.create({
   retry: { marginTop: 10, minHeight: 36, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18, backgroundColor: appColor.accentSoft, flexDirection: 'row', alignItems: 'center', gap: 8 },
   retryT: { ...ft(13.5), fontWeight: '700', color: appColor.deepPurple },
   /* 업데이트 */
-  ur: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: appColor.row, borderRadius: 16, padding: 12, marginTop: 8 },
+  urCol: { backgroundColor: appColor.row, borderRadius: 16, padding: 12, marginTop: 8 },
+  ur: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  urBox: { marginTop: 10, borderRadius: 12, backgroundColor: appColor.surface, paddingVertical: 8, paddingHorizontal: 10, gap: 5 },
+  urLine: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  urKind: { borderRadius: 6, backgroundColor: '#F1F2F4', paddingHorizontal: 6, paddingVertical: 1 },
+  urKindT: { ...ft(11), fontWeight: '700', color: appColor.ink2 },
+  urT: { flex: 1, minWidth: 0, ...ft(13), fontWeight: '600', color: appColor.ink },
+  urDot: { width: 10, height: 10, borderRadius: 3 },
+  urM: { ...ft(12), color: appColor.ink3 },
+  urMT: { flex: 1, minWidth: 0, color: appColor.ink2 },
   urMid: { flex: 1, minWidth: 0 },
   urB: { ...ft(15), fontWeight: '700', color: appColor.ink },
   urS: { ...ft(12.5), color: appColor.ink3 },

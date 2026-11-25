@@ -169,7 +169,7 @@ export interface Api {
   /** 거시 지표 (ECOS·FRED·KRX 금) */
   getMacro(): Promise<MacroOverview>;
   /** 투자 실험실 실행 (LLM) */
-  runLab(input: { stock_code: string; dirs: LabDirection[] }): Promise<LabRunResult>;
+  runLab(input: { stock_code: string; dirs: LabDirection[] }, opts?: { timeoutMs?: number }): Promise<LabRunResult>;
   /** 스튜디오 만든 항목 (studio_items, 내 것·만료 전) */
   listStudioItems(): Promise<StudioItem[]>;
   deleteStudioItem(id: string): Promise<void>;

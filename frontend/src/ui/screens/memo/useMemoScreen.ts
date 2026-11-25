@@ -5,6 +5,7 @@ import { env } from '@/config/env';
 import { qk, useBoardItem, useDeleteBoardItem, useMarkMemoUpdatesRead, useMemoTimeline, useStock, useUpdateBoardItem } from '@/hooks/queries';
 import type { Memo, MemoColor, MemoVersion } from '@/types/models';
 import { connectResult, detailFrom, type ConnectResult } from '@/ui/screens/board/useBoardData';
+import { findMockMemo, useMockBoard } from '@/store/mockBoard';
 import { mockDetailStockName, mockLastChecked, mockTrackItems } from './MemoDetail.mock';
 import type { AiTrackItem, MemoFeedItem } from './MemoDetail.types';
 import { feedOf, findMemo, mockUpdateStocks, versionsOf } from '@/ui/screens/updates/Updates.mock';
@@ -13,7 +14,7 @@ import { feedOf, findMemo, mockUpdateStocks, versionsOf } from '@/ui/screens/upd
  * 앱 메모 화면들(상세 · 근거 · 수정 이력 · AI 연결) 데이터 (2026-11-22, 웹은 보드 안 창이라 useBoardData 를 씀).
  * - 실제 모드: 메모 GET /board-items/{id} · 이력/소식/추적 항목 GET /memos/{id}/timeline · 종목 이름 GET /stocks/{code}
  *   저장 · 색 · 고정 PATCH · 삭제 DELETE · AI 끄기 PUT ai-link
- * - mock 모드: 지금처럼 보드 예시 메모(Updates.mock findMemo)
+ * - mock 모드: 보드에 있는 메모면 기기 저장(store/mockBoard), 아니면 예시 메모(Updates.mock findMemo)
  */
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -46,7 +47,8 @@ export function useMemoScreen(id: string) {
   const update = useUpdateBoardItem(code);
   const del = useDeleteBoardItem(code);
   const markSeen = useMarkMemoUpdatesRead();
-  const [mockMemo, setMockMemo] = useState<Memo | null>(() => (real ? null : findMemo(id)));
+  const stored = useMockBoard((s) => (real ? undefined : findMockMemo(s.boards, id)));
+  const [exMemo, setExMemo] = useState<Memo | null>(() => (real ? null : findMemo(id)));
 
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: qk.boardItem(id) });
@@ -55,7 +57,9 @@ export function useMemoScreen(id: string) {
   };
 
   if (!real) {
-    const m = mockMemo;
+    const m = stored ?? exMemo;
+    const setMockMemo = (f: (m: Memo | null) => Memo | null) =>
+      stored ? useMockBoard.getState().patchMemoAnywhere(id, (x) => f(x) ?? x) : setExMemo(f);
     const data: MemoScreenData = {
       memo: m,
       stockName: m ? mockUpdateStocks.find((s) => s.stock_code === m.stock_code)?.name ?? mockDetailStockName : mockDetailStockName,
@@ -97,5 +101,5 @@ export function useMemoScreen(id: string) {
       }
     },
   };
-  return { real, data, loading: item.isLoading || timeline.isLoading, setMockMemo, ops };
+  return { real, data, loading: item.isLoading || timeline.isLoading, setMockMemo: setExMemo, ops };
 }

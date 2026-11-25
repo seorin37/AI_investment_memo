@@ -54,6 +54,8 @@ export interface AppMemoCardProps {
   aiSpent?: boolean;
   onPress: () => void;
   onLongPress: () => void;
+  /** 꾹 누른 뒤 뗌 (끌기 · 고르기 구분) */
+  onPressOut?: () => void;
 }
 
 /**
@@ -62,7 +64,7 @@ export interface AppMemoCardProps {
  * 제목 15px 800 줄 1.36 · 위아래 6 · 두 줄 / 본문 12.5px 줄 1.5 #2E2E38 · 세 줄
  * 누르면 .12초 뒤 .965 로 줄어듦 (.45s cubic-bezier(.3,1.3,.5,1)) · .48초 꾹 누르면 고르기
  */
-export function AppMemoCard({ memo: m, width, height, selecting, selected, aiSpent, onPress, onLongPress }: AppMemoCardProps) {
+export function AppMemoCard({ memo: m, width, height, selecting, selected, aiSpent, onPress, onLongPress, onPressOut }: AppMemoCardProps) {
   const paper = usePaper();
   const k = useMotionK();
   const p = paper[m.color];
@@ -76,7 +78,10 @@ export function AppMemoCard({ memo: m, width, height, selecting, selected, aiSpe
         onLongPress={onLongPress}
         delayLongPress={480}
         onPressIn={() => scaleTo(0.965, 120)}
-        onPressOut={() => scaleTo(1)}
+        onPressOut={() => {
+          scaleTo(1);
+          onPressOut?.();
+        }}
         accessibilityRole="button"
         accessibilityLabel={m.title}
         accessibilityState={{ selected }}

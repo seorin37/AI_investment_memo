@@ -20,15 +20,14 @@ export default function StockUpdatesScreen() {
       items={items}
       now={now}
       code={code}
-      header={({ line, onSearch, onReadAll, readAllOff }) => (
+      header={({ line, onReadAll, readAllOff }) => (
         <TopBar
           preset="updates"
           title="최신 업데이트"
           showLine={line}
           actions={[
             ...(onReadAll ? [{ icon: 'checkAll' as const, label: '모두 읽음', onPress: onReadAll, color: readAllOff ? '#C9CBD1' : undefined }] : []),
-            { icon: 'search', label: '검색', onPress: onSearch },
-            { icon: 'bell', label: '알림', onPress: () => notice('알림') },
+            { icon: 'bell', label: '알림', onPress: () => router.push('/my-inbox') },
           ]}
           avatar={{ name: myName, onPress: () => router.push('/my') }}
         />

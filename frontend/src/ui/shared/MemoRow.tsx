@@ -47,6 +47,8 @@ export interface AppMemoRowProps {
   selected: boolean;
   onPress: () => void;
   onLongPress: () => void;
+  /** 꾹 누른 뒤 뗌 (끌기 · 고르기 구분) */
+  onPressOut?: () => void;
 }
 
 /**
@@ -55,12 +57,13 @@ export interface AppMemoRowProps {
  * 제목 15.5px 800 한 줄 (고정이면 앞에 핀 14 #575B63) / 둘째 줄 12.5px #575B63: AI 플러그 16 원 · 'MM.DD' 600 · 본문
  * 오른쪽 배지 24 (12.5px 700). 누르면 바탕 #F1F1F4, 고르면 #F4F0FF)
  */
-export function AppMemoRow({ memo: m, width, selecting, selected, onPress, onLongPress }: AppMemoRowProps) {
+export function AppMemoRow({ memo: m, width, selecting, selected, onPress, onLongPress, onPressOut }: AppMemoRowProps) {
   const badge = m.unread_updates > 0;
   return (
     <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
+      onPressOut={onPressOut}
       delayLongPress={480}
       accessibilityRole="button"
       accessibilityLabel={m.title}

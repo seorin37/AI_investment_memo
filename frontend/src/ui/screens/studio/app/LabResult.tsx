@@ -7,26 +7,30 @@ import { PressScale } from '@/ui/motion/PressScale';
 import { Head } from '../../my/app/parts';
 import type { mockLabStocks, mockLabVars } from '../Studio.mock';
 import type { LabGroup } from '../labParts';
+import type { LabMemo } from '../useLabMemo';
+import { labWatchItems } from '../useLabWatch';
 import { Keep } from '@/ui/shared/Dark';
 
 /**
  * 앱 실험 결과 = 원본 studio.html #pgLr renderLabRes (20)
  * 종목 · 가정 칩 · 영향 경로 지도(조건 → 중간 → 끝 항목 ①② · 공시 근거는 보라 · 이론은 점선) · 항목별 설명(공시/이론 근거) ·
- * 내 메모와 연결 · 추가로 확인할 것 · 안내 · 아래 [조건 바꿔 다시 실험]
+ * 앞으로 지켜볼 것 · 내 메모와 연결 · 안내 · 아래 [조건 바꿔 다시 실험]
  */
 type Stock = (typeof mockLabStocks)[number];
 type Vars = typeof mockLabVars;
 const C = { ink: '#16171A', ink2: '#575B63', ink3: '#9A9EA7' };
 
-export function AppLabResult({ stock, vars, groups, disclaimer, onBack, onOpenMemo, onAgain, onWatch, isAdded }: {
+export function AppLabResult({ stock, vars, groups, disclaimer, memo, onBack, onMemo, onAgain, onWatch, isAdded }: {
   stock: Stock; vars: Vars; groups: LabGroup[]; disclaimer: string;
-  onBack: () => void; onOpenMemo: () => void; onAgain: () => void;
-  /** '메모에 추가' (2026-11-24, 주간보고서와 같게): i = 추가로 확인할 것 순번 */
+  onBack: () => void; /** 그 종목의 내 메모 (없으면 메모 쓰기) */
+  memo: LabMemo | null; onMemo: (id?: string) => void; onAgain: () => void;
+  /** '메모에 추가' (2026-11-24, 주간보고서와 같게): i = 앞으로 지켜볼 것 순번 */
   onWatch?: (check: string, why: string, i: number) => void; isAdded?: (i: number) => boolean;
 }) {
   const insets = useSafeAreaInsets();
   const all = groups.flatMap((g) => g.leaves);
-  const chk = all.filter((l) => l.check).slice(0, 3);
+  /* 웹과 같은 규칙 (같은 문장은 하나로 · 최대 3개) — '추가됨' 순번이 웹과 맞아야 함 */
+  const chk = labWatchItems(groups);
   return (
     <View style={[st.root, { paddingTop: insets.top }]}>
       <Head title="실험 결과" onBack={onBack} />
@@ -70,31 +74,28 @@ export function AppLabResult({ stock, vars, groups, disclaimer, onBack, onOpenMe
             </View>
           ))}
         </View>
-        {stock.memo ? (
-          <View style={st.ymemo}>
-            <View style={st.yH}><Text style={st.yHT}>내 메모와 연결</Text><Pressable onPress={onOpenMemo} accessibilityRole="link"><Text style={[st.yHT, { fontWeight: '700', color: '#4A3800' }]}>원본 메모 보기 ›</Text></Pressable></View>
-            <Text style={st.yB}>{stock.memo}</Text>
-            <Text keepAll style={st.yP}>{stock.memo_text}</Text>
-          </View>
-        ) : null}
         {chk.length ? (
           <View style={{ marginBottom: 12 }}>
             <View style={st.chkH}>
               <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#5B3BD1" strokeWidth={2}><Path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><Circle cx={12} cy={12} r={3} /></Svg>
-              <Text style={st.chkHT}>추가로 확인할 것</Text>
+              <Text style={st.chkHT}>앞으로 지켜볼 것</Text>
             </View>
-            {chk.map((l, i) => (
-              <View key={l.no} style={[st.it, { flexDirection: 'row', alignItems: 'center', gap: 10 }]}>
-                <View style={{ flex: 1, minWidth: 0 }}><Text style={st.itB}>{l.check}</Text><Text style={st.itS}>근거 · {l.no} {l.check_why}</Text></View>
+            {chk.map((w, i) => (
+              <View key={w.check} style={[st.it, { flexDirection: 'row', alignItems: 'center', gap: 10 }]}>
+                <View style={{ flex: 1, minWidth: 0 }}><Text keepAll style={st.itB}>{w.check}</Text>{w.why ? <Text keepAll style={st.itS}>{w.why}</Text> : null}</View>
                 {isAdded?.(i) ? (
                   <View style={st.wDone}><Text style={st.wDoneT}>✓ 추가됨</Text></View>
                 ) : onWatch ? (
-                  <Pressable onPress={() => onWatch(l.check ?? '', l.check_why ?? '', i)} accessibilityRole="button" style={st.wBtn}><Text style={st.wBtnT}>메모에 추가</Text></Pressable>
+                  <Pressable onPress={() => onWatch(w.check, w.why, i)} accessibilityRole="button" style={st.wBtn}><Text style={st.wBtnT}>메모에 추가</Text></Pressable>
                 ) : null}
               </View>
             ))}
           </View>
         ) : null}
+        <View style={st.ymemo}>
+          <View style={st.yH}><Text style={st.yHT}>내 메모와 연결</Text><Pressable onPress={() => onMemo(memo?.id)} accessibilityRole="link" hitSlop={8}><Text style={[st.yHT, { fontWeight: '700', color: '#4A3800' }]}>{memo ? '원본 메모 보기 ›' : '메모 쓰기 ›'}</Text></Pressable></View>
+          <Text keepAll style={st.yP}>{memo ? `“${memo.title}” — 이번 실험은 시장 환경 경로예요. 메모에서 지켜보는 항목과 나눠서 보면 좋아요.` : `${stock.name}에 남긴 메모가 없어요. 실험에서 본 경로를 메모로 남겨 두면 관련 소식을 모아 드려요.`}</Text>
+        </View>
         <Text keepAll style={st.disc}>{disclaimer}</Text>
       </ScrollView>
       <View style={[st.bar, { paddingBottom: 26 + insets.bottom }]} pointerEvents="box-none">
@@ -143,7 +144,6 @@ const st = StyleSheet.create({
   ymemo: { backgroundColor: '#FCEAAA', borderRadius: 16, padding: 14, marginBottom: 12 },
   yH: { flexDirection: 'row', justifyContent: 'space-between' },
   yHT: { fontSize: 12.5, lineHeight: 18, color: '#6B5200' },
-  yB: { fontSize: 15, lineHeight: 21, fontWeight: '700', color: C.ink, marginTop: 6 },
   yP: { fontSize: 13, lineHeight: 21, color: '#3F3A2A', marginTop: 6 },
   chkH: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
   chkHT: { fontSize: 14, lineHeight: 20, fontWeight: '800', color: '#5B3BD1' },

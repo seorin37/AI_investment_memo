@@ -1,6 +1,5 @@
 import React, { useCallback } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useMockNotice } from '@/components/layout/MobileScreen';
 import { ErrorState, Loading } from '@/components/ui/primitives';
 import { useUI } from '@/store/ui';
 import { TopBar } from '@/ui/layout/app/TopBar';
@@ -19,7 +18,6 @@ import { useStockPrices } from '@/ui/screens/stocks/useStockPrices';
 export default function MyStocksTab() {
   const router = useRouter();
   const { profile: { name: myName, photoUrl } } = useMyProfile();
-  const notice = useMockNotice();
   const setTabBarHidden = useUI((s) => s.setTabBarHidden);
   const data = useMyStocksData();
   /* 가격: 실제 모드면 GET /quotes 한 번 (2026-11-21), mock 모드면 mock 가격 */
@@ -41,7 +39,7 @@ export default function MyStocksTab() {
           title="내 종목"
           actions={[
             { icon: 'search', label: '종목 찾기', onPress: onSearch },
-            { icon: 'bell', label: '알림', onPress: () => notice('알림') },
+            { icon: 'bell', label: '알림', onPress: () => router.push('/my-inbox') },
           ]}
           avatar={{ name: myName, photoUrl, onPress: () => router.push('/my') }}
         />

@@ -4,17 +4,17 @@ import { Redirect, useRouter } from 'expo-router';
 import { useStudioPlayer } from '@/store/studioPlayer';
 import { mockLabNote, mockLabVars } from '@/ui/screens/studio/Studio.mock';
 import { AppLab } from '@/ui/screens/studio/app/Lab';
-import { useLabStocks, useRunLab } from '@/ui/screens/studio/useLabRun';
+import { useLabStocks } from '@/ui/screens/studio/useLabRun';
+import { startLab } from '@/ui/screens/studio/genRuns';
 import { useLabVars } from '@/ui/screens/studio/useLabVars';
 
-/** 앱 투자 실험실 (원본 studio.html pgLab). 실행은 POST /studio/lab 결과를 만든 항목에 추가하고 결과 화면으로 */
+/** 앱 투자 실험실 (원본 studio.html pgLab). 실행하면 만드는 중 화면 → 결과 화면 */
 export default function StudioLabScreen() {
   const router = useRouter();
   const code = useStudioPlayer((s) => s.labCode);
   const dirs = useStudioPlayer((s) => s.labDirs);
   const setLab = useStudioPlayer((s) => s.setLab);
   const stocks = useLabStocks();
-  const runLab = useRunLab();
   /* 변수 '지금 값': 실제 모드면 GET /market/macro (2026-11-21) */
   const vars = useLabVars();
   if (Platform.OS === 'web') return <Redirect href="/" />;
@@ -30,9 +30,7 @@ export default function StudioLabScreen() {
       onPick={(c) => setLab({ code: c })}
       onDir={(i, d) => setLab({ dirs: dirs.map((x, j) => (j === i ? d : x)) })}
       onReset={() => setLab({ dirs: mockLabVars.map(() => '유지') })}
-      onRun={async () => {
-        if (await runLab(stock, dirs)) router.push({ pathname: '/studio-lab-result', params: { from: 'lab' } });
-      }}
+      onRun={() => router.push({ pathname: '/studio-gen', params: { id: startLab(stock, dirs) } })}
     />
   );
 }

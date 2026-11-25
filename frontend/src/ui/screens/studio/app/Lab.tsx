@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
@@ -14,7 +14,7 @@ import { Keep } from '@/ui/shared/Dark';
 /**
  * 앱 투자 실험실 = 원본 studio.html #pgLab (17)
  * 설명 · 범위 안내 · 실험할 종목 줄(→ 시트) · 조건 카드 4(지금 값 · 상승/유지/하락 세그) · 선택한 실험 조건 · [초기화][실험 실행]
- * 실행은 POST /studio/lab (LLM)이 끝나면 결과로
+ * 실행하면 만드는 중 화면으로
  */
 type Vars = typeof mockLabVars;
 type Stocks = typeof mockLabStocks;
@@ -22,11 +22,10 @@ const C = { ink: '#16171A', ink2: '#575B63', ink3: '#9A9EA7' };
 
 export function AppLab({ vars, stocks, code, dirs, note, onBack, onPick, onDir, onReset, onRun }: {
   vars: Vars; dirs: LabDir[]; stocks: Stocks; code: string; note: string;
-  onBack: () => void; onPick: (code: string) => void; onDir: (i: number, d: LabDir) => void; onReset: () => void; onRun: () => void | Promise<void>;
+  onBack: () => void; onPick: (code: string) => void; onDir: (i: number, d: LabDir) => void; onReset: () => void; onRun: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const [sheet, setSheet] = useState(false);
-  const [busy, setBusy] = useState(false);
   const cur = stocks.find((s) => s.stock_code === code) ?? stocks[0];
   const picked = vars.map((v, i) => ({ v, i })).filter(({ i }) => dirs[i] !== '유지');
   return (
@@ -54,8 +53,8 @@ export function AppLab({ vars, stocks, code, dirs, note, onBack, onPick, onDir, 
       <View style={[st.lfoot, { paddingBottom: 10 + insets.bottom }]}>
         <PressScale onPress={onReset} accessibilityRole="button" style={[st.cta, st.gray]}><Text style={[st.ctaT, { color: C.ink }]}>초기화</Text></PressScale>
         <View style={{ flex: 1 }}>
-          <PressScale disabled={!picked.length || busy} onPress={() => { setBusy(true); void Promise.resolve(onRun()).finally(() => setBusy(false)); }} accessibilityRole="button" style={[st.cta, !picked.length && { backgroundColor: '#C9CDD4' }]}>
-            {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={st.ctaT}>실험 실행</Text>}
+          <PressScale disabled={!picked.length} onPress={onRun} accessibilityRole="button" style={[st.cta, !picked.length && { backgroundColor: '#C9CDD4' }]}>
+            <Text style={st.ctaT}>실험 실행</Text>
           </PressScale>
         </View>
       </View>

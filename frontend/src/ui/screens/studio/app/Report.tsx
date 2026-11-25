@@ -65,11 +65,9 @@ export function AppReport({ rep, stocks, market, allDefault, onBack, onOpenMemo,
               ))}
             </ScrollView>
           )}
-          {one && !mc ? null : (
-            <View style={st.tl}>
-              {(one ? [['메모와 연결', `${mc}개`]] : [['공시', `${g}건`], ['뉴스', `${nw}건`], ['메모와 연결', `${mc}개`]]).map(([l, v]) => <Text key={l} style={st.tlT}>{l} <Text style={st.tlB}>{v}</Text></Text>)}
-            </View>
-          )}
+          <View style={st.tl}>
+            {[['공시', `${g}건`], ['뉴스', `${nw}건`], ['메모와 연결', `${mc}개`]].map(([l, v]) => <Text key={l} style={st.tlT}>{l} <Text style={st.tlB}>{v}</Text></Text>)}
+          </View>
         </View>
         <View style={[st.r3s, st.sum]}>
           <Text style={st.sumH}>이번 주 한눈에</Text>

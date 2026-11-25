@@ -54,7 +54,7 @@ export function WebViewToggle({ value, onChange }: { value: BoardView; onChange:
 }
 
 const st = StyleSheet.create({
-  app: { width: 74, height: 36, padding: 3, borderRadius: 11, backgroundColor: appColor.sf, flexDirection: 'row' },
+  app: { width: 74, height: 36, padding: 3, borderRadius: 11, backgroundColor: '#E3E5EA', flexDirection: 'row' },
   knob: { position: 'absolute', top: 3, bottom: 3, width: 34, borderRadius: 8, backgroundColor: appColor.surface, shadowColor: '#000000', shadowOpacity: 0.1, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
   appBtn: { width: 34, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   web: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 10, backgroundColor: webColor.surface, padding: 4, borderWidth: 1, borderColor: webColor.line },

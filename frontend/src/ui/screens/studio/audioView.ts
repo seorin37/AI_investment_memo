@@ -53,7 +53,7 @@ const FAIL_TEXT: [string, string][] = [
   ['no_updates', '고른 종목에 이 기간 새 소식이 없어요. 기간을 늘리거나 증시 요약을 넣어 주세요'],
   ['tts_not_ready', '목소리 설정이 안 돼 있어 만들지 못했어요'],
 ];
-const failText = (error: string | null) => FAIL_TEXT.find(([k]) => error?.startsWith(k))?.[1] ?? '오디오를 만들지 못했어요';
+export const failText = (error: string | null) => FAIL_TEXT.find(([k]) => error?.startsWith(k))?.[1] ?? '오디오를 만들지 못했어요';
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** 실제 모드 오디오 만들기: POST → 완성될 때까지 3초마다 확인 (최대 10분). 완성된 항목을 돌려준다. 크레딧은 서버가 완성 때 뺀다 */

@@ -33,6 +33,20 @@ export function toBoardStock(code: string, base: StockHeadProps, quote: Quote | 
   };
 }
 
+/**
+ * 앱 종목 상세 위 카드 (메모 보드 · 기업정보 탭 공통): mock 모드도 같은 시세(useQuote 최신 종가).
+ * 시세를 받기 전에는 loading — 예시 숫자를 잠깐 보여 주지 않는다
+ */
+export function useStockTop(code: string, base: StockHeadProps): { stock: StockHeadProps; priceNote?: string; loading: boolean } {
+  const quote = useQuote(code);
+  const master = useStock(code);
+  const mine = useMyStocks();
+  const status = mine.data?.find((s) => s.code === code)?.status;
+  const stock = toBoardStock(code, base, quote.data, master.data, status);
+  const none = quote.isError && !quote.data;
+  return { stock, priceNote: none ? PRICE_NOT_CONNECTED : undefined, loading: !quote.data && !none };
+}
+
 export function useBoardStock(code: string, base: StockHeadProps): { stock: StockHeadProps; priceNote?: string } {
   const real = !env.useMock;
   const quote = useQuote(code, real);

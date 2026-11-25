@@ -14,7 +14,7 @@ import { appColor, curve, fpx, ft, webColor } from '@/ui/theme';
 export function AppSelectHeader({ count, allSelected, onClose, onToggleAll }: { count: number; allSelected: boolean; onClose: () => void; onToggleAll: () => void }) {
   const insets = useSafeAreaInsets();
   return (
-    <View style={{ paddingTop: insets.top, backgroundColor: appColor.surface }}>
+    <View style={{ paddingTop: insets.top, backgroundColor: appColor.bg }}>
       <View style={st.hdr}>
         <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="선택 끝내기" hitSlop={1} style={st.x}>
           <AppIcon name="close" size={20} color={appColor.ink} />
@@ -108,7 +108,7 @@ export function WebSelectBar({ n, total, all, onAll, onPin, onCopy, onTrash, onE
 }
 
 const st = StyleSheet.create({
-  hdr: { height: 56, flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 6, paddingRight: 12, backgroundColor: appColor.surface },
+  hdr: { height: 56, flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 6, paddingRight: 12, backgroundColor: appColor.bg },
   x: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
   cnt: { flex: 1, ...ft(18), fontWeight: '700', color: appColor.ink },
   all: { padding: 8 },

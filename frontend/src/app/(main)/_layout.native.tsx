@@ -5,9 +5,12 @@ import { useCoach } from '@/store/coach';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/store/auth';
 import { chapterAt, fmt, useStudioPlayer } from '@/store/studioPlayer';
+import { blockPlay } from '@/ui/screens/studio/appAudio';
 import { epOf } from '@/ui/screens/studio/audioEp';
 import { AppMiniPlayer } from '@/ui/screens/studio/app/MiniPlayer';
 import { size } from '@/ui/theme';
+import { useGenJobs } from '@/store/genJobs';
+import { useGenRestore } from '@/ui/screens/studio/genRuns';
 import { useUI } from '@/store/ui';
 import { useStudioItemsSync } from '@/ui/screens/studio/studioItems';
 import { BottomTabBar } from '@/ui/layout/app/BottomTabBar';
@@ -27,6 +30,8 @@ export default function MainTabsLayout() {
   const status = useAuth((s) => s.status);
   /* 스튜디오 만든 항목: 실제 모드면 서버 목록으로 (2026-11-23) */
   useStudioItemsSync();
+  useGenRestore();
+  const studioDot = useGenJobs((s) => s.dot);
   /* 크레딧을 다 썼고 AI 연결 메모가 남아 있으면 '충전 · 업그레이드 · 모두 끄기' 한 번 묻기 (2026-11-24) */
   useAiOffPrompt();
   /* 로그인한 채 다른 사용자로 바뀌면(A → B) 커짐 → 탭을 다시 마운트해 열린 화면을 새 사용자 값으로 (store/auth sessionKey) */
@@ -45,6 +50,7 @@ export default function MainTabsLayout() {
             current={TAB_OF[state.routes[state.index]?.name ?? 'index'] ?? 'home'}
             hidden={hidden}
             badges={mockTabBadges}
+            dots={{ studio: studioDot }}
             onPress={(tab) => {
               const route = state.routes.find((r) => r.name === ROUTE_OF[tab]);
               if (route) navigateToTab(route.key);
@@ -75,7 +81,14 @@ function TabToast({ hidden }: { hidden: boolean }) {
   const toast = useUI((s) => s.toast);
   const insets = useSafeAreaInsets();
   const bottom = (hidden ? 0 : 1 + 65 + Math.max(size.tabBarPadBottom, insets.bottom)) + 16;
-  return <AppSnackbar visible={!!toast} message={toast?.message ?? ''} style={{ position: 'absolute', left: 12, right: 12, bottom }} />;
+  const action = toast?.action && {
+    label: toast.action.label,
+    onPress: () => {
+      useUI.setState({ toast: null });
+      toast.action?.onPress();
+    },
+  };
+  return <AppSnackbar visible={!!toast} message={toast?.message ?? ''} action={action} style={{ position: 'absolute', left: 12, right: 12, bottom }} />;
 }
 
 /**
@@ -130,7 +143,7 @@ function Mini({ hidden }: { hidden: boolean }) {
       progress={p.t / ep.dur}
       playing={p.playing}
       onOpen={() => router.push('/studio-player')}
-      onToggle={p.toggle}
+      onToggle={() => !blockPlay() && p.toggle()}
       onClose={p.closeMini}
     />
   );
