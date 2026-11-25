@@ -160,7 +160,8 @@ def check(raw: dict, brief: Brief, cfg: dict | None = None) -> list[str]:
         errors.append("새 소식이 없는 종목이 없는데 no_news 구간을 썼어요")
     need_recap = len(brief.news_stocks) >= 2
     if need_recap and "recap" not in kinds:
-        errors.append("새 소식이 있는 종목이 2개 이상이면 closing 앞에 recap 구간을 써 주세요")
+        errors.append("새 소식이 있는 종목이 2개 이상이면 closing 앞에 recap 구간을 써 주세요 "
+                      "(종목별로 다시 읽지 말고, 가장 기억할 사실이나 아직 확인되지 않은 질문 하나를 1~2줄로)")
     if not need_recap and "recap" in kinds:
         errors.append("새 소식이 있는 종목이 2개 미만이면 recap 구간을 쓰지 마세요")
     for g in segs:
@@ -213,7 +214,8 @@ def check(raw: dict, brief: Brief, cfg: dict | None = None) -> list[str]:
             sp = line.get("speaker")
             run, run_speaker = (run + 1, sp) if sp == run_speaker else (1, sp)
             if run > s["max_same_speaker"]:
-                errors.append(f"진행자 {sp}가 {run}줄 이어서 말해요 (A·B를 번갈아)")
+                errors.append(f"진행자 {sp}가 {run}줄 이어서 말해요 (구간이 바뀌어도 이어서 세요. "
+                              f"{kind} 구간 \"{t[:20]}\" 앞에서 다른 진행자가 받아 주세요)")
             bad_refs = [r for r in line.get("refs") or [] if r not in own]
             if bad_refs:
                 errors.append(f"{kind} {code} 구간에 쓸 수 없는 참조 {bad_refs}")

@@ -416,6 +416,16 @@ export const useAiStats = () => useQuery({ queryKey: qk.aiStats, queryFn: api.ge
 export const useTodayQuiz = (enabled = true) =>
   useQuery({ queryKey: qk.todayQuiz, queryFn: api.getTodayQuiz, staleTime: 10 * 60_000, retry: false, enabled });
 export const useUsage = () => useQuery({ queryKey: qk.usage, queryFn: api.getUsage });
+/** 크레딧을 다 쓴 뒤 'AI 연결 모두 끄기' (2026-11-24). 끈 뒤 보드·메모·사용량을 모두 다시 받는다 */
+export function useAiOffAll() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: () => api.aiOffAll(), onSuccess: () => qc.invalidateQueries() });
+}
+/** '지난 기간 사용량을 다 써서 N개가 꺼졌어요' 안내 확인 (2026-11-24) */
+export function useAiOffNoticeSeen() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: () => api.aiOffNoticeSeen(), onSuccess: () => qc.invalidateQueries({ queryKey: qk.usage }) });
+}
 export const useDataStats = () => useQuery({ queryKey: qk.dataStats, queryFn: api.getDataStats });
 
 export function useUpdateMe() {

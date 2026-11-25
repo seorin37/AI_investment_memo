@@ -16,6 +16,8 @@ import { patchMemo } from '@/ui/screens/board/boardCards';
 import { useBoardCards } from '@/ui/screens/board/useBoardCards';
 import { useMemoTimeline } from '@/hooks/queries';
 import { useStockTop } from '@/ui/screens/board/useBoardStock';
+import { useUsageView } from '@/ui/screens/my/useUsageView';
+import { useAiOffChoice } from '@/ui/shared/useAiOffChoice';
 import { env } from '@/config/env';
 import { mockBoardStock, mockEmptyStock } from '@/ui/screens/board/MemoBoard.mock';
 
@@ -44,6 +46,11 @@ export default function StockDetail() {
   const board = useBoardCards(code, null);
   const { bd } = board;
   const { memos, checklists, order } = board.cards;
+  /* AI 사용량을 다 쓰면 보드 안내 상자 (스튜디오와 같은 기준, 2026-11-24) */
+  const usage = useUsageView();
+  const spent = usage.paused || usage.usage_pct >= 100;
+  const toast = useUI((s) => s.showToast);
+  const askAiOff = useAiOffChoice();
   const [offFor, setOffFor] = useState<Memo | null>(null);
   /* AI 끄기 확인 창의 '추적 항목 N개': 실제 모드면 그 메모의 추적 항목 수 (질문 제외), mock 은 예시 2개 */
   const offTimeline = useMemoTimeline(offFor?.id ?? '', real && !!offFor);
@@ -82,7 +89,9 @@ export default function StockDetail() {
       onToggleAi={(id) => {
         const m = memos.find((x) => x.id === id);
         /* 원본 aiToggle: 켜져 있으면 해제 확인 시트, 꺼져 있으면 AI 연결 창 */
-        if (m?.ai_linked) setOffFor(m);
+        if (m?.ai_linked && spent) askAiOff();               // 끄기 대기: '모두 끄기' 선택
+        else if (m?.ai_linked) setOffFor(m);
+        else if (m && spent) toast('AI 사용량을 다 써서 AI 연결을 켤 수 없어요. 일반 메모로는 계속 쓸 수 있어요');
         else if (m) router.push({ pathname: '/memo/link', params: { id: m.id } });
       }}
       onDelete={board.remove}
@@ -95,7 +104,10 @@ export default function StockDetail() {
       onReorder={board.reorder}
       onChangeTab={changeTab}
       onSelectionChange={onSelectionChange}
-      onSpentAction={(a) => notice(a === 'credit' ? '크레딧 구매' : '플랜 변경')}
+      aiSpent={spent}
+      aiRefill={usage.usage_refill}
+      aiCount={usage.ai_count}
+      onSpentAction={(a) => (a === 'choice' ? askAiOff() : router.push(a === 'credit' ? '/studio-charge' : '/my-plans'))}
     />
     <AiOffSheet
       open={!!offFor}

@@ -1,15 +1,15 @@
-import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, View, type ScrollViewInstance, type ViewStyle } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
 import { FeatIcon } from '@/ui/layout/web/StudioColumnFrame';
 import { chapterAt, fmt, lineAt, type GenJob } from '@/store/studioPlayer';
-import type { mockAudioEpisode } from '../Studio.mock';
 import type { MadeItem } from '../Studio.types';
+import type { AudioEp } from '../audioEp';
 import { GBtn } from './Credit';
 
 type Hover = { hovered?: boolean; pressed?: boolean };
-type Ep = typeof mockAudioEpisode;
+type Ep = AudioEp;
 const TR = { letterSpacing: -0.2 };
 const SVGP = { strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
 const Ico = {
@@ -101,9 +101,18 @@ export function WebPlayer({ item, ep, t, playing, speed, onBack, onToggle, onSee
   onBack: () => void; onToggle: () => void; onSeek: (t: number) => void; onSpeed: () => void; onRemake: () => void;
 }) {
   const [w, setW] = useState(1);
-  const ci = chapterAt(t);
-  const cur = lineAt(t);
+  const [full, setFull] = useState(false);
+  const fullRef = useRef<ScrollViewInstance>(null);
+  const lineY = useRef<number[]>([]);
+  const ci = chapterAt(t, ep);
+  const cur = lineAt(t, ep);
   const talking = playing ? ep.script[cur][1] : null;
+  /* 전체 보기로 듣는 중이면 지금 줄이 상자 위쪽에 오게 따라간다 (멈춰 있을 때는 사용자가 스크롤한 그대로) */
+  useEffect(() => {
+    if (!full || !playing) return;
+    const y = lineY.current[cur];
+    if (y !== undefined) fullRef.current?.scrollTo({ y: Math.max(0, y - 80), animated: true });
+  }, [cur, full, playing]);
   return (
     <ScrollView contentContainerStyle={st.box} showsVerticalScrollIndicator={false}>
       <Pressable onPress={onBack} accessibilityRole="button" style={st.backL}>{Ico.back()}<Text style={st.backT}>스튜디오</Text></Pressable>
@@ -136,31 +145,51 @@ export function WebPlayer({ item, ep, t, playing, speed, onBack, onToggle, onSee
       <Text style={st.lbl}>챕터</Text>
       <View style={{ gap: 2 }}>
         {ep.chapters.map(([c0, name], i) => (
-          <Pressable key={name} onPress={() => onSeek(c0)} accessibilityRole="button" style={({ hovered }: Hover) => [st.ch, i === ci ? { backgroundColor: '#F5F6F8' } : hovered && { backgroundColor: '#F9F9F9' }]}>
+          <Pressable key={`${i}-${name}`} onPress={() => onSeek(c0)} accessibilityRole="button" style={({ hovered }: Hover) => [st.ch, i === ci ? { backgroundColor: '#F5F6F8' } : hovered && { backgroundColor: '#F9F9F9' }]}>
             <Text style={st.chN}>{String(i + 1).padStart(2, '0')}</Text>
             <Text style={[st.chT, i === ci && { fontWeight: '700' }]}>{name}</Text>
             <Text style={st.chN}>{fmt(c0)}</Text>
           </Pressable>
         ))}
       </View>
-      <Text style={st.lbl}>대본</Text>
-      <View style={{ gap: 12 }}>
-        {ep.script.map(([, who, text], i) => (i >= cur - 1 && i <= cur + 2 ? (
-          <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
-            <View style={[st.who, who === 'A' ? { borderWidth: 1, borderColor: '#15171A', backgroundColor: '#FFFFFF' } : { backgroundColor: '#15171A' }]}><Text style={[st.whoT, who === 'B' && { color: '#FFFFFF' }]}>{who}</Text></View>
-            <Text keepAll style={[st.line, i === cur ? { fontWeight: '500', color: '#15171A' } : { color: '#8E8A97' }]}>{text}</Text>
-          </View>
-        ) : null))}
+      <View style={st.lblRow}>
+        <Text style={st.lbl}>대본</Text>
+        <Pressable onPress={() => setFull(!full)} accessibilityRole="button" accessibilityState={{ expanded: full }} style={({ hovered }: Hover) => [st.more, hovered && { backgroundColor: '#F5F6F8' }]}>
+          <Text style={st.moreT}>{full ? '접기' : `전체 보기 · ${ep.script.length}줄`}</Text>
+        </Pressable>
       </View>
+      {full ? (
+        /* 전체 대본 (2026-11-24): 상자 안에서 따로 스크롤 · 줄을 누르면 그 부분부터 · 재생 중에는 지금 줄을 따라간다 */
+        <ScrollView ref={fullRef} style={st.full} contentContainerStyle={{ gap: 4, padding: 8 }} nestedScrollEnabled showsVerticalScrollIndicator>
+          {ep.script.map(([s0, who, text], i) => (
+            <Pressable key={i} onLayout={(e) => { lineY.current[i] = e.nativeEvent.layout.y; }} onPress={() => { onSeek(s0); if (!playing) onToggle(); }}
+              accessibilityRole="button" accessibilityLabel={`${fmt(s0)}부터 듣기`}
+              style={({ hovered }: Hover) => [st.fullLn, i === cur ? { backgroundColor: '#F5F6F8' } : hovered && { backgroundColor: '#F9F9F9' }]}>
+              <View style={[st.who, who === 'A' ? { borderWidth: 1, borderColor: '#15171A', backgroundColor: '#FFFFFF' } : { backgroundColor: '#15171A' }]}><Text style={[st.whoT, who === 'B' && { color: '#FFFFFF' }]}>{who}</Text></View>
+              <Text keepAll style={[st.line, i === cur ? { fontWeight: '500', color: '#15171A' } : { color: i < cur ? '#575B63' : '#8E8A97' }]}>{text}</Text>
+              <Text style={st.fullT}>{fmt(s0)}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      ) : (
+        <View style={{ gap: 12 }}>
+          {ep.script.map(([, who, text], i) => (i >= cur - 1 && i <= cur + 2 ? (
+            <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+              <View style={[st.who, who === 'A' ? { borderWidth: 1, borderColor: '#15171A', backgroundColor: '#FFFFFF' } : { backgroundColor: '#15171A' }]}><Text style={[st.whoT, who === 'B' && { color: '#FFFFFF' }]}>{who}</Text></View>
+              <Text keepAll style={[st.line, i === cur ? { fontWeight: '500', color: '#15171A' } : { color: '#8E8A97' }]}>{text}</Text>
+            </View>
+          ) : null))}
+        </View>
+      )}
       <View style={st.src}>
         <Text style={st.lbl}>들은 소식의 출처 · 연결된 메모</Text>
-        {[{ kind: '시장', text: ep.market_source, memo: '' }, ...ep.sources].map((r) => (
-          <View key={r.text} style={{ gap: 4 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View style={[st.chip, r.kind === '공시' && { backgroundColor: '#15171A' }]}><Text style={[st.chipT, r.kind === '공시' && { color: '#FFFFFF' }]}>{r.kind}</Text></View>
+        {[...(ep.market_source ? [{ kind: '시장', text: ep.market_source, memo: '' }] : []), ...ep.sources].map((r, i) => (
+          <View key={`${i}-${r.text}`} style={{ gap: 2 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={st.chipS}><Text style={st.chipST}>{r.kind}</Text></View>
               <Text style={st.srcT}>{r.text}</Text>
             </View>
-            {r.memo ? <Text style={st.note}>{r.memo}</Text> : null}
+            {r.memo ? <Text style={st.srcM}>{r.memo}</Text> : null}
           </View>
         ))}
       </View>
@@ -228,7 +257,17 @@ const st = StyleSheet.create({
   src: { gap: 10, borderRadius: 18, borderWidth: 1, borderColor: '#E5E3E8', backgroundColor: '#FFFFFF', padding: 16 },
   chip: { height: 24, borderRadius: 999, paddingHorizontal: 9, justifyContent: 'center', backgroundColor: '#F5F6F8' },
   chipT: { fontSize: 13, lineHeight: 16, fontWeight: '700', color: '#404752' },
-  srcT: { flex: 1, minWidth: 0, fontSize: 15, lineHeight: 22, fontWeight: '700', color: '#15171A', ...TR },
+  /* 출처·연결된 메모 (2026-11-24: 15 → 13, 메모 줄 14 → 12, 굵게 뺌 · 칩은 공시·뉴스·업데이트 모두 같은 회색) */
+  srcT: { flex: 1, minWidth: 0, fontSize: 13, lineHeight: 19, fontWeight: '400', color: '#15171A', ...TR },
+  srcM: { fontSize: 12, lineHeight: 17, color: '#8E8A97', ...TR },
+  chipS: { height: 20, borderRadius: 999, paddingHorizontal: 7, justifyContent: 'center', backgroundColor: '#F5F6F8' },
+  chipST: { fontSize: 11, lineHeight: 14, fontWeight: '700', color: '#404752' },
+  lblRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  more: { height: 28, borderRadius: 999, paddingHorizontal: 10, justifyContent: 'center' },
+  moreT: { fontSize: 13, lineHeight: 16, fontWeight: '700', color: '#404752', ...TR },
+  full: { maxHeight: 380, borderRadius: 16, borderWidth: 1, borderColor: '#E5E3E8', backgroundColor: '#FFFFFF' },
+  fullLn: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 8 },
+  fullT: { fontSize: 12, lineHeight: 23, color: '#B8BFC8', ...TR },
   mini: { position: 'absolute', left: 12, right: 12, bottom: 12, zIndex: 20, flexDirection: 'row', alignItems: 'center', gap: 10, overflow: 'hidden', borderRadius: 18, backgroundColor: '#15171A', paddingVertical: 10, paddingLeft: 10, paddingRight: 8 },
   miniP: { width: 40, height: 40, flexShrink: 0, borderRadius: 20, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
   miniT: { fontSize: 15, lineHeight: 19.5, fontWeight: '700', color: '#FFFFFF', ...TR },

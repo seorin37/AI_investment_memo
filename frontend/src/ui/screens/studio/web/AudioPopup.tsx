@@ -20,14 +20,24 @@ export function WebAudioPopup({ open, stocks, periods, lastClose, onClose, onMak
   const [sum, setSum] = useState(true);
   const [per, setPer] = useState(0);
   const [prev, setPrev] = useState(open);
+  /* 실제 모드는 종목 목록이 창을 연 뒤에 도착한다 (GET /studio/audio/options) → 도착하면 다시 고른다 */
+  const key = all.join(',');
+  const [prevKey, setPrevKey] = useState(key);
+  const pickAll = () => {
+    const pick = preset?.filter((c) => all.includes(c)) ?? [];
+    setSel(pick.length ? pick : all);
+  };
   if (open !== prev) {
     setPrev(open);
     if (open) {
-      const pick = preset?.filter((c) => all.includes(c)) ?? [];
-      setSel(pick.length ? pick : all);
+      pickAll();
       setSum(true);
       setPer(0);
     }
+  }
+  if (key !== prevKey) {
+    setPrevKey(key);
+    pickAll();
   }
   const n = (s: AudioStock) => s.news[per] ?? 0;
   const total = stocks.filter((s) => sel.includes(s.stock_code)).reduce((a, s) => a + n(s), 0);

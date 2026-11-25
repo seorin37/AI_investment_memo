@@ -30,6 +30,8 @@ export interface AppAiTabProps {
   /** ⋯ → '수정 이력 보기': 가장 최근 메모 기록 줄을 펼침 (바뀔 때마다) */
   openLatestRev: number;
   onToggleAi: () => void;
+  /** 크레딧을 다 써서 멈춤(끄기 대기): 스위치를 꺼진 모양으로 (2026-11-24) */
+  aiPaused?: boolean;
   onOpenSource?: (f: MemoFeedItem) => void;
   onOpenEvidence?: (f: MemoFeedItem) => void;
   onNudge?: () => void;
@@ -40,7 +42,7 @@ export interface AppAiTabProps {
  * 연결 안 됨: 안내 + AI 연결 스위치 + '메모 기록' / 연결됐고 소식 없음: 지켜보는 중 + 확인 중인 항목 + '기록' / 소식 있음: '도착한 소식 N'.
  * 아래: (소식 2개 이상이면) 주간보고서 넛지 · 출처 안내 · AI 연결 스위치 · 투자 권유 아님 안내.
  */
-export function AppAiTab({ memo, versions, feed, trackItems, lastChecked, openLatestRev, onToggleAi, onOpenSource, onOpenEvidence, onNudge }: AppAiTabProps) {
+export function AppAiTab({ memo, versions, feed, trackItems, lastChecked, openLatestRev, aiPaused, onToggleAi, onOpenSource, onOpenEvidence, onNudge }: AppAiTabProps) {
   const rows = buildTimeline(memo, versions, feed);
   const feeds = rows.filter((r) => r.t === 'feed');
   const firstUnread = feeds.find((r) => r.t === 'feed' && r.item.unread);
@@ -76,9 +78,9 @@ export function AppAiTab({ memo, versions, feed, trackItems, lastChecked, openLa
     <View ref={aiRef} collapsable={false} style={[st.aic, { marginTop: 6 }]}>
       <View style={st.flex}>
         <Text style={st.aicB}>AI 연결</Text>
-        <Text style={st.aicS}>{memo.ai_linked ? '이 메모를 AI가 지켜보고 있어요' : '켜면 관련 소식을 모아 드려요'}</Text>
+        <Text style={st.aicS}>{aiPaused ? 'AI 사용량을 다 써서 멈췄어요 · 충전하지 않으면 꺼져요' : memo.ai_linked ? '이 메모를 AI가 지켜보고 있어요' : '켜면 관련 소식을 모아 드려요'}</Text>
       </View>
-      <Toggle variant="app" on={memo.ai_linked} onChange={onToggleAi} label="AI 연결" />
+      <Toggle variant="app" on={memo.ai_linked && !aiPaused} onChange={onToggleAi} label="AI 연결" />
     </View>
   );
   return (

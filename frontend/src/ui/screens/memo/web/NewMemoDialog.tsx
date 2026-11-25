@@ -19,7 +19,7 @@ import { usePaper } from '@/ui/shared/Dark';
  * [체크리스트] 탭 (6.2, 2026-11-22): 종목당 체크리스트 하나 — 있으면 그걸 고치고, 없으면 새로 (ChecklistTab).
  *   onSaveChecklist 가 없으면 예전처럼 onSwitchToChecklist 만 부른다.
  */
-export function WebNewMemoDialog({ open, stockName, initialText, initialAi, onCancel, onSave, onSwitchToChecklist, tab0 = 0, checklist, onSaveChecklist, onEmptyChecklist }: NewMemoProps & {
+export function WebNewMemoDialog({ open, stockName, initialText, initialAi, aiSpent, onCancel, onSave, onSwitchToChecklist, tab0 = 0, checklist, onSaveChecklist, onEmptyChecklist }: NewMemoProps & {
   open: boolean;
   /** 처음 열 탭 (0 메모 · 1 체크리스트) */
   tab0?: 0 | 1;
@@ -33,7 +33,7 @@ export function WebNewMemoDialog({ open, stockName, initialText, initialAi, onCa
   const { height: H } = useWindowDimensions();
   const [text, setText] = useState(initialText ?? '');
   const [color, setColor] = useState<MemoColor>('yellow');
-  const [ai, setAi] = useState(!!initialAi);
+  const [ai, setAi] = useState(!!initialAi && !aiSpent);
   const [tab, setTab] = useState<0 | 1>(onSaveChecklist ? tab0 : 0);
   const ed = useRef<{ focus: () => void; blur: () => void }>(null);
   const empty = !text.trim();
@@ -76,7 +76,7 @@ export function WebNewMemoDialog({ open, stockName, initialText, initialAi, onCa
           </View>
           <Swatches v={color} set={setColor} />
         </View>
-        <AiFooter on={ai} set={setAi} sub={ai ? '이 메모에서 1개 항목을 지켜봐요.' : AI_OFF} />
+        <AiFooter on={ai} set={(v) => setAi(v && !aiSpent)} sub={aiSpent ? 'AI 사용량을 다 써서 일반 메모로만 저장돼요' : ai ? '이 메모에서 1개 항목을 지켜봐요.' : AI_OFF} />
         <Actions note="연결하지 않아도 메모는 그대로 남아요" ok="메모 저장" onCancel={onCancel} onOk={save} />
         </>
         )}

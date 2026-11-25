@@ -7,7 +7,8 @@ import { useUI } from '@/store/ui';
 import { TopBar } from '@/ui/layout/app/TopBar';
 import { useUsageView } from '@/ui/screens/my/useUsageView';
 import { useMyProfile } from '@/ui/screens/my/useMyProfile';
-import { mockAudioPeriods, mockAudioStocks, mockReport, mockStudioCounts, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
+import { mockReport, mockStudioCounts, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
+import { useAudioPick } from '@/ui/screens/studio/audioView';
 import { startAudio, startReport } from '@/ui/screens/studio/genRuns';
 import { useReportPickStocks } from '@/ui/screens/studio/reportView';
 import { env } from '@/config/env';
@@ -45,6 +46,8 @@ export default function StudioTab() {
   );
   const [sheet, setSheet] = useState(false);
   const [rsheet, setRSheet] = useState(false);
+  /* AI 오디오: 실제 모드면 GET /studio/audio/options (시트를 열었을 때만, 2026-11-24) */
+  const audioPick = useAudioPick(sheet);
   const [mk, setMk] = useState(make);
   if (make !== mk) {
     setMk(make);
@@ -98,8 +101,8 @@ export default function StudioTab() {
       />
       <AppAudioSheet
         open={sheet}
-        stocks={mockAudioStocks}
-        periods={mockAudioPeriods}
+        stocks={audioPick.stocks}
+        periods={audioPick.periods}
         onClose={() => setSheet(false)}
         onMake={({ codes, period, market }) => {
           setSheet(false);

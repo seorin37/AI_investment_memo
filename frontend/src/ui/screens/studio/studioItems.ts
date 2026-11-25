@@ -10,6 +10,7 @@ import type { StudioItem } from '@/types/models';
 import type { LabDir } from './Studio.mock';
 import type { MadeItem } from './Studio.types';
 import { labTitle } from './labParts';
+import { fromServerAudioItem } from './audioView';
 import { fromServerReportItem } from './reportView';
 
 const KIND_LABEL: Record<StudioItem['kind'], string> = { lab: '투자 실험실', report: '주간보고서', audio: '오디오' };
@@ -25,6 +26,7 @@ export function fromServerItem(s: StudioItem): MadeItem {
     return { id: s.id, server: true, kind: 'lab', title: t.title, sub: t.sub, meta: t.sub, left, lab: { code, dirs, name, groups: s.content.groups, added: (s.content as { added?: Record<string, string> }).added } };
   }
   if (s.kind === 'report') return fromServerReportItem(s);
+  if (s.kind === 'audio') return fromServerAudioItem(s);
   const meta = `${KIND_LABEL[s.kind]} · ${s.symbols.length}종목`;
   return { id: s.id, server: true, kind: s.kind, title: s.title, sub: meta, meta, left, codes: s.symbols };
 }

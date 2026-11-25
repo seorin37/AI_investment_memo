@@ -19,6 +19,7 @@ import { WebConnectDialog } from '@/ui/screens/memo/web/ConnectDialog';
 import { WebMemoDialog } from '@/ui/screens/memo/web/MemoDialog';
 import type { ChecklistDraft } from '@/ui/screens/memo/web/ChecklistTab';
 import { WebNewMemoDialog } from '@/ui/screens/memo/web/NewMemoDialog';
+import { useUsageView } from '@/ui/screens/my/useUsageView';
 import { useMarkWatchAdded } from '@/ui/screens/studio/reportView';
 import { feedOf, findMemo, versionsOf } from '@/ui/screens/updates/Updates.mock';
 
@@ -100,6 +101,10 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, pre, stockName, on
   const [cState, setCState] = useState<AiLinkState>('loading');
   /* 실제 모드: 서버 보드가 오면(또는 저장 뒤 다시 받으면) 화면 상태를 서버 값으로 */
   const bd = useBoardData(code, openId);
+  /* AI 사용량을 다 쓰면 보드·메모 창에 안내 상자 (스튜디오와 같은 기준: 정지 또는 100% 이상). 버튼은 셸의 충전 창·설정 사용량 탭 (2026-11-24) */
+  const usage = useUsageView();
+  const aiSpent = usage.paused || usage.usage_pct >= 100;
+  const requestSpent = useUI((s) => s.requestSpent);
   const [cItems, setCItems] = useState<AiTrackItem[]>([]);
   const [seenVersion, setSeenVersion] = useState(0);
   if (bd.data && bd.version !== seenVersion) {
@@ -158,6 +163,7 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, pre, stockName, on
     });
   };
   const startConnect = (c: Connect) => {
+    if (real && aiSpent) return toast('AI 사용량을 다 써서 AI 연결을 켤 수 없어요. 일반 메모로는 계속 쓸 수 있어요');     // 크레딧 0: AI 켜기 막음 (서버도 402)
     setCState('loading');
     setConnect(c);
     /* 실제 모드: 연결 창이 열릴 때 AI 켜기 → 분석 결과 (결정 7 임시안) */
@@ -204,6 +210,10 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, pre, stockName, on
   return (
     <>
     <WebMemoBoard
+      aiSpent={aiSpent}
+      aiRefill={usage.usage_refill}
+      aiCount={usage.ai_count}
+      onSpentAction={requestSpent}
       stock={stock}
       priceNote={priceNote}
       memos={memos}
@@ -239,6 +249,7 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, pre, stockName, on
       onToggleAi={(id) => {
         const m = memos.find((x) => x.id === id);
         if (!m) return;
+        if (m.ai_linked && real && aiSpent) return requestSpent('choice');   // 끄기 대기: 플러그를 누르면 '모두 끄기' 선택 창
         if (m.ai_linked) {
           bd.ops.aiOff(id);
           patch(id, (x) => ({ ...x, ai_linked: false }));
@@ -269,6 +280,13 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, pre, stockName, on
       <WebMemoDialog
         key={opened.id}
         open={dlg}
+        aiSpent={aiSpent}
+        aiRefill={usage.usage_refill}
+        aiCount={usage.ai_count}
+        onSpentAction={(a) => {
+          setDlg(false);
+          requestSpent(a);
+        }}
         memo={opened}
         stockName={stock.name}
         versions={real ? bd.detail?.versions ?? [] : versions[opened.id] ?? versionsOf(opened.id)}
@@ -321,6 +339,7 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, pre, stockName, on
       stockName={stock.name}
       initialText={preNew?.text ?? first}
       initialAi={!!preNew}
+      aiSpent={real && aiSpent}
       tab0={newTab}
       checklist={checklist}
       onSaveChecklist={saveChecklist}

@@ -1,0 +1,35 @@
+# AWS 배포용: api + caddy (DB는 강사님 서버. .env의 DATABASE_URL 사용)
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/aws/Dockerfile.api
+    container_name: memos-api
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Seoul
+    volumes:
+      - ../../.env:/app/.env:ro
+      - ../../frontend/dist:/app/frontend/dist:ro
+      - ../../data:/app/data:ro
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2
+    container_name: memos-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
+volumes:
+  caddy_data:
+  caddy_config:

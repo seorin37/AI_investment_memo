@@ -6,16 +6,16 @@ import { Text } from '@/components/ui/AppText';
 import { PressScale } from '@/ui/motion/PressScale';
 import { chapterAt, fmt, lineAt } from '@/store/studioPlayer';
 import { Head } from '../../my/app/parts';
-import type { mockAudioEpisode } from '../Studio.mock';
 import type { MadeItem } from '../Studio.types';
+import type { AudioEp } from '../audioEp';
 
 /**
  * 앱 오디오 플레이어 = 원본 studio.html #pgPl (09)
  * 검정 카드(진행자 A·B · 제목 20 · 진행 막대(누르기·끌기) · 시간/지금 챕터 · 속도 · −10 · 재생 64 · +10) ·
  * 종목별 챕터 · 대본(줄 누르면 그 부분부터) · 관련 업데이트·출처 · 내 메모와 연결 · [조건 바꿔 새로 만들기]
- * 소리는 내지 않음 (store/studioPlayer mock 타이머)
+ * 앱은 아직 소리를 내지 않음 (재생 모듈 없음 → store/studioPlayer 타이머). 서버 오디오면 그 편의 대본·챕터를 보여 준다
  */
-type Ep = typeof mockAudioEpisode;
+type Ep = AudioEp;
 const C = { a: '#8569E3', a2: '#6A42AB', ink: '#16171A', ink2: '#575B63', ink3: '#9A9EA7' };
 export const SPEEDS = [1, 1.25, 1.5, 2];
 
@@ -25,8 +25,9 @@ export function AppPlayer({ item, ep, t, playing, speed, onBack, onToggle, onSee
 }) {
   const insets = useSafeAreaInsets();
   const sc = useRef<ScrollViewInstance>(null);
-  const ci = chapterAt(t);
-  const li = lineAt(t);
+  const ci = chapterAt(t, ep);
+  const li = lineAt(t, ep);
+  const ml = ep.memo_link;
   const talk = playing ? ep.script[li][1] : null;
   return (
     <View style={[st.root, { paddingTop: insets.top }]}>
@@ -60,7 +61,7 @@ export function AppPlayer({ item, ep, t, playing, speed, onBack, onToggle, onSee
         <Sec t="종목별 챕터" s="누르면 그 위치로" />
         <View style={st.card}>
           {ep.chapters.map(([c0, name], i) => (
-            <Pressable key={name} onPress={() => onSeek(c0)} accessibilityRole="button" style={[st.cr, i > 0 && st.line]}>
+            <Pressable key={`${i}-${name}`} onPress={() => onSeek(c0)} accessibilityRole="button" style={[st.cr, i > 0 && st.line]}>
               <Text style={st.crT}>{fmt(c0)}</Text>
               <Text style={[st.crN, i === ci && { color: C.a2, fontWeight: '800' }]}>{name}</Text>
               {i === ci ? <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={C.a2} strokeWidth={2} strokeLinecap="round" style={{ marginLeft: 'auto' }}><Path d="M4 10v4h4l5 4V6L8 10z" /><Path d="M16 9a4 4 0 0 1 0 6" /></Svg> : null}
@@ -73,7 +74,7 @@ export function AppPlayer({ item, ep, t, playing, speed, onBack, onToggle, onSee
             const on = i === li;
             const past = i < li;
             return (
-              <Pressable key={s0} onPress={() => { onSeek(s0); if (!playing) onToggle(); }} accessibilityRole="button" style={({ pressed }) => [st.ln, on && { backgroundColor: '#F1ECFF' }, pressed && !on && { backgroundColor: '#F6F4FF' }]}>
+              <Pressable key={i} onPress={() => { onSeek(s0); if (!playing) onToggle(); }} accessibilityRole="button" style={({ pressed }) => [st.ln, on && { backgroundColor: '#F1ECFF' }, pressed && !on && { backgroundColor: '#F6F4FF' }]}>
                 <View style={st.tl}>
                   <View style={[st.rail, i === 0 && { top: 18 }, i === ep.script.length - 1 && { height: 18, bottom: undefined }]} />
                   <View style={[st.tc, on && { backgroundColor: C.a2, borderColor: C.a2 }]}><Text style={[st.tcT, on && { color: '#FFFFFF' }]}>{fmt(s0)}</Text></View>
@@ -90,22 +91,26 @@ export function AppPlayer({ item, ep, t, playing, speed, onBack, onToggle, onSee
         <Sec t="관련 업데이트 · 출처" />
         <View style={st.card}>
           {ep.sources.map((r, i) => (
-            <View key={r.text} style={[st.rr, i > 0 && st.line]}>
+            <View key={`${i}-${r.text}`} style={[st.rr, i > 0 && st.line]}>
               <View style={[st.tg, r.kind === '뉴스' && { backgroundColor: '#E8F0FF' }]}><Text style={[st.tgT, r.kind === '뉴스' && { color: '#2F6BDB' }]}>{r.kind}</Text></View>
               <Text style={st.rrT} numberOfLines={1}>{r.text}</Text>
             </View>
           ))}
         </View>
-        <Sec t="내 메모와 연결" s="이 오디오에서 다룬 메모 1개" />
-        <View style={st.mlink}>
-          <View style={st.ymemo}><Text style={st.ymH}>{ep.memo_link.head}</Text><Text style={st.ymB}>{ep.memo_link.title}</Text></View>
-          <Text keepAll style={st.mlP}>{ep.memo_link.body}</Text>
-          <View style={{ flexDirection: 'row', gap: 6 }}>
-            <Pressable onPress={() => { onSeek(ep.memo_link.seek); if (!playing) onToggle(); sc.current?.scrollTo({ y: 0, animated: true }); }} accessibilityRole="button" style={st.chip}><Text style={st.chipT}>▶ {fmt(ep.memo_link.seek)} 부분 듣기</Text></Pressable>
-            <View style={[st.chip, { backgroundColor: '#F2F2F5' }]}><Text style={[st.chipT, { color: C.ink2 }]}>{ep.memo_link.count}</Text></View>
-          </View>
-          <Pressable onPress={onOpenMemo} accessibilityRole="link" style={{ marginTop: 8 }}><Text style={st.lk}>원본 메모 보기 ›</Text></Pressable>
-        </View>
+        {ml ? (
+          <>
+            <Sec t="내 메모와 연결" s="이 오디오에서 다룬 메모 1개" />
+            <View style={st.mlink}>
+              <View style={st.ymemo}><Text style={st.ymH}>{ml.head}</Text><Text style={st.ymB}>{ml.title}</Text></View>
+              <Text keepAll style={st.mlP}>{ml.body}</Text>
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                <Pressable onPress={() => { onSeek(ml.seek); if (!playing) onToggle(); sc.current?.scrollTo({ y: 0, animated: true }); }} accessibilityRole="button" style={st.chip}><Text style={st.chipT}>▶ {fmt(ml.seek)} 부분 듣기</Text></Pressable>
+                <View style={[st.chip, { backgroundColor: '#F2F2F5' }]}><Text style={[st.chipT, { color: C.ink2 }]}>{ml.count}</Text></View>
+              </View>
+              <Pressable onPress={onOpenMemo} accessibilityRole="link" style={{ marginTop: 8 }}><Text style={st.lk}>원본 메모 보기 ›</Text></Pressable>
+            </View>
+          </>
+        ) : null}
         <View style={{ paddingTop: 6, paddingHorizontal: 16 }}>
           <PressScale onPress={onRemake} accessibilityRole="button" style={st.cta}><Text style={st.ctaT}>조건 바꿔 새로 만들기</Text></PressScale>
         </View>

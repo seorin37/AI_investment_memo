@@ -14,6 +14,11 @@
 사용 예:
     python -m backend.pipelines.news.naver --dry-run            # 전날 기사, DB 쓰기 없이 확인
     python -m backend.pipelines.news.naver --hours 3            # 최근 3시간 기사
+    python -m backend.pipelines.news.naver --since "2026-11-20 21:00" --until "2026-11-21 12:30"
+        # 지정 구간 재수집 (일회성 백필). 시간대가 없으면 KST, --until을 빼면 지금까지
+    python -m backend.pipelines.news.naver --general --since "2026-11-20 21:00" --until "2026-11-21 08:00"
+        # 수집 공백 메우기: naver_queries.yaml의 general_queries(일반 경제 검색어)로 받는다.
+        # 종목에 묶인 검색어가 아니므로 news_stocks에 연결하지 않는다 (종목 태그는 원문 수집 단계의 태거가 붙인다)
 """
 
 from __future__ import annotations
@@ -116,8 +121,8 @@ def parse_item(item: dict, aliases: list[str], publishers: dict[str, str],
     published_at = parse_published(item.get("pubDate"))
     if not title or not url or published_at is None:
         return None
-    if not mentions(title if title_only else f"{title} {description or ''}", aliases):
-        return None  # 검색어와 무관하게 걸린 기사
+    if aliases is not None and not mentions(title if title_only else f"{title} {description or ''}", aliases):
+        return None  # 검색어와 무관하게 걸린 기사 (aliases가 None인 일반 검색어는 거르지 않는다)
     publisher, listed = publisher_for(url, publishers)
     if only_listed and not listed:
         return None
@@ -158,12 +163,13 @@ def collect(stocks: list[dict], since: datetime, until: datetime, fetch: FetchFn
             try:
                 for item in iter_query_items(query, since, fetch):
                     stat["fetched"] += 1
-                    art = parse_item(item, stock["aliases"], publishers, only_listed, stock.get("title_only", False))
+                    art = parse_item(item, stock.get("aliases"), publishers, only_listed, stock.get("title_only", False))
                     if art is None or not (since <= art.published_at < until):
                         continue
                     stat["kept"] += 1
                     entry = merged.setdefault(art.url_norm, StockArticle(art))
-                    entry.stock_codes.add(stock["code"])
+                    if stock.get("code"):   # 일반 검색어(code 없음)는 종목에 연결하지 않는다
+                        entry.stock_codes.add(stock["code"])
             except Exception as exc:  # 한 검색어 실패가 전체를 막지 않게 한다
                 stat["error"] = f"{type(exc).__name__}: {exc}"
                 log.error("검색 실패 %s/%s: %s", stock["name"], query, exc)
@@ -243,11 +249,21 @@ def run_naver(conn, since: datetime, until: datetime, config_path: Path | None =
 
 # ---------------------------------------------------------------- CLI
 
+def parse_kst(raw: str) -> datetime:
+    """'2026-11-20 21:00' 같은 ISO 시각. 시간대가 없으면 KST로 본다."""
+    value = datetime.fromisoformat(raw)
+    return (value if value.tzinfo else value.replace(tzinfo=KST)).astimezone(UTC)
+
+
 def main(argv: list[str] | None = None) -> int:
     load_env()
     parser = argparse.ArgumentParser(description="네이버 뉴스 검색 API 수집기")
     parser.add_argument("--config", type=Path, default=Path(__file__).with_name("naver_queries.yaml"))
     parser.add_argument("--hours", type=float, help="최근 N시간 기사만 수집 (기본: 전날 KST 하루)")
+    parser.add_argument("--since", type=parse_kst, help="이 시각부터 [since, until) 재수집 (예: '2026-11-20 21:00', 시간대 없으면 KST)")
+    parser.add_argument("--until", type=parse_kst, help="--since와 함께: 이 시각 전까지 (기본: 지금)")
+    parser.add_argument("--general", action="store_true",
+                        help="--since와 함께: 종목 검색어 대신 general_queries(일반 경제 검색어)로 받고 종목 연결은 하지 않는다 (공백 메우기용)")
     parser.add_argument("--dry-run", action="store_true", help="DB에 쓰지 않고 결과만 출력")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
@@ -261,8 +277,19 @@ def main(argv: list[str] | None = None) -> int:
         log.error("NAVER_CLIENT_ID / NAVER_CLIENT_SECRET 환경변수가 필요합니다.")
         return 1
 
+    if args.until and not args.since:
+        parser.error("--until은 --since와 함께 써야 합니다.")
+    if args.since and args.hours:
+        parser.error("--since와 --hours는 함께 쓸 수 없습니다.")
+    if args.general and not args.since:
+        parser.error("--general은 --since와 함께 써야 합니다.")
+
     config = yaml.safe_load(args.config.read_text(encoding="utf-8"))
-    if args.hours:
+    if args.since:
+        since, until = args.since, args.until or datetime.now(UTC)
+        if since >= until:
+            parser.error("--since가 --until보다 앞서야 합니다.")
+    elif args.hours:
         until = datetime.now(UTC)
         since = until - timedelta(hours=args.hours)
     else:
@@ -270,7 +297,10 @@ def main(argv: list[str] | None = None) -> int:
 
     fetch = make_fetcher(client_id, client_secret,
                          os.environ.get("NAVER_API_BASE_URL", DEFAULT_BASE_URL))
-    items, stats = collect(config["stocks"], since, until, fetch,
+    stocks = config["stocks"]
+    if args.general:
+        stocks = [{"name": q, "code": None, "queries": [q], "aliases": None} for q in config["general_queries"]]
+    items, stats = collect(stocks, since, until, fetch,
                            config.get("publishers", {}), config.get("only_listed_publishers", True))
 
     for s in stats:
@@ -288,7 +318,7 @@ def main(argv: list[str] | None = None) -> int:
         log.error("DATABASE_URL 환경변수가 없습니다.")
         return 1
     import psycopg
-    target = (since.astimezone(KST).date() if not args.hours else None)
+    target = (since.astimezone(KST).date() if not (args.hours or args.since) else None)
     with psycopg.connect(dsn, autocommit=True) as conn:
         with conn.cursor() as cur:
             run_id = start_run(cur, "news", target)

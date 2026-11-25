@@ -26,12 +26,20 @@ import { toFeedItem } from '@/ui/screens/memo/toFeedItem';
  * - AI 연결 (전수 검사 결정 7, 임시안 '저장 = 켜기'): 연결 창이 열릴 때 PUT ai-link(켜기) → 분석 결과를 창에 보여 줌,
  *   '일반 메모로 두기' = 끄기. 분석만 하는 API 는 없다
  */
-export function boardFrom(items: BoardItem[]): BoardCards & { checklist: Checklist | null } {
+export function boardFrom(items: BoardItem[]): BoardCards & { checklist: Checklist | null; cardOrder: string[] } {
   const sorted = [...items].sort((a, b) => a.position - b.position);
   const memos = sorted.filter((b): b is Memo => b.kind === 'memo');
   const checklists = sorted.filter((b): b is Checklist => b.kind === 'checklist');
-  /* checklist: 웹 보드는 하나만 (첫 번째) */
-  return { memos, checklists, checklist: checklists[0] ?? null, order: sorted.filter((b) => b.kind !== 'reference').map((b) => b.id) };
+  const checklist = checklists[0] ?? null;
+  return {
+    memos,
+    checklists,
+    /* 웹 보드: 체크리스트는 첫 번째 하나, 순서도 그 하나만 */
+    checklist,
+    order: sorted.filter((b) => b.kind === 'memo' || b.id === checklist?.id).map((b) => b.id),
+    /* 앱 보드: 체크리스트를 모두 넣은 순서 */
+    cardOrder: sorted.filter((b) => b.kind !== 'reference').map((b) => b.id),
+  };
 }
 
 const DIR: Record<string, '이하' | '이상'> = {

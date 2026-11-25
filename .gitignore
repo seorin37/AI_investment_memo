@@ -51,3 +51,5 @@ compare/
 
 # AI 오디오 시험 결과·TTS 캐시 (음성 파일이 커서 커밋하지 않는다)
 results/studio_audio/
+# AI 오디오 API가 만든 음성 파일·줄 캐시 (app/studio_audio/routes.py DATA_DIR)
+data/studio_audio/

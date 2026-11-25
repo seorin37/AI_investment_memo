@@ -12,6 +12,7 @@ import { useMarkWatchAdded } from '@/ui/screens/studio/reportView';
 import { mockDetailStockName } from '@/ui/screens/memo/MemoDetail.mock';
 import { mockFirstHomeStocks } from '@/ui/screens/onboarding/Onboarding.mock';
 import { AppFirstMemo } from '@/ui/screens/onboarding/app/FirstMemo';
+import { useUsageView } from '@/ui/screens/my/useUsageView';
 
 /**
  * 앱 새 메모 = UI v2. from_onboarding은 기존 저장 API를 바꾸지 않고 복귀 위치만 홈으로 지정한다.
@@ -22,6 +23,8 @@ export default function NewMemoScreen() {
   /* 주간보고서 '메모에 추가'(2026-11-24): 제목·본문을 채우고 AI 연결을 켠 채로 연다. 저장하면 보고서에 '추가됨'(wr·wk) */
   const markWatch = useMarkWatchAdded();
   const router = useRouter();
+  /* 크레딧을 다 쓰면 AI 연결 스위치를 막고 일반 메모로만 (2026-11-24) */
+  const usage = useUsageView();
   const toast = useUI((s) => s.showToast);
   const qc = useQueryClient();
   const cancel = useCallback(() => router.back(), [router]);
@@ -56,6 +59,7 @@ export default function NewMemoScreen() {
       stockName={name || mockDetailStockName}
       initialText={first_line ? (preBody ? `${first_line}\n${preBody}` : first_line) : undefined}
       initialAi={preAi === '1'}
+      aiSpent={usage.paused || usage.usage_pct >= 100}
       onCancel={cancel}
       onEmpty={() => (code ? router.dismissTo({ pathname: '/stocks/[code]', params: { code, notice: 'empty', t: String(Date.now()) } }) : cancel())}
       onSave={({ title, body, color, ai }) => {

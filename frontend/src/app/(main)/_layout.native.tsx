@@ -5,7 +5,7 @@ import { useCoach } from '@/store/coach';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/store/auth';
 import { chapterAt, fmt, useStudioPlayer } from '@/store/studioPlayer';
-import { mockAudioEpisode } from '@/ui/screens/studio/Studio.mock';
+import { epOf } from '@/ui/screens/studio/audioEp';
 import { AppMiniPlayer } from '@/ui/screens/studio/app/MiniPlayer';
 import { size } from '@/ui/theme';
 import { useGenJobs } from '@/store/genJobs';
@@ -16,6 +16,7 @@ import { BottomTabBar } from '@/ui/layout/app/BottomTabBar';
 import { AppSnackbar } from '@/ui/shared/Snackbar';
 import { mockTabBadges } from '@/ui/layout/app/BottomTabBar.mock';
 import type { AppTab } from '@/ui/layout/app/BottomTabBar.types';
+import { useAiOffPrompt } from '@/ui/shared/useAiOffChoice';
 
 /**
  * 앱(안드로이드·iOS) 로그인 후 영역: UI v2 아래 탭 5개. 웹은 같은 폴더의 _layout.tsx(WebShell).
@@ -30,6 +31,8 @@ export default function MainTabsLayout() {
   useStudioItemsSync();
   useGenRestore();
   const studioDot = useGenJobs((s) => s.dot);
+  /* 크레딧을 다 썼고 AI 연결 메모가 남아 있으면 '충전 · 업그레이드 · 모두 끄기' 한 번 묻기 (2026-11-24) */
+  useAiOffPrompt();
   /* 로그인한 채 다른 사용자로 바뀌면(A → B) 커짐 → 탭을 다시 마운트해 열린 화면을 새 사용자 값으로 (store/auth sessionKey) */
   const sessionKey = useAuth((s) => s.sessionKey);
   /* 메모 고르기 중 탭바 숨김 (옛 보드가 store/ui 로 알려 줌) */
@@ -128,14 +131,15 @@ function Mini({ hidden }: { hidden: boolean }) {
   const insets = useSafeAreaInsets();
   const p = useStudioPlayer();
   const item = p.made.find((m) => m.id === p.cur);
-  const ch = mockAudioEpisode.chapters[chapterAt(p.t)][1].split(' ·')[0];
+  const ep = epOf(item);
+  const ch = ep.chapters[chapterAt(p.t, ep)][1].split(' ·')[0];
   return (
     <AppMiniPlayer
       visible={p.mini && !!item && !hidden}
       bottom={1 + 65 + Math.max(size.tabBarPadBottom, insets.bottom) + 10}
       title={item?.title ?? ''}
-      sub={`${ch} · ${fmt(p.t)} / ${fmt(mockAudioEpisode.dur)}`}
-      progress={p.t / mockAudioEpisode.dur}
+      sub={`${ch} · ${fmt(p.t)} / ${fmt(ep.dur)}`}
+      progress={p.t / ep.dur}
       playing={p.playing}
       onOpen={() => router.push('/studio-player')}
       onToggle={p.toggle}

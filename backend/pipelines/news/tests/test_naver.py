@@ -136,3 +136,22 @@ def test_title_only_naver():
             "pubDate": "Wed, 21 Oct 2026 10:00:00 +0900"}
     assert n.parse_item(item, ["네이버"], PUBLISHERS) is not None
     assert n.parse_item(item, ["네이버"], PUBLISHERS, title_only=True) is None
+
+
+def test_parse_kst_treats_naive_time_as_kst():
+    from datetime import datetime, timezone
+    from backend.pipelines.news.naver import parse_kst
+    assert parse_kst("2026-11-20 21:00") == datetime(2026, 11, 20, 12, 0, tzinfo=timezone.utc)
+    assert parse_kst("2026-11-20T12:00+00:00") == datetime(2026, 11, 20, 12, 0, tzinfo=timezone.utc)
+
+
+def test_general_query_saves_without_stock_link():
+    from datetime import datetime, timezone
+    from backend.pipelines.news.naver import collect
+    item = {"title": "증시 마감", "description": "코스피가 올랐다", "originallink": "https://www.yna.co.kr/view/AKR1",
+            "pubDate": "Fri, 20 Nov 2026 23:30:00 +0900"}
+    stocks = [{"name": "증시", "code": None, "queries": ["증시"], "aliases": None}]
+    items, stats = collect(stocks, datetime(2026, 11, 20, 12, tzinfo=timezone.utc), datetime(2026, 11, 21, tzinfo=timezone.utc),
+                           lambda q, start: {"items": [item] if start == 1 else []}, {"yna.co.kr": "yonhap"}, True)
+    assert len(items) == 1 and items[0].stock_codes == set()
+    assert stats[0]["kept"] == 1

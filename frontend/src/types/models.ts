@@ -608,6 +608,10 @@ export interface CreditUsage {
   renews_at: ISODate;
   renew_label: string; // '11.30 갱신'
   paused: boolean; // 남은 크레딧 0 → AI 업데이트 멈춤
+  /** 지금 AI 연결이 켜진 메모 수 (2026-11-24 '충전하지 않으면 N개가 모두 꺼져요' 선택 창) */
+  ai_memo_count?: number;
+  /** 크레딧을 다 쓴 채 갱신일이 지나 자동으로 꺼진 메모 수 (0026, 안내 한 번) */
+  auto_off_count?: number;
 }
 
 /** 오늘의 퀴즈 (GET /quiz/today, backend/app/quiz, 문제 표 quiz_questions 0023) */
@@ -668,6 +672,32 @@ export interface LabRunResult {
 
 /** POST /studio/reports — 주간보고서 만들기 (같은 주·같은 조합이면 reused) */
 export interface ReportCreateResult { item_id: string; status: 'generating' | 'ready' | 'queued'; reused: boolean }
+
+/** GET /studio/audio/options — AI 오디오 만들기 시트 (2026-11-24). news: 기간별 새 업데이트 수 [전날, 최근 3일, 최근 7일] */
+export interface AudioOptions {
+  stocks: { stock_code: string; name: string; news: [number, number, number]; hold: '보유' | '관심' }[];
+  periods: string[];
+  /** '11.21(금)' 직전 거래일 */
+  last_close: string | null;
+  last_close_date: string | null;
+  cost: number;
+}
+export type AudioPeriod = '전날' | '최근 3일' | '최근 7일';
+/** GET /studio/audio/{id} — 상태와 ready면 플레이어 내용 (content = backend app/studio_audio/episode.to_content) */
+export interface AudioItem {
+  id: string;
+  status: StudioItem['status'];
+  title: string;
+  /** failed 이유 이름 (no_updates · tts_not_ready: … · 예외 이름) */
+  error: string | null;
+  period: { start: string; end: string };
+  symbols: string[];
+  credits_used: number;
+  created_at: ISODate;
+  ready_at: ISODate | null;
+  content: Record<string, unknown>;
+  file_url: string | null;
+}
 
 /** GET /studio/items — 스튜디오 만든 항목 (studio_items, 30일 보관) */
 export interface StudioItem {

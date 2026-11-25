@@ -105,7 +105,13 @@ export function useHomeData() {
     data,
     onChangeWidgets: (w: HomeWidget[]) => saveLayout.mutate(layoutFrom(w)),
     onToggleCheck: (code: string, id: string) => {
-      /* 종목에 체크리스트가 여러 개일 수 있어 그 항목이 든 체크리스트로 */
+      if (Platform.OS === 'web') {
+        const c = checklists[code];
+        const it = c?.items.find((i) => i.id === id);
+        if (c && it) setItem.mutate({ checklistId: c.id, itemId: id, done: !it.done, stockCode: code });
+        return;
+      }
+      /* 앱: 종목에 체크리스트가 여러 개일 수 있어 그 항목이 든 체크리스트로 */
       const row = checks.data?.find((r) => r.id === id);
       if (row) setItem.mutate({ checklistId: row.checklist_id, itemId: id, done: !row.done, stockCode: code });
     },

@@ -17,7 +17,7 @@ import { useMyProfile } from '@/ui/screens/my/useMyProfile';
 import { planKey, withCurrentPlan } from '@/ui/screens/my/planLabel';
 import { useUsageView } from '@/ui/screens/my/useUsageView';
 import { useTrackedView } from '@/ui/screens/my/useTrackedView';
-import { useAiStats, useMyStocks } from '@/hooks/queries';
+import { useAiOffAll, useAiOffNoticeSeen, useAiStats, useMyStocks } from '@/hooks/queries';
 import Constants from 'expo-constants';
 import { legalDocument } from '@/ui/screens/auth/Auth.mock';
 import { mockCreditDefault, mockCreditPacks, mockPayMethods, mockDataSources, mockOss, mockPlanCompare, mockPlanDefault, mockPlanNotes, mockPlans, mockReportKinds, mockWithdrawCounts } from '@/ui/screens/my/My.mock';
@@ -30,7 +30,9 @@ import { useQuizAnswer } from '@/ui/screens/studio/useQuizAnswer';
 import { useTrashData } from '@/ui/screens/my/useTrashData';
 import { WebTrash } from '@/ui/screens/my/web/Trash';
 import { chapterAt, fmt, useStudioPlayer } from '@/store/studioPlayer';
-import { mockAudioEpisode, mockAudioGen, mockAudioPeriods, mockAudioStocks, mockLabDisclaimer, mockLabNote, mockLabVars, mockLastClose, mockReport, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
+import { mockAudioGen, mockLabDisclaimer, mockLabNote, mockLabVars, mockReport, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
+import { epOf } from '@/ui/screens/studio/audioEp';
+import { useAudioPick, useCreateAudio } from '@/ui/screens/studio/audioView';
 import { WebFail, WebGen, WebLabGen, WebMini, WebPlayer } from '@/ui/screens/studio/web/Audio';
 import { shellSizeFor } from '@/ui/layout/web/shellSize';
 import { WebReportPopup, WebReportSum } from '@/ui/screens/studio/web/Report';
@@ -44,7 +46,7 @@ import { labWatchDraft, labWatchItems, labWatchKey } from '@/ui/screens/studio/u
 import { useLabVars } from '@/ui/screens/studio/useLabVars';
 import { WebAudioPopup } from '@/ui/screens/studio/web/AudioPopup';
 import type { StudioKind } from '@/ui/screens/studio/Studio.types';
-import { WebChargePopup, WebCreditPopup, WebUsageSheet } from '@/ui/screens/studio/web/Credit';
+import { WebAiOffChoice, WebAiOffNotice, WebChargePopup, WebCreditPopup, WebUsageSheet } from '@/ui/screens/studio/web/Credit';
 import { WebStudioHome } from '@/ui/screens/studio/web/StudioHome';
 import { useUI } from '@/store/ui';
 import { ConfirmDialog } from '@/ui/shared/ConfirmDialog';
@@ -155,6 +157,28 @@ export default function MainLayout() {
   /* ⑧-8a 스튜디오: 사용량 창 · PLUS 창(다 쓴 뒤 만들기) · 충전 창. 결제·만들기는 연결 안 됨 */
   const [studioPop, setStudioPop] = useState<'usage' | 'credit' | 'charge' | 'audio' | 'report' | null>(null);
   const usageSpent = usage.paused || usage.usage_pct >= 100;
+  /* 보드·메모 창의 'AI 사용량 다 씀' 버튼: 스튜디오와 같게 충전 창 · 설정 사용량 탭 (2026-11-24) */
+  const spentReq = useUI((s) => s.spentReq);
+  const [aiChoice, setAiChoice] = useState(false);
+  const [spentSeen, setSpentSeen] = useState<number | null>(null);
+  if (spentReq && spentReq.id !== spentSeen) {                 // 렌더 중 상태 맞추기 (새 요청 id일 때만 한 번)
+    setSpentSeen(spentReq.id);
+    if (spentReq.kind === 'credit') setStudioPop('charge');
+    else if (spentReq.kind === 'choice') setAiChoice(true);
+    else setSettings('사용량');
+  }
+  /* 2026-11-24 크레딧을 다 썼고 AI 연결 메모가 남아 있으면(끄기 대기) 'AI 연결 모두 끄기' 선택 창. 화면을 연 뒤 한 번 묻고,
+     닫으면 다음에 다시 묻는다(그동안 매일 확인은 멈춤). 스위치·보드 안내에서도 연다 (spentReq 'choice') */
+  const aiPending = usageSpent && usage.ai_count > 0;
+  const [aiAsked, setAiAsked] = useState(false);
+  if (aiPending && !aiAsked) {
+    setAiAsked(true);
+    setAiChoice(true);
+  }
+  const aiOff = useAiOffAll();
+  /* 갱신일에 자동으로 꺼진 메모가 있으면 '지난 기간 사용량을 다 써서 N개가 꺼졌어요' 한 번 (닫거나 확인하면 서버 표시를 지움) */
+  const aiNoticeSeen = useAiOffNoticeSeen();
+  const [aiNoticeClosed, setAiNoticeClosed] = useState(false);
   /* 보고서·오디오 창에서 미리 고를 종목 (넛지에서 열 때만 · 다른 길로 열면 비워서 전체) */
   const [popPreset, setPopPreset] = useState<string[] | undefined>(undefined);
   const studioFeat = (k: StudioKind, codes?: string[]) => {
@@ -226,6 +250,10 @@ export default function MainLayout() {
   const repView = reportView(repItem);
   const reportPick = useReportPickStocks();
   const createReport = useCreateReport();
+  /* AI 오디오: 실제 모드면 GET /studio/audio/options (창을 열었을 때만) · POST /studio/audio (2026-11-24) */
+  const audioPick = useAudioPick(studioPop === 'audio');
+  const createAudio = useCreateAudio();
+  const spEp = epOf(spItem);
   const { studio_fail } = useGlobalSearchParams<{ studio_fail?: string }>();
   const unreadShown = inbox.items.filter((n) => unread.includes(n.id) && (n.kind === 'ai' ? myNoti.ai : myNoti.studio)).length;
   /* action(오른쪽 버튼)이 있을 때만 5초, 나머지는 그대로 4초 */
@@ -273,8 +301,10 @@ export default function MainLayout() {
           const s = sideStocks.find((x) => x.name === name);
           if (s) openStock(s.stock_code);
         },
+        /* 많이 찾는 종목: 내 종목이면 그 보드 · '추가' 표시면 종목 추가 창 (원본 shell.tsx setOverlay('addStock')) */
         onPickPopular: (code) => {
           if (sideStocks.some((s) => s.stock_code === code)) openStock(code);
+          else setAddOpen(true);
         },
         onNavigate: (to) => router.navigate(to === 'home' ? '/' : to === 'mine' ? '/stocks' : `/${to}`),
         onOpenStock: openStock,
@@ -363,7 +393,7 @@ export default function MainLayout() {
               : sp.webView === 'player' && spItem ? (
                 <WebPlayer
                   item={spItem}
-                  ep={mockAudioEpisode}
+                  ep={spEp}
                   t={sp.t}
                   playing={sp.playing}
                   speed={sp.speed}
@@ -398,8 +428,8 @@ export default function MainLayout() {
             {sp.mini && spItem && sp.webView !== 'player' ? (
               <WebMini
                 title={spItem.title}
-                sub={`지금 · ${mockAudioEpisode.chapters[chapterAt(sp.t)][1]} · ${fmt(sp.t)}`}
-                progress={sp.t / mockAudioEpisode.dur}
+                sub={`지금 · ${spEp.chapters[chapterAt(sp.t, spEp)][1]} · ${fmt(sp.t)}`}
+                progress={sp.t / spEp.dur}
                 playing={sp.playing}
                 onOpen={() => { sp.setMini(false); sp.setWebView('player'); }}
                 onToggle={sp.toggle}
@@ -529,16 +559,17 @@ export default function MainLayout() {
     />
     <WebAudioPopup
       open={studioPop === 'audio'}
-      stocks={mockAudioStocks}
-      periods={mockAudioPeriods}
-      lastClose={mockLastClose}
+      stocks={audioPick.stocks}
+      periods={audioPick.periods}
+      lastClose={audioPick.lastClose}
       preset={popPreset}
       onClose={() => setStudioPop(null)}
       onMake={({ codes, period, market }) => {
         setStudioPop(null);
         setStudioOpen(true);
         sp.setWebView('gen');
-        sp.startAudio({ sub: `${codes.length}종목 · ${period} · ${market ? '증시 요약 포함' : '증시 요약 없음'}`, n: codes.length }, __DEV__ && studio_fail === '1');
+        sp.startAudio({ sub: `${codes.length}종목 · ${period} · ${market ? '증시 요약 포함' : '증시 요약 없음'}`, n: codes.length, codes, market },
+          __DEV__ && studio_fail === '1', env.useMock ? undefined : () => createAudio(codes, period, market));
       }}
     />
     <WebReportPopup
@@ -557,6 +588,23 @@ export default function MainLayout() {
       }}
     />
     <WebUsageSheet open={studioPop === 'usage'} pct={usage.usage_pct} refill={usage.usage_refill} onClose={() => setStudioPop(null)} onBuyCredit={() => setStudioPop('charge')} onChangePlan={() => setSettings('사용량')} />
+    <WebAiOffNotice
+      open={usage.auto_off > 0 && !aiNoticeClosed && !aiPending}
+      count={usage.auto_off}
+      onClose={() => { setAiNoticeClosed(true); aiNoticeSeen.mutate(); }}
+    />
+    <WebAiOffChoice
+      open={aiChoice && aiPending}
+      count={usage.ai_count}
+      busy={aiOff.isPending}
+      onClose={() => setAiChoice(false)}
+      onCharge={() => { setAiChoice(false); setStudioPop('charge'); }}
+      onPlan={() => { setAiChoice(false); setSettings('사용량'); }}
+      onOff={() => aiOff.mutate(undefined, {
+        onSuccess: (r) => { setAiChoice(false); say({ msg: `AI 연결 메모 ${r.turned_off}개를 껐어요. 메모는 그대로 남아 있어요`, check: true }); },
+        onError: () => say({ msg: 'AI 연결을 끄지 못했어요. 잠시 뒤 다시 해 주세요' }),
+      })}
+    />
     <WebCreditPopup open={studioPop === 'credit'} onClose={() => setStudioPop(null)} onPlan={() => { setStudioPop(null); setSettings('사용량'); }} onCharge={() => setStudioPop('charge')} />
     <WebChargePopup open={studioPop === 'charge'} packs={mockCreditPacks} default_credits={mockCreditDefault} methods={mockPayMethods} onClose={() => setStudioPop(null)} onPay={() => say({ msg: '결제는 아직 연결되지 않았어요' })} />
     <WebFeedback open={fbOpen} kinds={mockReportKinds} onClose={() => setFbOpen(false)} onSend={() => say({ msg: '아직 연결되지 않았어요' })} />

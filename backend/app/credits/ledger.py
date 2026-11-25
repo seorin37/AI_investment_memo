@@ -115,9 +115,19 @@ def expire(db, user_id: int, now: datetime | None = None) -> int:
     return sum(int(left) for _, left in rows)
 
 
-def refresh(db, user_id: int, now: datetime | None = None) -> None:
+def refresh(db, user_id: int, now: datetime | None = None) -> int:
+    """만료 → 이번 기간 기본량. 2026-11-24: 지난 기간을 크레딧 0으로 끝낸 채 갱신되면 AI 연결 메모를 모두 끈다
+    (선택 창에서 충전·업그레이드를 하지 않은 경우, app/credits/ai_off.py). 자동으로 끈 메모 수."""
+    from . import ai_off
+    left_before = int(db.execute(text("SELECT COALESCE(sum(remaining), 0) FROM credit_grants WHERE user_id = :u"),
+                                 {"u": user_id}).scalar() or 0)          # 만료 처리 전 = 지난 기간이 끝날 때 남은 양
+    had_prior = db.execute(text("SELECT 1 FROM credit_grants WHERE user_id = :u AND source = 'monthly' LIMIT 1"),
+                           {"u": user_id}).first() is not None
     expire(db, user_id, now)
-    ensure_monthly(db, user_id, now)
+    granted = ensure_monthly(db, user_id, now)
+    if ai_off.should_auto_off(granted, had_prior, left_before):
+        return ai_off.turn_off_all(db, user_id, auto=True)
+    return 0
 
 
 def balance(db, user_id: int, now: datetime | None = None) -> int:

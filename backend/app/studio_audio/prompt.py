@@ -10,7 +10,7 @@ from functools import lru_cache
 
 from .collect import Brief, CardIn, MarketRow, MemoIn, PriceIn, StockIn, day_label
 
-PROMPT_VERSION = "audio-v6 (2026-11-24, 메모스 라디오 티키타카)"
+PROMPT_VERSION = "audio-v8 (2026-11-24, 질문을 따라가는 대화 + 오프닝·클로징 수다)"
 CONFIG_PATH = "configs/studio_audio.yaml"
 
 
@@ -143,55 +143,58 @@ def _l(speaker: str, tone: str, text: str, refs: list[str] | None = None, cue: s
     return {"speaker": speaker, "text": text, "refs": refs or [], "tone": tone, "cue": cue}
 
 
+# audio-v8: 본론은 v7처럼 숫자를 하나씩 되묻거나 앞말을 되풀이하지 않고, 메모의 질문 → 답 → 그 답에서 생기는 다음 질문으로 잇는다.
+# 앞뒤(opening·closing)는 v6처럼 가벼운 수다와 웃음. 종가는 메모와 이어지는 맥락이 없어서 넣지 않았다.
 FEWSHOT_ANSWER = {
     "title": "1월 첫째 주 메모스 라디오",
     "segments": [
         {"kind": "opening", "stock_code": "", "lines": [
-            _l("A", "bright", "안녕하세요, 메모스 라디오예요!"),
-            _l("B", "warm", "월요일 아침이에요. 주말 잘 쉬셨어요?"),
-            _l("A", "bright", "저는 쉬긴 했는데, 메모는 하나도 안 썼어요.", cue="light_laugh"),
+            _l("A", "bright", "안녕하세요, 메모스 라디오예요."),
+            _l("B", "bright", "월요일 아침이에요. 한 주 시작, 커피는 챙기셨죠?"),
+            _l("A", "bright", "저는 커피보다 메모가 급해요. 지난주에 하나도 못 썼거든요.", cue="light_laugh"),
             _l("B", "warm", "괜찮아요. 그래서 저희가 대신 챙겨 왔잖아요.", cue="light_laugh"),
-            _l("A", "warm", "오늘은 메모해 두신 신공장 투자 얘기가 진짜 나왔어요."),
-            _l("B", "warm", "1월 5일부터 11일까지, 두 종목이에요. 증시부터 볼까요?")]},
+            _l("A", "curious", "오늘은 예시전자 신공장에 얼마를, 언제까지 쓰는지부터 볼게요."),
+            _l("B", "warm", "1월 5일부터 11일까지 나온 자료에 답이 있었어요. 증시부터 짧게 볼게요.")]},
         {"kind": "market", "stock_code": "", "lines": [
-            _l("B", "calm", "1월 9일 코스피는 2,510.4로 마감했어요."),
-            _l("A", "curious", "기간 첫 거래일보다는요?"),
-            _l("B", "calm", "1.64% 높아요.")]},
+            _l("A", "warm", "코스피는 어떻게 끝났어요?"),
+            _l("B", "calm", "1월 9일 2,510.4로 마감했어요. 전 거래일보다 0.82% 올랐어요."),
+            _l("B", "calm", "기간 첫 거래일과 비교하면 1.64% 올랐고요.")]},
         {"kind": "stock", "stock_code": "000001", "lines": [
-            _l("A", "warm", "자, 예시전자부터 갈게요. 신공장 투자 계속 보겠다고 메모하셨잖아요.", cue="short_pause"),
-            _l("B", "calm", "네, 마침 그 공시가 나왔어요. 1월 7일 DART예요.", ["U1"]),
-            _l("A", "curious", "금액은요?"),
-            _l("B", "calm", "3,200억 원이에요.", ["U1"]),
-            _l("A", "surprised", "와, 3,200억이요?", ["U1"]),
-            _l("B", "calm", "네. 기간은 2026년 1월부터 2027년 6월까지고요.", ["U1"]),
-            _l("A", "curious", "메모에 금액이랑 기간 확인하고 싶다고 쓰셨는데, 둘 다 나온 거네요.", ["U1"]),
-            _l("B", "calm", "빙고.", ["U1"]),
-            _l("A", "curious", "그럼 이거 좋은 소식인 거예요?"),
-            _l("B", "calm", "그건 메모하신 기준으로 직접 보셔야 하고요. 공시에 나온 건 금액과 기간까지예요.", ["U1"]),
-            _l("A", "curious", "아, 근데 시설투자가 정확히 뭐예요?"),
-            _l("B", "warm", "쉽게 말하면 공장이나 기계처럼 오래 쓸 설비를 새로 들이는 데 돈을 쓰는 거예요."),
-            _l("A", "warm", "배당 얘기도 하나 있었죠?", ["U2"]),
+            _l("A", "warm", "예시전자 메모에는 신공장 증설 금액이랑 기간을 확인하고 싶다고 적혀 있었어요.", cue="short_pause"),
+            _l("B", "calm", "둘 다 1월 7일 공시에 나왔어요. 신규 시설투자 3,200억 원을 결정했어요.", ["U1"]),
+            _l("B", "calm", "투자 기간은 2026년 1월부터 2027년 6월까지예요.", ["U1"]),
+            _l("A", "curious", "그럼 시설투자는 정확히 어디에 쓰는 돈이에요?"),
+            _l("B", "warm", "공장이나 기계처럼 오래 쓸 설비를 새로 들이는 데 쓰는 돈이에요."),
+            _l("A", "calm", "메모에 적은 금액과 기간은 이번 공시로 확인된 거네요.", ["U1"]),
+            _l("B", "calm", "공시로 확인되는 건 거기까지예요. 공장을 언제 다 짓는지는 적혀 있지 않았어요.", ["U1"]),
+            _l("A", "warm", "아, 완공은 아직이군요. 메모에 배당도 궁금하다고 쓰셨는데, 그쪽 자료도 있었어요?"),
             _l("B", "calm", "1월 9일 예시경제 기사에서, 예시증권은 주당 배당금이 500원으로 늘 수 있다고 전망했어요.", ["U2"]),
-            _l("A", "curious", "회사가 정한 게 아니라 증권사 전망이라는 거죠?", ["U2"]),
-            _l("B", "calm", "맞아요. 메모의 배당 정책 항목과 이어지는 기사예요.", ["U2"]),
-            _l("A", "curious", "종가는요?"),
-            _l("B", "calm", "1월 9일 52,300원이었어요.")]},
+            _l("A", "curious", "회사가 배당을 정한 건 아니고요?"),
+            _l("B", "calm", "네, 예시증권이 그렇게 본 거예요. 회사가 배당을 정했다는 내용은 자료에 없어요.", ["U2"])]},
         {"kind": "no_news", "stock_code": "", "lines": [
             _l("A", "warm", "예시금융은 이번 기간에 새 소식이 없었어요.")]},
         {"kind": "closing", "stock_code": "", "lines": [
-            _l("B", "gentle", "오늘은 여기까지예요."),
-            _l("A", "bright", "벌써요? 숫자 얘기할 때 제일 신나 보이시던데요.", cue="light_laugh"),
-            _l("B", "warm", "들켰네요.", cue="light_laugh"),
+            _l("B", "gentle", "남은 질문은 배당이에요. 회사가 직접 정했는지는 아직 확인되지 않았어요.", ["U2"]),
+            _l("A", "bright", "근데 배당 얘기 나올 때 목소리가 좀 커지시던데요?", cue="light_laugh"),
+            _l("B", "warm", "들켰네요. 다음에도 꼼꼼히 챙겨 올게요.", cue="light_laugh"),
             _l("A", "gentle", "판단은 메모와 원문을 직접 보고 해 주세요. 다음에 또 만나요!")]},
     ],
 }
 # 소식 종목이 2개 이상일 때만 쓰는 recap 구간의 모양 (few-shot 브리프는 소식 종목이 1개라 답에는 넣지 않는다. 테스트·참고용)
+# audio-v7: 종목별로 다시 읽지 않고, 가장 기억할 사실이나 아직 확인되지 않은 질문 하나만
 FEWSHOT_RECAP = {"kind": "recap", "stock_code": "", "lines": [
-    _l("B", "calm", "오늘 정리해 보면, 예시전자는 신공장 투자 공시와 배당 전망 기사가 있었어요.", ["U1", "U2"]),
-    _l("A", "warm", "예시금융은 조용했고요.")]}
+    _l("B", "calm", "오늘 기억할 건 예시전자 신공장 투자 금액과 기간이 공시로 나왔다는 거예요.", ["U1"]),
+    _l("A", "curious", "공장을 언제 다 짓는지는 아직 확인되지 않았고요.")]}
+
+RETRY_NOTE = ("앞에서 쓴 대본에 아래 문제가 있어요. 이 문제만 고치고, 메모의 질문에서 답으로 이어지는 흐름은 살려서 "
+              "대본 전체를 같은 JSON 형식으로 다시 써 주세요.\n"
+              "고치면서 빈 질문, 맞장구, 앞 문장을 되풀이하는 줄을 새로 끼우지 마세요. "
+              "줄이 길면 사실 하나씩 두 줄로 나누고, 입력에 없는 숫자는 빼거나 입력의 숫자로 바꾸세요.\n")
 
 
-def messages(brief: Brief, fix: list[str] | None = None, cfg: dict | None = None) -> list[dict]:
+def messages(brief: Brief, fix: list[str] | None = None, cfg: dict | None = None,
+             prev: dict | None = None) -> list[dict]:
+    """fix: 검사에 걸린 문제(재시도 때). prev: 그때 받은 대본 — 무엇을 고칠지 보이게 assistant 차례로 넣는다."""
     msgs = [
         {"role": "system", "content": system_prompt()},
         {"role": "user", "content": build_user(FEWSHOT_BRIEF, cfg)},
@@ -199,6 +202,7 @@ def messages(brief: Brief, fix: list[str] | None = None, cfg: dict | None = None
         {"role": "user", "content": build_user(brief, cfg)},
     ]
     if fix:
-        msgs.append({"role": "user", "content": "앞 대본에 이런 문제가 있어. 규칙에 맞게 처음부터 다시 써 줘.\n"
-                                                + "\n".join(f"- {item}" for item in fix)})
+        if prev:
+            msgs.append({"role": "assistant", "content": json.dumps(prev, ensure_ascii=False)})
+        msgs.append({"role": "user", "content": RETRY_NOTE + "\n".join(f"- {item}" for item in fix)})
     return msgs

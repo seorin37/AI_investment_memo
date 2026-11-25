@@ -23,7 +23,7 @@ export function useBoardCards(code: string, openId: string | null, first = false
   const [seen, setSeen] = useState(0);
   if (bd.data && bd.version !== seen) {
     setSeen(bd.version);
-    setLocal(bd.data);
+    setLocal({ memos: bd.data.memos, checklists: bd.data.checklists, order: bd.data.cardOrder });
   }
   const cards = real ? local : mock;
   const removed = useRef<RemovedCard[]>([]);

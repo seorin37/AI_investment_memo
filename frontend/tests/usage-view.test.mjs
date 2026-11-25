@@ -7,7 +7,13 @@ import { kstMonthDay, toUsageView, USAGE_UNKNOWN } from '../src/ui/screens/my/us
 
 test("갱신일 'MM.DD' 와 채워지는 날 'M월 D일' 이 같은 날 (renews_at 의 한국 날짜)", () => {
   const v = toUsageView({ usage_percent: 62, renews_at: '2026-12-20T00:00:00+09:00', paused: false });
-  assert.deepEqual(v, { usage_pct: 62, usage_renew: '12.20', usage_refill: '12월 20일', paused: false });
+  assert.deepEqual(v, { usage_pct: 62, usage_renew: '12.20', usage_refill: '12월 20일', paused: false, ai_count: 0, auto_off: 0 });
+});
+
+test('켜진 AI 메모 수 (2026-11-24 선택 창 N)', () => {
+  assert.equal(toUsageView({ usage_percent: 100, renews_at: '2026-12-20T00:00:00+09:00', paused: true, ai_memo_count: 5 }).ai_count, 5);
+  assert.equal(toUsageView({ usage_percent: 100, renews_at: 'x', paused: true, ai_memo_count: 3 }).ai_count, 3);
+  assert.equal(toUsageView({ usage_percent: 0, renews_at: '2026-12-20', paused: false, auto_off_count: 4 }).auto_off, 4);
 });
 
 test('Z(UTC)로 와도 한국 날짜로: 12/19 15:00Z = 12/20 0시 KST', () => {
@@ -36,5 +42,5 @@ test('다 쓴 상태 · 범위 밖 값', () => {
 test('날짜를 못 읽으면 — 로 (숫자를 지어내지 않음)', () => {
   const v = toUsageView({ usage_percent: 5, renews_at: 'bad', paused: false });
   assert.deepEqual(v, { ...USAGE_UNKNOWN, usage_pct: 5 });
-  assert.deepEqual(USAGE_UNKNOWN, { usage_pct: 0, usage_renew: '—', usage_refill: '—', paused: false });
+  assert.deepEqual(USAGE_UNKNOWN, { usage_pct: 0, usage_renew: '—', usage_refill: '—', paused: false, ai_count: 0, auto_off: 0 });
 });

@@ -24,6 +24,10 @@ export interface MemoBoardProps {
   notice?: { message: string; key: string };
   /** AI 사용량을 다 씀 (원본 '.spent' · 웹 SpentBox) */
   aiSpent?: boolean;
+  /** 사용량이 다시 채워지는 날 ('12월 1일', GET /me/usage) */
+  aiRefill?: string;
+  /** 지금 AI 연결이 켜진 메모 수. 크레딧 0이고 이 값이 있으면 '충전하지 않으면 N개가 모두 꺼져요' (끄기 대기, 2026-11-24) */
+  aiCount?: number;
 
   /** 메모 열기 — 상세는 ④에서. 새 소식이 있고 AI 연결이면 'ai' 탭으로 */
   onOpenMemo: (id: string, tab: 'memo' | 'ai') => void;
@@ -48,7 +52,7 @@ export interface MemoBoardProps {
   /** 앱: 고르기 중이면 탭바를 숨김 (고른 개수) */
   onSelectionChange?: (count: number) => void;
   /** 사용량 소진 안내의 버튼 (크레딧 구매 · 플랜 변경) */
-  onSpentAction?: (a: 'credit' | 'plan') => void;
+  onSpentAction?: (a: 'credit' | 'plan' | 'choice') => void;
 }
 
 /** 앱 메모 보드: 체크리스트 여러 개 · 순서는 실제 id · 고정과 휴지통은 메모와 체크리스트를 같이 (웹과 규칙이 달라 따로) */
