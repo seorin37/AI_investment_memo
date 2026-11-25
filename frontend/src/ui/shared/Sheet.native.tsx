@@ -5,6 +5,7 @@ import { Text } from '@/components/ui/AppText';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { appColor, curve, dur, ft, shadow } from '@/ui/theme';
 import type { SheetProps } from './Sheet.types';
+import { MiniBar, useSheetMini } from '@/ui/screens/studio/app/MiniBar';
 import { DarkLayer, SCRIM_DARK, useDark } from '@/ui/shared/Dark';
 
 /**
@@ -16,6 +17,7 @@ export function Sheet({ open, onClose, title, children, label }: SheetProps) {
   const dark = useDark();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
+  const mini = useSheetMini();
   const [shown, setShown] = useState(open);
   const [y] = useState(() => new Animated.Value(height));
   const [drag] = useState(() => new Animated.Value(0));
@@ -58,13 +60,19 @@ export function Sheet({ open, onClose, title, children, label }: SheetProps) {
       <Animated.View style={[StyleSheet.absoluteFill, st.scrim, dark && { backgroundColor: SCRIM_DARK }, { opacity: y.interpolate({ inputRange: [0, height], outputRange: [1, 0] }) }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="닫기" />
       </Animated.View>
-      <Animated.View style={[st.sheet, { paddingBottom: 14 + insets.bottom, transform: [{ translateY: Animated.add(y, drag) }] }]} accessibilityViewIsModal accessibilityLabel={label}>
+      <Animated.View onLayout={mini.onLayout} style={[st.sheet, mini.on && { maxHeight: height - insets.top - mini.room }, { paddingBottom: 14 + insets.bottom, transform: [{ translateY: Animated.add(y, drag) }] }]} accessibilityViewIsModal accessibilityLabel={label}>
         <View {...pan.panHandlers} style={st.grab}>
           <View style={st.handle} />
           {title ? <Text style={st.title}>{title}</Text> : null}
         </View>
         {children}
       </Animated.View>
+      {/* 듣는 중이면 시트 위 8 에 미니 플레이어 (시트와 같이 오르내림) */}
+      {mini.on ? (
+        <Animated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { transform: [{ translateY: Animated.add(y, drag) }] }]}>
+          <MiniBar bottom={mini.bottom} beforeOpen={onClose} />
+        </Animated.View>
+      ) : null}
       </DarkLayer>
     </Modal>
   );

@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { BackHandler, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, G, Path } from 'react-native-svg';
+import { MiniSpace } from '@/ui/screens/studio/app/MiniBar';
 import { Text } from '@/components/ui/AppText';
 import { Avatar } from '@/ui/shared/Avatar';
 import { SkySwitch } from '@/ui/shared/SkySwitch';
@@ -84,6 +85,7 @@ export function AppMy(p: AppMyProps) {
           </Grp>
         </Rv>
         <Rv i={10}><Text style={st.ver}>{p.version}</Text></Rv>
+        <MiniSpace />
       </ScrollView>
     </View>
   );

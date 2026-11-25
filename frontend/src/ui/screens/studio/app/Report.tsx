@@ -2,10 +2,12 @@ import React, { useId } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import { MiniSpace } from '@/ui/screens/studio/app/MiniBar';
 import { Text } from '@/components/ui/AppText';
 import { Head } from '../../my/app/parts';
 import type { mockReport, ReportStock } from '../Studio.mock';
-import { Spark, SparkWide, WeekChart, issueParas, marketParas, quarterLine, reportSummary, sign, stripRefs, valuationCells, won } from '../reportParts';
+import { Spark, SparkWide, issueParas, marketParas, quarterLine, reportSummary, sign, stripRefs, valuationCells, won } from '../reportParts';
+import { WeekChart } from './WeekChart';
 import { Keep } from '@/ui/shared/Dark';
 
 /**
@@ -248,6 +250,7 @@ export function AppReport({ title, rep, stocks, market, allDefault, onBack, onOp
           <Text keepAll style={st.srcS}>{rep.source_note}</Text>
         </View>
         <Text keepAll style={st.disc}>공시·뉴스·시세에서 가져온 정보예요. 투자 권유나 주가 예측이 아니에요.</Text>
+        <MiniSpace />
       </ScrollView>
     </View>
   );

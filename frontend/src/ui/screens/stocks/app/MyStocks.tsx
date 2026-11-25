@@ -3,6 +3,9 @@ import { Animated, BackHandler, PanResponder, Pressable, StyleSheet, View } from
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { TAB_BAR_H, TabFrame, TabScroll } from '@/ui/layout/app/TabFrame';
+import { InlineGrip } from '@/ui/icons/InlineGlyphs';
+import { useMiniSpace } from '@/ui/screens/studio/app/MiniBar';
+import { useBottomBarTop } from '@/ui/shared/app/BottomBar';
 import { Text } from '@/components/ui/AppText';
 import { Reveal } from '@/ui/motion/Reveal';
 import { Skeleton } from '@/ui/motion/Skeleton';
@@ -158,6 +161,8 @@ export function AppMyStocks(p: AppMyStocksProps) {
   const askList = ask ? L.filter((s) => ask.includes(s.stock_code)) : [];
   const memoN = askList.reduce((a, s) => a + s.memo_count, 0);
   const aiN = askList.reduce((a, s) => a + s.ai_count, 0);
+  useBottomBarTop(sel ? 80 + insets.bottom : 0);
+  const miniSpace = useMiniSpace();
   const types = sel ? [...sel].map((c) => L.find((s) => s.stock_code === c)?.status) : [];
 
   return (
@@ -275,7 +280,7 @@ export function AppMyStocks(p: AppMyStocksProps) {
               );
             })}
             <Text style={st.foot2}>{p.as_of_mixed ? '시세는 종목별 종가 기준' : p.as_of ? `시세는 ${p.as_of.slice(5, 7)}.${p.as_of.slice(8, 10)} 종가 기준` : '시세 데이터가 아직 연결되지 않았어요'}</Text>
-            <Text style={st.hint2}>종목을 꾹 누르면 여러 개를 옮기거나 빼고, ⋮⋮를 끌어 순서를 바꿀 수 있어요</Text>
+            <Text style={st.hint2}>종목을 꾹 누르면 여러 개를 옮기거나 빼고, <InlineGrip color={appColor.ink3} />를 끌어 순서를 바꿀 수 있어요</Text>
           </>
         )}
       </TabScroll>
@@ -297,7 +302,7 @@ export function AppMyStocks(p: AppMyStocksProps) {
           </Pressable>
         </View>
       ) : null}
-      <AppSnackbar visible={!!snack} message={snack?.msg ?? ''} onUndo={snack?.undo} action={snack?.action} style={[st.snack, { bottom: sel ? 96 + insets.bottom : 16 }]} />
+      <AppSnackbar visible={!!snack} message={snack?.msg ?? ''} onUndo={snack?.undo} action={snack?.action} style={[st.snack, { bottom: (sel ? 96 + insets.bottom : 16) + miniSpace }]} />
       <ConfirmDialog
         variant="app"
         danger

@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import { MiniSpace, useMiniSpace } from '@/ui/screens/studio/app/MiniBar';
+import { useBottomBarTop } from '@/ui/shared/app/BottomBar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/AppText';
 import type { Checklist, Memo, MemoColor } from '@/types/models';
 import { Confetti } from '@/components/motion/Celebrate';
@@ -178,6 +181,9 @@ export function AppMemoBoard(p: AppMemoBoardProps & { header: React.ReactNode; t
   };
   const colorNow = colorFor && colorFor.every((id) => byId(id)?.color === byId(colorFor[0])?.color) ? byId(colorFor[0])?.color : null;
 
+  const miniSpace = useMiniSpace();
+  const { bottom: insetB } = useSafeAreaInsets();
+  useBottomBarTop(selecting ? 66 + Math.max(14, insetB) : 0);
   return (
     <View ref={rootRef} collapsable={false} style={st.root}>
       {sel ? <AppSelectHeader count={sel.length} allSelected={sel.length === items.length} onClose={() => setSel(null)} onToggleAll={() => setSel(sel.length === items.length ? null : items.map((i) => i.key))} /> : p.header}
@@ -279,15 +285,18 @@ export function AppMemoBoard(p: AppMemoBoardProps & { header: React.ReactNode; t
           </FadeIn>
         )}
         <View style={st.bottom} />
+        <MiniSpace />
       </ScrollView>
       </View>
       {!selecting ? (
+        <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { bottom: miniSpace }]}>
         <FabFan
           open={fan}
           onToggle={setFan}
           up={!!snack}
           onPick={(k) => (k === 'check' ? p.onNewChecklist() : p.onNewMemo())}
         />
+        </View>
       ) : null}
       {/* 체크리스트를 모두 끝내면 카드 가운데서 색종이 (원본 memo.html confetti · Lucian #093) */}
       <Confetti fire={cf} />
@@ -302,7 +311,7 @@ export function AppMemoBoard(p: AppMemoBoardProps & { header: React.ReactNode; t
               }
             : undefined
         }
-        style={st.snack}
+        style={[st.snack, { bottom: 14 + miniSpace }]}
       />
       <AppSelectBar
         visible={selecting}

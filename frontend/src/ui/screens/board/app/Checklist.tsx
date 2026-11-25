@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View, type TextInputInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Confetti, DotBurst } from '@/components/motion/Celebrate';
+import { MiniSpace } from '@/ui/screens/studio/app/MiniBar';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { CheckMark } from '@/ui/icons/BoardGlyphs';
 import { AppIconButton } from '@/ui/shared/IconButton';
@@ -142,6 +143,7 @@ export function AppChecklist(p: AppChecklistProps) {
             </Pressable>
           </View>
           <Text style={st.ai}>체크리스트는 AI 연결 없이 나만 보는 확인 목록이에요</Text>
+          <MiniSpace />
         </ScrollView>
       </KeyboardAvoidingView>
       <Confetti fire={cf} />

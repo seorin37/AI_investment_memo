@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Animated, BackHandler, Easing, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomBar } from '@/ui/shared/app/BottomBar';
+import { InlineSpark } from '@/ui/icons/InlineGlyphs';
+import { MiniSpace } from '@/ui/screens/studio/app/MiniBar';
 import { Text } from '@/components/ui/AppText';
 import { AppPlug } from '@/ui/icons/BoardGlyphs';
 import { CloseX, DoneCheck, RevIcon, SearchGlass } from '@/ui/icons/MemoGlyphs';
@@ -93,7 +95,7 @@ export function AppAiLink({ stockName, memo, state, items, fromNew, onConfirm, o
           <Text style={st.waitT}>⏳</Text>
           <Text style={[st.waitT, st.flex]}>소식은 바로 오지 않을 수 있어요. 관련 공시·뉴스·종가 변화가 새로 생길 때만 모아 드려요.</Text>
         </View>
-        <Text style={st.ainfo}>✦ AI는 메모를 수정하지 않아요. 관련된 사실과 출처만 연결해요.</Text>
+        <Text style={st.ainfo}><InlineSpark color="#4B2D93" /> AI는 메모를 수정하지 않아요. 관련된 사실과 출처만 연결해요.</Text>
       </>
     );
     bar = (
@@ -157,6 +159,7 @@ export function AppAiLink({ stockName, memo, state, items, fromNew, onConfirm, o
       <Steps step={step} />
       <ScrollView style={st.flex} contentContainerStyle={[st.ob, { paddingBottom: 120 + insets.bottom }]} showsVerticalScrollIndicator={false}>
         {body}
+        <MiniSpace />
       </ScrollView>
       {bar ? <BottomBar style={[st.obar, { paddingBottom: 18 + insets.bottom }]}>{bar}</BottomBar> : null}
     </View>

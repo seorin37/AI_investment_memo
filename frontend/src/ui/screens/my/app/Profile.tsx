@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { BackHandler, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MiniSpace } from '@/ui/screens/studio/app/MiniBar';
 import { Text, TextInput } from '@/components/ui/AppText';
 import type { AuthProvider } from '@/types/models';
 import { Avatar } from '@/ui/shared/Avatar';
@@ -88,6 +89,7 @@ export function AppProfile(p: ProfileProps) {
               <Item two red last title="회원 탈퇴" sub="모든 메모와 기록이 삭제돼요. 확인 창을 한 번 더 거쳐요." onPress={p.onWithdraw} />
             </Grp>
           </Rv>
+          <MiniSpace />
         </ScrollView>
       </KeyboardAvoidingView>
       <ConfirmSheet

@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, BackHandler, Keyboard, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent, type TextInputInstance, type TextStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MiniSpace, useMiniSpace } from '@/ui/screens/studio/app/MiniBar';
+import { BottomBar } from '@/ui/shared/app/BottomBar';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { copyText, shareText } from '@/lib/copyText';
 import { useMotionK } from '@/ui/motion/useMotion';
@@ -51,6 +53,7 @@ export interface AppNoteProps {
  */
 export function AppNote(p: AppNoteProps) {
   const k = useMotionK();
+  const miniSpace = useMiniSpace();
   const insets = useSafeAreaInsets();
   const [items, setItems] = useState<Item[]>(() => withKeys(p.entry?.blocks ?? []));
   const [editing, setEditing] = useState(!p.entry);
@@ -300,10 +303,11 @@ export function AppNote(p: AppNoteProps) {
         })}
         {/* 아래 빈 곳을 누르면 마지막 줄부터 쓰기 */}
         <Pressable disabled={editing} onPress={() => startEdit(items.length - 1)} style={{ minHeight: 160 }} accessibilityElementsHidden />
+        <MiniSpace />
       </ScrollView>
 
       {editing ? (
-        <View style={{ paddingBottom: fmt ? 0 : bottomPad }}>
+        <BottomBar key="edit" style={{ paddingBottom: fmt ? 0 : bottomPad }}>
           {/* 키보드 위 줄 (원본 .acc 48) */}
           <View style={st.acc}>
             <Pressable onPress={openFmt} accessibilityRole="button" accessibilityLabel="서식" accessibilityState={{ selected: fmt }} style={[st.accB, fmt && st.accOn]}>
@@ -316,20 +320,20 @@ export function AppNote(p: AppNoteProps) {
             </Pressable>
           </View>
           {fmt ? <FmtPanel b={items[cur] ?? items[0]} pad={insets.bottom} onClose={openFmt} onStyle={setStyle} onMark={toggleMark} onList={toggleList} /> : null}
-        </View>
+        </BottomBar>
       ) : (
         /* 아래 도구 (원본 .ntb 56: 체크리스트 · 새 기록) */
-        <View style={[st.ntb, { height: 56 + insets.bottom, paddingBottom: 4 + insets.bottom }]}>
+        <BottomBar key="view" style={[st.ntb, { height: 56 + insets.bottom, paddingBottom: 4 + insets.bottom }]}>
           <Pressable onPress={insertCk} accessibilityRole="button" accessibilityLabel="체크리스트" style={({ pressed }) => [st.ntbB, pressed && { backgroundColor: '#F1EEFB' }]}>
             <JChecklist color={A2} />
           </Pressable>
           <Pressable onPress={() => p.onNew(strip(items))} accessibilityRole="button" accessibilityLabel="새 기록" style={({ pressed }) => [st.ntbB, pressed && { backgroundColor: '#F1EEFB' }]}>
             <JCompose color={A2} />
           </Pressable>
-        </View>
+        </BottomBar>
       )}
 
-      <Pill toast={toastV} bottom={editing ? (fmt ? 340 : 70) : 70 + insets.bottom} />
+      <Pill toast={toastV} bottom={(editing ? (fmt ? 340 : 70) : 70 + insets.bottom) + miniSpace} />
 
       {/* 기록 더 보기 (원본 #nmore — '제안' 표시는 뺌) */}
       <Sheet open={more} onClose={() => setMore(false)} label="기록 더 보기">

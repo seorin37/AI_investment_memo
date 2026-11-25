@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
+import { InlineSpark } from '@/ui/icons/InlineGlyphs';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { Sheet } from '@/ui/shared/Sheet';
 import { StockLogo } from '@/ui/shared/StockLogo';
@@ -94,7 +95,7 @@ export function AddStockSheet({ open, mine, universe, popular, onClose, onAdd, r
                   </Text>
                   {s.ai_ready ? (
                     <View style={st.tg}>
-                      <Text style={st.tgT}>✦ AI 연결</Text>
+                      <Text style={st.tgT}><InlineSpark size={9} color="#5B3BD1" /> AI 연결</Text>
                     </View>
                   ) : null}
                 </View>

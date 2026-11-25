@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
+import { InlineSpark } from '@/ui/icons/InlineGlyphs';
 import { Text } from '@/components/ui/AppText';
 import type { Memo, MemoVersion } from '@/types/models';
 import { AppPlug } from '@/ui/icons/BoardGlyphs';
@@ -138,7 +139,7 @@ export function AppAiTab({ memo, versions, feed, trackItems, lastChecked, openLa
       ) : null}
       {memo.ai_linked ? (
         <>
-          <Text style={st.fn}>✦ 뉴스는 원문 링크로 볼 수 있어요. 공시는 원문 일부를 짚어 보여 줘요. 주가는 전일 확정 종가 기준이에요.</Text>
+          <Text style={st.fn}><InlineSpark color={appColor.ink3} /> 뉴스는 원문 링크로 볼 수 있어요. 공시는 원문 일부를 짚어 보여 줘요. 주가는 전일 확정 종가 기준이에요.</Text>
           {sw}
         </>
       ) : null}

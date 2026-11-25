@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { BottomBar } from '@/ui/shared/app/BottomBar';
+import { MiniSpace } from '@/ui/screens/studio/app/MiniBar';
 import { Text } from '@/components/ui/AppText';
 import { PressScale } from '@/ui/motion/PressScale';
 import { SlidingPill } from '@/ui/motion/SlidingPill';
@@ -50,6 +51,7 @@ export function AppLab({ vars, stocks, code, dirs, note, onBack, onPick, onDir, 
               : <Text style={st.emp}>조건을 하나 이상 골라 주세요 (유지만으로는 실험할 수 없어요)</Text>}
           </View>
         </View>
+        <MiniSpace />
       </ScrollView>
       <BottomBar style={[st.lfoot, { paddingBottom: 10 + insets.bottom }]}>
         <PressScale onPress={onReset} accessibilityRole="button" style={[st.cta, st.gray]}><Text style={[st.ctaT, { color: C.ink }]}>초기화</Text></PressScale>

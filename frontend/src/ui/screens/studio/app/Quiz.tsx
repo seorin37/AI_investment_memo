@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
+import { MiniSpace } from '@/ui/screens/studio/app/MiniBar';
 import { Text } from '@/components/ui/AppText';
 import { FadeIn } from '@/ui/motion/Reveal';
 import { PressScale } from '@/ui/motion/PressScale';
@@ -97,6 +98,7 @@ export function AppQuiz({ q, done, locked = false, onBack, onSubmit }: { q: Q; d
             <Text style={[st.qcap, { marginTop: 14 }]}>내일 오전 10시에 새 문제가 열려요</Text>
           </FadeIn>
         )}
+        <MiniSpace />
       </ScrollView>
     </View>
   );

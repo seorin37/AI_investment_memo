@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Animated, View, type ScrollViewInstance, type ScrollViewProps, type StyleProp, type ViewStyle } from 'react-native';
 import { NATIVE } from '@/ui/motion/useMotion';
+import { MiniSpace } from '@/ui/screens/studio/app/MiniBar';
 
 /** 탭 화면 상단 바 높이 · 첫 본문까지 간격 (탭 위에 덮는 편집·선택 머리도 같은 값을 씀) */
 export const TAB_BAR_H = 64;
@@ -24,7 +25,7 @@ export function TabFrame({ style, children }: { style?: StyleProp<ViewStyle>; ch
 }
 
 /** 탭 화면 본문: 바 아래 간격 12 도 함께 스크롤됨 */
-export function TabScroll({ contentContainerStyle, onScroll, ...p }: ScrollViewProps & { ref?: React.Ref<ScrollViewInstance> }) {
+export function TabScroll({ children, contentContainerStyle, onScroll, ...p }: ScrollViewProps & { ref?: React.Ref<ScrollViewInstance> }) {
   const y = useTabScrollY();
   useEffect(() => {
     y?.setValue(0);
@@ -36,6 +37,9 @@ export function TabScroll({ contentContainerStyle, onScroll, ...p }: ScrollViewP
       {...p}
       contentContainerStyle={[{ paddingTop: TAB_BAR_GAP }, contentContainerStyle]}
       onScroll={y ? Animated.event([{ nativeEvent: { contentOffset: { y } } }], { useNativeDriver: NATIVE, listener: onScroll as never }) : onScroll}
-    />
+    >
+      {children}
+      <MiniSpace />
+    </Animated.ScrollView>
   );
 }

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
+import { MiniSpace, useMiniSpace } from '@/ui/screens/studio/app/MiniBar';
 import { Text } from '@/components/ui/AppText';
 import type { ChartRange } from '@/types/models';
 import { Skeleton } from '@/ui/motion/Skeleton';
@@ -56,6 +57,7 @@ export function AppCompanyInfo(p: CompanyInfoProps & {
   const placed = useRef(false);
   const { width: W, height: VH } = useWindowDimensions();
   const k = useMotionK();
+  const miniSpace = useMiniSpace();
   const [ready, setReady] = useState(false);
   const [y, setY] = useState(0);
   const [locked, setLocked] = useState(false);
@@ -331,9 +333,10 @@ export function AppCompanyInfo(p: CompanyInfoProps & {
           </>
         )}
         <View style={{ height: nudge && p.onNudge ? 76 : 0 }} />
+        <MiniSpace />
       </ScrollView>
       {nudge && p.onNudge && ready && !p.loading && !p.preparing ? (
-        <View style={st.nudgeWrap} pointerEvents="box-none">
+        <View style={[st.nudgeWrap, { bottom: 16 + miniSpace }]} pointerEvents="box-none">
           <NudgePill text="공시·재무 읽기 어려우셨죠? 핵심만 정리해 드려요" onGo={p.onNudge} onClose={() => setNudge(false)} />
         </View>
       ) : null}

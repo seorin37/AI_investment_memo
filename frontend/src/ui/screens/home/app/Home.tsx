@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { Animated, BackHandler, PanResponder, Pressable, StyleSheet, View, type ScrollViewInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TAB_BAR_H, TabFrame, TabScroll } from '@/ui/layout/app/TabFrame';
+import { useMiniSpace } from '@/ui/screens/studio/app/MiniBar';
 import { Text } from '@/components/ui/AppText';
 import { GripDots, PlusGlyph, SlidersGlyph, WIDGET_META, WidgetGlyph } from '@/ui/icons/HomeGlyphs';
 import { Reveal } from '@/ui/motion/Reveal';
@@ -204,7 +205,8 @@ export function AppHome(p: AppHomeProps) {
     return <CheckWidget cl={cl} editing={editing} onToggle={(iid) => checkCode && p.onToggleCheck(checkCode, iid)} onAdd={(t) => checkCode && p.onAddCheck(checkCode, t)} />;
   };
 
-  const snackBottom = editing ? 24 + insets.bottom : 16;
+  const miniSpace = useMiniSpace();
+  const snackBottom = (editing ? 24 + insets.bottom : 16) + miniSpace;
   return (
     <TabFrame style={st.root}>
       {p.header({ line, onSearch: () => setSearch(true) })}
@@ -240,7 +242,7 @@ export function AppHome(p: AppHomeProps) {
             <View style={st.pill}><Text style={st.pillT}>AI 연결 메모 <Text style={st.pillB}>{p.counts.ai_memos}</Text></Text></View>
             <Pressable onPress={enterEdit} accessibilityRole="button" style={({ pressed }) => [st.pill, st.pillEdit, pressed && { transform: [{ scale: 0.94 }] }]}>
               <SlidersGlyph />
-              <Text style={[st.pillT, { color: appColor.ink }]}>홈 편집</Text>
+              <Text style={st.pillT}>홈 편집</Text>
             </Pressable>
           </View>
         ) : null}
@@ -288,7 +290,7 @@ export function AppHome(p: AppHomeProps) {
       </TabScroll>
 
       {nudge && !editing && ready && !p.firstStart ? (
-        <View style={[st.nudge, { bottom: snack ? 76 : 16 }]} pointerEvents="box-none">
+        <View style={[st.nudge, { bottom: (snack ? 76 : 16) + miniSpace }]} pointerEvents="box-none">
           <NudgePill text="이번 주 내 종목, 한 장으로 볼까요?" onGo={() => p.onNudge('report')} onClose={() => setNudge(false)} />
         </View>
       ) : null}
@@ -508,7 +510,7 @@ const st = StyleSheet.create({
   hr: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingBottom: 10 },
   pill: { minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, borderRadius: 16, backgroundColor: appColor.surface },
   pillEdit: { marginLeft: 'auto' },
-  pillT: { ...ft(13), color: appColor.ink2 },
+  pillT: { ...ft(13), color: appColor.ink },
   pillB: { ...ft(13), fontWeight: '700', color: appColor.ink, fontVariant: ['tabular-nums'] },
   nudge: { position: 'absolute', left: 16, right: 16, alignItems: 'center' },
   snack: { position: 'absolute', left: 14, right: 14 },

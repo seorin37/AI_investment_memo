@@ -1,5 +1,6 @@
 /**
- * (앱 전용 — MobileScreen.tsx 와 같고, MobileToast 만 아래 버튼 줄이 있는 화면에서 그 위 8 에 뜸)
+ * (앱 전용 — MobileScreen.tsx 와 같고, MobileToast 만 다름: 아래 버튼 줄이 있는 화면에서 그 위 8 에 뜸.
+ *  상세 화면((detail)) 전체 위에 놓이는 자리라 미니 플레이어도 여기서 띄움)
  * 앱(안드로이드·iOS) 화면 공통 틀 — 위 상단 바(TopBar) + 화면 본문 (11.18).
  * - useProfileAction(): 상단 바 오른쪽 프로필 → MY (/my)
  * - useMockNotice(): mock 단계에서 아직 연결하지 않은 동작을 누르면 짧은 알림
@@ -8,11 +9,13 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/AppText';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { TopBarAction } from '@/components/layout/TopBar';
 import { useAuth } from '@/store/auth';
 import { useUI } from '@/store/ui';
+import { MINI_GAP, MINI_H, MiniBar, useMiniOn } from '@/ui/screens/studio/app/MiniBar';
+import { size } from '@/ui/theme';
 import { useBottomBar } from '@/ui/shared/app/BottomBar';
 
 export const APP_BG = '#F3F4F6';
@@ -42,9 +45,21 @@ export function MobileToast({ bottom = 96 }: { bottom?: number }) {
   const toast = useUI((s) => s.toast);
   const insets = useSafeAreaInsets();
   const bar = useBottomBar((s) => s.bar);
-  if (!toast) return null;
+  const path = usePathname();
+  const miniOn = useMiniOn() && path !== '/studio-player';
+  const mini = bar ? bar.top + MINI_GAP : (path === '/my' ? 1 + 65 + Math.max(size.tabBarPadBottom, insets.bottom) : insets.bottom) + 10;
+  const at = miniOn ? mini + MINI_H + MINI_GAP : bar ? bar.top + 8 : bottom + insets.bottom;
   return (
-    <View pointerEvents={toast.action ? 'box-none' : 'none'} style={[st.wrap, { bottom: bar ? bar.top + 8 : bottom + insets.bottom }]}>
+    <>
+      <MiniBar bottom={mini} hidden={path === '/studio-player'} />
+      {toast ? <ToastBox toast={toast} bottom={at} /> : null}
+    </>
+  );
+}
+
+function ToastBox({ toast, bottom }: { toast: NonNullable<ReturnType<typeof useUI.getState>['toast']>; bottom: number }) {
+  return (
+    <View pointerEvents={toast.action ? 'box-none' : 'none'} style={[st.wrap, { bottom }]}>
       <View style={st.toast}>
         <Text style={st.text}>{toast.message}</Text>
         {toast.action ? (
