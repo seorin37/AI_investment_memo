@@ -405,6 +405,10 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, pre, stockName, on
       }}
       onEditMemo={() => {
         const id = connect?.id;
+        /* 2026-11-25 '추적할 항목을 찾지 못했어요' → [메모 수정]: 일반 메모로 두고 고치러 간다 (AI 연결이 켜진 채 남던 문제. 서버도 끈다) */
+        if (real && id) bd.ops.aiOff(id);
+        if (id) patch(id, (m) => ({ ...m, ai_linked: false }));
+        connectFor.current = null;
         setConnect(null);
         if (id) {
           setOpenId(id);

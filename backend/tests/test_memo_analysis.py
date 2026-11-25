@@ -207,13 +207,31 @@ class ServiceTest(unittest.TestCase):
             self.assertEqual(s.update(1, int(on["id"]), {"body": "파운드리 소식"})["analysis"]["status"], "done")   # 이미 켠 메모는 그대로
         self.assertEqual(a.call_count, 2)
 
+    def test_nothing_found_turns_ai_off(self):
+        """2026-11-25: 추적 항목·질문·확인 질문을 하나도 못 찾으면(분석 실패 포함) AI 연결을 다시 끈다 — 일반 메모로 저장."""
+        s = self.svc()
+        with mock.patch("app.board.service.analyze_memo", return_value=AnalysisResult(items=[], llm_calls=1)):
+            new = s.create_memo(1, "005930", MemoCreate(title="t", body="그래서 이거 올라?", ai_linked=True))
+        self.assertFalse(self.repo.rows[int(new["id"])]["ai_linked"])
+        self.assertIs(new["analysis"]["ai_linked"], False)
+        plain = s.create_memo(1, "005930", MemoCreate(title="t", body="b", ai_linked=False))
+        with mock.patch("app.board.service.analyze_memo", side_effect=AnalysisError("llm_failed", "x")):
+            out = s.set_ai_link(1, int(plain["id"]), True)
+        self.assertFalse(self.repo.rows[int(plain["id"])]["ai_linked"])
+        self.assertIs(out["analysis"]["ai_linked"], False)
+        with mock.patch("app.board.service.analyze_memo", side_effect=fake_analyze):        # 찾으면 그대로 켜져 있음
+            ok = s.set_ai_link(1, int(plain["id"]), True)
+        self.assertTrue(self.repo.rows[int(plain["id"])]["ai_linked"])
+        self.assertNotIn("ai_linked", ok["analysis"])
+
     def test_analysis_failure_keeps_memo(self):
         s = self.svc()
         with mock.patch("app.board.service.analyze_memo", side_effect=AnalysisError("llm_failed", "x")):
             out = s.create_memo(1, "005930", MemoCreate(title="t", body="b", ai_linked=True))
         self.assertEqual((out["analysis"]["status"], out["analysis"]["error"]), ("failed", "llm_failed"))
         self.assertIn(int(out["id"]), self.repo.rows)
-        self.assertEqual(self.repo.db.commits, 1)                              # 메모 저장은 커밋됨
+        self.assertGreaterEqual(self.repo.db.commits, 1)                       # 메모 저장은 커밋됨
+        self.assertFalse(self.repo.rows[int(out["id"])]["ai_linked"])           # 2026-11-25 못 찾으면 일반 메모로
 
     def test_update_reanalyzes_when_title_or_body_changes(self):
         """2026-11-18: 분석 입력 = 제목 + 본문. 제목만 바뀌어도 다시 분석하고, 입력이 그대로면 다시 분석하지 않는다."""

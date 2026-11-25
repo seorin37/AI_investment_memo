@@ -86,7 +86,15 @@ export default function AiLinkScreen() {
       fromNew={from === 'new'}
       onConfirm={confirm}
       onCancel={cancel}
-      onEditMemo={() => (isNew ? router.back() : router.replace({ pathname: '/memo/[id]', params: { id: id! } }))}
+      onEditMemo={() => {
+        /* 2026-11-25 못 찾았을 때 [메모 수정]: 일반 메모로 두고 고치러 간다 (AI 연결이 켜진 채 남던 문제. 서버도 끈다) */
+        if (real) {
+          closed.current = true;
+          void screen.ops!.aiOff();
+        }
+        if (isNew) router.back();
+        else router.replace({ pathname: '/memo/[id]', params: { id: id! } });
+      }}
       onRetry={() => {
         setFailed(false);
         setAsked((n) => n + 1);

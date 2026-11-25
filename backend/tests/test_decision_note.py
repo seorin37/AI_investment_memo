@@ -3,6 +3,7 @@
 import json
 import unittest
 from dataclasses import replace
+from unittest import mock
 
 from pipelines.updates.decision_note import _load, add_decision_note, is_decision_question
 from pipelines.updates.models import Candidate, TrackingItem, UpdateDraft
@@ -33,10 +34,10 @@ def reply():
 
 
 class MarkerTest(unittest.TestCase):
-    def test_lexicon_has_markers_and_note(self):
+    def test_lexicon_has_markers_and_note_off(self):
         markers, note = _load()
         self.assertGreater(len(markers), 30)
-        self.assertEqual(note, NOTE)
+        self.assertEqual(note, "")                                       # 2026-11-25 끝 고정 문장 끔
 
     def test_decision_questions(self):
         for text in ["이거 가격 괜찮은거야??", "SK하이닉스 나만 없는데 지금이라도 사야되나?", "하이닉스 이거 오르나",
@@ -50,7 +51,28 @@ class MarkerTest(unittest.TestCase):
             self.assertFalse(is_decision_question(text), text)
 
 
+def _with_note():
+    """2026-11-25 기본 설정은 문장을 붙이지 않는다(빈 값). 붙이는 동작 자체는 문장이 있는 설정으로 검사한다."""
+    markers, _ = _load()
+    return mock.patch("pipelines.updates.decision_note._load", return_value=(markers, NOTE))
+
+
+class DefaultOffTest(unittest.TestCase):
+    def test_default_config_adds_nothing(self):
+        """팀장님(11-25): 질문은 반려하지 않고 답에서 권유만 하지 않는다 → 끝 고정 문장 없음."""
+        self.assertEqual(_load()[1], "")
+        d = UpdateDraft(item=replace(ITEM, memo_text="사야 되나?"), type="news", title="t", summary="요약이에요.", reason="r",
+                        explanation="종가는 1,183,000원이에요.")
+        self.assertFalse(add_decision_note(d, {}))
+        self.assertEqual(d.explanation, "종가는 1,183,000원이에요.")
+
+
 class AddNoteTest(unittest.TestCase):
+    def setUp(self):
+        p = _with_note()
+        p.start()
+        self.addCleanup(p.stop)
+
     def _draft(self, memo, explanation="종가는 1,183,000원이에요."):
         return UpdateDraft(item=replace(ITEM, memo_text=memo), type="news", title="t", summary="요약이에요.",
                            reason="r", explanation=explanation)
@@ -78,6 +100,11 @@ class AddNoteTest(unittest.TestCase):
 
 
 class AskFlowTest(unittest.TestCase):
+    def setUp(self):
+        p = _with_note()
+        p.start()
+        self.addCleanup(p.stop)
+
     def test_ask_answer_gets_note_and_no_related_news(self):
         out = check_topic(ITEM, [disc(), news()], reply(), [], CFG)
         self.assertEqual(out.kind, "update")
