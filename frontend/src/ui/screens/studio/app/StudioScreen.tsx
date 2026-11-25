@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { BackHandler, View } from 'react-native';
+import { BackHandler, Pressable, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { env } from '@/config/env';
@@ -12,7 +12,10 @@ import { useMyProfile } from '@/ui/screens/my/useMyProfile';
 import { mockPayMethods } from '@/ui/screens/my/My.mock';
 import { usePlanView } from '@/ui/screens/my/usePlanView';
 import { useUsageView } from '@/ui/screens/my/useUsageView';
-import { webColor } from '@/ui/theme';
+import { Avatar } from '@/ui/shared/Avatar';
+import { AppIconButton } from '@/ui/shared/IconButton';
+import { NewMemoSheet, type NewMemoTarget } from '@/ui/screens/memo/app/NewMemoSheet';
+import { appColor, webColor } from '@/ui/theme';
 import { mockAudioGen, mockLabDisclaimer, mockLabNote, mockLabVars, mockReport, mockStudioFeatures } from '../Studio.mock';
 import type { StudioKind } from '../Studio.types';
 import { audioOff, blockPlay } from '../appAudio';
@@ -20,7 +23,6 @@ import { epOf } from '../audioEp';
 import { useAudioPick, useCreateAudio } from '../audioView';
 import { labResultGroups } from '../labParts';
 import { reportView, useCreateReport, useReportPickStocks } from '../reportView';
-import { useAddMemo } from '../useAddMemo';
 import { useLabMemo } from '../useLabMemo';
 import { labStockFor, useLabStocks, useRunLab } from '../useLabRun';
 import { useLabVars } from '../useLabVars';
@@ -38,7 +40,7 @@ const NOT_YET = '아직 연결되지 않았어요 · 데이터는 그대로예�
 
 /**
  * 앱 스튜디오 탭 = 웹 스튜디오 열(app/(main)/_layout.tsx)의 컴포넌트와 상태(store/studioPlayer webView)를 그대로 씀.
- * 웹과 다른 것: 폭 100% · 접기 없음 · 재생 모듈이 없는 동안 재생 막기(appAudio) · '메모에 추가'는 바로 저장(useAddMemo) ·
+ * 웹과 다른 것: 폭 100% · 접기 없음 · 재생 모듈이 없는 동안 재생 막기(appAudio) · '메모에 추가'는 이동하지 않고 새 메모 시트(NewMemoSheet) ·
  * 요금제 화면과 메모 열기는 앱 화면으로. 미니 플레이어는 탭 레이아웃.
  */
 export function StudioScreen() {
@@ -49,7 +51,7 @@ export function StudioScreen() {
   const { studio_fail } = useLocalSearchParams<{ studio_fail?: string }>();
   const usage = useUsageView();
   const spent = usage.paused || usage.usage_pct >= 100;
-  const { plan } = useMyProfile();
+  const { plan, profile } = useMyProfile();
   const planView = usePlanView();
   const nextPlan = planView.catalog.plans.find((x) => x.code === (plan === 'plus' ? 'pro' : 'plus'));
   const openPlans = () => router.push('/my-plans');
@@ -80,7 +82,7 @@ export function StudioScreen() {
   const rep = reportView(repItem);
   const labItem = sp.made.find((m) => m.id === sp.curLab && m.kind === 'lab');
   const labMemo = useLabMemo(labItem?.lab?.code, sp.webView === 'labResult');
-  const addMemo = useAddMemo();
+  const [memoTo, setMemoTo] = useState<NewMemoTarget | null>(null);
 
   /* 실험 중 화면 단계: 웹 _layout runLabWithGen 과 같음 */
   const [labGen, setLabGen] = useState<{ pct: number; at: number } | null>(null);
@@ -158,10 +160,13 @@ export function StudioScreen() {
           groups={labResultGroups(lab)}
           disclaimer={mockLabDisclaimer}
           watch={labWatchItems(labResultGroups(lab))}
-          watchState={(_w, i) => (lab.added?.[labWatchKey(lab.code, i)] || addMemo.isAdded(labItem.id, labWatchKey(lab.code, i)) ? 'added' : 'idle')}
-          onWatch={lab.code ? (w, i) => addMemo.add({ code: lab.code, ...labWatchDraft(w, labItem.title), itemId: labItem.id, key: labWatchKey(lab.code, i), server: labItem.server }) : undefined}
+          watchState={(_w, i) => (lab.added?.[labWatchKey(lab.code, i)] ? 'added' : 'idle')}
+          onWatch={lab.code ? (w, i) => {
+            const d = labWatchDraft(w, labItem.title);
+            setMemoTo({ code: lab.code, name: labStockFor(labStocks, lab).name, text: `${d.title}\n${d.body}`, ai: true, studio: { itemId: labItem.server ? labItem.id : undefined, key: labWatchKey(lab.code, i) } });
+          } : undefined}
           onBack={() => sp.setWebView('home')}
-          onMemo={(id) => (id ? router.push({ pathname: '/memo/[id]', params: { id } }) : router.push({ pathname: '/memo/new', params: { code: lab.code, name: labStockFor(labStocks, lab).name } }))}
+          onMemo={(id) => (id ? router.push({ pathname: '/memo/[id]', params: { id } }) : setMemoTo({ code: lab.code, name: labStockFor(labStocks, lab).name }))}
           onAgain={() => { sp.setLab({ code: lab.code, dirs: lab.dirs }); sp.setWebView('lab'); }}
         />
       );
@@ -215,9 +220,19 @@ export function StudioScreen() {
 
   return (
     <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: webColor.surface }}>
-      <StudioColumnFrame mobile open onToggle={() => undefined} {...head} usagePct={usage.usage_pct} onUsage={() => setPop('usage')} onFeature={feature}>
+      <StudioColumnFrame mobile open onToggle={() => undefined} {...head} usagePct={usage.usage_pct} onUsage={() => setPop('usage')} onFeature={feature}
+        right={
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <AppIconButton label="알림" size={40} icon="bell" iconSize={22} color={appColor.ink} onPress={() => router.push('/my-inbox')} />
+            <Pressable onPress={() => router.push('/my')} accessibilityRole="button" accessibilityLabel="MY" hitSlop={6}>
+              <Avatar name={profile.name} photoUrl={profile.photoUrl} size={32} variant="app" />
+            </Pressable>
+          </View>
+        }
+      >
         <View style={{ flex: 1, minHeight: 0, paddingBottom: mini ? 84 : 0 }}>{view()}</View>
       </StudioColumnFrame>
+      <NewMemoSheet target={memoTo} onClose={() => setMemoTo(null)} />
       <WebAudioPopup
         open={pop === 'audio'}
         stocks={audioPick.stocks}

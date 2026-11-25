@@ -134,7 +134,7 @@ export function useCreateReport() {
 
 /**
  * 앞으로 지켜볼 것 → '메모에 추가' (2026-11-24). 웹: 종목 보드로 가서 새 메모 창을 제안의 memo_title·memo_body로 채워 연다
- * (AI 연결 켬). 앱은 useAddMemo 로 바로 저장. 서버 보고서면 저장 뒤 '추가됨'을 남기도록 보고서 id·키를 같이 넘긴다.
+ * (AI 연결 켬). 앱은 NewMemoSheet 를 채워 엶. 서버 보고서면 저장 뒤 '추가됨'을 남기도록 보고서 id·키를 같이 넘긴다.
  */
 export function useWatchToMemo() {
   const open = useOpenMemoDraft();

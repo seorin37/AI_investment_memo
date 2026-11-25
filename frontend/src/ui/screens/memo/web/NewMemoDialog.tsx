@@ -19,7 +19,9 @@ import { usePaper } from '@/ui/shared/Dark';
  * [체크리스트] 탭 (6.2, 2026-11-22): 종목당 체크리스트 하나 — 있으면 그걸 고치고, 없으면 새로 (ChecklistTab).
  *   onSaveChecklist 가 없으면 예전처럼 onSwitchToChecklist 만 부른다.
  */
-export function WebNewMemoDialog({ open, stockName, initialText, initialAi, aiSpent, onCancel, onSave, onSwitchToChecklist, tab0 = 0, checklist, onSaveChecklist, onEmptyChecklist }: NewMemoProps & {
+export function WebNewMemoDialog({ open, stockName, initialText, initialAi, aiSpent, onCancel, onSave, onSwitchToChecklist, tab0 = 0, checklist, onSaveChecklist, onEmptyChecklist, mobile }: NewMemoProps & {
+  /** 앱 (폰): 아래에서 올라오는 전체 높이 시트 */
+  mobile?: boolean;
   open: boolean;
   /** 처음 열 탭 (0 메모 · 1 체크리스트) */
   tab0?: 0 | 1;
@@ -42,8 +44,8 @@ export function WebNewMemoDialog({ open, stockName, initialText, initialAi, aiSp
     onSave({ ...splitMemo(text), color, ai });
   };
   return (
-    <Sheet open={open} onClose={onCancel} width={680} label={tab ? '체크리스트' : '새 메모'}>
-      <View style={[panel.box, { maxHeight: H - 32 }]}>
+    <Sheet open={open} onClose={onCancel} width={680} full={mobile} label={tab ? '체크리스트' : '새 메모'}>
+      <View style={[panel.box, { maxHeight: H - 32 }, mobile && st.mobileBox]}>
         <View style={st.head}>
           <View style={st.headL}>
             <Text style={st.sub}>{stockName} · 나의 보드</Text>
@@ -53,11 +55,11 @@ export function WebNewMemoDialog({ open, stockName, initialText, initialAi, aiSp
         </View>
         <Tabs2 a="메모" b="체크리스트" v={tab} set={(i) => (onSaveChecklist ? setTab(i) : i === 1 && onSwitchToChecklist?.())} />
         {tab === 1 && onSaveChecklist ? (
-          <ChecklistTab initial={checklist ?? null} onCancel={onCancel} onSave={onSaveChecklist} onEmpty={() => (onEmptyChecklist ?? onCancel)()} />
+          <ChecklistTab fill={mobile} initial={checklist ?? null} onCancel={onCancel} onSave={onSaveChecklist} onEmpty={() => (onEmptyChecklist ?? onCancel)()} />
         ) : (
         <>
-        <View style={st.area}>
-          <View style={[st.paper, { backgroundColor: paper[color].bg }]}>
+        <View style={[st.area, mobile && st.mobileFill]}>
+          <View style={[st.paper, { backgroundColor: paper[color].bg }, mobile && st.mobileFill]}>
             {empty ? (
               <View pointerEvents="none" style={st.ph}>
                 <Text style={st.phT}>실적 발표 후 다시 보기</Text>
@@ -76,7 +78,7 @@ export function WebNewMemoDialog({ open, stockName, initialText, initialAi, aiSp
           </View>
           <Swatches v={color} set={setColor} />
         </View>
-        <AiFooter on={ai} set={(v) => setAi(v && !aiSpent)} sub={aiSpent ? 'AI 사용량을 다 써서 일반 메모로만 저장돼요' : ai ? '이 메모에서 1개 항목을 지켜봐요.' : AI_OFF} />
+        <AiFooter lines={mobile ? 2 : 1} on={ai} set={(v) => setAi(v && !aiSpent)} sub={aiSpent ? 'AI 사용량을 다 써서 일반 메모로만 저장돼요' : ai ? '이 메모에서 1개 항목을 지켜봐요.' : AI_OFF} />
         <Actions note="연결하지 않아도 메모는 그대로 남아요" ok="메모 저장" onCancel={onCancel} onOk={save} />
         </>
         )}
@@ -86,6 +88,8 @@ export function WebNewMemoDialog({ open, stockName, initialText, initialAi, aiSp
 }
 
 const st = StyleSheet.create({
+  mobileBox: { flex: 1, width: '100%', maxHeight: '100%', borderRadius: 0, borderWidth: 0, shadowOpacity: 0, elevation: 0 },
+  mobileFill: { flex: 1, height: 'auto', minHeight: 0 },
   head: { minHeight: 96, flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 20, paddingHorizontal: 24, paddingBottom: 24 },
   headL: { flex: 1, minWidth: 0, gap: 4 },
   sub: { ...fpx(13, 20), fontWeight: '500', color: '#747D8D' },

@@ -1,17 +1,11 @@
 import React, { useCallback, useMemo } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { api } from '@/api';
-import { env } from '@/config/env';
-import { useQueryClient } from '@tanstack/react-query';
-import { qk } from '@/hooks/queries';
-import { useMockBoard } from '@/store/mockBoard';
-import { mockBase, mockKey } from '@/ui/screens/board/useBoardCards';
 import { useUI } from '@/store/ui';
-import { AppNewMemo } from '@/ui/screens/memo/app/NewMemo';
+import { NewMemoSheet } from '@/ui/screens/memo/app/NewMemoSheet';
+import { mockBoardStock } from '@/ui/screens/board/MemoBoard.mock';
 import { mockDetailStockName } from '@/ui/screens/memo/MemoDetail.mock';
 import { mockFirstHomeStocks } from '@/ui/screens/onboarding/Onboarding.mock';
 import { AppFirstMemo } from '@/ui/screens/onboarding/app/FirstMemo';
-import { useUsageView } from '@/ui/screens/my/useUsageView';
 
 /**
  * 앱 새 메모 = UI v2. from_onboarding은 기존 저장 API를 바꾸지 않고 복귀 위치만 홈으로 지정한다.
@@ -20,12 +14,11 @@ import { useUsageView } from '@/ui/screens/my/useUsageView';
 export default function NewMemoScreen() {
   const { code, name, first_line, from_onboarding, onboarding_selected } = useLocalSearchParams<{ code?: string; name?: string; first_line?: string; from_onboarding?: string; onboarding_selected?: string }>();
   const router = useRouter();
-  /* 크레딧을 다 쓰면 AI 연결 스위치를 막고 일반 메모로만 (2026-11-24) */
-  const usage = useUsageView();
   const toast = useUI((s) => s.showToast);
-  const qc = useQueryClient();
   const cancel = useCallback(() => router.back(), [router]);
   const firstStocks = useMemo(() => (from_onboarding === '1' ? mockFirstHomeStocks(onboarding_selected) : []), [from_onboarding, onboarding_selected]);
+
+  const target = useMemo(() => ({ code: code || mockBoardStock.stock_code, name: name || mockDetailStockName, text: first_line || undefined }), [code, name, first_line]);
 
   if (from_onboarding === '1') {
     return (
@@ -51,37 +44,6 @@ export default function NewMemoScreen() {
     );
   }
 
-  return (
-    <AppNewMemo
-      stockName={name || mockDetailStockName}
-      initialText={first_line || undefined}
-      aiSpent={usage.paused || usage.usage_pct >= 100}
-      onCancel={cancel}
-      onEmpty={() => (code ? router.dismissTo({ pathname: '/stocks/[code]', params: { code, notice: 'empty', t: String(Date.now()) } }) : cancel())}
-      onSave={({ title, body, color, ai }) => {
-        /* 실제 모드(2026-11-22): 일반 메모로 저장 → AI 를 켰으면 그 메모로 AI 연결 창 (창이 열릴 때 켜고 분석) */
-        if (!env.useMock && code) {
-          void api.createMemo(code, { title, body, color, tags: [], ai_linked: false }).then(
-            (m) => {
-              void qc.invalidateQueries({ queryKey: qk.board(code) });
-              if (ai) router.replace({ pathname: '/memo/link', params: { id: m.id, from: 'new' } });
-              else router.dismissTo({ pathname: '/stocks/[code]', params: { code, notice: 'saved', t: String(Date.now()) } });
-            },
-            () => toast('메모를 저장하지 못했어요 · 잠시 뒤 다시 해 주세요'),
-          );
-          return;
-        }
-        const memoId = code ? useMockBoard.getState().addMemo(mockKey(code), mockBase(code), { title, body, color }) : undefined;
-        if (ai) {
-          router.replace({ pathname: '/memo/link', params: { id: 'new', title, body, from: 'new', memo_id: memoId ?? '' } });
-          return;
-        }
-        if (code) router.dismissTo({ pathname: '/stocks/[code]', params: { code, notice: 'saved', t: String(Date.now()) } });
-        else {
-          toast('메모를 저장했어요');
-          router.back();
-        }
-      }}
-    />
-  );
+  /* 그 밖의 새 메모는 각 화면의 NewMemoSheet — 주소로 바로 들어온 경우 */
+  return <NewMemoSheet target={target} onClose={cancel} />;
 }

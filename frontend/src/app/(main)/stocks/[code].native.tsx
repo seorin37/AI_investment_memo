@@ -10,6 +10,7 @@ import { useCompanyInfo } from '@/ui/screens/company/useCompanyInfo';
 import { AppStockTop } from '@/ui/screens/board/app/StockTop';
 import { mockCompanyByCode } from '@/ui/screens/company/CompanyInfo.mock';
 import { TopBar } from '@/ui/layout/app/TopBar';
+import { NewMemoSheet, type NewMemoTarget } from '@/ui/screens/memo/app/NewMemoSheet';
 import { AiOffSheet } from '@/ui/shared/AiOffSheet';
 import { AppMemoBoard } from '@/ui/screens/board/app/MemoBoard';
 import { patchMemo } from '@/ui/screens/board/boardCards';
@@ -51,6 +52,7 @@ export default function StockDetail() {
   const spent = usage.paused || usage.usage_pct >= 100;
   const toast = useUI((s) => s.showToast);
   const askAiOff = useAiOffChoice();
+  const [memoTo, setMemoTo] = useState<NewMemoTarget | null>(null);
   const [offFor, setOffFor] = useState<Memo | null>(null);
   /* AI 끄기 확인 창의 '추적 항목 N개': 실제 모드면 그 메모의 추적 항목 수 (질문 제외), mock 은 예시 2개 */
   const offTimeline = useMemoTimeline(offFor?.id ?? '', real && !!offFor);
@@ -82,7 +84,7 @@ export default function StockDetail() {
       notice={boardNotice}
       onOpenMemo={(id, t) => router.push({ pathname: '/memo/[id]', params: { id, tab: t } })}
       onOpenChecklist={(id) => router.push({ pathname: '/checklist/[id]', params: { id, code, name: stock.name } })}
-      onNewMemo={(first) => router.push({ pathname: '/memo/new', params: { code, name: stock.name, first_line: first ?? '' } })}
+      onNewMemo={(first) => setMemoTo({ code, name: stock.name, text: first })}
       onNewChecklist={() => router.push({ pathname: '/checklist/[id]', params: { id: 'new', code, name: stock.name } })}
       onToggleChecklistItem={board.toggleItem}
       onPin={board.pin}
@@ -109,6 +111,7 @@ export default function StockDetail() {
       aiCount={usage.ai_count}
       onSpentAction={(a) => (a === 'choice' ? askAiOff() : router.push(a === 'credit' ? '/studio-charge' : '/my-plans'))}
     />
+    <NewMemoSheet target={memoTo} onClose={() => setMemoTo(null)} />
     <AiOffSheet
       open={!!offFor}
       stockName={stock.name}
