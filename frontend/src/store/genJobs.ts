@@ -9,7 +9,7 @@ import type { MadeItem } from '@/ui/screens/studio/Studio.types';
 /**
  * 앱 스튜디오 만들기 작업 (오디오 · 주간보고서 · 투자 실험실). 여러 개를 같이 만들 수 있고 다른 화면에 있어도 이어짐.
  * 웹은 store/studioPlayer 의 job 을 씀 (여기와 따로). 완성된 항목은 studioPlayer.made 에 넣음.
- * 시간 제한으로 실패 처리하지 않음 — run 이 끝나거나(완성) 오류를 낼 때(실패)만 바뀜.
+ * run 이 끝나거나(완성) 오류를 낼 때(실패)만 바뀜. 대기 시간은 run 이 정함 (genRuns). 실패해도 화면은 옮기지 않고 그 작업만 '다시 시도'.
  */
 export type GenKind = MadeItem['kind'];
 export type StepState = 'wait' | 'run' | 'done' | 'bad';

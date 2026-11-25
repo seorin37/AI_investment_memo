@@ -15,13 +15,16 @@ import { fromServerItem } from './studioItems';
 
 /**
  * 앱 스튜디오 만들기 (store/genJobs 가 실행).
- * - 주간보고서: 서버가 세부 단계를 주지 않아 첫 단계만 '진행 중', 완성되면 끝. 시간 제한 없이 서버 상태를 기다림
+ * - 주간보고서: 서버가 세부 단계를 주지 않아 첫 단계만 '진행 중', 완성되면 끝. 기다리는 시간(웹과 같은 6분)을 넘기면 그 작업만 실패.
+ *   서버는 계속 만들고, 다시 시도하면 서버가 같은 조건의 항목을 돌려줘 이어서 기다림 (studio_report/routes.py SAME_SQL)
  * - 투자 실험실: 요청 하나로 답을 받음 → 조건 읽기 완료 · 영향 경로 찾기 '진행 중' → 답이 오면 결과 정리
  * - 오디오: 만들기 API 가 없어 예시 (mock 시간)
  * - mock 시간: EXPO_PUBLIC_MOCK_GEN_SECONDS (기본 5.5초)
  */
 export const LAB_STEPS = ['조건 읽기', '영향 경로 찾기', '결과 정리하기'];
 const POLL_MS = 3000;
+/* 기다리는 시간: reportView useCreateReport 와 같음 */
+const REPORT_WAIT_MS = 6 * 60_000;
 /* 서버는 15분 넘게 멈춘 항목을 버린 것으로 봄 (studio_report/routes.py SAME_SQL) */
 const RESTORE_MS = 15 * 60_000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -30,6 +33,7 @@ const isReal = !env.useMock;
 
 async function waitReport(id: string, c: GenCtx): Promise<MadeItem> {
   let missing = 0;
+  const until = Date.now() + REPORT_WAIT_MS;
   while (c.alive()) {
     /* 잠깐 끊긴 것은 실패가 아님 → 다음 번에 다시 */
     const items = await api.listStudioItems().catch(() => null);
@@ -43,6 +47,7 @@ async function waitReport(id: string, c: GenCtx): Promise<MadeItem> {
       missing = it ? 0 : missing + 1;
       if (it?.status === 'failed' || missing >= 3) throw new Error('failed');
     }
+    if (Date.now() >= until) throw new Error('timeout');
     await sleep(POLL_MS);
   }
   throw new Error('gone');
