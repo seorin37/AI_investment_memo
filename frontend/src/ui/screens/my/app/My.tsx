@@ -47,7 +47,7 @@ export function AppMy(p: AppMyProps) {
             </View>
             <UsageBar pct={p.usage_pct} />
             <View style={st.useM}>
-              <Text style={st.useMT}>이번 기간 <Text style={[st.useMT, { fontWeight: '700' }]}>{p.usage_pct}</Text>% 사용</Text>
+              <Text style={st.useMT}>이번 기간 <Text style={[st.useMT, { fontWeight: '700', fontVariant: ['tabular-nums'] }]}>{p.usage_pct}</Text>% 사용</Text>
               <Text style={st.useMT}>{p.usage_renew} 갱신</Text>
             </View>
           </Pressable>

@@ -81,7 +81,7 @@ export function AppAiLink({ stockName, memo, state, items, fromNew, onConfirm, o
         <Text style={st.ad}>메모에서 찾은 항목이에요. 항목을 골라 받을 수는 없고, 연결하면 이 항목 모두와 관련된 소식을 모아 드려요.</Text>
         {note}
         <Text style={st.found}>
-          찾은 항목 <Text style={{ color: appColor.deepPurple }}>{items.length}</Text>
+          찾은 항목 <Text style={st.foundN}>{items.length}</Text>
         </Text>
         {items.map((x, i) => (
           <Pop key={i} i={i}>
@@ -329,6 +329,7 @@ const st = StyleSheet.create({
   scanT: { ...ft(13.5), fontWeight: '600', color: appColor.deepPurple },
   spin: { width: 16, height: 16, borderRadius: 8, borderWidth: 2.5, borderColor: '#D9CEF7', borderTopColor: appColor.accent },
   sk: { height: 110, marginBottom: 10 },
+  foundN: { ...ft(16), fontWeight: '800', color: appColor.deepPurple, fontVariant: ['tabular-nums'] },
   found: { ...ft(16), fontWeight: '800', color: appColor.ink, marginTop: 18, marginHorizontal: 2, marginBottom: 10 },
   ti: { borderWidth: 1.5, borderColor: appColor.ink, borderRadius: 18, padding: 14, marginBottom: 10, backgroundColor: '#FFFFFF' },
   chp: { alignSelf: 'flex-start', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },

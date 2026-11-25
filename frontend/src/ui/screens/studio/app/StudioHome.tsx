@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
-import { Odometer } from '@/ui/motion/Numbers';
 import { PressScale } from '@/ui/motion/PressScale';
 import { Reveal } from '@/ui/motion/Reveal';
 import { useCoachRef } from '@/ui/shared/Coach';
@@ -75,12 +74,9 @@ export function AppStudioHome({ header, jobs, onJob, playingId, onQuickPlay, bot
           <Text style={[st.subrT, { flex: 1 }]}>내 종목 {p.stock_count} · AI 연결 메모 {p.ai_memo_count}</Text>
           <PressScale scaleTo={0.93} onPress={() => setSheet(true)} accessibilityRole="button" accessibilityLabel={`AI 사용량 ${p.usage_pct}%`} style={[st.cred, full && st.credZero]}>
             <Bolt c={full ? '#8A5A00' : '#5B3BD1'} />
-            {/* 칩 gap 은 번개 아이콘과 글자 사이만 — 숫자와 % 는 붙여서 (원본 'AI 사용량 62%') */}
-            <View style={st.credRow}>
-              <Text style={[st.credT, full && { color: '#8A5A00' }]}>AI 사용량 </Text>
-              <Odometer value={p.usage_pct} style={{ ...st.credT, ...(full ? { color: '#8A5A00' } : null) }} />
-              <Text style={[st.credT, full && { color: '#8A5A00' }]}>%</Text>
-            </View>
+            <Text style={[st.credT, full && { color: '#8A5A00' }]}>
+              AI 사용량 {p.usage_pct}%
+            </Text>
           </PressScale>
         </View>
         {full ? (
@@ -210,8 +206,7 @@ const st = StyleSheet.create({
   subrT: { fontSize: 12.5, lineHeight: 18, color: C.ink3 },
   cred: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 28, paddingHorizontal: 10, borderRadius: 14, backgroundColor: '#F0ECFF' },
   credZero: { backgroundColor: '#FFF1D6', borderWidth: 1, borderColor: '#F1D9A8' },
-  credRow: { flexDirection: 'row', alignItems: 'center' },
-  credT: { fontSize: 12.5, lineHeight: 17, fontWeight: '800', color: '#5B3BD1' },
+  credT: { fontSize: 12.5, lineHeight: 17, fontWeight: '800', color: '#5B3BD1', fontVariant: ['tabular-nums'] },
   fc: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#FFFFFF', borderRadius: 20, marginHorizontal: 16, marginBottom: 10, padding: 16 },
   fcH: { fontSize: 16, lineHeight: 22, fontWeight: '800', color: C.ink, marginBottom: 3 },
   fcP: { fontSize: 13, lineHeight: 18, color: C.ink2 },

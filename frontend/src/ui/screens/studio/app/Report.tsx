@@ -294,7 +294,7 @@ const st = StyleSheet.create({
   ostV: { fontSize: 14, lineHeight: 19, fontWeight: '700', color: '#FFFFFF', marginTop: 2 },
   tl: { flexDirection: 'row', gap: 14, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.12)', marginTop: 14, paddingTop: 12 },
   tlT: { fontSize: 12, lineHeight: 17, color: '#C9C3D9' },
-  tlB: { color: '#FFFFFF', fontWeight: '700' },
+  tlB: { fontSize: 12, lineHeight: 17, color: '#FFFFFF', fontWeight: '700', fontVariant: ['tabular-nums'] },
   r3s: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, marginTop: 12 },
   sum: { borderLeftWidth: 3, borderLeftColor: '#8569E3' },
   sumH: { fontSize: 13, lineHeight: 18, fontWeight: '800', color: C.a2, marginBottom: 6 },

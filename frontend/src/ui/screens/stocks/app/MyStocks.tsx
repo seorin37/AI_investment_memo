@@ -4,7 +4,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { TAB_BAR_H } from '@/ui/layout/app/TopBar';
 import { Text } from '@/components/ui/AppText';
-import { Odometer } from '@/ui/motion/Numbers';
 import { Reveal } from '@/ui/motion/Reveal';
 import { Skeleton } from '@/ui/motion/Skeleton';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
@@ -369,8 +368,10 @@ function FilterChips({ value, onChange, holding, watching }: { value: Filter; on
             accessibilityState={{ selected: on }}
             style={({ pressed }) => [st.chip, on && st.chipOn, pressed && { transform: [{ scale: 0.94 }] }]}
           >
-            <Text style={[st.chipT, on && st.chipTOn]}>{l}</Text>
-            {n !== null ? <Odometer value={n} style={on ? st.chipNOn : st.chipN} /> : null}
+            <Text style={[st.chipT, on && st.chipTOn]}>
+              {l}
+              {n !== null ? <Text style={[st.chipT, on && st.chipTOn, st.chipN]}> {n}</Text> : null}
+            </Text>
           </Pressable>
         );
       })}
@@ -476,8 +477,7 @@ const st = StyleSheet.create({
   chipOn: { backgroundColor: 'transparent', borderColor: 'transparent' },
   chipT: { ...ft(13.5), color: appColor.ink },
   chipTOn: { color: '#FFFFFF', fontWeight: '700' },
-  chipN: { fontSize: 13.5, color: appColor.ink },
-  chipNOn: { fontSize: 13.5, color: '#FFFFFF', fontWeight: '700' },
+  chipN: { fontVariant: ['tabular-nums'] },
   addc: { marginLeft: 'auto', minHeight: 34, paddingHorizontal: 12, borderRadius: 17, backgroundColor: '#FFFFFF', flexDirection: 'row', alignItems: 'center', gap: 4 },
   addcT: { ...ft(13), color: appColor.ink },
   grp: { backgroundColor: '#FFFFFF', borderRadius: 20, marginHorizontal: 16, marginBottom: 12, paddingTop: 14, paddingHorizontal: 14, paddingBottom: 6 },

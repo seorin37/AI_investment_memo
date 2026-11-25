@@ -511,7 +511,7 @@ const st = StyleSheet.create({
   pill: { minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, borderRadius: 16, backgroundColor: appColor.surface },
   pillEdit: { marginLeft: 'auto' },
   pillT: { ...ft(13), color: appColor.ink2 },
-  pillB: { fontWeight: '700', color: appColor.ink },
+  pillB: { ...ft(13), fontWeight: '700', color: appColor.ink, fontVariant: ['tabular-nums'] },
   nudge: { position: 'absolute', left: 16, right: 16, alignItems: 'center' },
   snack: { position: 'absolute', left: 14, right: 14 },
   wr: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 22, minHeight: 68 },

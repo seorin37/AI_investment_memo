@@ -4,7 +4,6 @@ import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-nativ
 import { AnimatedText, Text, TextInput } from '@/components/ui/AppText';
 import type { Checklist } from '@/types/models';
 import { CheckGlyph, CtaChevron, PlugGlyph, WIDGET_META, WidgetGlyph } from '@/ui/icons/HomeGlyphs';
-import { Odometer } from '@/ui/motion/Numbers';
 import { Skeleton } from '@/ui/motion/Skeleton';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { useProgress } from '@/ui/motion/useProgress';
@@ -61,11 +60,9 @@ export function HeroCard({ name, total, editing, ready, onCta }: { name: string;
             {total ? (
               <View style={st.htBox}>
                 <Text style={st.ht}>오늘 내 생각에</Text>
-                <View style={st.htRow}>
-                  <Text style={st.ht}>붙은 소식 </Text>
-                  <Odometer value={total} style={st.htOdo} />
-                  <Text style={st.ht}>건</Text>
-                </View>
+                <Text style={st.ht}>
+                  붙은 소식 <Text style={st.htN}>{total}</Text>건
+                </Text>
               </View>
             ) : (
               <View style={st.htBox}>
@@ -448,8 +445,7 @@ const st = StyleSheet.create({
   htBox: { marginTop: 4, marginBottom: 14 },
   ht: { ...ft(21, 1.4), fontWeight: '800', color: appColor.ink },
   htSub: { ...ft(13), color: appColor.ink2, marginTop: 4 },
-  htRow: { flexDirection: 'row', alignItems: 'center' },
-  htOdo: { fontSize: 21, fontWeight: '800', color: appColor.ink },
+  htN: { ...ft(21, 1.4), fontWeight: '800', color: appColor.ink, fontVariant: ['tabular-nums'] },
   cta2: { alignSelf: 'flex-start', marginTop: 14, minHeight: 38, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 19, backgroundColor: appColor.ink, flexDirection: 'row', alignItems: 'center', gap: 4 },
   cta2T: { ...ft(13.5), fontWeight: '700', color: '#FFFFFF' },
   /* 시장 */
