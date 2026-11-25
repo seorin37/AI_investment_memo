@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { BottomBar } from '@/ui/shared/app/BottomBar';
 import { MiniSpace } from '@/ui/screens/studio/app/MiniBar';
+import { nf } from '@/ui/shared/app/nf';
 import { Text } from '@/components/ui/AppText';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { Sheet } from '@/ui/shared/Sheet';
@@ -179,24 +180,24 @@ export const pt = StyleSheet.create({
   foot: { fontSize: 11.5, lineHeight: 18.4, color: MC.ink3, marginTop: 12, marginHorizontal: 4 },
   bh: { height: 58, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10 },
   ib: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
-  bhT: { fontSize: 19, lineHeight: 27, fontWeight: '700', color: MC.ink },
+  bhT: { ...nf(19), fontWeight: '700', color: MC.ink },
   lb: { marginTop: 16, marginHorizontal: 4, marginBottom: 7 },
-  lbT: { fontSize: 12.5, lineHeight: 18, color: MC.ink3 },
+  lbT: { ...nf(12.5), color: MC.ink3 },
   grp: { backgroundColor: '#FFFFFF', borderRadius: 18, overflow: 'hidden' },
   it: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 52, paddingHorizontal: 16 },
   /* 62 = 12 + 18 + 2 + 17 + 12 + 선 1 (마지막 줄도 62) */
   tw: { paddingVertical: 12, minHeight: 62 },
   itLine: { borderBottomWidth: 1, borderBottomColor: '#F1F2F4' },
   itMain: { flex: 1, minWidth: 0 },
-  itT: { fontSize: 15, lineHeight: 22, color: MC.ink },
+  itT: { ...nf(15), color: MC.ink },
   itT2: { lineHeight: 18, fontWeight: '500' },
   itS: { fontSize: 12, lineHeight: 17, color: MC.ink3, marginTop: 2 },
   v: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 4 },
-  vT: { fontSize: 13, lineHeight: 19, color: MC.ink3 },
+  vT: { ...nf(13), color: MC.ink3 },
   sh: { paddingHorizontal: 20, paddingBottom: 12 },
-  shH: { fontSize: 18, lineHeight: 26, fontWeight: '700', color: MC.ink, marginBottom: 6 },
+  shH: { ...nf(18), fontWeight: '700', color: MC.ink, marginBottom: 6 },
   shP: { fontSize: 13.5, lineHeight: 21.6, color: MC.ink2, marginBottom: 16 },
   sbtn: { flexDirection: 'row', gap: 8 },
   sb: { flex: 1, borderRadius: 14, paddingVertical: 15, minHeight: 52, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F2F4' },
-  sbT: { fontSize: 15, lineHeight: 22, fontWeight: '800', color: MC.ink },
+  sbT: { ...nf(15), fontWeight: '800', color: MC.ink },
 });

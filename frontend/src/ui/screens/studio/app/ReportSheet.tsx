@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import { nf } from '@/ui/shared/app/nf';
 import { Text } from '@/components/ui/AppText';
 import { PressScale } from '@/ui/motion/PressScale';
 import { Sheet } from '@/ui/shared/Sheet';
@@ -70,25 +71,25 @@ function Row({ on, dim, name, sub, tag, gray, onPress }: { on: boolean; dim?: bo
 }
 
 const st = StyleSheet.create({
-  h: { fontSize: 19, lineHeight: 26, fontWeight: '700', color: C.ink, marginBottom: 4 },
+  h: { ...nf(19), fontWeight: '700', color: C.ink, marginBottom: 4 },
   d: { fontSize: 12.5, lineHeight: 19, color: C.ink3, marginBottom: 12 },
   rper: { backgroundColor: '#F6F7F9', borderRadius: 12, paddingVertical: 9, paddingHorizontal: 12, marginBottom: 10 },
-  rperT: { fontSize: 12.5, lineHeight: 18, color: C.ink2 },
+  rperT: { ...nf(12.5), color: C.ink2 },
   rperB: { fontWeight: '700', color: C.ink },
   pickHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 },
-  pickTitle: { fontSize: 13.5, lineHeight: 19, fontWeight: '700', color: C.ink },
-  pickCount: { fontSize: 12, lineHeight: 17, fontWeight: '700', color: C.a },
+  pickTitle: { ...nf(13.5), fontWeight: '700', color: C.ink },
+  pickCount: { ...nf(12), fontWeight: '700', color: C.a },
   qc: { flexDirection: 'row', gap: 6, marginBottom: 6 },
   q: { height: 32, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1, borderColor: '#DADDE2', justifyContent: 'center' },
   qOn: { backgroundColor: C.ink, borderColor: C.ink },
-  qT: { fontSize: 12.5, lineHeight: 17, fontWeight: '600', color: C.ink },
+  qT: { ...nf(12.5), fontWeight: '600', color: C.ink },
   sr: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: '#F0F1F4' },
   cb: { width: 24, height: 24, borderRadius: 7, borderWidth: 2, borderColor: '#C9CDD4', alignItems: 'center', justifyContent: 'center' },
-  srT: { fontSize: 15, lineHeight: 21, fontWeight: '600', color: C.ink },
-  nn: { fontSize: 12, lineHeight: 17, fontWeight: '500', color: C.ink3 },
+  srT: { ...nf(15), fontWeight: '600', color: C.ink },
+  nn: { ...nf(12), fontWeight: '500', color: C.ink3 },
   op: { borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: '#EEE9FB' },
-  opT: { fontSize: 11, lineHeight: 15, fontWeight: '700', color: '#5B3BD1' },
-  note: { fontSize: 11.5, lineHeight: 16, color: C.ink3, marginTop: 8, marginBottom: 10 },
+  opT: { ...nf(11), fontWeight: '700', color: '#5B3BD1' },
+  note: { ...nf(11.5), color: C.ink3, marginTop: 8, marginBottom: 10 },
   cta: { height: 54, borderRadius: 15, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center', marginTop: 10 },
-  ctaT: { fontSize: 16, lineHeight: 22, fontWeight: '800', color: '#FFFFFF' },
+  ctaT: { ...nf(16), fontWeight: '800', color: '#FFFFFF' },
 });

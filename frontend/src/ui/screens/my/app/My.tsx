@@ -3,6 +3,7 @@ import { BackHandler, Pressable, ScrollView, StyleSheet, View } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, G, Path } from 'react-native-svg';
 import { MiniSpace } from '@/ui/screens/studio/app/MiniBar';
+import { nf } from '@/ui/shared/app/nf';
 import { Text } from '@/components/ui/AppText';
 import { Avatar } from '@/ui/shared/Avatar';
 import { SkySwitch } from '@/ui/shared/SkySwitch';
@@ -116,20 +117,20 @@ const st = StyleSheet.create({
   secT: { fontSize: 12.5, lineHeight: 15, color: MC.ink3 },
   prof: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, backgroundColor: '#FFFFFF', borderRadius: 18 },
   avb: { width: 50, height: 50, borderRadius: 25, backgroundColor: MC.aSoft, alignItems: 'center', justifyContent: 'center' },
-  avbT: { fontSize: 20, lineHeight: 26, fontWeight: '800', color: MC.a2 },
-  profB: { fontSize: 18, lineHeight: 26, fontWeight: '700', color: MC.ink },
-  profS: { fontSize: 12.5, lineHeight: 18, color: MC.ink3, flexShrink: 1 },
+  avbT: { ...nf(20), fontWeight: '800', color: MC.a2 },
+  profB: { ...nf(18), fontWeight: '700', color: MC.ink },
+  profS: { ...nf(12.5), color: MC.ink3, flexShrink: 1 },
   /* 높이 84 = 14 + 18 + 막대 26 + 14 + 12 */
   use: { marginTop: 10, paddingTop: 14, paddingHorizontal: 16, paddingBottom: 12, backgroundColor: '#FFFFFF', borderRadius: 18 },
   useT: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  useTT: { fontSize: 14, lineHeight: 18, fontWeight: '700', color: MC.ink },
+  useTT: { ...nf(14), fontWeight: '700', color: MC.ink },
   more: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center' },
-  moreT: { fontSize: 13, lineHeight: 18, fontWeight: '700', color: MC.a2 },
+  moreT: { ...nf(13), fontWeight: '700', color: MC.a2 },
   useM: { flexDirection: 'row', justifyContent: 'space-between' },
   useMT: { fontSize: 12, lineHeight: 14, color: MC.ink2 },
   dk: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 52, paddingHorizontal: 16 },
   dki: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center' },
-  dkT: { fontSize: 15, lineHeight: 22, color: MC.ink },
+  dkT: { ...nf(15), color: MC.ink },
   dkSw: { marginLeft: 'auto' },
-  ver: { textAlign: 'center', fontSize: 12, lineHeight: 17, color: MC.ink3, marginTop: 18 },
+  ver: { textAlign: 'center', ...nf(12), color: MC.ink3, marginTop: 18 },
 });
