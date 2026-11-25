@@ -436,8 +436,8 @@ def main(argv: list[str] | None = None) -> int:
                         stop, cands = None, []
                 brief = None
                 if item.category == "ask" and tcfg.get("decision_price_brief", True):
-                    from .decision_note import is_decision_question
-                    if is_decision_question(item.memo_text) or is_decision_question(item.description or ""):
+                    from .price_brief import wants_price_brief
+                    if wants_price_brief(item.description):          # 메모 전체가 아니라 이 질문의 설명으로 본다
                         # 2026-11-25 판단 질문(사야 되나·오르나): 코드가 계산한 주가 사실을 답 맨 앞에, 소식은 최근 7일 것만 (오래된 기사 하나가 답이 되지 않게)
                         from .price_brief import price_brief
                         brief = price_brief(conn, item.symbol, item.company_name or item.symbol) or None

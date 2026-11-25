@@ -9,6 +9,16 @@ from __future__ import annotations
 
 from datetime import date
 
+# 메모 분석 v2 지시문이 판단 질문(사야 되나·오르나·가격 괜찮아)을 바꿔 쓰는 사실 질문 모양 (configs/tracking_judge_prompt_intent_v2.md [판단 질문])
+PRICE_QUESTION_MARKS = ("주가 흐름", "52주 범위", "주가를 움직인")
+
+
+def wants_price_brief(description: str) -> bool:
+    """질문 항목(ask)의 설명이 주가를 묻는 사실 질문인지. 메모 전체 글이 아니라 항목마다 본다 (2026-11-25:
+    "손절가 140만원 아래면 알려줘. 배당 언제야?"의 배당 질문에 주가 요약이 붙던 문제)."""
+    return any(m in (description or "") for m in PRICE_QUESTION_MARKS)
+
+
 SQL = """SELECT trade_date, close FROM prices_daily
 WHERE btrim(symbol) = %(s)s AND trade_date <= %(d)s AND close IS NOT NULL ORDER BY trade_date DESC LIMIT 260"""
 

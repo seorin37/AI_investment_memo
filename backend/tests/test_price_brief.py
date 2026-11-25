@@ -4,7 +4,7 @@ import unittest
 from datetime import date, timedelta
 
 from pipelines.updates.models import TopicOutcome, TrackingItem, UpdateDraft
-from pipelines.updates.price_brief import brief_from_closes
+from pipelines.updates.price_brief import brief_from_closes, wants_price_brief
 from pipelines.updates.response import item_response
 from pipelines.updates.results import draft_to_dict
 from pipelines.updates.topic import NO_RECENT_NEWS, with_price_facts
@@ -38,6 +38,15 @@ class BriefTest(unittest.TestCase):
         text = " ".join(brief_from_closes("A", closes(260, step=2_000)))
         for w in ("싸", "비싸", "사세요", "매수", "바닥", "오를", "전망"):
             self.assertNotIn(w, text)
+
+
+class WantsBriefTest(unittest.TestCase):
+    def test_by_item_description(self):
+        for d in ("SK하이닉스 최근 주가 흐름과 최근 나온 공시·뉴스", "삼성전자 지금 주가가 최근 1개월·52주 범위에서 어디쯤인지",
+                  "SK하이닉스 최근 주가를 움직인 소식과 앞으로 예정된 일정"):
+            self.assertTrue(wants_price_brief(d), d)
+        for d in ("SK하이닉스 배당 지급 일정", "HBM4 공급 계약 소식", ""):      # 같은 메모에 '손절'이 있어도 이 질문엔 안 붙는다
+            self.assertFalse(wants_price_brief(d), d)
 
 
 class WithPriceFactsTest(unittest.TestCase):
