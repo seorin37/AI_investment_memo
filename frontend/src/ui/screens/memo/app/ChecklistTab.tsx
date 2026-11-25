@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
-import { Text } from '@/components/ui/AppText';
+import { Text, TextInput } from '@/components/ui/AppText';
 import type { ChecklistItem } from '@/types/models';
 import { fpx } from '@/ui/theme';
 import type { ChecklistDraft } from '../web/ChecklistTab';

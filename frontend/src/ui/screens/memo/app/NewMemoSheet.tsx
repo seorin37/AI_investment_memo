@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { ApiError, api } from '@/api';
+import { api } from '@/api';
 import { env } from '@/config/env';
 import { qk } from '@/hooks/queries';
 import { useMockBoard } from '@/store/mockBoard';
@@ -26,7 +26,7 @@ export interface NewMemoTarget {
 
 /**
  * 앱 새 메모 = 웹 새 메모 창과 같은 화면(AppNewMemoDialog)을 아래에서 올라오는 전체 높이 시트로 (메모 쓰기 · 메모에 추가 같이 씀).
- * 실제 모드: 일반 메모로 저장 → AI 를 켰으면 메모 쓰기는 AI 연결 창(/memo/link), '메모에 추가'는 화면을 옮기지 않고 뒤에서 켬.
+ * 실제 모드: 일반 메모로 저장 → AI 를 켰으면 AI 연결 창(/memo/link). '메모에 추가'는 확인·취소 뒤 보던 화면으로 돌아와 안내.
  * mock 모드: 앱 보드와 같은 store/mockBoard. 체크리스트 탭은 새 체크리스트 (앱은 여러 개).
  */
 export function NewMemoSheet({ target, onClose, onSaved }: { target: NewMemoTarget | null; onClose: () => void; onSaved?: (code: string) => void }) {
@@ -49,9 +49,11 @@ export function NewMemoSheet({ target, onClose, onSaved }: { target: NewMemoTarg
   const spent = !env.useMock && (usage.paused || usage.usage_pct >= 100);
 
   const view = { label: '보기', onPress: () => router.navigate({ pathname: '/stocks/[code]', params: { code: t.code } }) };
-  const saved = () => {
+  /* link: AI 연결 창으로 이어짐 — 저장 안내는 그 창이 닫힐 때 */
+  const studioLink = t.studio ? { board_code: t.code, board_name: t.name, stock_name: t.name } : {};
+  const saved = (link = false) => {
     onClose();
-    if (t.studio) toast(`${t.name} 보드에 저장했어요`, view);
+    if (t.studio && !link) toast(`${t.name} 보드에 저장했어요`, view);
     onSaved?.(t.code);
   };
   /* 시트(Modal)가 안내를 가리므로 알림 창으로. 시트는 그대로 두어 쓴 글이 남음 */
@@ -64,9 +66,8 @@ export function NewMemoSheet({ target, onClose, onSaved }: { target: NewMemoTarg
     if (busy) return;
     if (env.useMock) {
       const id = useMockBoard.getState().addMemo(mockKey(t.code), mockBase(t.code), { title, body, color });
-      if (ai && t.studio) useMockBoard.getState().patchMemoAnywhere(id, (m) => ({ ...m, ai_linked: true }));
-      saved();
-      if (ai && !t.studio) router.push({ pathname: '/memo/link', params: { id: 'new', title, body, from: 'new', memo_id: id } });
+      saved(ai);
+      if (ai) router.push({ pathname: '/memo/link', params: { id: 'new', title, body, from: 'new', memo_id: id, ...studioLink } });
       else if (!t.studio) toast('메모를 저장했어요');
       return;
     }
@@ -76,18 +77,9 @@ export function NewMemoSheet({ target, onClose, onSaved }: { target: NewMemoTarg
         setBusy(false);
         void qc.invalidateQueries({ queryKey: qk.board(t.code) });
         if (t.studio) markWatch(t.studio.itemId, t.studio.key, m.id);
-        saved();
-        if (!t.studio) {
-          if (ai) router.push({ pathname: '/memo/link', params: { id: m.id, from: 'new' } });
-          else toast('메모를 저장했어요');
-          return;
-        }
-        if (!ai) return;
-        void api.setAiLink(m.id, true).then(
-          () => qc.invalidateQueries({ queryKey: qk.board(t.code) }),
-          /* 크레딧 0(402) · 추적 항목 상한(409): 서버 문구 (memo/link 와 같음) */
-          (e) => useUI.getState().showToast(e instanceof ApiError && (e.status === 402 || e.status === 409) ? e.message : '일반 메모로 저장했어요 · AI 연결은 나중에 켤 수 있어요', view),
-        );
+        saved(ai);
+        if (ai) router.push({ pathname: '/memo/link', params: { id: m.id, from: 'new', ...studioLink } });
+        else if (!t.studio) toast('메모를 저장했어요');
       },
       () => failed('메모를 저장하지 못했어요 · 잠시 뒤 다시 해 주세요'),
     );
