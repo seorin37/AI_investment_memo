@@ -56,16 +56,16 @@ export function AppReport({ title, rep, stocks, market, allDefault, onBack, onOp
               </View>
             </View>
           ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ marginTop: 14 }}>
+            <MiniRow n={stocks.length}>
               {stocks.map((r) => (
-                <View key={r.stock_code} style={st.sm}>
-                  <View style={st.qn}><Logo s={r} size={16} /><Text style={st.smN}>{r.name}</Text></View>
+                <View key={r.stock_code} style={[st.sm, stocks.length > 3 ? { width: 104 } : { flex: 1, minWidth: 0 }]}>
+                  <View style={st.qn}><Logo s={r} size={16} /><Text style={[st.smN, { flexShrink: 1 }]} numberOfLines={1}>{r.name}</Text></View>
                   <Text style={[st.smV, { color: r.pct >= 0 ? '#FF6B6B' : '#5B9BFF' }]}>{sign(r.pct)}</Text>
                   <Spark c={r.closes} color={r.pct >= 0 ? '#FF6B6B' : '#5B9BFF'} />
                   <Text style={st.smS} numberOfLines={1}>{r.items.length ? [r.counts.공시 ? `공시 ${r.counts.공시}` : '', r.counts.뉴스 ? `뉴스 ${r.counts.뉴스}` : ''].filter(Boolean).join(' · ') : '새 소식 없음'}</Text>
                 </View>
               ))}
-            </ScrollView>
+            </MiniRow>
           )}
           <View style={st.tl}>
             {[['공시', `${g}건`], ['뉴스', `${nw}건`], ['메모와 연결', `${mc}개`]].map(([l, v]) => <Text key={l} style={st.tlT}>{l} <Text style={st.tlB}>{v}</Text></Text>)}
@@ -236,6 +236,12 @@ export function AppReport({ title, rep, stocks, market, allDefault, onBack, onOp
   );
 }
 
+/** 표지 종목 카드 줄: 3개까지 같은 폭으로 꽉 차게, 4개부터 가로 스크롤 */
+function MiniRow({ n, children }: { n: number; children: React.ReactNode }) {
+  if (n <= 3) return <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>{children}</View>;
+  return <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ marginTop: 14 }}>{children}</ScrollView>;
+}
+
 function SecH({ n, t }: { n: string; t: string }) {
   return <View style={st.r3h}><Text style={st.r3hE}>{n}</Text><Text style={st.r3hT}>{t}</Text><View style={st.r3hL} /></View>;
 }
@@ -253,7 +259,7 @@ const st = StyleSheet.create({
   kPT: { fontSize: 11, lineHeight: 15, fontWeight: '600', color: '#FFFFFF' },
   h2: { fontSize: 24, lineHeight: 32, fontWeight: '800', color: '#FFFFFF', marginTop: 10, marginBottom: 4 },
   pd: { fontSize: 12, lineHeight: 17, color: '#C9C3D9' },
-  sm: { width: 104, backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: 10 },
+  sm: { backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: 10 },
   qn: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   smN: { fontSize: 12, lineHeight: 17, fontWeight: '700', color: '#FFFFFF' },
   smV: { fontSize: 16, lineHeight: 24, fontWeight: '400', marginTop: 6 },
