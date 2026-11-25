@@ -10,8 +10,10 @@ export type FeedKind = '뉴스' | '공시' | '주가';
 export interface MemoFeedItem {
   id: string;
   kind: FeedKind;
-  /** 소식 날짜 (정렬 · 'MM.DD' 표시) */
+  /** 소식 날짜 = 자료 날짜 (기사 발행·공시 접수 · 'MM.DD' 표시) */
   at: ISODate;
+  /** 카드가 메모에 붙은 시각 (tracking_updates.created_at). 타임라인은 이 순서로 줄 세운다 (2026-11-25) */
+  arrived?: ISODate;
   /** 카드 제목: 'HBM4 공급 확대 소식이 나왔어요' */
   headline: string;
   /** 펼친 내용 (AI 요약 · 주가는 코드 계산 문장) */

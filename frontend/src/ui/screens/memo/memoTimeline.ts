@@ -15,7 +15,9 @@ export function buildTimeline(memo: Memo, versions: MemoVersion[], feed: MemoFee
   const last = versions.length - 1;
   const rows: { k: number; at: string; r: TimelineRow }[] = versions.map((v, i) => ({ k: dayKey(v.saved_at) + (i === last ? 0 : 0.3), at: v.saved_at, r: { t: 'rev', v, first: i === last } }));
   if (memo.ai_linked && memo.ai_linked_at) rows.push({ k: dayKey(memo.ai_linked_at) + 0.1, at: memo.ai_linked_at, r: { t: 'ai', at: memo.ai_linked_at } });
-  if (memo.ai_linked) feed.forEach((f) => rows.push({ k: dayKey(f.at) + 0.5, at: f.at, r: { t: 'feed', item: f } }));
+  /* 2026-11-25 소식은 '붙은 날'(arrived)로 줄 세운다. 첫 확인은 최근 1년 자료를 찾아 메모보다 먼저 나온 기사·공시가 붙을 수 있는데,
+     자료 날짜로 세우면 메모 아래(메모 쓰기 전)로 내려가 '그 뒤 도착한 소식'과 어긋났다 */
+  if (memo.ai_linked) feed.forEach((f) => { const t = f.arrived ?? f.at; rows.push({ k: dayKey(t) + 0.5, at: t, r: { t: 'feed', item: f } }); });
   return rows.sort((a, b) => b.k - a.k || b.at.localeCompare(a.at)).map((x) => x.r);
 }
 

@@ -264,7 +264,7 @@ function Overview({ p, kind, setKind, ready, fading, onOpenStock, onOpenRow }: {
                   <Text style={st.tt} numberOfLines={1}>
                     {u.headline}
                   </Text>
-                  <Text style={st.ag}>{ago(u.at, p.now)}</Text>
+                  <Text style={st.ag}>{ago(u.arrived ?? u.at, p.now)}</Text>
                   <Dot on={u.unread && !fading.includes(u.id)} />
                 </Pressable>
               ))
@@ -302,7 +302,7 @@ function StockView({ p, s, kind, setKind, openId, onOpen }: { p: AppUpdatesProps
   const L = all.filter((u) => kind === '전체' || u.kind === kind);
   const groups: [string, UpdateItem[]][] = [];
     L.forEach((u) => {
-      const key = dayGroup(u.at, p.now);
+      const key = dayGroup(u.arrived ?? u.at, p.now);   // 2026-11-25 붙은 날로 묶음 (자료 날짜는 상세 출처 줄에)
       const f = groups.find((x) => x[0] === key);
       if (f) f[1].push(u);
       else groups.push([key, [u]]);

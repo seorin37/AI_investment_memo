@@ -135,7 +135,7 @@ export function WebFeed({ memo, versions, feed, trackItems, onOpenSource, onOpen
                 </View>
                 <View style={st.flex}>
                   <Text style={st.c13b}>
-                    {f.kind} · {md(f.at)}
+                    {f.kind} · {md(f.arrived ?? f.at)}
                   </Text>
                   <Text style={st.cardT}>{f.headline}</Text>
                 </View>
