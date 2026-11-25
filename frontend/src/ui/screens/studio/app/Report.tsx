@@ -267,7 +267,7 @@ function SecH({ n, t }: { n: string; t: string }) {
 }
 
 function Logo({ s, size }: { s: ReportStock; size: number }) {
-  return <Keep style={{ width: size, height: size, borderRadius: size * 0.3, backgroundColor: s.logo_bg, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: size * 0.48, lineHeight: size * 0.62, fontWeight: '800', color: s.logo_ink ?? '#FFFFFF' }}>{s.logo}</Text></Keep>;
+  return <Keep style={{ width: size, height: size, borderRadius: size * 0.3, backgroundColor: s.logo_bg, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: size * 0.48, lineHeight: size * 0.62, fontWeight: size < 26 ? '700' : '800', color: s.logo_ink ?? '#FFFFFF' }}>{s.logo}</Text></Keep>;
 }
 
 const st = StyleSheet.create({
@@ -310,7 +310,7 @@ const st = StyleSheet.create({
   glP: { width: 52, textAlign: 'right', fontSize: 14, lineHeight: 19, fontWeight: '700' },
   topO: { fontSize: 11, lineHeight: 15, color: C.ink3 },
   r3h: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 22, marginHorizontal: 2 },
-  r3hE: { fontSize: 12, lineHeight: 17, color: C.a2 },
+  r3hE: { fontSize: 12, lineHeight: 17, fontWeight: '800', color: C.a2 },
   r3hT: { fontSize: 16, lineHeight: 22, fontWeight: '800', color: C.ink },
   miss: { alignItems: 'center', paddingTop: 96, paddingHorizontal: 24 },
   missB: { fontSize: 18, lineHeight: 25, fontWeight: '800', color: C.ink },
@@ -337,7 +337,7 @@ const st = StyleSheet.create({
   tg: { backgroundColor: 'rgba(255,255,255,0.75)', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 1 },
   tgT: { fontSize: 11.5, lineHeight: 16, fontWeight: '700', color: C.ink2 },
   qpr: { fontSize: 15, lineHeight: 20, fontWeight: '800', color: C.ink },
-  qprS: { fontSize: 12.5, lineHeight: 17, fontWeight: '700' },
+  qprS: { fontSize: 12.5, lineHeight: 17, fontWeight: '800' },
   bd: { paddingTop: 14, paddingHorizontal: 16, paddingBottom: 16 },
   metricBlock: { gap: 8, backgroundColor: '#F7F8FA', borderRadius: 14, padding: 12 },
   st4: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

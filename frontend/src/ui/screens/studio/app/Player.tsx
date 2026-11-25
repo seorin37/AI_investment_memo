@@ -179,7 +179,7 @@ const st = StyleSheet.create({
   big: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
   secr: { flexDirection: 'row', alignItems: 'baseline', gap: 8, paddingTop: 12, paddingHorizontal: 18, paddingBottom: 8 },
   secrT: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: C.ink },
-  secrS: { fontSize: 12, lineHeight: 17, color: C.ink3 },
+  secrS: { fontSize: 12, lineHeight: 17, fontWeight: '500', color: C.ink3 },
   card: { backgroundColor: '#FFFFFF', borderRadius: 20, marginHorizontal: 16, paddingVertical: 6, paddingHorizontal: 16 },
   line: { borderTopWidth: 1, borderTopColor: '#F0F1F4' },
   cr: { flexDirection: 'row', alignItems: 'center', gap: 12, height: 48 },

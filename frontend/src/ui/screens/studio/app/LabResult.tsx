@@ -123,7 +123,7 @@ const st = StyleSheet.create({
   mg: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
   mc: { width: 86, backgroundColor: '#F6F6F8', borderRadius: 12, padding: 10 },
   mcT: { fontSize: 13, lineHeight: 18, fontWeight: '800', color: C.ink },
-  mcS: { fontSize: 11.5, lineHeight: 16, color: C.ink3, marginTop: 3 },
+  mcS: { fontSize: 11.5, lineHeight: 16, fontWeight: '500', color: C.ink3, marginTop: 3 },
   l1: { width: 12, height: 2, backgroundColor: '#C5C8CF' },
   mm: { width: 66, borderWidth: 1.5, borderColor: '#E2E4E8', borderRadius: 12, paddingVertical: 8, paddingHorizontal: 6, backgroundColor: '#FFFFFF' },
   mmT: { fontSize: 12, lineHeight: 16, fontWeight: '700', textAlign: 'center', color: C.ink },

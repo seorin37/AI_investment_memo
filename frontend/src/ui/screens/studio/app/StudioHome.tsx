@@ -213,7 +213,7 @@ const st = StyleSheet.create({
   fcP: { fontSize: 13, lineHeight: 18, color: C.ink2 },
   secr: { flexDirection: 'row', alignItems: 'baseline', gap: 8, paddingTop: 12, paddingHorizontal: 18, paddingBottom: 8 },
   secrT: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: C.ink },
-  secrS: { fontSize: 12, lineHeight: 17, color: C.ink3 },
+  secrS: { fontSize: 12, lineHeight: 17, fontWeight: '500', color: C.ink3 },
   made: { backgroundColor: '#FFFFFF', borderRadius: 20, marginHorizontal: 16, paddingVertical: 4, paddingHorizontal: 16 },
   mi: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
   mrow: { flexDirection: 'row', alignItems: 'center', gap: 12 },

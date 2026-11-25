@@ -19,7 +19,7 @@ const pct = (n: number) => Math.abs(n).toFixed(2);
  * 높이 160 = 18 + 로고 40 + 12 + 가격 33 + 2 + 등락 15 + 12 + 날짜 14 + 14
  * shared/StockHead 의 앱 카드와 같고 줄 높이만 원본 값 (그쪽은 웹과 같은 파일이라 따로 둠). 바깥 여백(좌우 16)은 부모가.
  */
-export function AppStockCard({ loading, ...s }: StockHeadProps & { loading?: boolean }) {
+export function AppStockCard({ loading, company, ...s }: StockHeadProps & { loading?: boolean; /** 기업정보 탭: 글자 굵기가 다름 (원본 company.html .sum: 보유 700 · 주가 700 · 등락 600) */ company?: boolean }) {
   const { width: W } = useWindowDimensions();
   /* 첫 그림은 화면 폭으로 짐작하고, 재면 그 값으로 */
   const [box, setBox] = useState({ w: W - 32, h: 160 });
@@ -58,15 +58,15 @@ export function AppStockCard({ loading, ...s }: StockHeadProps & { loading?: boo
           </Text>
         </View>
         <View style={st.hold}>
-          <Text style={st.holdT}>{s.status === 'holding' ? '보유' : '관심'}</Text>
+          <Text style={[st.holdT, company && st.w700]}>{s.status === 'holding' ? '보유' : '관심'}</Text>
         </View>
       </View>
       <View style={[st.r2, loading && st.hide]}>
         <View style={st.flex}>
-          <Text style={st.price} numberOfLines={1}>
+          <Text style={[st.price, company && st.w700]} numberOfLines={1}>
             {won(s.price)}원
           </Text>
-          <Text style={[st.chg, { color: c }]} numberOfLines={1}>
+          <Text style={[st.chg, company && st.w600, { color: c }]} numberOfLines={1}>
             {up ? '+' : '-'}
             {won(Math.abs(s.change))} ({up ? '+' : '-'}
             {pct(s.change_pct)}%)
@@ -91,5 +91,7 @@ const st = StyleSheet.create({
   r2: { flexDirection: 'row', alignItems: 'flex-end', marginTop: 12 },
   price: { ...nf(27), fontWeight: '800', letterSpacing: -0.5, color: appColor.ink },
   chg: { ...nf(13), marginTop: 2 },
+  w600: { fontWeight: '600' },
+  w700: { fontWeight: '700' },
   note: { ...nf(11.5), color: appColor.ink3, marginTop: 12 },
 });

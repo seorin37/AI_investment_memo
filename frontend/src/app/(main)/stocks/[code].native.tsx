@@ -73,7 +73,7 @@ export default function StockDetail() {
 
   const topCard = (
     <View onLayout={(e) => { cardH.current = e.nativeEvent.layout.height; }}>
-      <AppStockTop stock={stock} priceNote={priceNote} loading={loading} />
+      <AppStockTop stock={stock} priceNote={priceNote} loading={loading} company={tab === 'company'} />
     </View>
   );
   const header = <StockBar name={stock.name} price={priceNote || loading ? null : stock.price} pct={stock.change_pct} compact={compact} line={line} onBack={() => router.back()} onMore={() => notice('종목 메뉴')} />;
