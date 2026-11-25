@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Animated, BackHandler, PanResponder, Pressable, ScrollView, StyleSheet, View, type ScrollViewInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { TAB_BAR_H } from '@/ui/layout/app/TopBar';
 import { Text } from '@/components/ui/AppText';
 import { GripDots, PlusGlyph, SlidersGlyph, WIDGET_META, WidgetGlyph } from '@/ui/icons/HomeGlyphs';
 import { Reveal } from '@/ui/motion/Reveal';
@@ -485,7 +486,7 @@ const st = StyleSheet.create({
   flexMin: { flex: 1, minWidth: 0 },
   pw: { paddingTop: 4, paddingHorizontal: 16, paddingBottom: 40 },
   wl: { gap: 14 },
-  eh: { position: 'absolute', left: 0, right: 0, height: 60, zIndex: 7, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, backgroundColor: appColor.bg },
+  eh: { position: 'absolute', left: 0, right: 0, height: TAB_BAR_H, zIndex: 7, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, backgroundColor: appColor.bg },
   ehT: { flex: 1, ...ft(20), fontWeight: '700', color: appColor.ink },
   addp: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 34, paddingLeft: 11, paddingRight: 13, borderRadius: 17, backgroundColor: appColor.accentSoft2, marginRight: 6 },
   addpT: { ...ft(14), fontWeight: '800', color: appColor.deepPurple },

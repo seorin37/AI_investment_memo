@@ -44,7 +44,7 @@ export default function JournalTab() {
           preset="journal"
           title="투자 기록"
           actions={[
-            { icon: 'moreHPurple', label: '더 보기', size: 34, iconSize: 18, color: '#16171A', onPress: () => setViewSig((n) => n + 1) },
+            { icon: 'moreHPurple', label: '더 보기', onPress: () => setViewSig((n) => n + 1) },
             { icon: 'bell', label: '알림', onPress: () => router.push('/my-inbox') },
           ]}
           avatar={{ name: myName, onPress: () => router.push('/my') }}

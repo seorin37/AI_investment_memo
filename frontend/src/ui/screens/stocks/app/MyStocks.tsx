@@ -2,6 +2,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 're
 import { Animated, BackHandler, PanResponder, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Rect } from 'react-native-svg';
+import { TAB_BAR_H } from '@/ui/layout/app/TopBar';
 import { Text } from '@/components/ui/AppText';
 import { Odometer } from '@/ui/motion/Numbers';
 import { Reveal } from '@/ui/motion/Reveal';
@@ -465,7 +466,7 @@ const st = StyleSheet.create({
   root: { flex: 1, backgroundColor: appColor.bg },
   flex: { flex: 1 },
   sub: { ...ft(12.5), color: appColor.ink3, paddingHorizontal: 18, paddingBottom: 10 },
-  selh: { position: 'absolute', left: 0, right: 0, height: 60, zIndex: 7, flexDirection: 'row', alignItems: 'center', paddingLeft: 8, paddingRight: 14, backgroundColor: appColor.bg },
+  selh: { position: 'absolute', left: 0, right: 0, height: TAB_BAR_H, zIndex: 7, flexDirection: 'row', alignItems: 'center', paddingLeft: 8, paddingRight: 14, backgroundColor: appColor.bg },
   ib: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
   selhT: { ...ft(18), fontWeight: '700', color: appColor.ink, marginLeft: 4 },
   all: { marginLeft: 'auto', padding: 8 },

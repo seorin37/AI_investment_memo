@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, BackHandler, Keyboard, Pressable, ScrollView, StyleSheet, View, type TextInputInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { TAB_BAR_GAP, TAB_BAR_H } from '@/ui/layout/app/TopBar';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { Reveal } from '@/ui/motion/Reveal';
 import { Skeleton } from '@/ui/motion/Skeleton';
@@ -624,7 +625,7 @@ const st = StyleSheet.create({
   flex: { flex: 1 },
   content: { paddingBottom: 70 },
   headWrap: { overflow: 'hidden', backgroundColor: appColor.bg },
-  selh: { height: 60, flexDirection: 'row', alignItems: 'center', paddingLeft: 8, paddingRight: 14, backgroundColor: appColor.bg },
+  selh: { height: TAB_BAR_H, marginBottom: TAB_BAR_GAP, flexDirection: 'row', alignItems: 'center', paddingLeft: 8, paddingRight: 14, backgroundColor: appColor.bg },
   ib: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   selhT: { ...ft(18), fontWeight: '700', color: appColor.ink, marginLeft: 4 },
   all: { marginLeft: 'auto', padding: 8 },

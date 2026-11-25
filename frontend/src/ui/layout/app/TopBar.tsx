@@ -11,6 +11,8 @@ import type { TopBarPreset, TopBarProps } from './TopBar.types';
 
 type Spec = {
   h: number;
+  /** 바 아래 본문까지 간격 */
+  gap?: number;
   padL: number;
   padR: number;
   bg: string;
@@ -26,15 +28,19 @@ type Spec = {
   logo?: boolean;
 };
 
-/* 원본 실측 (412 폭, 상태 바 36 아래) */
-const TAB_TITLE: TextStyle = { ...ft(21), fontWeight: '800', color: appColor.ink };
+/** 탭 화면 상단 바 높이 · 본문까지 간격 (탭 위에 덮는 편집·선택 머리도 같은 값을 씀) */
+export const TAB_BAR_H = 64;
+export const TAB_BAR_GAP = 12;
+/* 탭 5개 공용 (2026-11-25 수정 48: 높이 64 · 좌우 20 · 본문 간격 12) */
+const TAB: Spec = { h: TAB_BAR_H, gap: TAB_BAR_GAP, padL: 20, padR: 20, bg: appColor.bg, btn: 40, btnGap: 2, avatarGap: 6, title: { ...ft(21), fontWeight: '800', color: appColor.ink } };
+/* 나머지는 원본 실측 (412 폭, 상태 바 36 아래) */
 const SPEC: Record<TopBarPreset, Spec> = {
-  home: { h: 60, padL: 18, padR: 12, bg: appColor.bg, btn: 42, btnGap: 2, avatarGap: 6, logo: true },
+  home: { ...TAB, logo: true },
   start: { h: 56, padL: 18, padR: 10, bg: appColor.bg, btn: 40, btnGap: 2, avatarGap: 6, logo: true },
-  updates: { h: 60, padL: 18, padR: 12, bg: appColor.bg, btn: 40, btnGap: 2, avatarGap: 6, title: TAB_TITLE },
-  stocks: { h: 60, padL: 18, padR: 12, bg: appColor.bg, btn: 40, btnGap: 2, avatarGap: 6, title: TAB_TITLE },
-  journal: { h: 60, padL: 18, padR: 12, bg: appColor.bg, btn: 40, btnGap: 6, avatarGap: 6, title: TAB_TITLE },
-  studio: { h: 56, padL: 18, padR: 10, bg: appColor.bg, btn: 42, btnGap: 0, avatarGap: 6, title: TAB_TITLE },
+  updates: TAB,
+  stocks: TAB,
+  journal: TAB,
+  studio: TAB,
   board: { h: 56, padL: 6, padR: 8, bg: appColor.bg, btn: 42, btnGap: 0, avatarGap: 0, back: 42, backIcon: 'back2', titleGap: 2, title: { ...ft(20), fontWeight: '700', color: appColor.ink } },
   memoDetail: { h: 56, padL: 6, padR: 6, bg: appColor.surface, btn: 42, btnGap: 0, avatarGap: 0, back: 42, backIcon: 'back', titleGap: 0, title: { ...ft(17), fontWeight: '600', color: appColor.ink } },
   company: { h: 56, padL: 6, padR: 6, bg: appColor.bg, btn: 40, btnGap: 0, avatarGap: 0, back: 40, backIcon: 'back', titleGap: 4, title: { ...ft(18), fontWeight: '700', color: appColor.ink } },
@@ -50,7 +56,7 @@ export function TopBar({ preset, title, onBack, actions = [], avatar, showLine =
   const s = SPEC[preset];
   const insets = useSafeAreaInsets();
   return (
-    <View style={{ paddingTop: insets.top, backgroundColor: s.bg }}>
+    <View style={{ paddingTop: insets.top, paddingBottom: s.gap ?? 0, backgroundColor: s.bg }}>
       <View style={[st.row, { height: s.h, paddingLeft: s.padL, paddingRight: s.padR, backgroundColor: s.bg }]}>
         {s.back ? <AppIconButton label="뒤로" size={s.back} icon={s.backIcon} iconSize={22} color={appColor.ink} onPress={onBack} /> : null}
         {s.logo ? (
@@ -74,8 +80,8 @@ export function TopBar({ preset, title, onBack, actions = [], avatar, showLine =
             <Avatar name={avatar.name} photoUrl={avatar.photoUrl} size={32} variant="app" />
           </Pressable>
         ) : null}
-        <BarLine on={showLine} />
       </View>
+      <BarLine on={showLine} />
     </View>
   );
 }
