@@ -500,7 +500,7 @@ const st = StyleSheet.create({
   pr: { alignItems: 'flex-end' },
   prB: { ...ft(15), fontWeight: '700', color: appColor.ink },
   prS: { ...ft(12.5), fontWeight: '600' },
-  hdl: { width: 28, height: 40, marginLeft: -4, alignItems: 'center', justifyContent: 'center' },
+  hdl: { width: 28, height: 40, marginVertical: -2, marginLeft: -4, alignItems: 'center', justifyContent: 'center' },
   none: { ...ft(12.5), color: appColor.ink3, paddingTop: 4, paddingHorizontal: 4, paddingBottom: 12 },
   foot2: { textAlign: 'center', ...ft(11.5), color: appColor.ink3, marginTop: 6, marginBottom: 10 },
   hint2: { textAlign: 'center', ...ft(11.5), color: appColor.ink3, marginTop: -4, marginBottom: 12, paddingHorizontal: 16 },
