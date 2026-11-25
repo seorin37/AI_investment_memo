@@ -1,0 +1,38 @@
+# 수집·임베딩·업데이트 작업용 (API와 별도 프로젝트)
+name: memos-worker
+services:
+  # 항상 켜져 있는 실시간 뉴스 수집 (강의실 PC의 memos-news-hourly와 같은 명령)
+  news:
+    image: memos-worker
+    container_name: memos-news
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ../..:/app
+      - hf_cache:/hf
+    command:
+      - python
+      - -m
+      - backend.pipelines.news.pipeline
+      - hourly
+      - --embed
+      - --keep-days
+      - "0"
+      - --loop
+      - "1800"
+      - --naver-every
+      - "7200"
+      - --naver-hours
+      - "3"
+
+  # 타이머가 한 번씩 실행하는 작업용 (docker compose run --rm job ...)
+  job:
+    image: memos-worker
+    profiles: ["job"]
+    working_dir: /app
+    volumes:
+      - ../..:/app
+      - hf_cache:/hf
+
+volumes:
+  hf_cache:
