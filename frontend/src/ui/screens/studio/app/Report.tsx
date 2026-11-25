@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
@@ -38,6 +38,8 @@ export function AppReport({ title, rep, stocks, market, allDefault, onBack, onOp
   onBack: () => void; onOpenMemo: (code: string, memoId?: string) => void; onWatch: (s: ReportStock, i: number) => void;
 }) {
   const insets = useSafeAreaInsets();
+  /* 보고서를 겹쳐 열어도 그라데이션 id 가 안 겹치게 (겹치면 표지 바탕이 안 그려져 흰 글자가 흐려 보임) */
+  const cv = `cv${useId().replace(/\W/g, '')}`;
   const g = stocks.reduce((a, r) => a + r.counts.공시, 0), nw = stocks.reduce((a, r) => a + r.counts.뉴스, 0), mc = stocks.reduce((a, r) => a + (r.memos ? r.memos.length : r.memo ? 1 : 0), 0);
   const one = stocks.length === 1 ? stocks[0] : null;
   const last = rep.days[rep.days.length - 1]?.split(' ')[0] ?? rep.range;
@@ -51,8 +53,8 @@ export function AppReport({ title, rep, stocks, market, allDefault, onBack, onOp
       <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 24 + insets.bottom }} showsVerticalScrollIndicator={false}>
         <View style={st.cover}>
           <Svg style={StyleSheet.absoluteFill} preserveAspectRatio="none" viewBox="0 0 10 10">
-            <Defs><LinearGradient id="cv" x1="0.1" y1="0" x2="0.9" y2="1"><Stop offset="0" stopColor="#2B2140" /><Stop offset="1" stopColor="#16141F" /></LinearGradient></Defs>
-            <Rect width="10" height="10" fill="url(#cv)" />
+            <Defs><LinearGradient id={cv} x1="0.1" y1="0" x2="0.9" y2="1"><Stop offset="0" stopColor="#2B2140" /><Stop offset="1" stopColor="#16141F" /></LinearGradient></Defs>
+            <Rect width="10" height="10" fill={`url(#${cv})`} />
           </Svg>
           <View style={st.k}><Text style={st.kT}>MEMO&apos;S WEEKLY REPORT</Text><View style={st.kP}><Text style={st.kPT}>{rep.week}</Text></View></View>
           <Text style={st.h2}>{title}</Text>
@@ -267,7 +269,7 @@ function Logo({ s, size }: { s: ReportStock; size: number }) {
 
 const st = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#F3F4F6' },
-  cover: { borderRadius: 22, overflow: 'hidden', paddingTop: 18, paddingHorizontal: 16, paddingBottom: 16 },
+  cover: { backgroundColor: '#211A32', borderRadius: 22, overflow: 'hidden', paddingTop: 18, paddingHorizontal: 16, paddingBottom: 16 },
   k: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   kT: { fontSize: 11, lineHeight: 15, letterSpacing: 0.8, fontWeight: '800', color: '#B9A8E6' },
   kP: { backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3 },
