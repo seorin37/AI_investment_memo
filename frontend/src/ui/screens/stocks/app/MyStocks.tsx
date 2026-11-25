@@ -178,8 +178,7 @@ export function AppMyStocks(p: AppMyStocksProps) {
           </Pressable>
         </Reveal>
       ) : null}
-      <ScrollView style={st.flex} contentContainerStyle={{ paddingBottom: 30 + (sel ? 80 + insets.bottom : 0) }} stickyHeaderIndices={L.length ? [1] : undefined} scrollEnabled={!drag} showsVerticalScrollIndicator={false}>
-        <Text style={st.sub}>관심을 둔 이유까지, 메모와 함께 보관해요</Text>
+      <ScrollView style={st.flex} contentContainerStyle={{ paddingBottom: 30 + (sel ? 80 + insets.bottom : 0) }} stickyHeaderIndices={L.length ? [0] : undefined} scrollEnabled={!drag} showsVerticalScrollIndicator={false}>
         {L.length ? (
           <View>
             {/* 끈적이 머리는 자기 style 을 바깥 틀로 옮겨서, 줄 배치는 안쪽 View 에 */}
@@ -465,13 +464,12 @@ function StockRow({ s, sel, on, fresh, lifted, dragY, shift, group, api, onPress
 const st = StyleSheet.create({
   root: { flex: 1, backgroundColor: appColor.bg },
   flex: { flex: 1 },
-  sub: { ...ft(12.5), color: appColor.ink3, paddingHorizontal: 18, paddingBottom: 10 },
   selh: { position: 'absolute', left: 0, right: 0, height: TAB_BAR_H, zIndex: 7, flexDirection: 'row', alignItems: 'center', paddingLeft: 8, paddingRight: 14, backgroundColor: appColor.bg },
   ib: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
   selhT: { ...ft(18), fontWeight: '700', color: appColor.ink, marginLeft: 4 },
   all: { marginLeft: 'auto', padding: 8 },
   allT: { ...ft(14.5), fontWeight: '700', color: appColor.tabPurple },
-  chips: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 4, paddingHorizontal: 16, paddingBottom: 12, backgroundColor: appColor.bg },
+  chips: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingBottom: 12, backgroundColor: appColor.bg },
   cw: { flexDirection: 'row', gap: 6 },
   cpl: { position: 'absolute', top: 0, bottom: 0, borderRadius: 17, backgroundColor: appColor.accent },
   chip: { minHeight: 34, paddingHorizontal: 13, borderRadius: 17, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E3E5EA', flexDirection: 'row', alignItems: 'center', gap: 3 },

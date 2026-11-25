@@ -23,6 +23,8 @@ export interface TopBarProps {
   preset: TopBarPreset;
   /** 제목 (home · start 는 로고) */
   title?: string;
+  /** 제목 아래 설명 한 줄 (탭 화면) */
+  subtitle?: string;
   /** 뒤로 (밀려 들어오는 화면) */
   onBack?: () => void;
   /** 오른쪽 아이콘 버튼들 (원본 순서대로) */

@@ -67,6 +67,7 @@ export default function StudioTab() {
           <TopBar
             preset="studio"
             title="스튜디오"
+            subtitle="쌓인 소식을 듣고, 읽고, 실험해 보세요"
             actions={[{ icon: 'bell', label: '알림', onPress: () => router.push('/my-inbox') }]}
             avatar={{ name: myName, photoUrl, onPress: () => router.push('/my') }}
           />

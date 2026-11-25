@@ -245,9 +245,8 @@ export function AppJournal(p: AppJournalProps) {
         </Animated.View>
       )}
       <ScrollView style={st.flex} contentContainerStyle={st.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} onScrollBeginDrag={() => openRow && setOpenRow(null)}>
-        {!srch && !selecting ? <Text style={[st.lead, loading && { opacity: 0 }]}>{L.length}개의 기록 · AI 연결 없이 나만 보는 투자 일지예요</Text> : null}
         {/* 검색 줄 */}
-        <View style={st.srow}>
+        <View style={[st.srow, srch && { paddingTop: 2 }]}>
           <Pressable onPress={() => input.current?.focus()} style={st.sbx}>
             <JSearch color={appColor.ink3} />
             <TextInput ref={input} value={q} onChangeText={setQ} onFocus={openSearch} placeholder="검색" placeholderTextColor="#8E939C" style={st.sin} accessibilityLabel="기록 검색" />
@@ -630,8 +629,7 @@ const st = StyleSheet.create({
   selhT: { ...ft(18), fontWeight: '700', color: appColor.ink, marginLeft: 4 },
   all: { marginLeft: 'auto', padding: 8 },
   allT: { ...ft(14.5), fontWeight: '700', color: A2 },
-  lead: { ...ft(13.5), color: appColor.ink2, paddingHorizontal: 18, paddingBottom: 8 },
-  srow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 2, paddingHorizontal: 16, paddingBottom: 6 },
+  srow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingBottom: 6 },
   sbx: { flex: 1, minWidth: 0, height: 40, borderRadius: 12, backgroundColor: appColor.searchBg2, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10 },
   sin: { flex: 1, minWidth: 0, fontSize: 15, color: appColor.ink, paddingVertical: 0 },
   cmp: { width: 42, height: 40, borderRadius: 12, backgroundColor: appColor.accentSoft3, alignItems: 'center', justifyContent: 'center' },

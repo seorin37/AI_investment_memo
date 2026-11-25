@@ -484,7 +484,7 @@ const st = StyleSheet.create({
   root: { flex: 1, backgroundColor: appColor.bg },
   flex: { flex: 1 },
   flexMin: { flex: 1, minWidth: 0 },
-  pw: { paddingTop: 4, paddingHorizontal: 16, paddingBottom: 40 },
+  pw: { paddingTop: 0, paddingHorizontal: 16, paddingBottom: 40 },
   wl: { gap: 14 },
   eh: { position: 'absolute', left: 0, right: 0, height: TAB_BAR_H, zIndex: 7, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, backgroundColor: appColor.bg },
   ehT: { flex: 1, ...ft(20), fontWeight: '700', color: appColor.ink },

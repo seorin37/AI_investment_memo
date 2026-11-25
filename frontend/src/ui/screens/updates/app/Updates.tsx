@@ -98,7 +98,6 @@ export function AppUpdates(p: AppUpdatesProps) {
       {p.header({ line: scrolled, onReadAll: code ? undefined : readAll, readAllOff: !total })}
       <ScrollView style={st.flex} contentContainerStyle={st.pw} stickyHeaderIndices={[1]} scrollEventThrottle={16} onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > 0)} showsVerticalScrollIndicator={false}>
         <View style={st.lt}>
-          <Text style={st.ltP}>내 종목의 공시·뉴스·주가 변동을 모아봤어요</Text>
           <View style={st.unr}>
             <View style={st.unrDot} />
             <Text style={st.unrT}>읽지 않은 소식 </Text>
@@ -651,8 +650,7 @@ const st = StyleSheet.create({
   flexMin: { flex: 1, minWidth: 0 },
   pw: { paddingBottom: 30 },
   lt: { paddingHorizontal: 18, paddingBottom: 10 },
-  ltP: { ...ft(13.5), color: appColor.ink2, marginTop: 6 },
-  unr: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', marginTop: 10, minHeight: 30, paddingHorizontal: 12, borderRadius: 15, backgroundColor: '#EEE9FB' },
+  unr: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', minHeight: 30, paddingHorizontal: 12, borderRadius: 15, backgroundColor: '#EEE9FB' },
   unrDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#E5484D', marginRight: 6 },
   unrT: { ...ft(13), fontWeight: '700', color: '#5B3BD1' },
   unrB: { fontSize: 13, lineHeight: 17, fontWeight: '700', color: '#5B3BD1' },

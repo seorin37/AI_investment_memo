@@ -72,10 +72,7 @@ export function AppStudioHome({ header, jobs, onJob, playingId, onQuickPlay, bot
       {header}
       <ScrollView contentContainerStyle={{ paddingBottom: 24 + bottomPad }} showsVerticalScrollIndicator={false}>
         <View style={st.subr}>
-          <View style={{ flex: 1 }}>
-            <Text style={st.subrT}>쌓인 소식을 듣고, 읽고, 실험해 보세요</Text>
-            <Text style={st.subrT}>내 종목 {p.stock_count} · AI 연결 메모 {p.ai_memo_count}</Text>
-          </View>
+          <Text style={[st.subrT, { flex: 1 }]}>내 종목 {p.stock_count} · AI 연결 메모 {p.ai_memo_count}</Text>
           <PressScale scaleTo={0.93} onPress={() => setSheet(true)} accessibilityRole="button" accessibilityLabel={`AI 사용량 ${p.usage_pct}%`} style={[st.cred, full && st.credZero]}>
             <Bolt c={full ? '#8A5A00' : '#5B3BD1'} />
             {/* 칩 gap 은 번개 아이콘과 글자 사이만 — 숫자와 % 는 붙여서 (원본 'AI 사용량 62%') */}

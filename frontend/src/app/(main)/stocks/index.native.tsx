@@ -40,6 +40,7 @@ export default function MyStocksTab() {
         <TopBar
           preset="stocks"
           title="내 종목"
+          subtitle="관심을 둔 이유까지, 메모와 함께 보관해요"
           actions={[
             { icon: 'search', label: '종목 찾기', onPress: onSearch },
             { icon: 'bell', label: '알림', onPress: () => router.push('/my-inbox') },
