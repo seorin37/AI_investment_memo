@@ -234,6 +234,6 @@ def test_plan_catalog_matches_config():
     assert (by["plus"]["price"], by["plus"]["first_month_price"], by["plus"]["monthly_credits"], by["plus"]["tracking_items"]) == (14900, 7450, 80, 30)
     assert (by["pro"]["price"], by["pro"]["monthly_credits"], by["pro"]["tracking_items"]) == (29900, 160, 100)
     assert (by["free"]["price"], by["free"]["first_month_price"], by["free"]["monthly_credits"], by["free"]["tracking_items"]) == (0, None, 20, 5)
-    assert c["credit_packs"] == [{"credits": 50, "price": 9300}]
+    assert c["credit_packs"] == [{"credits": 50, "price": 9900}]
     assert c["costs"]["report"] == 3 and c["costs"]["lab"] == 1 and c["costs"]["answer_unverified"] == 0
     assert ledger.cost("answer_unverified") == 0

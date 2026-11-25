@@ -15,7 +15,7 @@ export const MOCK_PLAN_CATALOG: Omit<PlanCatalog, 'current_plan' | 'tracking_use
     { code: 'plus', name: 'PLUS', price: 14900, first_month_price: 7450, monthly_credits: 80, tracking_items: 30, summary: '메모를 꾸준히 쓰고 주간보고서도 보는 분께', recommended: true },
     { code: 'pro', name: 'PRO', price: 29900, first_month_price: 14950, monthly_credits: 160, tracking_items: 100, summary: '종목이 많고 스튜디오를 자주 쓰는 분께', recommended: false },
   ],
-  credit_packs: [{ credits: 50, price: 9300 }],
+  credit_packs: [{ credits: 50, price: 9900 }],
   costs: { card: 1, answer: 1, answer_unverified: 0, price_condition: 0, report: 3, audio: 5, lab: 1 },
 };
 

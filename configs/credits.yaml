@@ -38,6 +38,6 @@ plans:
     price: 29900
     first_month_price: 14950
     summary: 종목이 많고 스튜디오를 자주 쓰는 분께
-credit_packs:          # 추가 크레딧 (모든 요금제 같은 값, 크레딧 1개 약 186원)
+credit_packs:          # 추가 크레딧 (모든 요금제 같은 값, 2026-11-25 9,900원 확정)
   - credits: 50
-    price: 9300
+    price: 9900
