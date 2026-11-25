@@ -63,7 +63,7 @@ export function HomeSearch({ open, onClose, recent, popular, all, onPick }: { op
           {i >= 0 ? (
             <>
               {s.name.slice(0, i)}
-              <Text style={{ color: appColor.deepPurple }}>{s.name.slice(i, i + t.length)}</Text>
+              <Text style={{ fontWeight: '700', color: appColor.deepPurple }}>{s.name.slice(i, i + t.length)}</Text>
               {s.name.slice(i + t.length)}
             </>
           ) : (

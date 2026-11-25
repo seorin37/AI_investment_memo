@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Easing, PanResponder, View, type GestureResponderEvent } from 'react-native';
-import Svg, { Circle, G, Line, Path, Polygon, Rect, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, G, Line, Path, Polygon, Rect } from 'react-native-svg';
+import { SvgText } from '@/ui/shared/app/SvgText';
 import type { Candle } from '@/types/models';
 import { seg, useProgress } from '@/ui/motion/useProgress';
 import type { CompanyQuarter } from '../CompanyInfo.types';

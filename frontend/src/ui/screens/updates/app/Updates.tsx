@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Animated, BackHandler, PanResponder, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import { InlineSpark } from '@/ui/icons/InlineGlyphs';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { ChevDown16 } from '@/ui/icons/MemoGlyphs';
 import { Collapse } from '@/ui/motion/Collapse';
@@ -422,7 +423,7 @@ function NewsBody({ u, onOpenSource, onOpenBoard, onOpenEvidence }: { u: UpdateI
       {u.kind === '공시' ? (
         <>
           <View style={st.aiBox}>
-            <Text style={st.aiH}>✦ AI 요약 · 원문 근거</Text>
+            <Text style={st.aiH}><InlineSpark color={appColor.deepPurple} /> AI 요약 · 원문 근거</Text>
             <Text style={st.aiT}>
               {u.summary}
               {u.quote ? ' ' : null}
@@ -615,7 +616,7 @@ function SearchOver({ stocks, items, q, setQ, top, onClose, onPick }: { stocks: 
                         {at >= 0 ? (
                           <>
                             {s.name.slice(0, at)}
-                            <Text style={{ color: appColor.deepPurple }}>{s.name.slice(at, at + t.length)}</Text>
+                            <Text style={{ fontWeight: '700', color: appColor.deepPurple }}>{s.name.slice(at, at + t.length)}</Text>
                             {s.name.slice(at + t.length)}
                           </>
                         ) : (

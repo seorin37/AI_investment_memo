@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomBar } from '@/ui/shared/app/BottomBar';
 import { Text } from '@/components/ui/AppText';
 import { BackChevron } from '@/ui/icons/MemoGlyphs';
+import '@/ui/shared/app/SvgText';
 import { appColor, ft } from '@/ui/theme';
 import { EvidenceBody, evidenceActions, evidenceTitle } from '../EvidenceContent';
 import { HistoryContent } from '../HistoryContent';

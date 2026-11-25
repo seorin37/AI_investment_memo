@@ -5,7 +5,8 @@ import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-nativ
 import { Text } from '@/components/ui/AppText';
 import { Head } from '../../my/app/parts';
 import type { mockReport, ReportStock } from '../Studio.mock';
-import { Spark, SparkWide, WeekChart, issueParas, marketParas, quarterLine, reportSummary, sign, stripRefs, valuationCells, won } from '../reportParts';
+import { Spark, SparkWide, issueParas, marketParas, quarterLine, reportSummary, sign, stripRefs, valuationCells, won } from '../reportParts';
+import { WeekChart } from './WeekChart';
 import { Keep } from '@/ui/shared/Dark';
 
 /**

@@ -37,7 +37,7 @@ export function AppLabResult({ stock, vars, groups, disclaimer, memo, onBack, on
       <Head title="실험 결과" onBack={onBack} />
       <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 110 + insets.bottom }} showsVerticalScrollIndicator={false}>
         <View style={st.sh}><Keep style={[st.lo, { backgroundColor: stock.logo_bg }]}><Text style={st.loT}>{stock.logo}</Text></Keep><Text style={st.shT}>{stock.name}</Text></View>
-        <View style={st.cds}>{groups.map((g) => <View key={g.i} style={st.cd}><Text style={st.cdT}>{vars[g.i].name} · <Text style={{ color: dirColor(g.d) }}>{g.d}</Text> 가정</Text></View>)}</View>
+        <View style={st.cds}>{groups.map((g) => <View key={g.i} style={st.cd}><Text style={st.cdT}>{vars[g.i].name} · <Text style={{ fontWeight: '600', color: dirColor(g.d) }}>{g.d}</Text> 가정</Text></View>)}</View>
         <Text style={st.lead}>바꾼 가정이 회사의 어떤 항목에 닿는지 경로로 보여 드려요.</Text>
         <View style={st.card}>
           <Text style={st.h4}>영향 경로 지도</Text>
