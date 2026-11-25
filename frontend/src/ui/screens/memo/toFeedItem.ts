@@ -75,6 +75,7 @@ export function toFeedItem(u: AiUpdate): MemoFeedItem {
     provider: kind === '뉴스' ? lead?.source ?? u.source : undefined,
     price,
     memo_version: u.memo_version,
+    suggest: u.suggest_memo ?? undefined,
     unread: !u.read,
   };
 }

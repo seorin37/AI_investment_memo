@@ -1,4 +1,4 @@
-import type { ISODate, Memo, MemoColor, MemoVersion } from '@/types/models';
+import type { ISODate, Memo, MemoColor, MemoVersion, SuggestMemo } from '@/types/models';
 
 /** 소식 종류 (원본 앱 FK · 웹 KIND) */
 export type FeedKind = '뉴스' | '공시' | '주가';
@@ -48,6 +48,8 @@ export interface MemoFeedItem {
   };
   /** 이 소식이 붙을 때의 메모 버전 (MemoVersion.version) */
   memo_version: number;
+  /** 질문 답의 새 메모 제안 (2026-11-25) */
+  suggest?: SuggestMemo;
   /** 안 읽은 소식 */
   unread: boolean;
 }
@@ -97,13 +99,16 @@ export interface MemoDetailProps {
   onDelete: () => void;
   onCopy: () => void;
   /** AI 연결 켜기 (AI 연결 창으로) */
-  onConnectAi: () => void;
+  /** draft: 메모 창에서 고친 글 (저장 전이라도 연결 창에 이 글을 보여 줌, 2026-11-25) */
+  onConnectAi: (draft?: { title: string; body: string }) => void;
   /** AI 연결 끄기 (확인 시트에서 '연결 해제') */
   onDisconnectAi: () => void;
   /** AI 업데이트 탭을 봄 (안 읽은 소식 읽음 처리) */
   onSeenUpdates?: () => void;
   /** 원문 열기 (앱 안 브라우저) */
   onOpenSource?: (item: MemoFeedItem) => void;
+  /** 답 카드 [알림 받기] → 미리 채운 새 메모 창 (2026-11-25) */
+  onSuggestMemo?: (text: string) => void;
   /** 근거 자세히 보기 (근거 상세 화면 — 다음 묶음) */
   onOpenEvidence?: (item: MemoFeedItem) => void;
   /** 넛지: 이 메모에 붙은 소식을 주간보고서로 */
@@ -124,6 +129,8 @@ export interface EvidenceProps {
   onOpenSource: (item: MemoFeedItem) => void;
   /** 연결된 내 메모를 누르면 그 버전 이력 */
   onOpenHistory: (version: number) => void;
+  /** 답 카드 [알림 받기] → 이 종목 새 메모 창 (글을 채우고 AI 연결 켬) */
+  onSuggestMemo?: (text: string) => void;
 }
 
 /** 수정 이력 (원본 memo.html 10 · 근거 상세의 메모 카드에서 열림) */

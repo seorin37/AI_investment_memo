@@ -266,6 +266,8 @@ export interface AiUpdate extends MarketUpdate {
   /** DB 원래 종류 (answer = 질문 답) — type 은 계약 3종으로 바뀌어 옴 */
   card_type?: string;
   answer_status?: string | null;
+  /** 질문 답 아래 새 메모 제안 (2026-11-25): "140만원 넘으면 알려드릴까요?" [알림 받기] → memo_text 를 채운 새 메모 창 */
+  suggest_memo?: SuggestMemo | null;
   memo_color?: MemoColor;
   sources?: UpdateSourceRef[];
   price?: {
@@ -278,6 +280,13 @@ export interface AiUpdate extends MarketUpdate {
     closes: number[];
     closes_from: string | null;
   } | null;
+}
+
+/** 답 카드의 새 메모 제안. 문장은 서버 코드가 만든다 (LLM 아님) */
+export interface SuggestMemo {
+  label: string;
+  button: string;
+  memo_text: string;
 }
 
 /** 카드 근거 한 건 (뉴스 · 공시) */

@@ -93,6 +93,8 @@ class BoardService:
         self._commit()                                          # 메모 저장을 먼저 확정한다 (분석 실패와 무관하게)
         analysis = self._analyze(row) if ai_on else self._skipped(
             "ai_off" if not payload.ai_linked else "no_credit" if not credit_ok else "plan_limit")
+        if ai_on:
+            analysis = self._off_if_nothing(user_id, int(row["id"]), analysis)
         return {**self.get(user_id, int(row["id"])), "analysis": analysis}
 
     def create_checklist(
@@ -247,7 +249,8 @@ class BoardService:
         self._commit()
         fresh = self._require_item(user_id, memo_id)
         if self.tracking.changed_since_analysis(memo_id):       # 마지막 분석 뒤 메모가 바뀌었으면(또는 항목이 없으면) 다시 분석
-            return {**self._response(fresh), "analysis": self._analyze(fresh)}
+            analysis = self._off_if_nothing(user_id, memo_id, self._analyze(fresh))
+            return {**self.get(user_id, memo_id), "analysis": analysis}
         resumed = self.tracking.set_memo_status(memo_id, "paused", "active")
         self._commit()
         return {**self._response(fresh), "analysis": {**self._unchanged(memo_id), "resumed": resumed}}
@@ -288,6 +291,17 @@ class BoardService:
         except Exception:                                       # noqa: BLE001 — 크레딧 확인 실패로 메모 저장을 막지 않는다
             log.warning("credit check failed user=%s", user_id, exc_info=True)
             return True
+
+    def _off_if_nothing(self, user_id: int, memo_id: int, analysis: dict[str, Any]) -> dict[str, Any]:
+        """AI를 켜고 분석했는데 남은 추적 항목·질문·확인 질문이 하나도 없으면(분석 실패 포함) AI 연결을 다시 끈다 (2026-11-25).
+        연결 창이 '메모는 일반 메모로 그대로 저장돼요'라고 안내하는데, [메모 수정]·뒤로 가기로 나가면 AI 연결이 켜진 채 남던 문제."""
+        if analysis.get("items") or analysis.get("confirmations") or analysis.get("questions"):
+            return analysis
+        if not self.repository.set_ai_link(user_id, memo_id, False):
+            return analysis
+        self.tracking.set_memo_status(memo_id, "active", "paused")
+        self._commit()
+        return {**analysis, "ai_linked": False}
 
     def _under_cap(self, user_id: int) -> bool:
         """AI 추적 항목이 요금제 상한보다 적은지 (새로 켤 때만 본다). 확인할 수 없으면 막지 않는다 (테스트 가짜 저장소 등)."""

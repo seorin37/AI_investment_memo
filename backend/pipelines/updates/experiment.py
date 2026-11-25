@@ -434,6 +434,17 @@ def main(argv: list[str] | None = None) -> int:
                                                   rcfg.get("company_aliases"))
                     if stop == "no_relevant_candidates":       # 관련 후보가 없어도 재무 표로 답해 본다
                         stop, cands = None, []
+                brief = None
+                if item.category == "ask" and tcfg.get("decision_price_brief", True):
+                    from .price_brief import wants_price_brief
+                    if wants_price_brief(item.description):          # 메모 전체가 아니라 이 질문의 설명으로 본다
+                        # 2026-11-25 판단 질문(사야 되나·오르나): 코드가 계산한 주가 사실을 답 맨 앞에, 소식은 최근 7일 것만 (오래된 기사 하나가 답이 되지 않게)
+                        from .price_brief import price_brief
+                        brief = price_brief(conn, item.symbol, item.company_name or item.symbol) or None
+                        recent = (date.today() - timedelta(days=tcfg.get("decision_news_days", 7))).isoformat()
+                        cands = [c for c in cands if (c.date or "") >= recent]
+                        if brief and stop == "no_relevant_candidates":
+                            stop, cands = None, []
                 if stop is not None:                            # 관련 후보가 없거나 판정 실패: 카드 생성 호출 없이
                     from .models import TopicOutcome
                     out = TopicOutcome(stop)                    # 실패 이유는 responses의 relevance.failed에 남는다
@@ -448,7 +459,7 @@ def main(argv: list[str] | None = None) -> int:
                         ver_call = tracker.caller(verify_client, item, "verify")
                         card_call = (lambda p, _c=card_call, _v=ver_call: _v(p) if stage_of(p) == "verify" else _c(p))
                     out = check_topic(item, cands, card_call, banned, tcfg, links,
-                                      extra_evidence=extra)          # --no-cards: 근거 준비까지만 (not_called)
+                                      extra_evidence=extra, price_facts=brief)          # --no-cards: 근거 준비까지만 (not_called)
                 if used_store is not None:
                     from .used_refs import card_refs
                     used_store.record(item.item_id, card_refs(out.draft))
@@ -574,7 +585,7 @@ def main(argv: list[str] | None = None) -> int:
     failed_items: set[str] = set()                              # 카드 저장이 실패한 항목 (last_checked_at을 갱신하지 않는다)
     if writer is not None:                                      # 카드 → tracking_updates·update_sources (합친 카드는 남은 카드 하나만)
         for d in drafts:
-            if d.origin == "llm" or d.type == "price_condition":
+            if d.origin in ("llm", "code") or d.type == "price_condition":
                 try:
                     writer.write(d.item, d, draft_to_dict(d))
                 except Exception as exc:                        # 그 카드만 되돌리고(savepoint) 계속한다

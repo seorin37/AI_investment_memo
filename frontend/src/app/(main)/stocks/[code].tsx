@@ -292,6 +292,14 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, pre, stockName, on
         versions={real ? bd.detail?.versions ?? [] : versions[opened.id] ?? versionsOf(opened.id)}
         feed={real ? bd.detail?.feed ?? [] : feed[opened.id] ?? feedOf(opened.id)}
         initialEvidence={opened.id === memoParam ? ev : undefined}
+        /* 답 카드 [알림 받기] (2026-11-25): 메모 창을 닫고 글을 채운 새 메모 창 (AI 연결 켬) */
+        onSuggestMemo={(text) => {
+          setDlg(false);
+          setPreNew({ text });
+          setNewTab(0);
+          setNewKey((n) => n + 1);
+          setNewOpen(true);
+        }}
         trackItems={real ? bd.detail?.trackItems ?? [] : mockTrackItems[opened.id] ?? []}
         initialTab={openTab}
         onBack={() => setDlg(false)}
@@ -318,7 +326,7 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, pre, stockName, on
           remove([opened.id]);
         }}
         onCopy={() => {}}
-        onConnectAi={() => startConnect({ id: opened.id, title: opened.title, body: opened.body, color: opened.color, fromNew: false })}
+        onConnectAi={(d) => startConnect({ id: opened.id, title: d?.title ?? opened.title, body: d?.body ?? opened.body, color: opened.color, fromNew: false })}
         onDisconnectAi={() => {
           bd.ops.aiOff(opened.id);
           patch(opened.id, (m) => ({ ...m, ai_linked: false }));
@@ -405,6 +413,10 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, pre, stockName, on
       }}
       onEditMemo={() => {
         const id = connect?.id;
+        /* 2026-11-25 '추적할 항목을 찾지 못했어요' → [메모 수정]: 일반 메모로 두고 고치러 간다 (AI 연결이 켜진 채 남던 문제. 서버도 끈다) */
+        if (real && id) bd.ops.aiOff(id);
+        if (id) patch(id, (m) => ({ ...m, ai_linked: false }));
+        connectFor.current = null;
         setConnect(null);
         if (id) {
           setOpenId(id);

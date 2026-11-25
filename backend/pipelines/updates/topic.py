@@ -80,8 +80,9 @@ def thresholds(cfg: dict) -> tuple[dict[str, float], dict[str, float]]:
 
 def check_topic(item: TrackingItem, candidates: list[Candidate], call: Callable[[str], str] | None,
                 banned: list[str], cfg: dict | None = None, same_event: dict[str, str] | None = None,
-                extra_evidence: Callable[[list], list] | None = None) -> TopicOutcome:
-    """extra_evidence(근거 목록) → 덧붙일 근거 (v2 compare_prior.prior_evidence, DB 연결은 호출자가 가진다)."""
+                extra_evidence: Callable[[list], list] | None = None, price_facts: list[str] | None = None) -> TopicOutcome:
+    """extra_evidence(근거 목록) → 덧붙일 근거 (v2 compare_prior.prior_evidence, DB 연결은 호출자가 가진다).
+    price_facts: 판단 질문(ask)에 코드가 계산한 주가 사실 문장 (price_brief.py). 답 맨 앞에 붙이고, 소식 답이 없으면 이것만으로 답한다."""
     cfg = cfg or {}
     floor, strong = thresholds(cfg)
     if item.category == "ask" and cfg.get("prompt_path_ask"):
@@ -101,6 +102,11 @@ def check_topic(item: TrackingItem, candidates: list[Candidate], call: Callable[
     schema = cfg.get("card_schema", "v1")
     out = _judge_v2(item, evidence, call, banned, cfg) if schema == "v2" else _judge(item, evidence, call, banned, cfg)
     out.grouped = grouped
+    if price_facts and item.category == "ask":
+        out = with_price_facts(item, out, price_facts)
+    if item.category == "ask" and out.draft is not None:
+        from .price_brief import alert_suggestion
+        out.draft.suggest_memo = alert_suggestion(item)     # 2026-11-25 "140만원 넘으면 살까?" → 답 아래 새 메모 제안
     if grouped and out.draft is not None and out.draft.type == "disclosure":
         cited = {rcept_of(ref) for ref, _ in out.draft.sources if ref.startswith("disc:")}
         out.draft.supporting_news = [{"ref": c.ref, "title": c.title, "source": c.source, "date": c.date, "url": c.url}
@@ -396,6 +402,34 @@ def _judge_v2_run(item: TrackingItem, evidence, call: Callable[[str], str] | Non
         from .decision_note import add_decision_note
         add_decision_note(draft, cfg)                          # 2026-11-23: 사야 되나·오르나 질문의 답 끝에 고정 문장 (코드가 붙인다)
     return TopicOutcome("update", evidence, card, [], draft, raw, retried)
+
+
+# 판단 질문(2026-11-25): 소식 답이 없을 때 주가 사실만으로 답하는 경우. 호출·형식 실패는 다음 실행에서 다시 보므로 넣지 않는다
+_PRICE_ONLY_KINDS = {"no_candidates", "no_update", "already_shown"}
+PRICE_SOURCE = {"kind": "data", "title": "시세 DB 종가 (코드 계산)", "date": "", "source": "", "url": None, "ref": "price"}
+NO_RECENT_NEWS = "최근 7일 안에 이 질문과 관련된 새 공시·뉴스는 찾지 못했어요."
+
+
+def with_price_facts(item: TrackingItem, out: TopicOutcome, price_facts: list[str]) -> TopicOutcome:
+    """판단 질문 답에 코드가 계산한 주가 사실을 맨 앞에 붙인다 (2026-11-25). 권유·예측 없이 숫자만.
+    LLM 답이 있으면 사실 목록·요약 앞에, 없으면(소식 없음·답 없음) 주가 사실만으로 코드 답을 만든다 (origin code)."""
+    rows = [{"text": t, "ref": ""} for t in price_facts]
+    name = item.company_name or item.symbol
+    d = out.draft
+    if out.kind == "update" and d is not None:
+        # 제목은 기사 하나(목표가 하향 등)가 답처럼 보이지 않게 중립으로, 기사 속 옛 종가 문장은 코드 종가와 겹쳐 뺀다
+        news_facts = [f for f in d.facts if "종가" not in f["text"]]
+        d.title = f"{name} 최근 주가와 소식"
+        d.facts = rows + news_facts
+        d.summary = " ".join(f["text"] for f in d.facts)
+        d.source_list = [PRICE_SOURCE, *d.source_list]
+        return out
+    if out.kind not in _PRICE_ONLY_KINDS or out.fail_codes:
+        return out
+    draft = UpdateDraft(item=item, type="news", title=f"{name} 최근 주가 흐름", summary=" ".join(price_facts),
+                        reason="", origin="code", card_schema="v2", facts=rows, explanation=NO_RECENT_NEWS,
+                        source_list=[PRICE_SOURCE])
+    return TopicOutcome("update", out.evidence, None, [], draft, out.raw)
 
 
 _KIND_ORDER = {"disclosure": 0, "news": 1}
