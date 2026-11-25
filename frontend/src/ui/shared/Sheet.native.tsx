@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Modal, PanResponder, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Animated, Modal, PanResponder, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/AppText';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
@@ -11,44 +11,7 @@ import { DarkLayer, SCRIM_DARK, useDark } from '@/ui/shared/Dark';
  * 앱 바텀 시트 (원본 home.html #sheet: 흰 바탕 · 위 라운드 26 · 손잡이 40×5 #D5D8DD 라운드 3 (위 10 · 아래 14) · 제목 17px 800 · 좌우 22
  * 막 rgba(12,12,22,.4)). 올라옴 .5s sheet 곡선. 끌기는 터치 시작부터(규칙 5) — 아래로 끌면 닫힘. 안드로이드 뒤로 = 닫기.
  */
-/** 웹 창을 앱에서 그대로 쓸 때 (width 를 주는 웹 컴포넌트): 바텀 시트가 아니라 웹처럼 가운데 창 */
-export function Sheet(p: SheetProps) {
-  return p.width && !p.title ? <CenterSheet {...p} /> : <BottomSheet {...p} />;
-}
-
-function CenterSheet({ open, onClose, children, width, label, scrim }: SheetProps) {
-  const k = useMotionK();
-  const dark = useDark();
-  const [shown, setShown] = useState(open);
-  const [v] = useState(() => new Animated.Value(0));
-  if (open && !shown) setShown(true);
-  useEffect(() => {
-    if (!shown) return;
-    const a = Animated.timing(v, { toValue: open ? 1 : 0, duration: (open ? dur.sheet : 260) * k, easing: open ? curve.sheet : curve.ease, useNativeDriver: NATIVE });
-    a.start(({ finished }) => {
-      if (finished && !open) setShown(false);
-    });
-    return () => a.stop();
-  }, [open, shown, v, k]);
-  if (!shown) return null;
-  return (
-    <Modal transparent visible animationType="none" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
-      <DarkLayer>
-      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: scrim ?? 'rgba(0,0,0,0.45)' }, dark && { backgroundColor: SCRIM_DARK }, { opacity: v }]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="닫기" />
-      </Animated.View>
-      <View style={st.center} pointerEvents="box-none">
-        <Animated.View accessibilityViewIsModal accessibilityLabel={label} style={[{ width, maxWidth: '100%', maxHeight: '100%' }, { opacity: v, transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }, { scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }] }]}>
-          {/* 종목이 많아 화면보다 길면 창 안에서 스크롤 */}
-          <ScrollView style={st.centerScroll} showsVerticalScrollIndicator={false}>{children}</ScrollView>
-        </Animated.View>
-      </View>
-      </DarkLayer>
-    </Modal>
-  );
-}
-
-function BottomSheet({ open, onClose, title, children, label }: SheetProps) {
+export function Sheet({ open, onClose, title, children, label }: SheetProps) {
   const k = useMotionK();
   const dark = useDark();
   const insets = useSafeAreaInsets();
@@ -108,8 +71,6 @@ function BottomSheet({ open, onClose, title, children, label }: SheetProps) {
 }
 
 const st = StyleSheet.create({
-  center: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center', padding: 16 },
-  centerScroll: { flexGrow: 0, borderRadius: 28 },
   scrim: { backgroundColor: 'rgba(12,12,22,0.4)' },
   sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: appColor.surface, borderTopLeftRadius: 26, borderTopRightRadius: 26, ...shadow.sheet },
   grab: { paddingTop: 10, paddingHorizontal: 22, paddingBottom: 4 },
