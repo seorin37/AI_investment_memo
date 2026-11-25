@@ -119,7 +119,7 @@ export function WebMemoDialog(p: MemoDetailProps & { open: boolean }) {
             </View>
             <ScrollView style={st.aiArea} contentContainerStyle={[st.evIn, sub.k === 'ev' && st.evGray]}>
               {sub.k === 'ev' ? (
-                <EvidenceBody item={sub.item} memo={m} version={p.versions.find((v) => v.version === sub.item.memo_version)} onOpenSource={(f) => p.onOpenSource?.(f)} onOpenHistory={(v) => setSub({ k: 'hist', v, from: sub })} />
+                <EvidenceBody item={sub.item} memo={m} version={p.versions.find((v) => v.version === sub.item.memo_version)} onOpenSource={(f) => p.onOpenSource?.(f)} onOpenHistory={(v) => setSub({ k: 'hist', v, from: sub })} onSuggestMemo={p.onSuggestMemo} />
               ) : (
                 <HistoryContent memo={m} versions={p.versions} openVersion={sub.v} />
               )}

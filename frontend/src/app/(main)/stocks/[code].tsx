@@ -292,6 +292,14 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, pre, stockName, on
         versions={real ? bd.detail?.versions ?? [] : versions[opened.id] ?? versionsOf(opened.id)}
         feed={real ? bd.detail?.feed ?? [] : feed[opened.id] ?? feedOf(opened.id)}
         initialEvidence={opened.id === memoParam ? ev : undefined}
+        /* 답 카드 [알림 받기] (2026-11-25): 메모 창을 닫고 글을 채운 새 메모 창 (AI 연결 켬) */
+        onSuggestMemo={(text) => {
+          setDlg(false);
+          setPreNew({ text });
+          setNewTab(0);
+          setNewKey((n) => n + 1);
+          setNewOpen(true);
+        }}
         trackItems={real ? bd.detail?.trackItems ?? [] : mockTrackItems[opened.id] ?? []}
         initialTab={openTab}
         onBack={() => setDlg(false)}

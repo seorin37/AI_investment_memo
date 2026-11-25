@@ -44,5 +44,24 @@ class SameQuestionOnceTest(unittest.TestCase):
         self.assertEqual([x["question"] for x in r.questions], [q])
 
 
+class AskAlertStoredTest(unittest.TestCase):
+    def test_conditional_question_keeps_price_on_question(self):
+        from app.board.tracking import ask_item
+        q = "SK하이닉스 최근 주가 흐름과 최근 나온 공시·뉴스"
+
+        def fake(judged, *_a, **_k):
+            for j in judged:
+                j.decision, j.category = "normal", "A4"
+                j.asks = [{"question": q, "kind": "check"}]
+            return judged
+        with mock.patch("pipelines.tracking.llm.judge_with_llm", fake):
+            r = analyze_memo(1, 1, "140만원 넘으면 살까?", "000660", "SK하이닉스", lambda p: "", [])
+        self.assertEqual(r.items, [])                                  # 알림은 등록하지 않는다
+        self.assertEqual(r.questions[0]["alert"], {"type": "price_above", "price_threshold": 1_400_000})
+        item = ask_item(r.questions[0])
+        self.assertEqual((item["keywords"], item["price_threshold"]), (["alert:price_above"], 1_400_000))
+        self.assertEqual(ask_item({"question": q})["keywords"], [])     # 조건 없는 질문은 그대로
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -36,7 +36,7 @@ export const evidenceActions = (f: MemoFeedItem): { label: string; a: 'memo' | '
         { label: f.kind === '공시' ? 'DART에서 보고서 찾기 ↗' : '원문 기사 보기 ↗', a: 'out' },
       ];
 
-export function EvidenceBody({ item: f, memo, version, onOpenSource, onOpenHistory }: { item: MemoFeedItem; memo: Memo; version?: MemoVersion; onOpenSource: (f: MemoFeedItem) => void; onOpenHistory: (v: number) => void }) {
+export function EvidenceBody({ item: f, memo, version, onOpenSource, onOpenHistory, onSuggestMemo }: { item: MemoFeedItem; memo: Memo; version?: MemoVersion; onOpenSource: (f: MemoFeedItem) => void; onOpenHistory: (v: number) => void; onSuggestMemo?: (text: string) => void }) {
   const kc = KCHIP[f.kind];
   const memoCard = <MemoCard memo={memo} version={version} onPress={() => onOpenHistory(version?.version ?? 1)} />;
   if (f.kind === '주가' && f.price) {
@@ -90,12 +90,25 @@ export function EvidenceBody({ item: f, memo, version, onOpenSource, onOpenHisto
       <Text style={st.evh}>{f.headline}</Text>
     </>
   );
+  /* 질문 답 아래 새 메모 제안 (2026-11-25): "140만원 넘으면 알려드릴까요?" [알림 받기] → 글을 채운 새 메모 창 */
+  const suggest =
+    f.suggest && onSuggestMemo ? (
+      <View style={[st.ecd, st.sug]}>
+        <Text style={st.sugT}>🔔 {f.suggest.label}</Text>
+        <Pressable onPress={() => onSuggestMemo(f.suggest!.memo_text)} accessibilityRole="button" style={({ pressed }) => [st.sugB, pressed && { opacity: 0.7 }]}>
+          <Text style={st.sugBT}>{f.suggest.button}</Text>
+        </Pressable>
+      </View>
+    ) : null;
   const ai = (t: string, s: string) => (
-    <View style={st.ecd}>
-      <CardHead icon={<Text style={st.spark}>✦</Text>} bg="#EEE9FB" title={t} />
-      <Text style={st.p}>{f.summary}</Text>
-      <Text style={[st.sm, { marginTop: 6 }]}>{s}</Text>
-    </View>
+    <>
+      <View style={st.ecd}>
+        <CardHead icon={<Text style={st.spark}>✦</Text>} bg="#EEE9FB" title={t} />
+        <Text style={st.p}>{f.summary}</Text>
+        <Text style={[st.sm, { marginTop: 6 }]}>{s}</Text>
+      </View>
+      {suggest}
+    </>
   );
   if (f.kind === '공시')
     return (
@@ -372,6 +385,10 @@ const st = StyleSheet.create({
   artAt: { marginLeft: 'auto', ...ft(12), color: '#6A42AB' },
   artT: { ...ft(15.5, 1.4), fontWeight: '800', color: appColor.ink, marginTop: 8, marginBottom: 6 },
   artLink: { ...ft(13), fontWeight: '700', color: '#6A42AB' },
+  sug: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  sugT: { ...ft(14, 1.5), color: appColor.ink, flex: 1, fontWeight: '600' },
+  sugB: { backgroundColor: '#2F6BDB', borderRadius: 12, paddingVertical: 9, paddingHorizontal: 14 },
+  sugBT: { ...ft(13), color: '#FFFFFF', fontWeight: '700' },
   ainfo: { backgroundColor: '#F3EFFD', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, ...ft(12.5, 1.6), color: '#4B2D93', marginTop: 6, overflow: 'hidden' },
   priceTop: { backgroundColor: '#ECEDF1', overflow: 'hidden' },
   pH: { ...ft(16), fontWeight: '700', color: appColor.ink },

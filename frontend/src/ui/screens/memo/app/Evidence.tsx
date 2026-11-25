@@ -19,7 +19,7 @@ export function AppEvidence(p: EvidenceProps) {
     <View style={[st.root, st.gray, { paddingTop: insets.top }]}>
       <Head title={evidenceTitle(p.item)} onBack={p.onBack} />
       <ScrollView style={st.flex} contentContainerStyle={[st.ob, { paddingBottom: 120 + insets.bottom }]} showsVerticalScrollIndicator={false}>
-        <EvidenceBody item={p.item} memo={p.memo} version={p.version} onOpenSource={p.onOpenSource} onOpenHistory={p.onOpenHistory} />
+        <EvidenceBody item={p.item} memo={p.memo} version={p.version} onOpenSource={p.onOpenSource} onOpenHistory={p.onOpenHistory} onSuggestMemo={p.onSuggestMemo} />
       </ScrollView>
       <View style={[st.obar, { paddingBottom: 18 + insets.bottom }]}>
         {acts.map((a) => (

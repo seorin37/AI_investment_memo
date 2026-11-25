@@ -19,6 +19,24 @@ def wants_price_brief(description: str) -> bool:
     return any(m in (description or "") for m in PRICE_QUESTION_MARKS)
 
 
+def won(n: int) -> str:
+    """1400000 → "140만원", 1350000 → "135만원", 52300 → "52,300원"."""
+    n = int(n)
+    return f"{n // 10000:,}만원" if n >= 10000 and n % 10000 == 0 else f"{n:,}원"
+
+
+def alert_suggestion(item) -> dict | None:
+    """"140만원 넘으면 살까?" 질문(가격 칸 + 핵심어 alert:price_*) → 답 카드의 새 메모 제안. 코드가 만든 문장만 (LLM 없음).
+    memo_text는 메모 분석 코드 규칙이 그대로 가격 알림(A2)으로 읽는 글이다."""
+    kind = next((k.split(":", 1)[1] for k in (item.keywords or ()) if k.startswith("alert:")), None)
+    if kind not in ("price_above", "price_below") or not item.price_threshold:
+        return None
+    p = won(item.price_threshold)
+    cond = f"{p} 넘으면" if kind == "price_above" else f"{p} 밑으로 가면"
+    return {"label": f"{cond} 알려드릴까요?", "button": "알림 받기", "memo_text": f"{cond} 알려줘",
+            "type": kind, "price_threshold": int(item.price_threshold)}
+
+
 SQL = """SELECT trade_date, close FROM prices_daily
 WHERE btrim(symbol) = %(s)s AND trade_date <= %(d)s AND close IS NOT NULL ORDER BY trade_date DESC LIMIT 260"""
 

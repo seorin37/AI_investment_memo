@@ -4,7 +4,7 @@ import unittest
 from datetime import date, timedelta
 
 from pipelines.updates.models import TopicOutcome, TrackingItem, UpdateDraft
-from pipelines.updates.price_brief import brief_from_closes, wants_price_brief
+from pipelines.updates.price_brief import alert_suggestion, brief_from_closes, wants_price_brief, won
 from pipelines.updates.response import item_response
 from pipelines.updates.results import draft_to_dict
 from pipelines.updates.topic import NO_RECENT_NEWS, with_price_facts
@@ -75,6 +75,33 @@ class WithPriceFactsTest(unittest.TestCase):
         out = with_price_facts(ITEM, TopicOutcome("no_update", fail_codes=["CALL_FAILED"]), self.FACTS)
         self.assertEqual(out.kind, "no_update")                    # 호출 실패는 다음 실행에서 다시 본다
         self.assertEqual(with_price_facts(ITEM, TopicOutcome("not_called"), self.FACTS).kind, "not_called")
+
+
+class AlertSuggestionTest(unittest.TestCase):
+    def item(self, kw, price):
+        return TrackingItem("1", "000660", "topic", "SK하이닉스 최근 주가 흐름과 최근 나온 공시·뉴스", keywords=kw,
+                            price_threshold=price, category="ask")
+
+    def test_above_below(self):
+        up = alert_suggestion(self.item(("alert:price_above",), 1_400_000))
+        self.assertEqual((up["label"], up["memo_text"]), ("140만원 넘으면 알려드릴까요?", "140만원 넘으면 알려줘"))
+        down = alert_suggestion(self.item(("alert:price_below",), 52_300))
+        self.assertEqual(down["memo_text"], "52,300원 밑으로 가면 알려줘")
+
+    def test_none_without_condition(self):
+        self.assertIsNone(alert_suggestion(self.item((), None)))
+        self.assertIsNone(alert_suggestion(self.item(("HBM",), 1_400_000)))
+
+    def test_suggested_memo_becomes_price_alert(self):
+        from app.board.analysis import _lexicon
+        from pipelines.tracking.judge import judge_memo
+        for kind, price in (("price_above", 1_400_000), ("price_below", 1_350_000)):
+            text = alert_suggestion(self.item((f"alert:{kind}",), price))["memo_text"]
+            [j] = judge_memo(text, "000660", _lexicon())
+            self.assertEqual([(i["type"], i["price_threshold"]) for i in j.items], [(kind, price)], text)
+
+    def test_won(self):
+        self.assertEqual([won(1_400_000), won(1_350_000), won(52_300)], ["140만원", "135만원", "52,300원"])
 
 
 if __name__ == "__main__":

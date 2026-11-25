@@ -104,6 +104,9 @@ def check_topic(item: TrackingItem, candidates: list[Candidate], call: Callable[
     out.grouped = grouped
     if price_facts and item.category == "ask":
         out = with_price_facts(item, out, price_facts)
+    if item.category == "ask" and out.draft is not None:
+        from .price_brief import alert_suggestion
+        out.draft.suggest_memo = alert_suggestion(item)     # 2026-11-25 "140만원 넘으면 살까?" → 답 아래 새 메모 제안
     if grouped and out.draft is not None and out.draft.type == "disclosure":
         cited = {rcept_of(ref) for ref, _ in out.draft.sources if ref.startswith("disc:")}
         out.draft.supporting_news = [{"ref": c.ref, "title": c.title, "source": c.source, "date": c.date, "url": c.url}

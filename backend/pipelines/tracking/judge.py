@@ -54,6 +54,9 @@ class Judgment:
     # 실험(2026-11-16, docs/memo-intent-redesign-proposal.md): 한 번 답하면 끝나는 질문 [{"question", "kind": explain|check}].
     # 추적 항목(items)과 따로 둔다. 지시문 configs/tracking_judge_prompt_intent.md가 채운다 (기존 지시문은 비워 둔다)
     asks: list[dict] = field(default_factory=list)
+    # 2026-11-25: "140만원 넘으면 살까?"처럼 질문의 전제로 쓴 가격 조건 (price_item 모양). 추적하지 않고, 답 카드에서
+    # "140만원 넘으면 알려드릴까요?" 새 메모 제안으로만 쓴다 (app/board/analysis.py → 질문 항목의 가격 칸)
+    ask_alerts: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         data = asdict(self)
@@ -107,6 +110,8 @@ def judge_sentence(index: int, text: str, span: tuple[int, int], memo_symbol: st
     ]
     if len(tracked_conditions) != len(conditions):
         j.items = [price_item(c.direction, c.price) for c in tracked_conditions if c.kind == "condition"]
+        j.ask_alerts = [price_item(c.direction, c.price) for c in conditions
+                        if c not in tracked_conditions and c.kind == "condition"]
         return j
     if conditions and conditions[0].kind == "unsupported":
         return decide("needs_confirmation", None, "UNSUPPORTED_CONDITION", note=conditions[0].rest or None)
