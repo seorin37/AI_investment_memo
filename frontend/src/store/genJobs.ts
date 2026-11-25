@@ -12,6 +12,8 @@ import type { MadeItem } from '@/ui/screens/studio/Studio.types';
  * run 이 끝나거나(완성) 오류를 낼 때(실패)만 바뀜. 대기 시간은 run 이 정함 (genRuns). 실패해도 화면은 옮기지 않고 그 작업만 '다시 시도'.
  */
 export type GenKind = MadeItem['kind'];
+/** 화면에 그대로 보여 줄 실패 이유 */
+export class GenError extends Error {}
 export type StepState = 'wait' | 'run' | 'done' | 'bad';
 export interface GenCtx {
   /** 로그아웃 · 다시 시도로 이 실행이 버려졌으면 false */
@@ -95,7 +97,7 @@ export const useGenJobs = create<GenJobsState>((set, get) => {
           if (!alive()) return;
           patch(job.id, (j) => {
             const at = Math.max(0, j.steps.findIndex((x) => x !== 'done'));
-            return { ...j, status: 'fail', error: e instanceof ApiError ? e.message : undefined, steps: j.steps.map((x, i) => (i === at ? 'bad' : x)) };
+            return { ...j, status: 'fail', error: e instanceof ApiError || e instanceof GenError ? e.message : undefined, steps: j.steps.map((x, i) => (i === at ? 'bad' : x)) };
           });
           if (get().viewing !== job.id) useUI.getState().showToast(BAD_T[job.kind]);
         },

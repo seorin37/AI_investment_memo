@@ -46,7 +46,7 @@ export default function StudioTab() {
   );
   const [sheet, setSheet] = useState(false);
   const [rsheet, setRSheet] = useState(false);
-  /* AI 오디오: 실제 모드면 GET /studio/audio/options (시트를 열었을 때만, 2026-11-24) */
+  /* AI 오디오: 실제 모드면 GET /studio/audio/options (시트를 열었을 때만) · POST /studio/audio (genRuns, 2026-11-24) */
   const audioPick = useAudioPick(sheet);
   const [mk, setMk] = useState(make);
   if (make !== mk) {
@@ -106,7 +106,7 @@ export default function StudioTab() {
         onClose={() => setSheet(false)}
         onMake={({ codes, period, market }) => {
           setSheet(false);
-          const id = startAudio({ key: `${[...codes].sort().join(',')}:${period}:${market}`, sub: `${codes.length}종목 · ${period} · ${market ? '증시 요약 포함' : '증시 요약 없음'}`, n: codes.length, fail: __DEV__ && fail === '1' });
+          const id = startAudio({ sub: `${codes.length}종목 · ${period} · ${market ? '증시 요약 포함' : '증시 요약 없음'}`, codes, period, market, fail: __DEV__ && fail === '1' });
           setTimeout(() => router.push({ pathname: '/studio-gen', params: { id } }), 220);
         }}
       />

@@ -4,11 +4,13 @@ import { env } from '@/config/env';
 import { qk, useStudioItems } from '@/hooks/queries';
 import { queryClient } from '@/lib/queryClient';
 import { useAuth } from '@/store/auth';
-import { useGenJobs, type GenCtx } from '@/store/genJobs';
+import type { AudioPeriod } from '@/types/models';
+import { GenError, useGenJobs, type GenCtx } from '@/store/genJobs';
 import { fmt, useStudioPlayer } from '@/store/studioPlayer';
 import type { LabStock } from './useLabRun';
 import { mockAudioEpisode, mockAudioGen, mockReport, type LabDir } from './Studio.mock';
 import type { MadeItem } from './Studio.types';
+import { failText, fromServerAudioItem } from './audioView';
 import { labTitle } from './labParts';
 import { fromServerReportItem } from './reportView';
 import { fromServerItem } from './studioItems';
@@ -18,13 +20,15 @@ import { fromServerItem } from './studioItems';
  * - 주간보고서: 서버가 세부 단계를 주지 않아 첫 단계만 '진행 중', 완성되면 끝. 기다리는 시간(웹과 같은 6분)을 넘기면 그 작업만 실패.
  *   서버는 계속 만들고, 다시 시도하면 서버가 같은 조건의 항목을 돌려줘 이어서 기다림 (studio_report/routes.py SAME_SQL)
  * - 투자 실험실: 요청 하나로 답을 받음 → 조건 읽기 완료 · 영향 경로 찾기 '진행 중' → 답이 오면 결과 정리
- * - 오디오: 만들기 API 가 없어 예시 (mock 시간)
+ * - 오디오: POST /studio/audio → GET /studio/audio/{id} 로 완성 확인 (웹과 같은 10분, 보고서처럼 첫 단계만 '진행 중'). mock 모드는 예시
  * - mock 시간: EXPO_PUBLIC_MOCK_GEN_SECONDS (기본 5.5초)
  */
 export const LAB_STEPS = ['조건 읽기', '영향 경로 찾기', '결과 정리하기'];
 const POLL_MS = 3000;
 /* 기다리는 시간: reportView useCreateReport 와 같음 */
 const REPORT_WAIT_MS = 6 * 60_000;
+/* audioView useCreateAudio 와 같음 */
+const AUDIO_WAIT_MS = 10 * 60_000;
 /* 서버는 15분 넘게 멈춘 항목을 버린 것으로 봄 (studio_report/routes.py SAME_SQL) */
 const RESTORE_MS = 15 * 60_000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -74,13 +78,38 @@ export function startReport(p: { sub: string; codes: string[]; market: boolean; 
   });
 }
 
-export function startAudio(p: { sub: string; n: number; key: string; fail?: boolean }): string {
+async function waitAudio(id: string, c: GenCtx): Promise<MadeItem> {
+  const until = Date.now() + AUDIO_WAIT_MS;
+  while (c.alive()) {
+    /* 잠깐 끊긴 것은 실패가 아님 → 다음 번에 다시 */
+    const it = await api.getAudio(id).catch(() => null);
+    if (it?.status === 'failed') throw new GenError(failText(it.error));
+    if (it?.status === 'ready') {
+      const items = await api.listStudioItems().catch(() => null);
+      const made = items?.find((x) => x.id === id);
+      if (items && made) {
+        queryClient.setQueryData(qk.studioItems, items);
+        void queryClient.invalidateQueries({ queryKey: qk.usage });
+        return fromServerAudioItem(made);
+      }
+    }
+    if (Date.now() >= until) throw new Error('timeout');
+    await sleep(POLL_MS);
+  }
+  throw new Error('gone');
+}
+
+export function startAudio(p: { sub: string; codes: string[]; period: string; market: boolean; fail?: boolean }): string {
   return useGenJobs.getState().start({
-    key: `audio:${p.key}`,
+    key: `audio:${[...p.codes].sort().join(',')}:${p.period}:${p.market}`,
     kind: 'audio',
     sub: p.sub,
     labels: mockAudioGen.steps,
     run: async (c) => {
+      if (isReal) {
+        const res = await api.createAudio({ codes: p.codes, period: p.period as AudioPeriod, market: p.market });
+        return waitAudio(res.item_id, c);
+      }
       const part = mockMs() / 3;
       await sleep(part);
       c.step(['done', 'run', 'wait']);
@@ -92,7 +121,7 @@ export function startAudio(p: { sub: string; n: number; key: string; fail?: bool
       c.step(['done', 'done', 'run']);
       await sleep(part);
       const dur = fmt(mockAudioEpisode.dur);
-      const meta = `오디오 · ${p.n}종목 · ${dur}`;
+      const meta = `오디오 · ${p.codes.length}종목 · ${dur}`;
       return { id: `m${Date.now()}`, kind: 'audio', title: mockAudioGen.result_title, sub: meta, meta, left: '30일 뒤 삭제', dur, foot: p.sub };
     },
   });
