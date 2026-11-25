@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Animated, BackHandler, Easing, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BottomBar } from '@/ui/shared/app/BottomBar';
 import { Text } from '@/components/ui/AppText';
 import { AppPlug } from '@/ui/icons/BoardGlyphs';
 import { CloseX, DoneCheck, RevIcon, SearchGlass } from '@/ui/icons/MemoGlyphs';
@@ -157,7 +158,7 @@ export function AppAiLink({ stockName, memo, state, items, fromNew, onConfirm, o
       <ScrollView style={st.flex} contentContainerStyle={[st.ob, { paddingBottom: 120 + insets.bottom }]} showsVerticalScrollIndicator={false}>
         {body}
       </ScrollView>
-      {bar ? <View style={[st.obar, { paddingBottom: 18 + insets.bottom }]}>{bar}</View> : null}
+      {bar ? <BottomBar style={[st.obar, { paddingBottom: 18 + insets.bottom }]}>{bar}</BottomBar> : null}
     </View>
   );
 }

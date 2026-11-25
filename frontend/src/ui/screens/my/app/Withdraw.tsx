@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { BackHandler, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import { BottomBar } from '@/ui/shared/app/BottomBar';
 import { Text } from '@/components/ui/AppText';
 import { WITHDRAW_REASONS, type WithdrawProps } from '../My.types';
 import { ConfirmSheet, Head, Lb, MC, Rv } from './parts';
@@ -57,7 +58,7 @@ export function AppWithdraw(p: WithdrawProps) {
         </Rv>
       </ScrollView>
       {/* .bot: 위로 갈수록 투명해지는 바탕 · 안쪽 30 16 12 */}
-      <View style={[st.bot, { paddingBottom: 12 + insets.bottom }]}>
+      <BottomBar clear={30} style={[st.bot, { paddingBottom: 12 + insets.bottom }]}>
         <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" preserveAspectRatio="none">
           <Defs>
             <LinearGradient id="wdBot" x1="0" y1="0" x2="0" y2="1">
@@ -71,7 +72,7 @@ export function AppWithdraw(p: WithdrawProps) {
         <Pressable disabled={!ok} onPress={() => setAsk(true)} style={({ pressed }) => [st.cta, !ok && st.ctaDis, ok && { backgroundColor: MC.red }, pressed && { opacity: 0.9 }]} accessibilityRole="button">
           <Text style={[st.ctaT, !ok && { color: MC.ink3 }]}>탈퇴하기</Text>
         </Pressable>
-      </View>
+      </BottomBar>
       <ConfirmSheet
         open={ask}
         red

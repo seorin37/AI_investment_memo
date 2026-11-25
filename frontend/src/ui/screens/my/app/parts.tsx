@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Animated, BackHandler, Easing, Keyboard, Pressable, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import { BottomBar } from '@/ui/shared/app/BottomBar';
 import { Text } from '@/components/ui/AppText';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { Sheet } from '@/ui/shared/Sheet';
@@ -115,7 +116,7 @@ export function Page({ title, onBack, lead, children, bottom, onHardwareBack }: 
         <View style={pt.w}>{children}</View>
       </ScrollView>
       {bottom ? (
-        <View style={[pt.bot, { paddingBottom: 12 + padB }]}>
+        <BottomBar clear={30} style={[pt.bot, { paddingBottom: 12 + padB }]}>
           {/* 원본 .bot: linear-gradient(transparent → .85 40% → bg 70%) */}
           <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" preserveAspectRatio="none">
             <Defs>
@@ -128,7 +129,7 @@ export function Page({ title, onBack, lead, children, bottom, onHardwareBack }: 
             <Rect x="0" y="0" width="100%" height="100%" fill="url(#myBot)" />
           </Svg>
           {bottom}
-        </View>
+        </BottomBar>
       ) : null}
     </View>
   );

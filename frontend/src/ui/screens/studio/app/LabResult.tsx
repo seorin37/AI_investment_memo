@@ -2,6 +2,7 @@ import React from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
+import { BottomBar } from '@/ui/shared/app/BottomBar';
 import { Text } from '@/components/ui/AppText';
 import { PressScale } from '@/ui/motion/PressScale';
 import { Head } from '../../my/app/parts';
@@ -98,9 +99,9 @@ export function AppLabResult({ stock, vars, groups, disclaimer, memo, onBack, on
         </View>
         <Text keepAll style={st.disc}>{disclaimer}</Text>
       </ScrollView>
-      <View style={[st.bar, { paddingBottom: 26 + insets.bottom }]} pointerEvents="box-none">
+      <BottomBar style={[st.bar, { paddingBottom: 26 + insets.bottom }]} pointerEvents="box-none">
         <PressScale onPress={onAgain} accessibilityRole="button" style={st.barB}><Text style={st.barT}>조건 바꿔 다시 실험</Text></PressScale>
-      </View>
+      </BottomBar>
     </View>
   );
 }
