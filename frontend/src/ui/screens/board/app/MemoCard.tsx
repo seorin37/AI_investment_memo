@@ -1,31 +1,33 @@
 import React, { useState } from 'react';
 import { Animated, Pressable, StyleSheet, View } from 'react-native';
-import Svg, { ClipPath, Defs, Path } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
 import { AppPlug } from '@/ui/icons/BoardGlyphs';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { SelCircle, type AppMemoCardProps } from '@/ui/shared/MemoCard';
 import { AppTape } from '@/ui/shared/MemoPaper';
 import { mmdd, oneLine } from '@/ui/shared/memoFormat';
-import { usePaper } from '@/ui/shared/Dark';
+import { useDark, usePaper } from '@/ui/shared/Dark';
 import { appColor, curve, ft } from '@/ui/theme';
 
 /** 접힌 모서리 크기 */
 const CUT = 24;
+/** 카드 라운드 */
+const R = 16;
 
 /**
  * 앱 보드 2열 메모 카드 (shared/MemoCard 는 웹도 써서 앱 것을 따로) (원본 memo.html .grid .item)
- * 종이: r16 · 귀퉁이 24 접힘 / 안쪽 14·13 / 날짜 줄 최소 22 (날짜 11.5px 500 #4A4A55 · 플러그 22 원 rgba(255,255,255,.8))
+ * 종이: r16 · 귀퉁이 24 접힘(덧그림) / 안쪽 14·13 / 날짜 줄 최소 22 (날짜 11.5px 500 #4A4A55 · 플러그 22 원 rgba(255,255,255,.8))
  * 제목 15px 800 줄 1.36 · 위아래 6 · 두 줄 / 본문 12.5px 줄 1.5 #2E2E38 · 세 줄
  * 누르면 .12초 뒤 .965 로 줄어듦 (.45s cubic-bezier(.3,1.3,.5,1)) · .48초 꾹 누르면 고르기
  */
 export function AppMemoCard({ memo: m, width, height, selecting, selected, aiSpent, onPress, onLongPress, onPressOut }: AppMemoCardProps) {
   const paper = usePaper();
+  const dark = useDark();
   const k = useMotionK();
   const p = paper[m.color];
   const [s] = useState(() => new Animated.Value(1));
   const scaleTo = (v: number, delay = 0) => Animated.timing(s, { toValue: v, duration: 450 * k, delay: delay * k, easing: curve.land, useNativeDriver: NATIVE }).start();
-  const d = `M16 0H${width - 16}A16 16 0 0 1 ${width} 16V${height - CUT}L${width - CUT} ${height}H16A16 16 0 0 1 0 ${height - 16}V16A16 16 0 0 1 16 0Z`;
   return (
     <View style={{ width, height }}>
       <Pressable
@@ -42,23 +44,15 @@ export function AppMemoCard({ memo: m, width, height, selecting, selected, aiSpe
         accessibilityState={{ selected }}
       >
         <Animated.View style={{ width, height, transform: [{ scale: s }] }}>
+          {/* 카드는 라운드 네모 그대로 · 접힌 모서리는 그 위에 덧그림 (투명한 곳이 없어 끌기·그림자·선택에서도 모양이 같음) */}
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: R, backgroundColor: p.bg }]} />
           <Svg width={width} height={height} style={StyleSheet.absoluteFill} pointerEvents="none">
-            {/* 잘린 모서리 자리: 보드 바탕 (끌 때 그림자·뒤 카드가 비치지 않게 카드 라운드까지) */}
-            <Path d={`M${width} ${height - CUT}V${height - 16}A16 16 0 0 1 ${width - 16} ${height}H${width - CUT}Z`} fill={appColor.bg} />
-            <Path d={d} fill={p.bg} />
+            {/* 접힌 선 바깥: 카드 색보다 살짝 밝게 (다크는 화면이 반전되므로 어둡게 넣음) */}
+            <Path d={`M${width} ${height - CUT}V${height - R}A${R} ${R} 0 0 1 ${width - R} ${height}H${width - CUT}Z`} fill={dark ? '#000000' : '#FFFFFF'} fillOpacity={dark ? 0.15 : 0.5} />
           </Svg>
-          {selected ? (
-            /* 원본: inset 0 0 0 2.5px var(--a) — 종이 모양 안쪽 테두리 */
-            <Svg width={width} height={height} style={StyleSheet.absoluteFill} pointerEvents="none">
-              <Defs>
-                <ClipPath id={`sel${m.id}`}>
-                  <Path d={d} />
-                </ClipPath>
-              </Defs>
-              <Path d={d} fill="none" stroke={appColor.accent} strokeWidth={5} clipPath={`url(#sel${m.id})`} />
-            </Svg>
-          ) : null}
-          {/* 접힌 삼각형: 고른 테두리 위 — 상태가 바뀌어도 모양과 색이 그대로 (원본 .corner) */}
+          {/* 원본: inset 0 0 0 2.5px var(--a) */}
+          {selected ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: R, borderWidth: 2.5, borderColor: appColor.accent }]} /> : null}
+          {/* 접힌 삼각형: 고른 테두리 위 (원본 .corner) */}
           <Svg width={width} height={height} style={StyleSheet.absoluteFill} pointerEvents="none">
             <Path d={`M${width - CUT} ${height - CUT + 7}A7 7 0 0 1 ${width - CUT + 7} ${height - CUT}H${width}L${width - CUT} ${height}Z`} fill={p.accent} />
           </Svg>
