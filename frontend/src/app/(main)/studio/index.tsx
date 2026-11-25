@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { Platform, View } from 'react-native';
 import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useGenJobs } from '@/store/genJobs';
+import { useAiStats, useMyStocks } from '@/hooks/queries';
 import { useStudioPlayer } from '@/store/studioPlayer';
 import { useUI } from '@/store/ui';
 import { TopBar } from '@/ui/layout/app/TopBar';
@@ -32,6 +33,10 @@ export default function StudioTab() {
   /* AI 사용량: 실제 모드면 GET /me/usage, mock 모드면 My.mock */
   const usage = useUsageView();
   const toast = useUI((s) => s.showToast);
+  /* 내 종목 · AI 연결 메모 수: 실제 모드는 웹 스튜디오 머리와 같은 GET /stocks · /ai/stats */
+  const myStocks = useMyStocks();
+  const aiStats = useAiStats();
+  const counts = env.useMock ? mockStudioCounts : { stock_count: myStocks.data?.length ?? 0, ai_memo_count: aiStats.data?.linked_memos ?? 0 };
   const { fail, make } = useLocalSearchParams<{ fail?: string; make?: string }>();
   const p = useStudioPlayer();
   /* 주간보고서: 실제 모드면 내 종목 · POST /studio/reports (2026-11-23) */
@@ -62,6 +67,7 @@ export default function StudioTab() {
           <TopBar
             preset="studio"
             title="스튜디오"
+            subtitle="쌓인 소식을 듣고, 읽고, 실험해 보세요"
             actions={[{ icon: 'bell', label: '알림', onPress: () => router.push('/my-inbox') }]}
             avatar={{ name: myName, photoUrl, onPress: () => router.push('/my') }}
           />
@@ -82,8 +88,9 @@ export default function StudioTab() {
           router.push({ pathname: '/studio-gen', params: { id } });
         }}
         usage_pct={usage.usage_pct}
+        spent={usage.paused}
         usage_refill={usage.usage_refill}
-        {...mockStudioCounts}
+        {...counts}
         onFeature={(k) => (k === 'audio' ? setSheet(true) : k === 'report' ? setRSheet(true) : router.push(k === 'quiz' ? '/studio-quiz' : '/studio-lab'))}
         onOpenMade={(m) => {
           if (m.kind === 'lab') {
@@ -105,6 +112,7 @@ export default function StudioTab() {
         open={sheet}
         stocks={audioPick.stocks}
         periods={audioPick.periods}
+        lastClose={audioPick.lastClose}
         onClose={() => setSheet(false)}
         onMake={({ codes, period, market }) => {
           setSheet(false);

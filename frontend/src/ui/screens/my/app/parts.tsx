@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Animated, BackHandler, Easing, Keyboard, Pressable, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import { BottomBar } from '@/ui/shared/app/BottomBar';
 import { Text } from '@/components/ui/AppText';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { Sheet } from '@/ui/shared/Sheet';
@@ -115,7 +116,7 @@ export function Page({ title, onBack, lead, children, bottom, onHardwareBack }: 
         <View style={pt.w}>{children}</View>
       </ScrollView>
       {bottom ? (
-        <View style={[pt.bot, { paddingBottom: 12 + padB }]}>
+        <BottomBar clear={30} style={[pt.bot, { paddingBottom: 12 + padB }]}>
           {/* 원본 .bot: linear-gradient(transparent → .85 40% → bg 70%) */}
           <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" preserveAspectRatio="none">
             <Defs>
@@ -128,7 +129,7 @@ export function Page({ title, onBack, lead, children, bottom, onHardwareBack }: 
             <Rect x="0" y="0" width="100%" height="100%" fill="url(#myBot)" />
           </Svg>
           {bottom}
-        </View>
+        </BottomBar>
       ) : null}
     </View>
   );
@@ -152,31 +153,6 @@ export function UsageBar({ pct, delay = 200 }: { pct: number; delay?: number }) 
   );
 }
 export const usageColor = (pct: number) => (pct >= 100 ? MC.red : pct >= 90 ? '#E89A0C' : MC.a);
-
-/* .odo: 숫자 자리마다 0~9 가 굴러 멈춤 .7s (#098) */
-export function Odometer({ value, size, lineHeight, weight = '800', color = MC.ink }: { value: number; size: number; lineHeight: number; weight?: '700' | '800'; color?: string }) {
-  return (
-    <View style={{ flexDirection: 'row' }} accessible accessibilityLabel={String(value)}>
-      {String(value).split('').map((d, i) => <Digit key={i} n={Number(d)} size={size} lh={lineHeight} weight={weight} color={color} />)}
-    </View>
-  );
-}
-function Digit({ n, size, lh, weight, color }: { n: number; size: number; lh: number; weight: '700' | '800'; color: string }) {
-  const k = useMotionK();
-  const [y] = useState(() => new Animated.Value(0));
-  useEffect(() => {
-    const a = Animated.timing(y, { toValue: -n * lh, duration: 700 * k, delay: 250 * k, easing: Easing.bezier(0.3, 1.25, 0.5, 1), useNativeDriver: NATIVE });
-    a.start();
-    return () => a.stop();
-  }, [n, lh, k, y]);
-  return (
-    <View style={{ height: lh, overflow: 'hidden' }} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-      <Animated.View style={{ transform: [{ translateY: y }] }}>
-        {Array.from({ length: 10 }, (_, d) => <Text key={d} style={{ fontSize: size, lineHeight: lh, height: lh, fontWeight: weight, color, textAlign: 'center' }}>{d}</Text>)}
-      </Animated.View>
-    </View>
-  );
-}
 
 /* .lead (하위 화면): 12.5 ink3 · 좌우 18 · 아래 12 · 줄 1.55 */
 export function Lead({ children }: { children: string }) {

@@ -24,6 +24,7 @@ export default function StockUpdatesScreen() {
         <TopBar
           preset="updates"
           title="최신 업데이트"
+          subtitle="내 종목의 공시·뉴스·주가 변동을 모아봤어요"
           showLine={line}
           actions={[
             ...(onReadAll ? [{ icon: 'checkAll' as const, label: '모두 읽음', onPress: onReadAll, color: readAllOff ? '#C9CBD1' : undefined }] : []),

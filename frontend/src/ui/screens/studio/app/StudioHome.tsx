@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
+import { TabFrame, TabScroll } from '@/ui/layout/app/TabFrame';
 import { Text } from '@/components/ui/AppText';
-import { Odometer } from '@/ui/motion/Numbers';
 import { PressScale } from '@/ui/motion/PressScale';
 import { Reveal } from '@/ui/motion/Reveal';
 import { useCoachRef } from '@/ui/shared/Coach';
 import { Sheet } from '@/ui/shared/Sheet';
+import { SpentBox } from '@/ui/shared/SpentBox';
 import type { MadeItem, StudioHomeProps, StudioKind } from '../Studio.types';
 import { GEN_LATE, type AppGenJob } from '@/store/genJobs';
 import { Spin } from './Spin';
@@ -47,7 +48,7 @@ const Chev = ({ c = '#B7BBC3' }: { c?: string }) => <Svg width={18} height={18} 
 const Bolt = ({ c, s = 11 }: { c: string; s?: number }) => <Svg width={s} height={s * 13 / 11} viewBox="0 0 11 13"><Path d="M6.5 0 0 7.5h4.5L3.5 13 11 4.8H6.3z" fill={c} /></Svg>;
 const WAVE = [8, 14, 10, 18, 12, 20, 9, 16, 22, 13, 17, 10, 19, 12, 8, 15, 11, 18, 9, 14, 12, 7];
 
-export function AppStudioHome({ header, jobs, onJob, playingId, onQuickPlay, bottomPad = 0, ...p }: StudioHomeProps & {
+export function AppStudioHome({ header, jobs, onJob, playingId, onQuickPlay, bottomPad = 0, spent = false, ...p }: StudioHomeProps & {
   header: React.ReactNode;
   /** 만드는 중 · 실패 줄 (원본 madeRow prog / fail) */
   jobs: AppGenJob[];
@@ -57,34 +58,38 @@ export function AppStudioHome({ header, jobs, onJob, playingId, onQuickPlay, bot
   onJob?: (id: string) => void;
   /** 미니 플레이어가 떠 있으면 스크롤 끝 빈 자리 (원본 .withmini) */
   bottomPad?: number;
+  /** AI 사용량 정지 (usage_pct 100 이상과 같게) */
+  spent?: boolean;
 }) {
   const remove = useRemoveMade();
   const [sheet, setSheet] = useState(false);
   const featRef = useCoachRef('studio');
-  const full = p.usage_pct >= 100;
+  const full = spent || p.usage_pct >= 100;
   const top = p.made.find((m) => m.kind === 'audio');
   const rest = p.made.filter((m) => m !== top);
   return (
-    <View style={st.root}>
+    <TabFrame style={st.root}>
       {header}
-      <ScrollView contentContainerStyle={{ paddingBottom: 24 + bottomPad }} showsVerticalScrollIndicator={false}>
+      <TabScroll contentContainerStyle={{ paddingBottom: 24 + bottomPad }} showsVerticalScrollIndicator={false}>
         <View style={st.subr}>
-          <Text style={st.subrT}>쌓인 소식을 듣고, 읽고, 실험해 보세요</Text>
+          <Text style={[st.subrT, { flex: 1 }]}>내 종목 {p.stock_count} · AI 연결 메모 {p.ai_memo_count}</Text>
           <PressScale scaleTo={0.93} onPress={() => setSheet(true)} accessibilityRole="button" accessibilityLabel={`AI 사용량 ${p.usage_pct}%`} style={[st.cred, full && st.credZero]}>
             <Bolt c={full ? '#8A5A00' : '#5B3BD1'} />
-            {/* 칩 gap 은 번개 아이콘과 글자 사이만 — 숫자와 % 는 붙여서 (원본 'AI 사용량 62%') */}
-            <View style={st.credRow}>
-              <Text style={[st.credT, full && { color: '#8A5A00' }]}>AI 사용량 </Text>
-              <Odometer value={p.usage_pct} style={{ ...st.credT, ...(full ? { color: '#8A5A00' } : null) }} />
-              <Text style={[st.credT, full && { color: '#8A5A00' }]}>%</Text>
-            </View>
+            <Text style={[st.credT, full && { color: '#8A5A00' }]}>
+              AI 사용량 {p.usage_pct}%
+            </Text>
           </PressScale>
         </View>
+        {full ? (
+          <View style={st.spent}>
+            <SpentBox variant="app" title="이번 달 AI 사용량을 다 썼어요" body={`${p.usage_refill}에 새로 채워져요.\n이미 만든 결과와 오늘의 퀴즈는 계속 쓸 수 있어요.`} onCredit={p.onBuyCredit} onPlan={p.onChangePlan} />
+          </View>
+        ) : null}
         {/* 사용법 안내 ④ 대상 (원본 #feat) */}
         <View ref={featRef} collapsable={false}>
         {p.features.map((f, i) => (
           <Reveal key={f.key} i={i}>
-            <PressScale scaleTo={0.975} onPress={() => p.onFeature(f.key)} accessibilityRole="button" accessibilityLabel={f.title} style={st.fc}>
+            <PressScale scaleTo={0.975} onPress={() => (full && f.key !== 'quiz' ? setSheet(true) : p.onFeature(f.key))} accessibilityRole="button" accessibilityLabel={f.title} style={st.fc}>
               <FeatIcon k={f.key} />
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={st.fcH}>{f.title}</Text>
@@ -96,7 +101,7 @@ export function AppStudioHome({ header, jobs, onJob, playingId, onQuickPlay, bot
         ))}
         </View>
         <View style={st.secr}><Text style={st.secrT}>만든 항목</Text><Text style={st.secrS}>30일 보관 · 다시 보기 무료</Text></View>
-        {top ? <RadioCard m={top} playing={playingId === top.id} onPress={() => p.onOpenMade(top)} onPlay={() => onQuickPlay(top)} /> : null}
+        {top ? <RadioCard m={top} playing={playingId === top.id} onPress={() => p.onOpenMade(top)} onPlay={() => onQuickPlay(top)} onRemove={() => remove(top)} /> : null}
         {rest.length || jobs.length ? (
           <View style={st.made}>
             {jobs.map((job, i) => {
@@ -104,7 +109,7 @@ export function AppStudioHome({ header, jobs, onJob, playingId, onQuickPlay, bot
               return job.status === 'fail' ? (
                 <Pressable key={job.id} onPress={() => onJob?.(job.id)} accessibilityRole="button" style={[st.mi, i > 0 && st.miLine]}>
                   <View style={[st.failIc]}><Svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="#E5484D" strokeWidth={2} strokeLinecap="round"><Path d="M12 8v5M12 16.5h.01" /><Circle cx={12} cy={12} r={9} /></Svg></View>
-                  <View style={{ flex: 1 }}><Text style={st.miB}>{title} · {job.late ? GEN_LATE.title : '만들지 못했어요'}</Text><Text style={st.miS}>{job.late ? GEN_LATE.body : '사용량은 그대로 돌려드려요'}</Text></View>
+                  <View style={{ flex: 1 }}><Text style={st.miB}>{title} · {job.late ? GEN_LATE.title : '만들지 못했어요'}</Text><Text style={st.miS}>{job.late ? GEN_LATE.body : job.sub}</Text></View>
                   <Text style={[st.miR, { color: C.a2, fontWeight: '700' }]}>다시 시도</Text>
                 </Pressable>
               ) : (
@@ -129,7 +134,7 @@ export function AppStudioHome({ header, jobs, onJob, playingId, onQuickPlay, bot
                   <Text style={st.miR}>{m.left}</Text>
                 </Pressable>
                 <Pressable onPress={() => remove(m)} accessibilityRole="button" accessibilityLabel={`${m.title} 휴지통으로`} hitSlop={10} style={st.del}>
-                  <Svg width={16} height={16} viewBox="0 0 16 16" fill="none"><Path d="M2.5 4h11M6 4V2.75h4V4M4 4l.6 9.25h6.8L12 4" stroke="#B0B5BD" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" /></Svg>
+                  <Trash />
                 </Pressable>
                 {m.kind === 'audio' ? (
                   <Pressable onPress={() => onQuickPlay(m)} accessibilityRole="button" accessibilityLabel={playingId === m.id ? '일시정지' : '바로 재생'} hitSlop={6} accessibilityState={{ disabled: audioOff }} style={[st.qp, audioOff && { backgroundColor: AUDIO_OFF_BG }]}>{playingId === m.id ? <PauseGlyph s={14} /> : <PlayGlyph s={14} />}</Pressable>
@@ -140,7 +145,7 @@ export function AppStudioHome({ header, jobs, onJob, playingId, onQuickPlay, bot
         ) : null}
         {!p.made.length && !jobs.length ? <View style={st.made}><Text style={st.empty}>{'아직 만든 항목이 없어요\n위에서 오디오·보고서·실험을 만들어 보세요'}</Text></View> : null}
         <Text style={st.sdisc}>스튜디오는 투자 권유나 주가 예측을 하지 않아요.</Text>
-      </ScrollView>
+      </TabScroll>
       <Sheet open={sheet} onClose={() => setSheet(false)} label="AI 사용량">
         <View style={{ paddingHorizontal: 18 }}>
           <Text style={st.shH}>{full ? '이번 달 AI 사용량을 다 썼어요' : 'AI 사용량'}</Text>
@@ -152,7 +157,7 @@ export function AppStudioHome({ header, jobs, onJob, playingId, onQuickPlay, bot
           </View>
         </View>
       </Sheet>
-    </View>
+    </TabFrame>
   );
 }
 
@@ -167,7 +172,7 @@ function Choice({ bg, icon, title, sub, onPress }: { bg: string; icon: React.Rea
 }
 
 /* .mfeat 라디오 카드: 라운드 20 · 16 · 머리 12.5 파랑 · 제목 17 · 재생 44 · 파형 · 아래 줄 */
-function RadioCard({ m, playing, onPress, onPlay }: { m: MadeItem; playing: boolean; onPress: () => void; onPlay: () => void }) {
+function RadioCard({ m, playing, onPress, onPlay, onRemove }: { m: MadeItem; playing: boolean; onPress: () => void; onPlay: () => void; onRemove: () => void }) {
   return (
     <View style={st.mfeat}>
       <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${m.title} 열기`}>
@@ -183,22 +188,26 @@ function RadioCard({ m, playing, onPress, onPlay }: { m: MadeItem; playing: bool
         <Pressable onPress={onPress} accessible={false} style={st.wv}>{WAVE.map((h, i) => <View key={i} style={[st.wvI, { height: h, backgroundColor: i < 5 ? '#3D73F0' : '#C9D7FB' }]} />)}</Pressable>
         <Text style={st.du}>{m.dur}</Text>
       </View>
-      <View style={st.mf}><Text style={st.mfT}>{m.foot}</Text><Text style={st.mfT}>{m.left}</Text></View>
+      <View style={st.mf}>
+        <Text style={[st.mfT, { flex: 1 }]}>{m.foot}</Text>
+        <Text style={st.mfT}>{m.left}</Text>
+        <Pressable onPress={onRemove} accessibilityRole="button" accessibilityLabel={`${m.title} 휴지통으로`} hitSlop={12} style={{ marginLeft: 10 }}><Trash /></Pressable>
+      </View>
     </View>
   );
 }
 
+const Trash = () => <Svg width={16} height={16} viewBox="0 0 16 16" fill="none"><Path d="M2.5 4h11M6 4V2.75h4V4M4 4l.6 9.25h6.8L12 4" stroke="#B0B5BD" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" /></Svg>;
 const PlayGlyph = ({ s = 16 }: { s?: number }) => <Svg width={s} height={s} viewBox="0 0 24 24" fill="#fff"><Path d="M8 5v14l11-7z" /></Svg>;
 const PauseGlyph = ({ s = 16 }: { s?: number }) => <Svg width={s} height={s} viewBox="0 0 24 24" fill="#fff"><Path d="M7 5h4v14H7zM13 5h4v14h-4z" /></Svg>;
 
 const st = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
   subr: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingBottom: 10 },
-  subrT: { flex: 1, fontSize: 12.5, lineHeight: 18, color: C.ink3 },
+  subrT: { fontSize: 12.5, lineHeight: 18, color: C.ink3 },
   cred: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 28, paddingHorizontal: 10, borderRadius: 14, backgroundColor: '#F0ECFF' },
   credZero: { backgroundColor: '#FFF1D6', borderWidth: 1, borderColor: '#F1D9A8' },
-  credRow: { flexDirection: 'row', alignItems: 'center' },
-  credT: { fontSize: 12.5, lineHeight: 17, fontWeight: '800', color: '#5B3BD1' },
+  credT: { fontSize: 12.5, lineHeight: 17, fontWeight: '800', color: '#5B3BD1', fontVariant: ['tabular-nums'] },
   fc: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#FFFFFF', borderRadius: 20, marginHorizontal: 16, marginBottom: 10, padding: 16 },
   fcH: { fontSize: 16, lineHeight: 22, fontWeight: '800', color: C.ink, marginBottom: 3 },
   fcP: { fontSize: 13, lineHeight: 18, color: C.ink2 },
@@ -228,7 +237,8 @@ const st = StyleSheet.create({
   wv: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 3, height: 28 },
   wvI: { width: 3, borderRadius: 2 },
   du: { fontSize: 13, lineHeight: 18, fontWeight: '700', color: C.ink2 },
-  mf: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#F0F1F4', marginTop: 14, paddingTop: 10 },
+  spent: { marginHorizontal: 16, marginBottom: 10 },
+  mf: { flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#F0F1F4', marginTop: 14, paddingTop: 10 },
   mfT: { fontSize: 12, lineHeight: 17, color: C.ink3 },
   sdisc: { fontSize: 12, lineHeight: 17, color: C.ink3, textAlign: 'center', marginTop: 14, marginHorizontal: 16, marginBottom: 24 },
   shH: { fontSize: 19, lineHeight: 26, fontWeight: '700', color: C.ink, marginBottom: 4 },

@@ -2,11 +2,12 @@ import React from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
+import { BottomBar } from '@/ui/shared/app/BottomBar';
 import { Text } from '@/components/ui/AppText';
 import { PressScale } from '@/ui/motion/PressScale';
 import { Head } from '../../my/app/parts';
 import type { mockLabStocks, mockLabVars } from '../Studio.mock';
-import type { LabGroup } from '../labParts';
+import { dirColor, type LabGroup } from '../labParts';
 import type { LabMemo } from '../useLabMemo';
 import { labWatchItems } from '../useLabWatch';
 import { Keep } from '@/ui/shared/Dark';
@@ -36,7 +37,7 @@ export function AppLabResult({ stock, vars, groups, disclaimer, memo, onBack, on
       <Head title="실험 결과" onBack={onBack} />
       <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 110 + insets.bottom }} showsVerticalScrollIndicator={false}>
         <View style={st.sh}><Keep style={[st.lo, { backgroundColor: stock.logo_bg }]}><Text style={st.loT}>{stock.logo}</Text></Keep><Text style={st.shT}>{stock.name}</Text></View>
-        <View style={st.cds}>{groups.map((g) => <View key={g.i} style={st.cd}><Text style={st.cdT}>{vars[g.i].name} · {g.d} 가정</Text></View>)}</View>
+        <View style={st.cds}>{groups.map((g) => <View key={g.i} style={st.cd}><Text style={st.cdT}>{vars[g.i].name} · <Text style={{ color: dirColor(g.d) }}>{g.d}</Text> 가정</Text></View>)}</View>
         <Text style={st.lead}>바꾼 가정이 회사의 어떤 항목에 닿는지 경로로 보여 드려요.</Text>
         <View style={st.card}>
           <Text style={st.h4}>영향 경로 지도</Text>
@@ -44,7 +45,7 @@ export function AppLabResult({ stock, vars, groups, disclaimer, memo, onBack, on
             const n = g.leaves.length, H = n * 48 + (n - 1) * 8, cy = H / 2;
             return (
               <View key={g.i} style={st.mg}>
-                <View style={st.mc}><Text style={st.mcT}>{vars[g.i].name}</Text><Text style={st.mcS}>가정 · {g.d}</Text></View>
+                <View style={st.mc}><Text style={st.mcT}>{vars[g.i].name}</Text><Text style={[st.mcS, { color: dirColor(g.d) }]}>가정 · {g.d}</Text></View>
                 <View style={st.l1} />
                 <View style={st.mm}><Text style={st.mmT}>{vars[g.i].mid}</Text></View>
                 <Svg width={20} height={H} viewBox={`0 0 20 ${H}`}>
@@ -98,9 +99,9 @@ export function AppLabResult({ stock, vars, groups, disclaimer, memo, onBack, on
         </View>
         <Text keepAll style={st.disc}>{disclaimer}</Text>
       </ScrollView>
-      <View style={[st.bar, { paddingBottom: 26 + insets.bottom }]} pointerEvents="box-none">
+      <BottomBar style={[st.bar, { paddingBottom: 26 + insets.bottom }]} pointerEvents="box-none">
         <PressScale onPress={onAgain} accessibilityRole="button" style={st.barB}><Text style={st.barT}>조건 바꿔 다시 실험</Text></PressScale>
-      </View>
+      </BottomBar>
     </View>
   );
 }

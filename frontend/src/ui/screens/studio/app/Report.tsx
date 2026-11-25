@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
@@ -17,11 +17,29 @@ type Rep = typeof mockReport;
 const C = { a2: '#6A42AB', ink: '#16171A', ink2: '#575B63', ink3: '#9A9EA7' };
 const up = (v: number) => (v >= 0 ? '#E5323B' : '#2F6BDB');
 
-export function AppReport({ rep, stocks, market, allDefault, onBack, onOpenMemo, onWatch }: {
+/** 만든 지 30일이 지났거나 아직 없는 보고서 (문구는 웹과 같음) */
+export function AppReportMissing({ onBack }: { onBack: () => void }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[st.root, { paddingTop: insets.top }]}>
+      <Head title="주간보고서" onBack={onBack} />
+      <View style={st.miss}>
+        <Text style={st.missB}>보고서를 찾을 수 없어요</Text>
+        <Text keepAll style={st.missS}>만든 지 30일이 지나 지워졌거나 아직 만들지 않았어요.</Text>
+      </View>
+    </View>
+  );
+}
+
+export function AppReport({ title, rep, stocks, market, allDefault, onBack, onOpenMemo, onWatch }: {
+  /** 만든 항목 제목 ('10월 다섯째 주 돌아보기') */
+  title: string;
   rep: Rep; stocks: ReportStock[]; market: boolean; allDefault: boolean;
-  onBack: () => void; onOpenMemo: (code: string) => void; onWatch: (s: ReportStock, i: number) => void;
+  onBack: () => void; onOpenMemo: (code: string, memoId?: string) => void; onWatch: (s: ReportStock, i: number) => void;
 }) {
   const insets = useSafeAreaInsets();
+  /* 보고서를 겹쳐 열어도 그라데이션 id 가 안 겹치게 (겹치면 표지 바탕이 안 그려져 흰 글자가 흐려 보임) */
+  const cv = `cv${useId().replace(/\W/g, '')}`;
   const g = stocks.reduce((a, r) => a + r.counts.공시, 0), nw = stocks.reduce((a, r) => a + r.counts.뉴스, 0), mc = stocks.reduce((a, r) => a + (r.memos ? r.memos.length : r.memo ? 1 : 0), 0);
   const one = stocks.length === 1 ? stocks[0] : null;
   const last = rep.days[rep.days.length - 1]?.split(' ')[0] ?? rep.range;
@@ -35,11 +53,11 @@ export function AppReport({ rep, stocks, market, allDefault, onBack, onOpenMemo,
       <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 24 + insets.bottom }} showsVerticalScrollIndicator={false}>
         <View style={st.cover}>
           <Svg style={StyleSheet.absoluteFill} preserveAspectRatio="none" viewBox="0 0 10 10">
-            <Defs><LinearGradient id="cv" x1="0.1" y1="0" x2="0.9" y2="1"><Stop offset="0" stopColor="#2B2140" /><Stop offset="1" stopColor="#16141F" /></LinearGradient></Defs>
-            <Rect width="10" height="10" fill="url(#cv)" />
+            <Defs><LinearGradient id={cv} x1="0.1" y1="0" x2="0.9" y2="1"><Stop offset="0" stopColor="#2B2140" /><Stop offset="1" stopColor="#16141F" /></LinearGradient></Defs>
+            <Rect width="10" height="10" fill={`url(#${cv})`} />
           </Svg>
           <View style={st.k}><Text style={st.kT}>MEMO&apos;S WEEKLY REPORT</Text><View style={st.kP}><Text style={st.kPT}>{rep.week}</Text></View></View>
-          <Text style={st.h2}>주간보고서</Text>
+          <Text style={st.h2}>{title}</Text>
           <Text style={st.pd}>{rep.range} · 거래일 {rep.days.length}일 · {stocks.length}종목 · {rep.made_at} 작성</Text>
           {one ? (
             <View style={st.one}>
@@ -54,16 +72,16 @@ export function AppReport({ rep, stocks, market, allDefault, onBack, onOpenMemo,
               </View>
             </View>
           ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ marginTop: 14 }}>
+            <MiniRow n={stocks.length}>
               {stocks.map((r) => (
-                <View key={r.stock_code} style={st.sm}>
-                  <View style={st.qn}><Logo s={r} size={16} /><Text style={st.smN}>{r.name}</Text></View>
+                <View key={r.stock_code} style={[st.sm, stocks.length > 3 ? { width: 104 } : { flex: 1, minWidth: 0 }]}>
+                  <View style={st.qn}><Logo s={r} size={16} /><Text style={[st.smN, { flexShrink: 1 }]} numberOfLines={1}>{r.name}</Text></View>
                   <Text style={[st.smV, { color: r.pct >= 0 ? '#FF6B6B' : '#5B9BFF' }]}>{sign(r.pct)}</Text>
                   <Spark c={r.closes} color={r.pct >= 0 ? '#FF6B6B' : '#5B9BFF'} />
                   <Text style={st.smS} numberOfLines={1}>{r.items.length ? [r.counts.공시 ? `공시 ${r.counts.공시}` : '', r.counts.뉴스 ? `뉴스 ${r.counts.뉴스}` : ''].filter(Boolean).join(' · ') : '새 소식 없음'}</Text>
                 </View>
               ))}
-            </ScrollView>
+            </MiniRow>
           )}
           <View style={st.tl}>
             {[['공시', `${g}건`], ['뉴스', `${nw}건`], ['메모와 연결', `${mc}개`]].map(([l, v]) => <Text key={l} style={st.tlT}>{l} <Text style={st.tlB}>{v}</Text></Text>)}
@@ -73,35 +91,61 @@ export function AppReport({ rep, stocks, market, allDefault, onBack, onOpenMemo,
           <Text style={st.sumH}>이번 주 한눈에</Text>
           <Text keepAll style={st.sumP}>{sum}</Text>
         </View>
+        {/* 요약: 증시 한 주 · 종목별 한 줄 (웹 주간보고서 요약과 같은 내용). 아래로 자세한 내용이 이어짐 */}
+        <View style={st.r3s}>
+          {market ? null : (
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+              {rep.market.map((m) => <View key={m.name} style={st.mk}><Text style={st.mkS}>{m.name}</Text><Text style={[st.mkP, { color: up(m.pct) }]}>{sign(m.pct)}</Text></View>)}
+            </View>
+          )}
+          <Text style={st.blockLabel}>종목별 한눈에</Text>
+          {stocks.map((r, i) => {
+            const bits = [r.counts.공시 ? `공시 ${r.counts.공시}` : '', r.counts.뉴스 ? `뉴스 ${r.counts.뉴스}` : ''].filter(Boolean);
+            const memo = r.memos ? (r.memos.length ? `메모 ${r.memos.length}개` : '') : r.memo ? '메모 1개와 연결' : '';
+            return (
+              <View key={r.stock_code} style={[st.gl, i === stocks.length - 1 && { borderBottomWidth: 0, paddingBottom: 0 }]}>
+                <Logo s={r} size={28} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={st.glN} numberOfLines={1}>{r.name}</Text>
+                  <Text style={st.glS} numberOfLines={2}>{[bits.length ? bits.join(' · ') : '새 소식 없음', memo || (bits.length ? '' : '연결된 메모 없음')].filter(Boolean).join(' · ')}</Text>
+                </View>
+                <Spark c={r.closes} color={up(r.pct)} />
+                <Text style={[st.glP, { color: up(r.pct) }]}>{sign(r.pct)}</Text>
+              </View>
+            );
+          })}
+        </View>
         {market ? (
           <>
             <SecH n="01" t="국내 증시 현황" />
             <View style={st.r3s}>
-              <Text style={st.marketBasis}>{rep.range} · 거래일 {rep.days.length}일 기준</Text>
+              <Text style={st.marketBasis}>{rep.range} · 거래일 {rep.days.length}일 기준 지수와 한 주 시황이에요</Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 {rep.market.map((m) => (
                   <View key={m.name} style={st.mk}><Text style={st.mkS}>{m.name}</Text><Text style={st.mkB}>{m.value}</Text><Text style={[st.mkP, { color: up(m.pct) }]}>{sign(m.pct)}</Text></View>
                 ))}
               </View>
               {marketText.length ? <View style={st.marketBrief}><Text style={st.blockLabel}>한 주 시황</Text>{marketText.map((p, i) => <Text key={i} keepAll style={st.txPlain}>{p}</Text>)}</View> : null}
-              <View style={{ marginTop: 4 }}><Text style={st.blockLabel}>날짜별 흐름</Text>
+              {rep.flow.length ? <View style={{ marginTop: 12 }}><Text style={st.blockLabel}>날짜별 흐름</Text>
                 {rep.flow.map((f, i) => (
                   <View key={f.day} style={[st.nw, i === rep.flow.length - 1 && { borderBottomWidth: 0, paddingBottom: 0 }]}>
                     <Text style={st.nwD}>{f.day}</Text><Text keepAll style={st.nwB}>{f.text}</Text><Text style={st.nwR}>{f.src}</Text>
                   </View>
                 ))}
-              </View>
+              </View> : null}
             </View>
           </>
         ) : null}
-        <SecH n={no(2)} t="종목별 흐름" />
-        {stocks.map((r) => (
+        <SecH n={no(2)} t="종목별 리포트" />
+        <Text style={st.secS}>숫자부터 소식과 메모까지 종목별로 정리했어요</Text>
+        {stocks.map((r, si) => (
           <View key={r.stock_code} style={[st.sk, { borderTopColor: r.sc }]}>
             <View style={[st.top, { backgroundColor: r.st }]}>
               <Logo s={r} size={28} />
               <Text style={st.topB}>{r.name}</Text>
               <View style={st.tg}><Text style={st.tgT}>{r.own}</Text></View>
               <View style={{ marginLeft: 'auto', alignItems: 'flex-end' }}>
+                <Text style={st.topO}>종목 {String(si + 1).padStart(2, '0')} · {last} 종가 기준</Text>
                 <Text style={st.qpr}>{won(r.close)}원</Text>
                 <Text style={[st.qprS, { color: up(r.pct) }]}>{sign(r.pct)}</Text>
               </View>
@@ -127,11 +171,11 @@ export function AppReport({ rep, stocks, market, allDefault, onBack, onOpenMemo,
                   {r.memo_digest ? <Text keepAll style={st.dgLead}>{stripRefs(r.memo_digest)}</Text> : null}
                   {r.memos.map((m) => (
                     <View key={m.memo_id} style={st.dgM}>
-                      <Pressable onPress={() => onOpenMemo(r.stock_code)} accessibilityRole="link"><Text style={st.dgT}>{m.title}  <Text style={st.dgS}>{m.meta} ›</Text></Text></Pressable>
+                      <Pressable onPress={() => onOpenMemo(r.stock_code, m.memo_id)} accessibilityRole="link"><Text style={st.dgT}>{m.title}  <Text style={st.dgS}>{m.meta} ›</Text></Text></Pressable>
                       {m.cards.map((c) => (
                         <View key={c.id} style={st.dgC}>
                           <Text style={st.dgS}>{c.date} · {c.kind}</Text>
-                          <Text keepAll style={st.dgCT}>{c.title}</Text>
+                          <Text keepAll style={st.dgCT}>{c.title}{c.refs.length ? <Text style={st.dgS}>{'  '}{c.refs.map((x) => `[${x}]`).join('')}</Text> : null}</Text>
                           <Text keepAll style={st.dgCB} numberOfLines={2}>{c.text}</Text>
                         </View>
                       ))}
@@ -165,7 +209,7 @@ export function AppReport({ rep, stocks, market, allDefault, onBack, onOpenMemo,
                       <View style={[st.no, { backgroundColor: x.kind === '공시' ? '#7C5CE0' : '#3D73F0' }]}><Text style={st.noT}>{x.no}</Text></View>
                       <View style={[st.tg5, x.kind === '뉴스' && { backgroundColor: '#E4ECFF' }]}><Text style={[st.tg5T, x.kind === '뉴스' && { color: '#2F6BDB' }]}>{x.kind}</Text></View>
                       <Text style={st.evD}>{x.date}</Text>
-                      <Text style={st.evB} numberOfLines={1}>{x.title}</Text>
+                      <Text style={st.evB}>{x.title}</Text>
                       <Text style={st.evD}>{x.src}</Text>
                     </View>
                   ))}
@@ -203,10 +247,16 @@ export function AppReport({ rep, stocks, market, allDefault, onBack, onOpenMemo,
           {rep.sources.filter((x) => (x.code ? codes.includes(x.code) : market)).map((x) => <Text key={x.text} style={st.src}>{x.text}</Text>)}
           <Text keepAll style={st.srcS}>{rep.source_note}</Text>
         </View>
-        <View style={st.ft}><Text style={st.ftT}>memo&apos;s · 주간보고서</Text><Text style={st.ftT}>투자 권유나 주가 예측이 아니에요</Text></View>
+        <Text keepAll style={st.disc}>공시·뉴스·시세에서 가져온 정보예요. 투자 권유나 주가 예측이 아니에요.</Text>
       </ScrollView>
     </View>
   );
+}
+
+/** 표지 종목 카드 줄: 3개까지 같은 폭으로 꽉 차게, 4개부터 가로 스크롤 */
+function MiniRow({ n, children }: { n: number; children: React.ReactNode }) {
+  if (n <= 3) return <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>{children}</View>;
+  return <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ marginTop: 14 }}>{children}</ScrollView>;
 }
 
 function SecH({ n, t }: { n: string; t: string }) {
@@ -219,14 +269,14 @@ function Logo({ s, size }: { s: ReportStock; size: number }) {
 
 const st = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#F3F4F6' },
-  cover: { borderRadius: 22, overflow: 'hidden', paddingTop: 18, paddingHorizontal: 16, paddingBottom: 16 },
+  cover: { backgroundColor: '#211A32', borderRadius: 22, overflow: 'hidden', paddingTop: 18, paddingHorizontal: 16, paddingBottom: 16 },
   k: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   kT: { fontSize: 11, lineHeight: 15, letterSpacing: 0.8, fontWeight: '800', color: '#B9A8E6' },
   kP: { backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3 },
   kPT: { fontSize: 11, lineHeight: 15, fontWeight: '600', color: '#FFFFFF' },
   h2: { fontSize: 24, lineHeight: 32, fontWeight: '800', color: '#FFFFFF', marginTop: 10, marginBottom: 4 },
   pd: { fontSize: 12, lineHeight: 17, color: '#C9C3D9' },
-  sm: { width: 104, backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: 10 },
+  sm: { backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: 10 },
   qn: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   smN: { fontSize: 12, lineHeight: 17, fontWeight: '700', color: '#FFFFFF' },
   smV: { fontSize: 16, lineHeight: 24, fontWeight: '400', marginTop: 6 },
@@ -246,14 +296,23 @@ const st = StyleSheet.create({
   ostV: { fontSize: 14, lineHeight: 19, fontWeight: '700', color: '#FFFFFF', marginTop: 2 },
   tl: { flexDirection: 'row', gap: 14, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.12)', marginTop: 14, paddingTop: 12 },
   tlT: { fontSize: 12, lineHeight: 17, color: '#C9C3D9' },
-  tlB: { color: '#FFFFFF', fontWeight: '700' },
+  tlB: { fontSize: 12, lineHeight: 17, color: '#FFFFFF', fontWeight: '700', fontVariant: ['tabular-nums'] },
   r3s: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, marginTop: 12 },
   sum: { borderLeftWidth: 3, borderLeftColor: '#8569E3' },
   sumH: { fontSize: 13, lineHeight: 18, fontWeight: '800', color: C.a2, marginBottom: 6 },
   sumP: { fontSize: 14, lineHeight: 24, color: '#2E2E38' },
+  gl: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: '#F0F1F4' },
+  glN: { fontSize: 14, lineHeight: 19, fontWeight: '700', color: C.ink },
+  glS: { fontSize: 12, lineHeight: 17, color: C.ink3 },
+  glP: { width: 52, textAlign: 'right', fontSize: 14, lineHeight: 19, fontWeight: '700' },
+  topO: { fontSize: 11, lineHeight: 15, color: C.ink3 },
   r3h: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 22, marginHorizontal: 2 },
   r3hE: { fontSize: 12, lineHeight: 17, color: C.a2 },
   r3hT: { fontSize: 16, lineHeight: 22, fontWeight: '800', color: C.ink },
+  miss: { alignItems: 'center', paddingTop: 96, paddingHorizontal: 24 },
+  missB: { fontSize: 18, lineHeight: 25, fontWeight: '800', color: C.ink },
+  missS: { fontSize: 13.5, lineHeight: 20, color: C.ink2, marginTop: 6, textAlign: 'center' },
+  secS: { fontSize: 12, lineHeight: 17, color: C.ink3, marginTop: 4, marginHorizontal: 2 },
   r3hL: { flex: 1, height: 1, backgroundColor: '#E2E4E8' },
   mk: { flex: 1, minWidth: 0, backgroundColor: '#F6F6F8', borderRadius: 12, paddingVertical: 9, paddingHorizontal: 10 },
   mkS: { fontSize: 11.5, lineHeight: 16, color: C.ink3 },
@@ -333,6 +392,5 @@ const st = StyleSheet.create({
   itDoneT: { fontSize: 12.5, lineHeight: 17, fontWeight: '600', color: '#8B95A1' },
   src: { fontSize: 12.5, lineHeight: 24, color: '#3F434A' },
   srcS: { fontSize: 12.5, lineHeight: 20, color: C.ink3, marginTop: 8 },
-  ft: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 18, marginHorizontal: 4 },
-  ftT: { fontSize: 11.5, lineHeight: 16, color: C.ink3 },
+  disc: { fontSize: 11.5, lineHeight: 17, color: C.ink3, textAlign: 'center', marginTop: 18 },
 });

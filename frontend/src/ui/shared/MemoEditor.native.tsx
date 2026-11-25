@@ -1,7 +1,8 @@
 import React, { useImperativeHandle, useRef, useState } from 'react';
-import { StyleSheet, type TextInputInstance } from 'react-native';
+import { StyleSheet, View, type TextInputInstance } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { appColor, ft, webColor } from '@/ui/theme';
+import { ON_DOM } from './onDom';
 import type { MemoEditorProps } from './MemoEditor.types';
 
 /**
@@ -32,10 +33,11 @@ export function MemoEditor({ value, onChangeText, editable, autoFocus, variant, 
         {lines}
       </Text>
     );
-  return (
+  const input = (
     <TextInput
       ref={ref}
       multiline
+      {...(ON_DOM ? { value } : null)}
       autoFocus={autoFocus ?? true}
       onFocus={onFocus}
       onChangeText={onChangeText}
@@ -46,13 +48,25 @@ export function MemoEditor({ value, onChangeText, editable, autoFocus, variant, 
       selectionColor={variant === 'app' ? appColor.deepPurple : webColor.ink}
       cursorColor={variant === 'app' ? appColor.deepPurple : webColor.ink}
       accessibilityLabel={accessibilityLabel ?? '메모 (첫 줄은 제목)'}
-      style={s.box}
+      style={[s.box, ON_DOM && dom.input]}
     >
-      {lines}
+      {/* 브라우저 미리보기의 textarea 는 글자 묶음(children)을 못 받아 value 로 */}
+      {ON_DOM ? null : lines}
     </TextInput>
+  );
+  if (!ON_DOM) return input;
+  /* 미리보기: 제목 크기가 보이게 글자를 뒤에 그리고 입력 칸 글자는 투명 */
+  return (
+    <View>
+      <Text style={s.box}>{lines}</Text>
+      {input}
+    </View>
   );
 }
 
+const dom = StyleSheet.create({
+  input: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, minHeight: 120, color: 'transparent', caretColor: '#15171A', outlineStyle: 'none' } as object,
+});
 const app = StyleSheet.create({
   box: { ...ft(15.5, 1.8), color: '#2E2E38', padding: 0, margin: 0, minHeight: 120 },
   title: { ...ft(21, 1.4), fontWeight: '800', color: appColor.ink },

@@ -5,7 +5,7 @@ import { Text } from '@/components/ui/AppText';
 import { useMotionK } from '@/ui/motion/useMotion';
 import type { UsageProps } from '../My.types';
 import type { TrackedStock } from '../My.mock';
-import { Chev, Foot, Grp, Item, Lb, MC, Odometer, Page, Rv, UsageBar } from './parts';
+import { Chev, Foot, Grp, Item, Lb, MC, Page, Rv, UsageBar } from './parts';
 import { Keep } from '@/ui/shared/Dark';
 
 /**
@@ -37,10 +37,9 @@ export function AppUsage(p: UsageProps) {
           <View style={st.planH}>
             <Text style={st.planHT}>{p.plan_name}</Text>
           </View>
-          <View style={st.big}>
-            <Odometer value={pct} size={30} lineHeight={38} />
-            <Text style={st.bigT}>% 사용</Text>
-          </View>
+          <Text style={[st.big, st.bigT]}>
+            {pct}% 사용
+          </Text>
           <UsageBar pct={pct} delay={250} />
           <View style={st.m}>
             <Text style={[st.mT, { color: st2 === 'er' ? MC.red : MC.ink2 }]}>{p.credits_left != null ? `남은 크레딧 ${p.credits_left}개` : `남은 사용량 ${Math.max(0, 100 - pct)}%`}</Text>
@@ -118,8 +117,8 @@ const st = StyleSheet.create({
   plan: { padding: 16 },
   planH: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   planHT: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: MC.ink },
-  big: { flexDirection: 'row', alignItems: 'flex-end', marginTop: 10, marginBottom: 2 },
-  bigT: { fontSize: 30, lineHeight: 38, fontWeight: '800', color: MC.ink },
+  big: { marginTop: 10, marginBottom: 2 },
+  bigT: { fontSize: 30, lineHeight: 38, fontWeight: '800', color: MC.ink, fontVariant: ['tabular-nums'] },
   m: { flexDirection: 'row', justifyContent: 'space-between' },
   mT: { fontSize: 12, lineHeight: 17 },
   lbRow: { flexDirection: 'row' },

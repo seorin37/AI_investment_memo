@@ -44,7 +44,7 @@ export function AppReportSheet({ open, stocks, period, onClose, onMake, counts =
         </View>
         {stocks.map((s) => {
           const k = s.counts.공시 + s.counts.뉴스;
-          return <Row key={s.stock_code} on={pick.includes(s.stock_code)} dim={counts && !k} name={s.name} sub={!counts ? '지난주 시세·공시·뉴스·내 메모' : k ? `이번 주 공시·뉴스 ${k}건` : '이번 주 공시·뉴스 없음'} tag={s.own} onPress={() => setPick((a) => (a.includes(s.stock_code) ? a.filter((x) => x !== s.stock_code) : [...a, s.stock_code]))} />;
+          return <Row key={s.stock_code} on={pick.includes(s.stock_code)} dim={counts && !k} name={s.name} sub={!counts ? '지난주 시세·공시·뉴스·내 메모' : k ? `이번 주 공시 ${s.counts.공시} · 뉴스 ${s.counts.뉴스}` : '이번 주 공시·뉴스 없음'} tag={s.own} onPress={() => setPick((a) => (a.includes(s.stock_code) ? a.filter((x) => x !== s.stock_code) : [...a, s.stock_code]))} />;
         })}
         <Row on={mkt} name="국내 증시 주간 요약" sub="코스피·코스닥·원/달러와 날짜별 흐름" tag="선택" gray onPress={() => setMkt(!mkt)} />
         <Text style={st.note}>공시·뉴스가 없는 종목도 시세·재무·메모 추적 현황은 들어가요</Text>

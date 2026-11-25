@@ -1,9 +1,10 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ErrorState, Loading } from '@/components/ui/primitives';
 import { useUI } from '@/store/ui';
 import { TopBar } from '@/ui/layout/app/TopBar';
 import { useMyProfile } from '@/ui/screens/my/useMyProfile';
+import { NewMemoSheet, type NewMemoTarget } from '@/ui/screens/memo/app/NewMemoSheet';
 import { AppMyStocks } from '@/ui/screens/stocks/app/MyStocks';
 import { mockMyStocksData } from '@/ui/screens/stocks/MyStocks.mock';
 import type { MyStock } from '@/ui/screens/stocks/MyStocks.types';
@@ -17,6 +18,7 @@ import { useStockPrices } from '@/ui/screens/stocks/useStockPrices';
  */
 export default function MyStocksTab() {
   const router = useRouter();
+  const [memoTo, setMemoTo] = useState<NewMemoTarget | null>(null);
   const { profile: { name: myName, photoUrl } } = useMyProfile();
   const setTabBarHidden = useUI((s) => s.setTabBarHidden);
   const data = useMyStocksData();
@@ -27,6 +29,7 @@ export default function MyStocksTab() {
   if (data.loading) return <Loading height={400} />;
   if (data.failed) return <ErrorState message="내 종목을 불러오지 못했어요" onRetry={data.retry} />;
   return (
+    <>
     <AppMyStocks
       {...mockMyStocksData}
       {...priced}
@@ -37,6 +40,7 @@ export default function MyStocksTab() {
         <TopBar
           preset="stocks"
           title="내 종목"
+          subtitle="관심을 둔 이유까지, 메모와 함께 보관해요"
           actions={[
             { icon: 'search', label: '종목 찾기', onPress: onSearch },
             { icon: 'bell', label: '알림', onPress: () => router.push('/my-inbox') },
@@ -55,7 +59,9 @@ export default function MyStocksTab() {
       onRemove={(codes) => data.setStocks((all) => all.filter((s) => !codes.includes(s.stock_code)))}
       onRestore={data.setStocks}
       onReorder={(codes) => data.setStocks((all) => codes.map((c) => all.find((s) => s.stock_code === c)).filter((s): s is MyStock => !!s))}
-      onWriteMemo={(code) => router.push({ pathname: '/memo/new', params: { code, name: data.universe.find((s) => s.stock_code === code)?.name ?? data.stocks.find((s) => s.stock_code === code)?.name ?? '', first_line: '' } })}
+      onWriteMemo={(code) => setMemoTo({ code, name: data.universe.find((s) => s.stock_code === code)?.name ?? data.stocks.find((s) => s.stock_code === code)?.name ?? '' })}
     />
+    <NewMemoSheet target={memoTo} onClose={() => setMemoTo(null)} onSaved={(code) => router.push({ pathname: '/stocks/[code]', params: { code } })} />
+    </>
   );
 }

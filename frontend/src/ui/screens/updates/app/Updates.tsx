@@ -5,7 +5,6 @@ import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { ChevDown16 } from '@/ui/icons/MemoGlyphs';
 import { Collapse } from '@/ui/motion/Collapse';
-import { Odometer } from '@/ui/motion/Numbers';
 import { Reveal } from '@/ui/motion/Reveal';
 import { Skeleton } from '@/ui/motion/Skeleton';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
@@ -18,6 +17,7 @@ import { StockLogo } from '@/ui/shared/StockLogo';
 import { appColor, curve, ft } from '@/ui/theme';
 import type { AppUpdatesProps, KindFilter, UpdateItem, UpdateStock } from '../Updates.types';
 import { versionsOf } from '../Updates.mock';
+import { TabFrame, TabScroll } from '@/ui/layout/app/TabFrame';
 import { APP_TAG, KINDS, ago, byStock, dayGroup, kstMd, sourceLine, unreadOf } from '../updatesFormat';
 import { useNudge } from '@/store/nudge';
 
@@ -94,16 +94,15 @@ export function AppUpdates(p: AppUpdatesProps) {
   const nN = cur ? unreadOf(byStock(p.items, cur.stock_code)) : total;
 
   return (
-    <View style={st.root}>
+    <TabFrame style={st.root}>
       {p.header({ line: scrolled, onReadAll: code ? undefined : readAll, readAllOff: !total })}
-      <ScrollView style={st.flex} contentContainerStyle={st.pw} stickyHeaderIndices={[1]} scrollEventThrottle={16} onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > 0)} showsVerticalScrollIndicator={false}>
+      <TabScroll style={st.flex} contentContainerStyle={st.pw} stickyHeaderIndices={[1]} onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > 0)} showsVerticalScrollIndicator={false}>
         <View style={st.lt}>
-          <Text style={st.ltP}>내 종목의 공시·뉴스·주가 변동을 모아봤어요</Text>
           <View style={st.unr}>
             <View style={st.unrDot} />
-            <Text style={st.unrT}>읽지 않은 소식 </Text>
-            <Odometer value={total} style={st.unrB} />
-            <Text style={st.unrB}>건</Text>
+            <Text style={st.unrT}>
+              읽지 않은 소식 <Text style={st.unrB}>{total}건</Text>
+            </Text>
           </View>
         </View>
         <View style={st.chipsBar}>
@@ -139,7 +138,7 @@ export function AppUpdates(p: AppUpdatesProps) {
         )}
         <Text style={st.disc}>투자 권유가 아닌 참고 정보예요 · AI는 틀릴 수 있어 원문을 꼭 확인해 주세요</Text>
         <View style={{ height: nudge && nN ? 60 : 0 }} />
-      </ScrollView>
+      </TabScroll>
 
       {nudge && nN && !search ? (
         <View style={[st.nudge, { bottom: snack ? 76 : 16 }]} pointerEvents="box-none">
@@ -148,7 +147,7 @@ export function AppUpdates(p: AppUpdatesProps) {
       ) : null}
       <AppSnackbar visible={!!snack} message={snack?.msg ?? ''} onUndo={snack?.undo} style={st.snack} />
       {search ? <SearchOver stocks={p.stocks} items={p.items} q={q} setQ={setQ} top={insets.top} onClose={() => setSearch(false)} onPick={(c) => (setSearch(false), pick(c))} /> : null}
-    </View>
+    </TabFrame>
   );
 }
 
@@ -182,8 +181,10 @@ function SlideChips({ items, value, onChange }: { items: { key: string; label: s
             accessibilityState={{ selected: on }}
             style={[st.chip, !on && st.chipOff]}
           >
-            <Text style={[st.chipT, on && { color: '#FFFFFF' }]}>{c.label}</Text>
-            {c.count !== undefined ? <Text style={[st.chipN, on && { color: 'rgba(255,255,255,0.8)' }]}>{c.count}</Text> : null}
+            <Text style={[st.chipT, on && { color: '#FFFFFF' }]}>
+              {c.label}
+              {c.count !== undefined ? <Text style={[st.chipN, on && { color: 'rgba(255,255,255,0.44)' }]}> {c.count}</Text> : null}
+            </Text>
             {c.badge ? (
               <View style={st.chipC}>
                 <Text style={st.chipCT}>{c.badge}</Text>
@@ -344,12 +345,9 @@ function StockView({ p, s, kind, setKind, openId, onOpen }: { p: AppUpdatesProps
   return (
     <View>
       {card}
-      <View style={st.sub2}>
-        <Text style={st.sub2T}>읽지 않은 소식 </Text>
-        <Odometer value={unreadOf(all)} style={st.sub2B} />
-        <Text style={st.sub2B}>건</Text>
-        <Text style={st.sub2T}> · 최근 30일</Text>
-      </View>
+      <Text style={[st.sub2, st.sub2T]}>
+        읽지 않은 소식 <Text style={st.sub2B}>{unreadOf(all)}건</Text> · 최근 30일
+      </Text>
       <KindChips pool={all} kind={kind} setKind={setKind} />
       {groups.map(([g, list]) => (
         <View key={g}>
@@ -651,11 +649,10 @@ const st = StyleSheet.create({
   flexMin: { flex: 1, minWidth: 0 },
   pw: { paddingBottom: 30 },
   lt: { paddingHorizontal: 18, paddingBottom: 10 },
-  ltP: { ...ft(13.5), color: appColor.ink2, marginTop: 6 },
-  unr: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', marginTop: 10, minHeight: 30, paddingHorizontal: 12, borderRadius: 15, backgroundColor: '#EEE9FB' },
+  unr: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', minHeight: 30, paddingHorizontal: 12, borderRadius: 15, backgroundColor: '#EEE9FB' },
   unrDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#E5484D', marginRight: 6 },
   unrT: { ...ft(13), fontWeight: '700', color: '#5B3BD1' },
-  unrB: { fontSize: 13, lineHeight: 17, fontWeight: '700', color: '#5B3BD1' },
+  unrB: { ...ft(13), fontWeight: '700', color: '#5B3BD1', fontVariant: ['tabular-nums'] },
   chipsBar: { backgroundColor: appColor.bg, paddingTop: 8, paddingBottom: 12 },
   find: { height: 42, marginHorizontal: 16, marginBottom: 12, borderRadius: 14, backgroundColor: '#FFFFFF', flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14 },
   findT: { ...ft(14), color: appColor.ink3 },
@@ -664,7 +661,7 @@ const st = StyleSheet.create({
   chip: { minHeight: 36, paddingHorizontal: 14, borderRadius: 18, flexDirection: 'row', alignItems: 'center', gap: 6 },
   chipOff: { borderWidth: 1, borderColor: '#DADDE2' },
   chipT: { ...ft(14), fontWeight: '600', color: appColor.ink2 },
-  chipN: { ...ft(14), fontWeight: '700', color: appColor.ink2, opacity: 0.55, marginLeft: -1 },
+  chipN: { ...ft(14), fontWeight: '700', color: 'rgba(87,91,99,0.55)', fontVariant: ['tabular-nums'] },
   chipC: { minWidth: 18, height: 18, borderRadius: 9, backgroundColor: appColor.red, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center' },
   chipCT: { fontSize: 11, lineHeight: 13, fontWeight: '700', color: '#FFFFFF' },
   tch: { paddingVertical: 10 },
@@ -687,9 +684,9 @@ const st = StyleSheet.create({
   sc: { backgroundColor: '#FFFFFF', borderRadius: 22, marginHorizontal: 16, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
   mb: { marginLeft: 'auto', minHeight: 32, borderRadius: 16, backgroundColor: '#F4F0FF', paddingHorizontal: 12, justifyContent: 'center' },
   mbT: { ...ft(13), fontWeight: '700', color: appColor.deepPurple },
-  sub2: { flexDirection: 'row', alignItems: 'center', paddingTop: 12, paddingHorizontal: 20 },
+  sub2: { paddingTop: 12, paddingHorizontal: 20 },
   sub2T: { ...ft(13), color: appColor.ink2 },
-  sub2B: { fontSize: 13, lineHeight: 17, fontWeight: '700', color: appColor.deepPurple },
+  sub2B: { ...ft(13), fontWeight: '700', color: appColor.deepPurple, fontVariant: ['tabular-nums'] },
   gh: { ...ft(13), fontWeight: '700', color: appColor.ink2, paddingTop: 12, paddingHorizontal: 20, paddingBottom: 7 },
   /* 같은 날짜 소식 한 카드 */
   gc: { backgroundColor: '#FFFFFF', borderRadius: 20, marginHorizontal: 16, overflow: 'hidden' },

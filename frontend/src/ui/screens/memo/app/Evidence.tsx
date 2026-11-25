@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BottomBar } from '@/ui/shared/app/BottomBar';
 import { Text } from '@/components/ui/AppText';
 import { BackChevron } from '@/ui/icons/MemoGlyphs';
 import { appColor, ft } from '@/ui/theme';
@@ -21,13 +22,13 @@ export function AppEvidence(p: EvidenceProps) {
       <ScrollView style={st.flex} contentContainerStyle={[st.ob, { paddingBottom: 120 + insets.bottom }]} showsVerticalScrollIndicator={false}>
         <EvidenceBody item={p.item} memo={p.memo} version={p.version} onOpenSource={p.onOpenSource} onOpenHistory={p.onOpenHistory} onSuggestMemo={p.onSuggestMemo} />
       </ScrollView>
-      <View style={[st.obar, { paddingBottom: 18 + insets.bottom }]}>
+      <BottomBar style={[st.obar, { paddingBottom: 18 + insets.bottom }]}>
         {acts.map((a) => (
           <Pressable key={a.label} onPress={() => (a.a === 'memo' ? p.onShowMemo() : p.onOpenSource(p.item))} accessibilityRole="button" style={({ pressed }) => [st.bt, a.gray && st.btGray, pressed && st.press]}>
             <Text style={[st.btT, a.gray && { color: appColor.ink }]}>{a.label}</Text>
           </Pressable>
         ))}
-      </View>
+      </BottomBar>
     </View>
   );
 }

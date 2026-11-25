@@ -91,10 +91,13 @@ export function AppPlayer({ item, ep, t, playing, speed, onBack, onToggle, onSee
         </View>
         <Sec t="관련 업데이트 · 출처" />
         <View style={st.card}>
-          {ep.sources.map((r, i) => (
+          {[...(ep.market_source ? [{ kind: '시장', text: ep.market_source, memo: '' }] : []), ...ep.sources].map((r, i) => (
             <View key={`${i}-${r.text}`} style={[st.rr, i > 0 && st.line]}>
               <View style={[st.tg, r.kind === '뉴스' && { backgroundColor: '#E8F0FF' }]}><Text style={[st.tgT, r.kind === '뉴스' && { color: '#2F6BDB' }]}>{r.kind}</Text></View>
-              <Text style={st.rrT} numberOfLines={1}>{r.text}</Text>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={st.rrT} numberOfLines={1}>{r.text}</Text>
+                {r.memo ? <Text style={st.rrM} numberOfLines={1}>{r.memo}</Text> : null}
+              </View>
             </View>
           ))}
         </View>
@@ -190,10 +193,11 @@ const st = StyleSheet.create({
   dot: { width: 9, height: 9, borderRadius: 5, backgroundColor: '#D5D8DD', marginTop: 6 },
   lnB: { fontSize: 12, lineHeight: 17, fontWeight: '700' },
   lnT: { fontSize: 13.5, lineHeight: 22 },
-  rr: { flexDirection: 'row', alignItems: 'center', gap: 10, height: 46 },
+  rr: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 46, paddingVertical: 8 },
   tg: { borderRadius: 7, paddingHorizontal: 7, paddingVertical: 3, backgroundColor: '#F0ECFF' },
   tgT: { fontSize: 11.5, lineHeight: 15, fontWeight: '700', color: '#5B3BD1' },
-  rrT: { flex: 1, fontSize: 13.5, lineHeight: 19, color: C.ink },
+  rrM: { fontSize: 12, lineHeight: 17, color: C.ink3 },
+  rrT: { fontSize: 13.5, lineHeight: 19, color: C.ink },
   mlink: { backgroundColor: '#FFFFFF', borderRadius: 20, marginHorizontal: 16, marginBottom: 10, paddingVertical: 14, paddingHorizontal: 16 },
   ymemo: { backgroundColor: '#FFF1BF', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12 },
   ymH: { fontSize: 12, lineHeight: 17, color: '#8A6A00' },

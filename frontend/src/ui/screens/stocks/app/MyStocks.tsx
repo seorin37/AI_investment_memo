@@ -1,9 +1,9 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Animated, BackHandler, PanResponder, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Animated, BackHandler, PanResponder, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Rect } from 'react-native-svg';
+import { TAB_BAR_H, TabFrame, TabScroll } from '@/ui/layout/app/TabFrame';
 import { Text } from '@/components/ui/AppText';
-import { Odometer } from '@/ui/motion/Numbers';
 import { Reveal } from '@/ui/motion/Reveal';
 import { Skeleton } from '@/ui/motion/Skeleton';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
@@ -161,7 +161,7 @@ export function AppMyStocks(p: AppMyStocksProps) {
   const types = sel ? [...sel].map((c) => L.find((s) => s.stock_code === c)?.status) : [];
 
   return (
-    <View style={st.root}>
+    <TabFrame style={st.root}>
       {p.header({ onSearch: () => setAdd(true) })}
       {/* 선택 머리 (원본 .selh: 위 바 자리로 내려옴) */}
       {sel ? (
@@ -177,8 +177,7 @@ export function AppMyStocks(p: AppMyStocksProps) {
           </Pressable>
         </Reveal>
       ) : null}
-      <ScrollView style={st.flex} contentContainerStyle={{ paddingBottom: 30 + (sel ? 80 + insets.bottom : 0) }} stickyHeaderIndices={L.length ? [1] : undefined} scrollEnabled={!drag} showsVerticalScrollIndicator={false}>
-        <Text style={st.sub}>관심을 둔 이유까지, 메모와 함께 보관해요</Text>
+      <TabScroll style={st.flex} contentContainerStyle={{ paddingBottom: 30 + (sel ? 80 + insets.bottom : 0) }} stickyHeaderIndices={L.length ? [0] : undefined} scrollEnabled={!drag} showsVerticalScrollIndicator={false}>
         {L.length ? (
           <View>
             {/* 끈적이 머리는 자기 style 을 바깥 틀로 옮겨서, 줄 배치는 안쪽 View 에 */}
@@ -279,7 +278,7 @@ export function AppMyStocks(p: AppMyStocksProps) {
             <Text style={st.hint2}>종목을 꾹 누르면 여러 개를 옮기거나 빼고, ⋮⋮를 끌어 순서를 바꿀 수 있어요</Text>
           </>
         )}
-      </ScrollView>
+      </TabScroll>
 
       {/* 선택 동작 막대 (원본 .abar: 탭바 자리 80) */}
       {sel ? (
@@ -330,7 +329,7 @@ export function AppMyStocks(p: AppMyStocksProps) {
           show({ msg: `${n}${josa(n)} ${KO[h]} 종목에 추가했어요`, action: { label: '메모 쓰기', onPress: () => (setSnack(null), p.onWriteMemo(c)) } });
         }}
       />
-    </View>
+    </TabFrame>
   );
 }
 
@@ -369,8 +368,10 @@ function FilterChips({ value, onChange, holding, watching }: { value: Filter; on
             accessibilityState={{ selected: on }}
             style={({ pressed }) => [st.chip, on && st.chipOn, pressed && { transform: [{ scale: 0.94 }] }]}
           >
-            <Text style={[st.chipT, on && st.chipTOn]}>{l}</Text>
-            {n !== null ? <Odometer value={n} style={on ? st.chipNOn : st.chipN} /> : null}
+            <Text style={[st.chipT, on && st.chipTOn]}>
+              {l}
+              {n !== null ? <Text style={[st.chipT, on && st.chipTOn, st.chipN]}> {n}</Text> : null}
+            </Text>
           </Pressable>
         );
       })}
@@ -464,21 +465,19 @@ function StockRow({ s, sel, on, fresh, lifted, dragY, shift, group, api, onPress
 const st = StyleSheet.create({
   root: { flex: 1, backgroundColor: appColor.bg },
   flex: { flex: 1 },
-  sub: { ...ft(12.5), color: appColor.ink3, paddingHorizontal: 18, paddingBottom: 10 },
-  selh: { position: 'absolute', left: 0, right: 0, height: 60, zIndex: 7, flexDirection: 'row', alignItems: 'center', paddingLeft: 8, paddingRight: 14, backgroundColor: appColor.bg },
+  selh: { position: 'absolute', left: 0, right: 0, height: TAB_BAR_H, zIndex: 7, flexDirection: 'row', alignItems: 'center', paddingLeft: 8, paddingRight: 14, backgroundColor: appColor.bg },
   ib: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
   selhT: { ...ft(18), fontWeight: '700', color: appColor.ink, marginLeft: 4 },
   all: { marginLeft: 'auto', padding: 8 },
   allT: { ...ft(14.5), fontWeight: '700', color: appColor.tabPurple },
-  chips: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 4, paddingHorizontal: 16, paddingBottom: 12, backgroundColor: appColor.bg },
+  chips: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingBottom: 12, backgroundColor: appColor.bg },
   cw: { flexDirection: 'row', gap: 6 },
   cpl: { position: 'absolute', top: 0, bottom: 0, borderRadius: 17, backgroundColor: appColor.accent },
   chip: { minHeight: 34, paddingHorizontal: 13, borderRadius: 17, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E3E5EA', flexDirection: 'row', alignItems: 'center', gap: 3 },
   chipOn: { backgroundColor: 'transparent', borderColor: 'transparent' },
   chipT: { ...ft(13.5), color: appColor.ink },
   chipTOn: { color: '#FFFFFF', fontWeight: '700' },
-  chipN: { fontSize: 13.5, color: appColor.ink },
-  chipNOn: { fontSize: 13.5, color: '#FFFFFF', fontWeight: '700' },
+  chipN: { fontVariant: ['tabular-nums'] },
   addc: { marginLeft: 'auto', minHeight: 34, paddingHorizontal: 12, borderRadius: 17, backgroundColor: '#FFFFFF', flexDirection: 'row', alignItems: 'center', gap: 4 },
   addcT: { ...ft(13), color: appColor.ink },
   grp: { backgroundColor: '#FFFFFF', borderRadius: 20, marginHorizontal: 16, marginBottom: 12, paddingTop: 14, paddingHorizontal: 14, paddingBottom: 6 },
@@ -501,7 +500,7 @@ const st = StyleSheet.create({
   pr: { alignItems: 'flex-end' },
   prB: { ...ft(15), fontWeight: '700', color: appColor.ink },
   prS: { ...ft(12.5), fontWeight: '600' },
-  hdl: { width: 28, height: 40, marginLeft: -4, alignItems: 'center', justifyContent: 'center' },
+  hdl: { width: 28, height: 40, marginVertical: -2, marginLeft: -4, alignItems: 'center', justifyContent: 'center' },
   none: { ...ft(12.5), color: appColor.ink3, paddingTop: 4, paddingHorizontal: 4, paddingBottom: 12 },
   foot2: { textAlign: 'center', ...ft(11.5), color: appColor.ink3, marginTop: 6, marginBottom: 10 },
   hint2: { textAlign: 'center', ...ft(11.5), color: appColor.ink3, marginTop: -4, marginBottom: 12, paddingHorizontal: 16 },

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Animated, BackHandler, PanResponder, Pressable, ScrollView, StyleSheet, View, type ScrollViewInstance } from 'react-native';
+import { Animated, BackHandler, PanResponder, Pressable, StyleSheet, View, type ScrollViewInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { TAB_BAR_H, TabFrame, TabScroll } from '@/ui/layout/app/TabFrame';
 import { Text } from '@/components/ui/AppText';
 import { GripDots, PlusGlyph, SlidersGlyph, WIDGET_META, WidgetGlyph } from '@/ui/icons/HomeGlyphs';
 import { Reveal } from '@/ui/motion/Reveal';
@@ -205,7 +206,7 @@ export function AppHome(p: AppHomeProps) {
 
   const snackBottom = editing ? 24 + insets.bottom : 16;
   return (
-    <View style={st.root}>
+    <TabFrame style={st.root}>
       {p.header({ line, onSearch: () => setSearch(true) })}
       {/* 편집 머리 (원본 .eh: 위 바 자리에 페이드 · -6 → 0) */}
       <Animated.View pointerEvents={editing ? 'auto' : 'none'} style={[st.eh, { top: insets.top, opacity: editV, transform: [{ translateY: editV.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }] }]}>
@@ -218,13 +219,11 @@ export function AppHome(p: AppHomeProps) {
           <Text style={st.doneT}>완료</Text>
         </Pressable>
       </Animated.View>
-      <ScrollView
+      <TabScroll
         ref={scroll}
         style={st.flex}
         contentContainerStyle={st.pw}
         scrollEnabled={!lifted}
-        showsVerticalScrollIndicator={false}
-        scrollEventThrottle={16}
         onScroll={(e) => setLine(e.nativeEvent.contentOffset.y > 0)}
       >
         {/* 편집 안내 (원본 .einfo: 높이 0 → 52) */}
@@ -286,7 +285,7 @@ export function AppHome(p: AppHomeProps) {
           </Reveal>
         ) : null}
         <View style={{ height: !editing && nudge && !p.firstStart ? 64 : 0 }} />
-      </ScrollView>
+      </TabScroll>
 
       {nudge && !editing && ready && !p.firstStart ? (
         <View style={[st.nudge, { bottom: snack ? 76 : 16 }]} pointerEvents="box-none">
@@ -330,7 +329,7 @@ export function AppHome(p: AppHomeProps) {
           setFresh({ ids: DEFAULT_W, key: nextKey(), flash: false });
         }}
       />
-    </View>
+    </TabFrame>
   );
 }
 
@@ -483,9 +482,9 @@ const st = StyleSheet.create({
   root: { flex: 1, backgroundColor: appColor.bg },
   flex: { flex: 1 },
   flexMin: { flex: 1, minWidth: 0 },
-  pw: { paddingTop: 4, paddingHorizontal: 16, paddingBottom: 40 },
+  pw: { paddingHorizontal: 16, paddingBottom: 40 },
   wl: { gap: 14 },
-  eh: { position: 'absolute', left: 0, right: 0, height: 60, zIndex: 7, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, backgroundColor: appColor.bg },
+  eh: { position: 'absolute', left: 0, right: 0, height: TAB_BAR_H, zIndex: 7, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, backgroundColor: appColor.bg },
   ehT: { flex: 1, ...ft(20), fontWeight: '700', color: appColor.ink },
   addp: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 34, paddingLeft: 11, paddingRight: 13, borderRadius: 17, backgroundColor: appColor.accentSoft2, marginRight: 6 },
   addpT: { ...ft(14), fontWeight: '800', color: appColor.deepPurple },
@@ -510,7 +509,7 @@ const st = StyleSheet.create({
   pill: { minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, borderRadius: 16, backgroundColor: appColor.surface },
   pillEdit: { marginLeft: 'auto' },
   pillT: { ...ft(13), color: appColor.ink2 },
-  pillB: { fontWeight: '700', color: appColor.ink },
+  pillB: { ...ft(13), fontWeight: '700', color: appColor.ink, fontVariant: ['tabular-nums'] },
   nudge: { position: 'absolute', left: 16, right: 16, alignItems: 'center' },
   snack: { position: 'absolute', left: 14, right: 14 },
   wr: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 22, minHeight: 68 },

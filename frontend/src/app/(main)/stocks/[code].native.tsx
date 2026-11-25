@@ -1,4 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
+import { View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useMockNotice } from '@/components/layout/MobileScreen';
 import { copyText, memoText } from '@/lib/copyText';
@@ -9,7 +10,8 @@ import type { CompanyInfoProps } from '@/ui/screens/company/CompanyInfo.types';
 import { useCompanyInfo } from '@/ui/screens/company/useCompanyInfo';
 import { AppStockTop } from '@/ui/screens/board/app/StockTop';
 import { mockCompanyByCode } from '@/ui/screens/company/CompanyInfo.mock';
-import { TopBar } from '@/ui/layout/app/TopBar';
+import { StockBar } from '@/ui/screens/board/app/StockBar';
+import { NewMemoSheet, type NewMemoTarget } from '@/ui/screens/memo/app/NewMemoSheet';
 import { AiOffSheet } from '@/ui/shared/AiOffSheet';
 import { AppMemoBoard } from '@/ui/screens/board/app/MemoBoard';
 import { patchMemo } from '@/ui/screens/board/boardCards';
@@ -38,7 +40,15 @@ export default function StockDetail() {
   const [tab, setTab] = useState<'board' | 'company'>(tabParam === 'company' || tabParam === 'info' ? 'company' : 'board');
   const lastY = useRef(0);
   const [startY, setStartY] = useState(0);
-  const onScrollY = useCallback((y: number) => { lastY.current = y; }, []);
+  /* 머리: 두 탭이 같은 StockBar · 같은 스크롤 상태 */
+  const cardH = useRef(200);
+  const [compact, setCompact] = useState(false);
+  const [line, setLine] = useState(false);
+  const onScrollY = useCallback((y: number) => {
+    lastY.current = y;
+    setLine(y > 8);
+    setCompact(y > cardH.current - 10);
+  }, []);
   const empty = code === mockEmptyStock.stock_code;
   /* 위 카드: 두 탭이 같은 카드 · 같은 시세 (최신 종가 GET /stocks/{code}/quote). 탭을 바꿔도 스크롤 자리를 이어 감 */
   const { stock, priceNote, loading } = useStockTop(code, empty ? mockEmptyStock : mockBoardStock);
@@ -51,6 +61,7 @@ export default function StockDetail() {
   const spent = usage.paused || usage.usage_pct >= 100;
   const toast = useUI((s) => s.showToast);
   const askAiOff = useAiOffChoice();
+  const [memoTo, setMemoTo] = useState<NewMemoTarget | null>(null);
   const [offFor, setOffFor] = useState<Memo | null>(null);
   /* AI 끄기 확인 창의 '추적 항목 N개': 실제 모드면 그 메모의 추적 항목 수 (질문 제외), mock 은 예시 2개 */
   const offTimeline = useMemoTimeline(offFor?.id ?? '', real && !!offFor);
@@ -60,18 +71,23 @@ export default function StockDetail() {
   useFocusEffect(useCallback(() => () => setTabBarHidden(false), [setTabBarHidden]));
   const onSelectionChange = useCallback((n: number) => setTabBarHidden(n > 0), [setTabBarHidden]);
 
-  const topCard = <AppStockTop stock={stock} priceNote={priceNote} loading={loading} />;
+  const topCard = (
+    <View onLayout={(e) => { cardH.current = e.nativeEvent.layout.height; }}>
+      <AppStockTop stock={stock} priceNote={priceNote} loading={loading} />
+    </View>
+  );
+  const header = <StockBar name={stock.name} price={priceNote || loading ? null : stock.price} pct={stock.change_pct} compact={compact} line={line} onBack={() => router.back()} onMore={() => notice('종목 메뉴')} />;
   const changeTab = (t: 'board' | 'company') => {
     setStartY(lastY.current);
     setTab(t);
   };
 
-  if (tab === 'company') return <AppCompanyTab code={code} onBack={() => router.back()} onMore={() => notice('종목 메뉴')} onChangeTab={changeTab} onNudge={() => notice('주간보고서')} stock={stock} noPrice={!!priceNote || loading} topCard={topCard} startY={startY} onScrollY={onScrollY} />;
+  if (tab === 'company') return <AppCompanyTab code={code} onBack={() => router.back()} onMore={() => notice('종목 메뉴')} onChangeTab={changeTab} onNudge={() => notice('주간보고서')} stock={stock} header={header} topCard={topCard} startY={startY} onScrollY={onScrollY} />;
 
   return (
     <>
     <AppMemoBoard
-      header={<TopBar preset="board" title={stock.name} onBack={() => router.back()} actions={[{ icon: 'moreV2', label: '종목 메뉴', onPress: () => notice('종목 메뉴') }]} />}
+      header={header}
       stock={stock}
       topCard={topCard}
       startY={startY}
@@ -82,7 +98,7 @@ export default function StockDetail() {
       notice={boardNotice}
       onOpenMemo={(id, t) => router.push({ pathname: '/memo/[id]', params: { id, tab: t } })}
       onOpenChecklist={(id) => router.push({ pathname: '/checklist/[id]', params: { id, code, name: stock.name } })}
-      onNewMemo={(first) => router.push({ pathname: '/memo/new', params: { code, name: stock.name, first_line: first ?? '' } })}
+      onNewMemo={(first) => setMemoTo({ code, name: stock.name, text: first })}
       onNewChecklist={() => router.push({ pathname: '/checklist/[id]', params: { id: 'new', code, name: stock.name } })}
       onToggleChecklistItem={board.toggleItem}
       onPin={board.pin}
@@ -109,6 +125,7 @@ export default function StockDetail() {
       aiCount={usage.ai_count}
       onSpentAction={(a) => (a === 'choice' ? askAiOff() : router.push(a === 'credit' ? '/studio-charge' : '/my-plans'))}
     />
+    <NewMemoSheet target={memoTo} onClose={() => setMemoTo(null)} />
     <AiOffSheet
       open={!!offFor}
       stockName={stock.name}
@@ -127,7 +144,7 @@ export default function StockDetail() {
 }
 
 /* 기업정보 (앱, 2026-11-21): 실제 API 4개 → 화면 props (useCompanyInfo). 주가 데이터도 없으면 '준비 중' */
-function AppCompanyTab({ code, ...rest }: { code: string } & Pick<CompanyInfoProps, 'onBack' | 'onMore' | 'onChangeTab' | 'onNudge' | 'stock'> & { topCard: React.ReactNode; noPrice: boolean; startY: number; onScrollY: (y: number) => void }) {
+function AppCompanyTab({ code, ...rest }: { code: string } & Pick<CompanyInfoProps, 'onBack' | 'onMore' | 'onChangeTab' | 'onNudge' | 'stock'> & { topCard: React.ReactNode; header: React.ReactNode; startY: number; onScrollY: (y: number) => void }) {
   const { data, error } = useCompanyInfo(code);
   /* 받는 중에도 카드 · 탭은 그대로 (아래만 뼈대) */
   return <AppCompanyInfo {...(data ?? mockCompanyByCode(code))} {...rest} loading={!data && !error} preparing={error ? true : data?.preparing} />;

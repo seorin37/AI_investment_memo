@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
+import { BottomBar } from '@/ui/shared/app/BottomBar';
 import { Text } from '@/components/ui/AppText';
 import { PressScale } from '@/ui/motion/PressScale';
 import { SlidingPill } from '@/ui/motion/SlidingPill';
@@ -50,14 +51,14 @@ export function AppLab({ vars, stocks, code, dirs, note, onBack, onPick, onDir, 
           </View>
         </View>
       </ScrollView>
-      <View style={[st.lfoot, { paddingBottom: 10 + insets.bottom }]}>
+      <BottomBar style={[st.lfoot, { paddingBottom: 10 + insets.bottom }]}>
         <PressScale onPress={onReset} accessibilityRole="button" style={[st.cta, st.gray]}><Text style={[st.ctaT, { color: C.ink }]}>초기화</Text></PressScale>
         <View style={{ flex: 1 }}>
           <PressScale disabled={!picked.length} onPress={onRun} accessibilityRole="button" style={[st.cta, !picked.length && { backgroundColor: '#C9CDD4' }]}>
             <Text style={st.ctaT}>실험 실행</Text>
           </PressScale>
         </View>
-      </View>
+      </BottomBar>
       <Sheet open={sheet} onClose={() => setSheet(false)} label="실험할 종목">
         <View style={{ paddingHorizontal: 18 }}>
           <Text style={st.shH}>실험할 종목</Text>

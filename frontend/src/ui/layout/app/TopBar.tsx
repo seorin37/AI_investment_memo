@@ -7,6 +7,7 @@ import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { Avatar } from '@/ui/shared/Avatar';
 import { AppIconButton } from '@/ui/shared/IconButton';
 import { appColor, ft } from '@/ui/theme';
+import { TAB_BAR_H, useTabScrollY } from './TabFrame';
 import type { TopBarPreset, TopBarProps } from './TopBar.types';
 
 type Spec = {
@@ -26,15 +27,20 @@ type Spec = {
   logo?: boolean;
 };
 
-/* 원본 실측 (412 폭, 상태 바 36 아래) */
-const TAB_TITLE: TextStyle = { ...ft(21), fontWeight: '800', color: appColor.ink };
+/* 부제목: 제목 줄(높이 24, 세로 가운데 32 → 아래 끝 44) 아래 6 = 50 ~ 64. 바 높이 안이라 부제목이 있어도 없어도 본문 시작이 같음 */
+const SUB_TOP = 50;
+/* 부제목이 올라가며 잘리는 위치 (제목 바로 아래) */
+const SUB_CLIP = 46;
+/* 탭 5개 공용 (높이 64 · 좌우 20 · 부제목은 제목 아래 6 · 첫 본문 간격 12 는 TabScroll) */
+const TAB: Spec = { h: TAB_BAR_H, padL: 20, padR: 20, bg: appColor.bg, btn: 40, btnGap: 2, avatarGap: 6, title: { ...ft(21), fontWeight: '800', color: appColor.ink } };
+/* 나머지는 원본 실측 (412 폭, 상태 바 36 아래) */
 const SPEC: Record<TopBarPreset, Spec> = {
-  home: { h: 60, padL: 18, padR: 12, bg: appColor.bg, btn: 42, btnGap: 2, avatarGap: 6, logo: true },
+  home: { ...TAB, logo: true },
   start: { h: 56, padL: 18, padR: 10, bg: appColor.bg, btn: 40, btnGap: 2, avatarGap: 6, logo: true },
-  updates: { h: 60, padL: 18, padR: 12, bg: appColor.bg, btn: 40, btnGap: 2, avatarGap: 6, title: TAB_TITLE },
-  stocks: { h: 60, padL: 18, padR: 12, bg: appColor.bg, btn: 40, btnGap: 2, avatarGap: 6, title: TAB_TITLE },
-  journal: { h: 60, padL: 18, padR: 12, bg: appColor.bg, btn: 40, btnGap: 6, avatarGap: 6, title: TAB_TITLE },
-  studio: { h: 56, padL: 18, padR: 10, bg: appColor.bg, btn: 42, btnGap: 0, avatarGap: 6, title: TAB_TITLE },
+  updates: TAB,
+  stocks: TAB,
+  journal: TAB,
+  studio: TAB,
   board: { h: 56, padL: 6, padR: 8, bg: appColor.bg, btn: 42, btnGap: 0, avatarGap: 0, back: 42, backIcon: 'back2', titleGap: 2, title: { ...ft(20), fontWeight: '700', color: appColor.ink } },
   memoDetail: { h: 56, padL: 6, padR: 6, bg: appColor.surface, btn: 42, btnGap: 0, avatarGap: 0, back: 42, backIcon: 'back', titleGap: 0, title: { ...ft(17), fontWeight: '600', color: appColor.ink } },
   company: { h: 56, padL: 6, padR: 6, bg: appColor.bg, btn: 40, btnGap: 0, avatarGap: 0, back: 40, backIcon: 'back', titleGap: 4, title: { ...ft(18), fontWeight: '700', color: appColor.ink } },
@@ -46,9 +52,11 @@ const SPEC: Record<TopBarPreset, Spec> = {
  * 앱 상단 바. 원본의 가짜 상태 바(36) 대신 기기 상태 바 높이(안전 영역)만큼 같은 바탕으로 띄움.
  * 뒤로 아이콘은 원본 11.17 결정대로 꺾쇠(‹).
  */
-export function TopBar({ preset, title, onBack, actions = [], avatar, showLine = false }: TopBarProps) {
+export function TopBar({ preset, title, subtitle, onBack, actions = [], avatar, showLine = false }: TopBarProps) {
   const s = SPEC[preset];
   const insets = useSafeAreaInsets();
+  const y = useTabScrollY();
+  const rise = s.h - SUB_CLIP;
   return (
     <View style={{ paddingTop: insets.top, backgroundColor: s.bg }}>
       <View style={[st.row, { height: s.h, paddingLeft: s.padL, paddingRight: s.padR, backgroundColor: s.bg }]}>
@@ -74,8 +82,17 @@ export function TopBar({ preset, title, onBack, actions = [], avatar, showLine =
             <Avatar name={avatar.name} photoUrl={avatar.photoUrl} size={32} variant="app" />
           </Pressable>
         ) : null}
-        <BarLine on={showLine} />
       </View>
+      {subtitle ? (
+        <View pointerEvents="none" style={[st.subClip, { top: insets.top + SUB_CLIP, left: s.padL, right: s.padR, height: rise }]}>
+          <Animated.View style={y ? { transform: [{ translateY: y.interpolate({ inputRange: [0, rise], outputRange: [0, -rise], extrapolate: 'clamp' }) }] } : null}>
+            <Text style={st.sub} numberOfLines={1}>
+              {subtitle}
+            </Text>
+          </Animated.View>
+        </View>
+      ) : null}
+      <BarLine on={showLine} />
     </View>
   );
 }
@@ -96,5 +113,8 @@ const st = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   flex: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' },
   shrink: { flexShrink: 1 },
+  /* 원본 내 종목 .sub · 스튜디오 .subr: 12.5 · ink3 */
+  subClip: { position: 'absolute', overflow: 'hidden' },
+  sub: { marginTop: SUB_TOP - SUB_CLIP, fontSize: 12.5, lineHeight: 14, color: appColor.ink3 },
   line: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 1, backgroundColor: appColor.line },
 });

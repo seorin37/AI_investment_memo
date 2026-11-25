@@ -15,7 +15,7 @@ import type { AudioStock } from '../Studio.mock';
  */
 const C = { a: '#8569E3', ink: '#16171A', ink2: '#575B63', ink3: '#9A9EA7' };
 
-export function AppAudioSheet({ open, stocks, periods, onClose, onMake }: { open: boolean; stocks: AudioStock[]; periods: readonly string[]; onClose: () => void; onMake: (p: { codes: string[]; period: string; market: boolean }) => void }) {
+export function AppAudioSheet({ open, stocks, periods, lastClose, onClose, onMake }: { open: boolean; stocks: AudioStock[]; periods: readonly string[]; /** '11.06(금)' 직전 거래일 */ lastClose: string; onClose: () => void; onMake: (p: { codes: string[]; period: string; market: boolean }) => void }) {
   const [pick, setPick] = useState<string[]>(stocks.map((s) => s.stock_code));
   const [mkt, setMkt] = useState(true);
   const [per, setPer] = useState(0);
@@ -34,6 +34,9 @@ export function AppAudioSheet({ open, stocks, periods, onClose, onMake }: { open
   const want = (q: 'all' | 'own' | 'watch') => stocks.filter((s) => q === 'all' || (q === 'own' ? s.hold === '보유' : s.hold === '관심')).map((s) => s.stock_code);
   const same = (a: string[]) => a.length === pick.length && a.every((c) => pick.includes(c));
   const n = pick.length;
+  /* 고른 종목에 이 기간 소식이 없고 증시 요약도 안 넣음 → 만들 것이 없음 (웹과 같음) */
+  const empty = !mkt && stocks.filter((s) => pick.includes(s.stock_code)).every((s) => !s.news[per]);
+  const can = !empty && (n > 0 || mkt);
   return (
     <Sheet open={open} onClose={onClose} label="AI 오디오 만들기">
       <View style={{ paddingHorizontal: 18 }}>
@@ -51,7 +54,7 @@ export function AppAudioSheet({ open, stocks, periods, onClose, onMake }: { open
         </View>
         {stocks.map((s) => {
           const on = pick.includes(s.stock_code);
-          const news = s.news[0];
+          const news = s.news[per] ?? 0;
           const none = !news;
           return (
             <Pressable key={s.stock_code} onPress={() => setPick((a) => (on ? a.filter((x) => x !== s.stock_code) : [...a, s.stock_code]))} accessibilityRole="checkbox" accessibilityState={{ checked: on }} style={st.sr}>
@@ -66,7 +69,8 @@ export function AppAudioSheet({ open, stocks, periods, onClose, onMake }: { open
         })}
         <Text style={st.note}>새 소식이 없는 종목은 넣어도 &quot;새 소식 없음&quot;으로만 짧게 다뤄요</Text>
         <View style={st.swr}>
-          <View style={{ flex: 1 }}><Text style={st.swB}>직전 거래일 증시 요약</Text><Text style={st.swS}>코스피·코스닥·원/달러</Text></View>
+          <View style={{ flex: 1 }}><Text style={st.swB}>직전 거래일 증시 요약</Text><Text style={st.swS}>{lastClose} 코스피·코스닥·원/달러</Text></View>
+          <View style={[st.op, { backgroundColor: '#F2F2F5', marginRight: 8 }]}><Text style={[st.opT, { color: C.ink2 }]}>+1</Text></View>
           <Toggle variant="app" on={mkt} onChange={setMkt} label="직전 거래일 증시 요약" />
         </View>
         <Text style={st.lbl}>업데이트 기간</Text>
@@ -78,8 +82,15 @@ export function AppAudioSheet({ open, stocks, periods, onClose, onMake }: { open
             </Pressable>
           ))}
         </View>
-        <PressScale disabled={!n} onPress={() => onMake({ codes: pick, period: periods[per], market: mkt })} accessibilityRole="button" style={[st.cta, !n && { backgroundColor: '#C9CDD4' }]}>
-          <Text style={st.ctaT}>{n ? '오디오 만들기' : '종목을 1개 이상 골라 주세요'}</Text>
+        {empty && n ? (
+          <View style={st.warn}>
+            <Text style={st.warnB}>새로 들려줄 소식이 없어요</Text>
+            <Text keepAll style={st.warnS}>{`고른 종목에 ${per === 0 ? '전날' : `${periods[per]} 동안`} 생긴 업데이트가 없어요. 기간을 늘리거나 증시 요약을 넣으면 만들 수 있어요.`}</Text>
+            {per < periods.length - 1 ? <Pressable onPress={() => setPer(periods.length - 1)} accessibilityRole="button"><Text style={st.warnL}>{periods[periods.length - 1]}로 늘리기</Text></Pressable> : null}
+          </View>
+        ) : null}
+        <PressScale disabled={!can} onPress={() => onMake({ codes: pick, period: periods[per], market: mkt })} accessibilityRole="button" style={[st.cta, !can && { backgroundColor: '#C9CDD4' }]}>
+          <Text style={st.ctaT}>{can ? '오디오 만들기' : n ? '만들 소식이 없어요' : '종목을 1개 이상 골라 주세요'}</Text>
         </PressScale>
       </View>
     </Sheet>
@@ -87,6 +98,10 @@ export function AppAudioSheet({ open, stocks, periods, onClose, onMake }: { open
 }
 
 const st = StyleSheet.create({
+  warn: { borderRadius: 14, backgroundColor: '#FFF6E5', borderWidth: 1, borderColor: '#F6E2B8', paddingVertical: 12, paddingHorizontal: 14, marginTop: 12 },
+  warnB: { fontSize: 14, lineHeight: 19, fontWeight: '800', color: '#5C3800' },
+  warnS: { fontSize: 12.5, lineHeight: 19, color: '#7A4B00', marginTop: 3 },
+  warnL: { fontSize: 12.5, lineHeight: 18, fontWeight: '800', color: '#8A5A00', marginTop: 8 },
   h: { fontSize: 19, lineHeight: 26, fontWeight: '700', color: C.ink, marginBottom: 4 },
   d: { fontSize: 12.5, lineHeight: 18, color: C.ink3, marginBottom: 12 },
   qc: { flexDirection: 'row', gap: 6, marginBottom: 6 },

@@ -8,7 +8,7 @@ import { FadeIn } from '@/ui/motion/Reveal';
 import { AppChecklistCard, AppChecklistRow } from '@/ui/shared/ChecklistCard';
 import { AppChips } from '@/ui/shared/Chips';
 import { FabFan } from '@/ui/shared/FabFan';
-import { AppMemoCard } from '@/ui/shared/MemoCard';
+import { AppMemoCard } from './MemoCard';
 import { AppMemoRow } from '@/ui/shared/MemoRow';
 import { PillSeg } from '@/ui/shared/PillSeg';
 import { AppSelectBar, AppSelectHeader, type AppSelAction } from '@/ui/shared/SelectBar';

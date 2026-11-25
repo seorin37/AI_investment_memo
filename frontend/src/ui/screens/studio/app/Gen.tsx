@@ -66,7 +66,7 @@ export function AppGen({ job, onBack, onAway, onRetry }: { job: AppGenJob; onBac
             );
           })}
         </View>
-        <Text style={[st.note, fail && !late && { color: '#1F8A4C', fontWeight: '700' }]}>{late ? GEN_LATE.body : fail ? '사용량은 그대로 돌려드려요' : long ? '생각보다 오래 걸리고 있어요 · 다른 화면을 봐도 계속 만들어요' : '만들지 못하면 사용량은 그대로 돌려드려요'}</Text>
+        <Text style={st.note}>{late ? GEN_LATE.body : !fail && long ? '생각보다 오래 걸리고 있어요 · 다른 화면을 봐도 계속 만들어요' : ''}</Text>
         <View style={{ alignSelf: 'stretch' }}>
           <PressScale onPress={fail ? onRetry : onAway} accessibilityRole="button" style={st.cta}><Text style={st.ctaT}>{fail ? '다시 시도' : '다른 화면 보기'}</Text></PressScale>
         </View>

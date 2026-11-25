@@ -19,7 +19,7 @@ import { waitSave } from '@/lib/pendingSaves';
  * 실제 모드(2026-11-22, 결정 7 임시안 '저장 = 켜기'): 창이 열릴 때 PUT ai-link(켜기) → analysis.items, '일반 메모로 두기' = 끄기.
  */
 export default function AiLinkScreen() {
-  const { id, title, body, from, fail, from_onboarding, onboarding_selected, stock_name, first_code, first_title, first_body, memo_id } = useLocalSearchParams<{ id?: string; title?: string; body?: string; from?: string; fail?: string; from_onboarding?: string; onboarding_selected?: string; stock_name?: string; first_code?: string; first_title?: string; first_body?: string; memo_id?: string }>();
+  const { id, title, body, from, fail, from_onboarding, onboarding_selected, stock_name, first_code, first_title, first_body, memo_id, board_code, board_name } = useLocalSearchParams<{ id?: string; title?: string; body?: string; from?: string; fail?: string; from_onboarding?: string; onboarding_selected?: string; stock_name?: string; first_code?: string; first_title?: string; first_body?: string; memo_id?: string; board_code?: string; board_name?: string }>();
   /* 첫 메모 흐름: 홈(첫 홈)으로 돌아가며 고른 종목과 저장한 메모 요약을 넘긴다 */
   const homeParams = useMemo(
     () => ({ onboarding: 'first_saved', selected: onboarding_selected ?? '', first_code: first_code ?? '', first_title: first_title ?? title ?? '', first_body: first_body ?? body ?? '' }),
@@ -27,6 +27,11 @@ export default function AiLinkScreen() {
   );
   const router = useRouter();
   const toast = useUI((s) => s.showToast);
+  /* 스튜디오 '메모에 추가'(board_code): 확인·취소 뒤 보던 화면으로 돌아가 저장 안내 [보기] (NewMemoSheet 와 같은 안내) */
+  const backToStudio = useCallback(() => {
+    router.back();
+    toast(`${board_name ?? ''} 보드에 저장했어요`, { label: '보기', onPress: () => router.navigate({ pathname: '/stocks/[code]', params: { code: board_code ?? '' } }) });
+  }, [router, toast, board_code, board_name]);
   const isNew = !id || id === 'new';
   const screen = useMemoScreen(isNew ? '' : id!);
   const real = !!screen.ops && !isNew; // 첫 메모(온보딩) 흐름의 id='new' 는 아직 mock
@@ -68,17 +73,19 @@ export default function AiLinkScreen() {
       closed.current = true;
       void screen.ops!.aiOff();
     }
+    if (board_code) return backToStudio();
     if (from === 'new') toast('일반 메모로 저장했어요 · AI 연결은 나중에 켤 수 있어요');
     if (from_onboarding === '1') { router.dismissTo({ pathname: '/', params: { ...homeParams, first_ai: '0' } }); return; }
     router.back();
-  }, [real, screen.ops, from, from_onboarding, homeParams, router, toast]);
+  }, [real, screen.ops, from, from_onboarding, homeParams, router, toast, board_code, backToStudio]);
   const confirm = useCallback(() => {
     const mockId = memo_id || (isNew ? '' : id);
     if (!real && mockId) useMockBoard.getState().patchMemoAnywhere(mockId, (m) => ({ ...m, ai_linked: true }));
+    if (board_code) return backToStudio();
     toast('이제 AI가 이 메모를 지켜봐요');
     if (from_onboarding === '1') { router.dismissTo({ pathname: '/', params: { ...homeParams, first_ai: '1' } }); return; }
     router.back();
-  }, [real, isNew, id, memo_id, from_onboarding, homeParams, router, toast]);
+  }, [real, isNew, id, memo_id, from_onboarding, homeParams, router, toast, board_code, backToStudio]);
   return (
     <AppAiLink
       stockName={stock_name || (real ? screen.data.stockName : mockDetailStockName)}
@@ -94,8 +101,10 @@ export default function AiLinkScreen() {
           closed.current = true;
           void screen.ops!.aiOff();
         }
-        if (isNew) router.back();
-        else router.replace({ pathname: '/memo/[id]', params: { id: id! } });
+        /* mock '메모에 추가'면 방금 저장한 메모로 */
+        const editId = isNew ? (board_code ? memo_id : undefined) : id;
+        if (editId) router.replace({ pathname: '/memo/[id]', params: { id: editId } });
+        else router.back();
       }}
       onRetry={() => {
         setFailed(false);
