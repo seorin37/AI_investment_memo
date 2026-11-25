@@ -174,8 +174,9 @@ export function WebMemoDialog(p: MemoDetailProps & { open: boolean }) {
             /* 꺼진 메모를 켜면 AI 연결 창 (원본 onConnect) */
             /* 고친 글이 있으면 먼저 저장하고 연결 (2026-11-25: 저장 전 글로 분석해 '찾지 못했어요'가 나던 문제) */
             if (v && !m.ai_linked) {
+              const draft = text.trim() ? splitMemo(text) : undefined;
               save();
-              return p.onConnectAi();
+              return p.onConnectAi(draft);
             }
             setAi(v);
           }}

@@ -318,7 +318,7 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, pre, stockName, on
           remove([opened.id]);
         }}
         onCopy={() => {}}
-        onConnectAi={() => startConnect({ id: opened.id, title: opened.title, body: opened.body, color: opened.color, fromNew: false })}
+        onConnectAi={(d) => startConnect({ id: opened.id, title: d?.title ?? opened.title, body: d?.body ?? opened.body, color: opened.color, fromNew: false })}
         onDisconnectAi={() => {
           bd.ops.aiOff(opened.id);
           patch(opened.id, (m) => ({ ...m, ai_linked: false }));

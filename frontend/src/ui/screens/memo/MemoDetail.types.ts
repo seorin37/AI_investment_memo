@@ -97,7 +97,8 @@ export interface MemoDetailProps {
   onDelete: () => void;
   onCopy: () => void;
   /** AI 연결 켜기 (AI 연결 창으로) */
-  onConnectAi: () => void;
+  /** draft: 메모 창에서 고친 글 (저장 전이라도 연결 창에 이 글을 보여 줌, 2026-11-25) */
+  onConnectAi: (draft?: { title: string; body: string }) => void;
   /** AI 연결 끄기 (확인 시트에서 '연결 해제') */
   onDisconnectAi: () => void;
   /** AI 업데이트 탭을 봄 (안 읽은 소식 읽음 처리) */
