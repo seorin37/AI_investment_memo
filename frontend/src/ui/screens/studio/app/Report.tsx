@@ -17,6 +17,20 @@ type Rep = typeof mockReport;
 const C = { a2: '#6A42AB', ink: '#16171A', ink2: '#575B63', ink3: '#9A9EA7' };
 const up = (v: number) => (v >= 0 ? '#E5323B' : '#2F6BDB');
 
+/** 만든 지 30일이 지났거나 아직 없는 보고서 (문구는 웹과 같음) */
+export function AppReportMissing({ onBack }: { onBack: () => void }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[st.root, { paddingTop: insets.top }]}>
+      <Head title="주간보고서" onBack={onBack} />
+      <View style={st.miss}>
+        <Text style={st.missB}>보고서를 찾을 수 없어요</Text>
+        <Text keepAll style={st.missS}>만든 지 30일이 지나 지워졌거나 아직 만들지 않았어요.</Text>
+      </View>
+    </View>
+  );
+}
+
 export function AppReport({ title, rep, stocks, market, allDefault, onBack, onOpenMemo, onWatch }: {
   /** 만든 항목 제목 ('10월 다섯째 주 돌아보기') */
   title: string;
@@ -103,24 +117,25 @@ export function AppReport({ title, rep, stocks, market, allDefault, onBack, onOp
           <>
             <SecH n="01" t="국내 증시 현황" />
             <View style={st.r3s}>
-              <Text style={st.marketBasis}>{rep.range} · 거래일 {rep.days.length}일 기준</Text>
+              <Text style={st.marketBasis}>{rep.range} · 거래일 {rep.days.length}일 기준 지수와 한 주 시황이에요</Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 {rep.market.map((m) => (
                   <View key={m.name} style={st.mk}><Text style={st.mkS}>{m.name}</Text><Text style={st.mkB}>{m.value}</Text><Text style={[st.mkP, { color: up(m.pct) }]}>{sign(m.pct)}</Text></View>
                 ))}
               </View>
               {marketText.length ? <View style={st.marketBrief}><Text style={st.blockLabel}>한 주 시황</Text>{marketText.map((p, i) => <Text key={i} keepAll style={st.txPlain}>{p}</Text>)}</View> : null}
-              <View style={{ marginTop: 4 }}><Text style={st.blockLabel}>날짜별 흐름</Text>
+              {rep.flow.length ? <View style={{ marginTop: 12 }}><Text style={st.blockLabel}>날짜별 흐름</Text>
                 {rep.flow.map((f, i) => (
                   <View key={f.day} style={[st.nw, i === rep.flow.length - 1 && { borderBottomWidth: 0, paddingBottom: 0 }]}>
                     <Text style={st.nwD}>{f.day}</Text><Text keepAll style={st.nwB}>{f.text}</Text><Text style={st.nwR}>{f.src}</Text>
                   </View>
                 ))}
-              </View>
+              </View> : null}
             </View>
           </>
         ) : null}
-        <SecH n={no(2)} t="종목별 흐름" />
+        <SecH n={no(2)} t="종목별 리포트" />
+        <Text style={st.secS}>숫자부터 소식과 메모까지 종목별로 정리했어요</Text>
         {stocks.map((r, si) => (
           <View key={r.stock_code} style={[st.sk, { borderTopColor: r.sc }]}>
             <View style={[st.top, { backgroundColor: r.st }]}>
@@ -158,7 +173,7 @@ export function AppReport({ title, rep, stocks, market, allDefault, onBack, onOp
                       {m.cards.map((c) => (
                         <View key={c.id} style={st.dgC}>
                           <Text style={st.dgS}>{c.date} · {c.kind}</Text>
-                          <Text keepAll style={st.dgCT}>{c.title}</Text>
+                          <Text keepAll style={st.dgCT}>{c.title}{c.refs.length ? <Text style={st.dgS}>{'  '}{c.refs.map((x) => `[${x}]`).join('')}</Text> : null}</Text>
                           <Text keepAll style={st.dgCB} numberOfLines={2}>{c.text}</Text>
                         </View>
                       ))}
@@ -192,7 +207,7 @@ export function AppReport({ title, rep, stocks, market, allDefault, onBack, onOp
                       <View style={[st.no, { backgroundColor: x.kind === '공시' ? '#7C5CE0' : '#3D73F0' }]}><Text style={st.noT}>{x.no}</Text></View>
                       <View style={[st.tg5, x.kind === '뉴스' && { backgroundColor: '#E4ECFF' }]}><Text style={[st.tg5T, x.kind === '뉴스' && { color: '#2F6BDB' }]}>{x.kind}</Text></View>
                       <Text style={st.evD}>{x.date}</Text>
-                      <Text style={st.evB} numberOfLines={1}>{x.title}</Text>
+                      <Text style={st.evB}>{x.title}</Text>
                       <Text style={st.evD}>{x.src}</Text>
                     </View>
                   ))}
@@ -230,7 +245,7 @@ export function AppReport({ title, rep, stocks, market, allDefault, onBack, onOp
           {rep.sources.filter((x) => (x.code ? codes.includes(x.code) : market)).map((x) => <Text key={x.text} style={st.src}>{x.text}</Text>)}
           <Text keepAll style={st.srcS}>{rep.source_note}</Text>
         </View>
-        <View style={st.ft}><Text style={st.ftT}>memo&apos;s · 주간보고서</Text><Text style={st.ftT}>투자 권유나 주가 예측이 아니에요</Text></View>
+        <Text keepAll style={st.disc}>공시·뉴스·시세에서 가져온 정보예요. 투자 권유나 주가 예측이 아니에요.</Text>
       </ScrollView>
     </View>
   );
@@ -292,6 +307,10 @@ const st = StyleSheet.create({
   r3h: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 22, marginHorizontal: 2 },
   r3hE: { fontSize: 12, lineHeight: 17, color: C.a2 },
   r3hT: { fontSize: 16, lineHeight: 22, fontWeight: '800', color: C.ink },
+  miss: { alignItems: 'center', paddingTop: 96, paddingHorizontal: 24 },
+  missB: { fontSize: 18, lineHeight: 25, fontWeight: '800', color: C.ink },
+  missS: { fontSize: 13.5, lineHeight: 20, color: C.ink2, marginTop: 6, textAlign: 'center' },
+  secS: { fontSize: 12, lineHeight: 17, color: C.ink3, marginTop: 4, marginHorizontal: 2 },
   r3hL: { flex: 1, height: 1, backgroundColor: '#E2E4E8' },
   mk: { flex: 1, minWidth: 0, backgroundColor: '#F6F6F8', borderRadius: 12, paddingVertical: 9, paddingHorizontal: 10 },
   mkS: { fontSize: 11.5, lineHeight: 16, color: C.ink3 },
@@ -371,6 +390,5 @@ const st = StyleSheet.create({
   itDoneT: { fontSize: 12.5, lineHeight: 17, fontWeight: '600', color: '#8B95A1' },
   src: { fontSize: 12.5, lineHeight: 24, color: '#3F434A' },
   srcS: { fontSize: 12.5, lineHeight: 20, color: C.ink3, marginTop: 8 },
-  ft: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 18, marginHorizontal: 4 },
-  ftT: { fontSize: 11.5, lineHeight: 16, color: C.ink3 },
+  disc: { fontSize: 11.5, lineHeight: 17, color: C.ink3, textAlign: 'center', marginTop: 18 },
 });
