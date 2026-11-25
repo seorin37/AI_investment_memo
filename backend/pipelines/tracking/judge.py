@@ -25,6 +25,8 @@ def _decision_question(text: str) -> bool:
 
 PENDING = "pending_llm"
 _URL = re.compile(r"https?://|www\.|bit\.ly", re.IGNORECASE)
+_CONDITIONAL_QUESTION_END = re.compile(r"(?:까(?:요)?|나(?:요)?|고민\s*중(?:이야)?|고민돼|고민이야|\?)\s*[.!?~]*$")
+_ALERT_REQUEST = re.compile(r"알림|알려\s*(?:줘|주|줄|달)")
 # 광고·범위 밖은 짧은 조각에서만 확정한다. 긴 조각은 문장 분리가 덜 돼 다른 내용이 섞였을 수 있어 LLM에 넘긴다.
 SPAM_MAX_WORDS = 10
 OUT_OF_SCOPE_MAX_WORDS = 6
@@ -96,6 +98,16 @@ def judge_sentence(index: int, text: str, span: tuple[int, int], memo_symbol: st
 
     # ② 가격 조건 (한 문장에 여러 개일 수 있다)
     conditions = parse_conditions(cleaned.text, lex)
+    # 가격이 질문의 전제일 수 있다. 알림 요청이 없는 "140만원 넘으면 살까?"는 ask로 보낸다.
+    tracked_conditions = [
+        c for c in conditions
+        if not (_CONDITIONAL_QUESTION_END.search(c.rest)
+                and not _ALERT_REQUEST.search(c.rest)
+                and (classify_rest(c.rest, lex) == "action" or _decision_question(c.rest)))
+    ]
+    if len(tracked_conditions) != len(conditions):
+        j.items = [price_item(c.direction, c.price) for c in tracked_conditions if c.kind == "condition"]
+        return j
     if conditions and conditions[0].kind == "unsupported":
         return decide("needs_confirmation", None, "UNSUPPORTED_CONDITION", note=conditions[0].rest or None)
     if conditions:
