@@ -5,7 +5,7 @@ import { qk, useStudioItems } from '@/hooks/queries';
 import { queryClient } from '@/lib/queryClient';
 import { useAuth } from '@/store/auth';
 import type { AudioPeriod } from '@/types/models';
-import { GenError, useGenJobs, type GenCtx } from '@/store/genJobs';
+import { GenError, GenTimeout, useGenJobs, type GenCtx } from '@/store/genJobs';
 import { fmt, useStudioPlayer } from '@/store/studioPlayer';
 import type { LabStock } from './useLabRun';
 import { mockAudioEpisode, mockAudioGen, mockReport, type LabDir } from './Studio.mock';
@@ -51,7 +51,7 @@ async function waitReport(id: string, c: GenCtx): Promise<MadeItem> {
       missing = it ? 0 : missing + 1;
       if (it?.status === 'failed' || missing >= 3) throw new Error('failed');
     }
-    if (Date.now() >= until) throw new Error('timeout');
+    if (Date.now() >= until) throw new GenTimeout('timeout');
     await sleep(POLL_MS);
   }
   throw new Error('gone');
@@ -93,7 +93,7 @@ async function waitAudio(id: string, c: GenCtx): Promise<MadeItem> {
         return fromServerAudioItem(made);
       }
     }
-    if (Date.now() >= until) throw new Error('timeout');
+    if (Date.now() >= until) throw new GenTimeout('timeout');
     await sleep(POLL_MS);
   }
   throw new Error('gone');

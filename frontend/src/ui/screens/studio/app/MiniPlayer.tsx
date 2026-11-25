@@ -3,6 +3,7 @@ import { Animated, Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
+import { AUDIO_OFF_BG, audioOff } from '../appAudio';
 import { curve } from '@/ui/theme';
 
 /**
@@ -33,7 +34,7 @@ export function AppMiniPlayer({ visible, bottom, title, sub, progress, playing, 
         <Text style={st.b} numberOfLines={1}>{title}</Text>
         <Text style={st.s} numberOfLines={1}>{sub}</Text>
       </Pressable>
-      <Pressable onPress={onToggle} accessibilityRole="button" accessibilityLabel={playing ? '일시정지' : '재생'} style={st.pp}>
+      <Pressable onPress={onToggle} accessibilityRole="button" accessibilityLabel={playing ? '일시정지' : '재생'} accessibilityState={{ disabled: audioOff }} style={[st.pp, audioOff && { backgroundColor: AUDIO_OFF_BG }]}>
         <Svg width={18} height={18} viewBox="0 0 26 26"><Path d={playing ? 'M6 4 L6 22 L11 22 L11 4 Z M15 4 L15 22 L20 22 L20 4 Z' : 'M7 4 L7 22 L13 18.5 L13 7.5 Z M13 7.5 L13 18.5 L22 13 L22 13 Z'} fill="#fff" /></Svg>
       </Pressable>
       <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="닫기" style={st.xb}>

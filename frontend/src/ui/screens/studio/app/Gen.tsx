@@ -5,7 +5,7 @@ import Svg, { Path } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { PressScale } from '@/ui/motion/PressScale';
-import type { AppGenJob, GenKind, StepState } from '@/store/genJobs';
+import { GEN_LATE, type AppGenJob, type GenKind, type StepState } from '@/store/genJobs';
 import { Head } from '../../my/app/parts';
 import { Spin } from './Spin';
 
@@ -39,6 +39,7 @@ export function AppGen({ job, onBack, onAway, onRetry }: { job: AppGenJob; onBac
   const insets = useSafeAreaInsets();
   const long = useLong(job.startedAt);
   const fail = job.status === 'fail';
+  const late = fail && job.late;
   const T = TEXT[job.kind];
   const steps = job.labels;
   return (
@@ -49,7 +50,7 @@ export function AppGen({ job, onBack, onAway, onRetry }: { job: AppGenJob; onBac
           {!fail ? <Ripple color={T.bg} /> : null}
           {fail ? <Svg width={34} height={34} viewBox="0 0 24 24" fill="none" stroke="#E5484D" strokeWidth={2.4} strokeLinecap="round"><Path d="M12 7v6M12 16.5h.01" /></Svg> : job.kind === 'report' ? <Doc /> : job.kind === 'lab' ? <Flask /> : <Eq />}
         </View>
-        <Text style={st.h}>{fail ? T.bad : T.ing}</Text>
+        <Text style={st.h}>{late ? GEN_LATE.title : fail ? T.bad : T.ing}</Text>
         <Text style={st.gs}>{job.sub}</Text>
         <View style={st.steps}>
           {steps.map((t, i) => {
@@ -65,11 +66,11 @@ export function AppGen({ job, onBack, onAway, onRetry }: { job: AppGenJob; onBac
             );
           })}
         </View>
-        <Text style={[st.note, fail && { color: '#1F8A4C', fontWeight: '700' }]}>{fail ? '사용량은 그대로 돌려드려요' : long ? '생각보다 오래 걸리고 있어요 · 다른 화면을 봐도 계속 만들어요' : '만들지 못하면 사용량은 그대로 돌려드려요'}</Text>
+        <Text style={[st.note, fail && !late && { color: '#1F8A4C', fontWeight: '700' }]}>{late ? GEN_LATE.body : fail ? '사용량은 그대로 돌려드려요' : long ? '생각보다 오래 걸리고 있어요 · 다른 화면을 봐도 계속 만들어요' : '만들지 못하면 사용량은 그대로 돌려드려요'}</Text>
         <View style={{ alignSelf: 'stretch' }}>
           <PressScale onPress={fail ? onRetry : onAway} accessibilityRole="button" style={st.cta}><Text style={st.ctaT}>{fail ? '다시 시도' : '다른 화면 보기'}</Text></PressScale>
         </View>
-        <Text style={st.cap}>{fail ? (job.error ?? (job.kind === 'lab' ? '잠시 뒤 다시 해 보세요' : '잠시 뒤 다시 해 보거나 종목을 줄여 보세요')) : '다 되면 알려 드리고, 스튜디오 탭에 점을 표시해요'}</Text>
+        <Text style={st.cap}>{late ? '' : fail ? (job.error ?? (job.kind === 'lab' ? '잠시 뒤 다시 해 보세요' : '잠시 뒤 다시 해 보거나 종목을 줄여 보세요')) : '다 되면 알려 드리고, 스튜디오 탭에 점을 표시해요'}</Text>
       </View>
     </View>
   );

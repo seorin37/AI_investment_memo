@@ -5,6 +5,7 @@ import { useCoach } from '@/store/coach';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/store/auth';
 import { chapterAt, fmt, useStudioPlayer } from '@/store/studioPlayer';
+import { blockPlay } from '@/ui/screens/studio/appAudio';
 import { epOf } from '@/ui/screens/studio/audioEp';
 import { AppMiniPlayer } from '@/ui/screens/studio/app/MiniPlayer';
 import { size } from '@/ui/theme';
@@ -142,7 +143,7 @@ function Mini({ hidden }: { hidden: boolean }) {
       progress={p.t / ep.dur}
       playing={p.playing}
       onOpen={() => router.push('/studio-player')}
-      onToggle={p.toggle}
+      onToggle={() => !blockPlay() && p.toggle()}
       onClose={p.closeMini}
     />
   );

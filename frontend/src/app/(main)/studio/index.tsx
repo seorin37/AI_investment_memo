@@ -8,6 +8,7 @@ import { TopBar } from '@/ui/layout/app/TopBar';
 import { useUsageView } from '@/ui/screens/my/useUsageView';
 import { useMyProfile } from '@/ui/screens/my/useMyProfile';
 import { mockReport, mockStudioCounts, mockStudioFeatures } from '@/ui/screens/studio/Studio.mock';
+import { blockPlay } from '@/ui/screens/studio/appAudio';
 import { useAudioPick } from '@/ui/screens/studio/audioView';
 import { startAudio, startReport } from '@/ui/screens/studio/genRuns';
 import { useReportPickStocks } from '@/ui/screens/studio/reportView';
@@ -70,6 +71,7 @@ export default function StudioTab() {
         jobs={jobs}
         playingId={p.playing ? p.cur : null}
         onQuickPlay={(m) => {
+          if (blockPlay()) return;
           if (p.cur === m.id && p.mini) p.toggle();
           else p.play(m.id);
           p.setMini(true);

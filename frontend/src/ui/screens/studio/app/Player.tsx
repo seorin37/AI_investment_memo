@@ -7,6 +7,7 @@ import { PressScale } from '@/ui/motion/PressScale';
 import { chapterAt, fmt, lineAt } from '@/store/studioPlayer';
 import { Head } from '../../my/app/parts';
 import type { MadeItem } from '../Studio.types';
+import { AUDIO_OFF_BG, audioOff } from '../appAudio';
 import type { AudioEp } from '../audioEp';
 
 /**
@@ -51,8 +52,8 @@ export function AppPlayer({ item, ep, t, playing, speed, onBack, onToggle, onSee
           <View style={st.ctl}>
             <PressScale scaleTo={0.88} onPress={onSpeed} accessibilityRole="button" accessibilityLabel={`재생 속도 ${speed}배`} style={st.sm}><Text style={st.ctlT}>{speed % 1 ? speed : speed.toFixed(1)}x</Text></PressScale>
             <PressScale scaleTo={0.88} onPress={() => onSeek(t - 10)} accessibilityRole="button" accessibilityLabel="10초 뒤로" style={st.rw}><Text style={st.ctlT}>−10</Text></PressScale>
-            <PressScale scaleTo={0.88} onPress={onToggle} accessibilityRole="button" accessibilityLabel={playing ? '일시정지' : '재생'} style={st.big}>
-              <Svg width={26} height={26} viewBox="0 0 26 26"><Path d={playing ? 'M6 4 L6 22 L11 22 L11 4 Z M15 4 L15 22 L20 22 L20 4 Z' : 'M7 4 L7 22 L13 18.5 L13 7.5 Z M13 7.5 L13 18.5 L22 13 L22 13 Z'} fill={C.ink} /></Svg>
+            <PressScale scaleTo={0.88} onPress={onToggle} accessibilityRole="button" accessibilityLabel={playing ? '일시정지' : '재생'} accessibilityState={{ disabled: audioOff }} style={[st.big, audioOff && { backgroundColor: AUDIO_OFF_BG }]}>
+              <Svg width={26} height={26} viewBox="0 0 26 26"><Path d={playing ? 'M6 4 L6 22 L11 22 L11 4 Z M15 4 L15 22 L20 22 L20 4 Z' : 'M7 4 L7 22 L13 18.5 L13 7.5 Z M13 7.5 L13 18.5 L22 13 L22 13 Z'} fill={audioOff ? '#FFFFFF' : C.ink} /></Svg>
             </PressScale>
             <PressScale scaleTo={0.88} onPress={() => onSeek(t + 10)} accessibilityRole="button" accessibilityLabel="10초 앞으로" style={st.rw}><Text style={st.ctlT}>+10</Text></PressScale>
             <View style={{ width: 46 }} />

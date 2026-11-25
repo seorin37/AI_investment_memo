@@ -4,6 +4,7 @@ import { ApiError } from '@/api';
 import { registerUserReset } from '@/lib/sessionReset';
 import { useStudioPlayer } from '@/store/studioPlayer';
 import { useUI } from '@/store/ui';
+import { audioOff } from '@/ui/screens/studio/appAudio';
 import type { MadeItem } from '@/ui/screens/studio/Studio.types';
 
 /**
@@ -14,6 +15,9 @@ import type { MadeItem } from '@/ui/screens/studio/Studio.types';
 export type GenKind = MadeItem['kind'];
 /** 화면에 그대로 보여 줄 실패 이유 */
 export class GenError extends Error {}
+/** 기다리는 시간을 넘김 (서버는 계속 만들 수 있음) */
+export class GenTimeout extends Error {}
+export const GEN_LATE = { title: '시간이 오래 걸리고 있어요', body: '아직 만드는 중일 수 있어요. 다시 시도하면 이어서 기다려요.' };
 export type StepState = 'wait' | 'run' | 'done' | 'bad';
 export interface GenCtx {
   /** 로그아웃 · 다시 시도로 이 실행이 버려졌으면 false */
@@ -34,6 +38,8 @@ export interface AppGenJob {
   status: 'run' | 'fail';
   startedAt: number;
   error?: string;
+  /** 실패 이유가 시간 초과 */
+  late?: boolean;
   attempt: number;
   run: (c: GenCtx) => Promise<MadeItem>;
 }
@@ -62,7 +68,7 @@ function choose(item: MadeItem, autoplay: boolean) {
   const s = useStudioPlayer.getState();
   if (item.kind === 'report') s.openReport(item.id);
   else if (item.kind === 'lab') s.openLab(item.id);
-  else if (autoplay) s.play(item.id, true);
+  else if (autoplay && !audioOff) s.play(item.id, true);
   else s.select(item.id);
 }
 
@@ -97,9 +103,9 @@ export const useGenJobs = create<GenJobsState>((set, get) => {
           if (!alive()) return;
           patch(job.id, (j) => {
             const at = Math.max(0, j.steps.findIndex((x) => x !== 'done'));
-            return { ...j, status: 'fail', error: e instanceof ApiError || e instanceof GenError ? e.message : undefined, steps: j.steps.map((x, i) => (i === at ? 'bad' : x)) };
+            return { ...j, status: 'fail', late: e instanceof GenTimeout, error: e instanceof ApiError || e instanceof GenError ? e.message : undefined, steps: j.steps.map((x, i) => (i === at ? 'bad' : x)) };
           });
-          if (get().viewing !== job.id) useUI.getState().showToast(BAD_T[job.kind]);
+          if (get().viewing !== job.id) useUI.getState().showToast(e instanceof GenTimeout ? GEN_LATE.title : BAD_T[job.kind]);
         },
       );
   };
@@ -123,7 +129,7 @@ export const useGenJobs = create<GenJobsState>((set, get) => {
       const old = get().jobs.find((j) => j.id === id);
       if (!old || old.status === 'run') return;
       /* startedAt 은 run 에는 처음 시각(앞서 만든 항목 찾기), 화면에는 다시 시작한 시각 */
-      const job: AppGenJob = { ...old, steps: old.steps.map((_, i) => (i ? 'wait' : 'run')), status: 'run', error: undefined, attempt: old.attempt + 1 };
+      const job: AppGenJob = { ...old, steps: old.steps.map((_, i) => (i ? 'wait' : 'run')), status: 'run', error: undefined, late: false, attempt: old.attempt + 1 };
       patch(id, () => ({ ...job, startedAt: Date.now() }));
       exec(job);
     },

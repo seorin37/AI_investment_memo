@@ -8,8 +8,9 @@ import { Reveal } from '@/ui/motion/Reveal';
 import { useCoachRef } from '@/ui/shared/Coach';
 import { Sheet } from '@/ui/shared/Sheet';
 import type { MadeItem, StudioHomeProps, StudioKind } from '../Studio.types';
-import type { AppGenJob } from '@/store/genJobs';
+import { GEN_LATE, type AppGenJob } from '@/store/genJobs';
 import { Spin } from './Spin';
+import { AUDIO_OFF_BG, audioOff } from '../appAudio';
 import { useRemoveMade } from '../studioItems';
 
 /**
@@ -103,7 +104,7 @@ export function AppStudioHome({ header, jobs, onJob, playingId, onQuickPlay, bot
               return job.status === 'fail' ? (
                 <Pressable key={job.id} onPress={() => onJob?.(job.id)} accessibilityRole="button" style={[st.mi, i > 0 && st.miLine]}>
                   <View style={[st.failIc]}><Svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="#E5484D" strokeWidth={2} strokeLinecap="round"><Path d="M12 8v5M12 16.5h.01" /><Circle cx={12} cy={12} r={9} /></Svg></View>
-                  <View style={{ flex: 1 }}><Text style={st.miB}>{title} · 만들지 못했어요</Text><Text style={st.miS}>사용량은 그대로 돌려드려요</Text></View>
+                  <View style={{ flex: 1 }}><Text style={st.miB}>{title} · {job.late ? GEN_LATE.title : '만들지 못했어요'}</Text><Text style={st.miS}>{job.late ? GEN_LATE.body : '사용량은 그대로 돌려드려요'}</Text></View>
                   <Text style={[st.miR, { color: C.a2, fontWeight: '700' }]}>다시 시도</Text>
                 </Pressable>
               ) : (
@@ -131,7 +132,7 @@ export function AppStudioHome({ header, jobs, onJob, playingId, onQuickPlay, bot
                   <Svg width={16} height={16} viewBox="0 0 16 16" fill="none"><Path d="M2.5 4h11M6 4V2.75h4V4M4 4l.6 9.25h6.8L12 4" stroke="#B0B5BD" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" /></Svg>
                 </Pressable>
                 {m.kind === 'audio' ? (
-                  <Pressable onPress={() => onQuickPlay(m)} accessibilityRole="button" accessibilityLabel={playingId === m.id ? '일시정지' : '바로 재생'} hitSlop={6} style={st.qp}>{playingId === m.id ? <PauseGlyph s={14} /> : <PlayGlyph s={14} />}</Pressable>
+                  <Pressable onPress={() => onQuickPlay(m)} accessibilityRole="button" accessibilityLabel={playingId === m.id ? '일시정지' : '바로 재생'} hitSlop={6} accessibilityState={{ disabled: audioOff }} style={[st.qp, audioOff && { backgroundColor: AUDIO_OFF_BG }]}>{playingId === m.id ? <PauseGlyph s={14} /> : <PlayGlyph s={14} />}</Pressable>
                 ) : null}
               </View>
             ))}
@@ -178,7 +179,7 @@ function RadioCard({ m, playing, onPress, onPlay }: { m: MadeItem; playing: bool
         <Text style={st.mfS}>{m.sub}</Text>
       </Pressable>
       <View style={st.pl}>
-        <Pressable onPress={onPlay} accessibilityRole="button" accessibilityLabel={playing ? '일시정지' : '바로 재생'} style={st.pb}>{playing ? <PauseGlyph /> : <PlayGlyph />}</Pressable>
+        <Pressable onPress={onPlay} accessibilityRole="button" accessibilityLabel={playing ? '일시정지' : '바로 재생'} accessibilityState={{ disabled: audioOff }} style={[st.pb, audioOff && { backgroundColor: AUDIO_OFF_BG }]}>{playing ? <PauseGlyph /> : <PlayGlyph />}</Pressable>
         <Pressable onPress={onPress} accessible={false} style={st.wv}>{WAVE.map((h, i) => <View key={i} style={[st.wvI, { height: h, backgroundColor: i < 5 ? '#3D73F0' : '#C9D7FB' }]} />)}</Pressable>
         <Text style={st.du}>{m.dur}</Text>
       </View>
