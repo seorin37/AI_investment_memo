@@ -1,10 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import Svg, { Path, Rect } from 'react-native-svg';
 import { Text } from '@/components/ui/AppText';
 import type { ChartRange } from '@/types/models';
-import { BackChevron } from '@/ui/icons/MemoGlyphs';
 import { Skeleton } from '@/ui/motion/Skeleton';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { NudgePill } from '@/ui/shared/NudgePill';
@@ -39,7 +37,7 @@ const PROF: { name: string; color: string; key: 'op_margin' | 'net_margin' | 'ro
 
 /**
  * 앱 기업정보 (원본 company.html 09.1 · 11.17 웹 통일판)
- * 머리 56 (뒤로 · 이름 18px → 요약 카드가 지나가면 이름 15px + 가격 12px 로 바뀜 · 스크롤하면 아래 선)
+ * 머리는 라우트가 줌 (StockBar: 요약 카드가 지나가면 이름 15px + 가격 12px 로 바뀜 · 스크롤하면 아래 선)
  * 요약 카드 · [메모 보드 | 기업정보] · 기업 개요 · 주가·거래량 (캔들 · 누른 채 훑기 · 1주/1달/3달/1년) · 시세·투자정보 (52주 막대 · 12칸 · ?)
  * 실적 (막대 + 전년 같은 분기 대비 선 · 칸 누르기) · 수익성 (범례 켜고 끄기) · 기업 건전성 (레이더 + 목록) · 출처
  * 카드는 화면에 들어올 때 아래 14에서 올라오고 그때 차트가 그려짐. ? 를 누르면 용어 시트.
@@ -47,8 +45,8 @@ const PROF: { name: string; color: string; key: 'op_margin' | 'net_margin' | 'ro
 export function AppCompanyInfo(p: CompanyInfoProps & {
   /** 메모 보드와 같은 카드 */
   topCard: React.ReactNode;
-  /** 시세가 없거나 받는 중: 줄어든 머리에 숫자를 쓰지 않음 */
-  noPrice?: boolean;
+  /** 종목 상세 머리 (StockBar — 메모 보드와 같은 것) */
+  header: React.ReactNode;
   /** 데이터를 받는 중: 카드 · 탭은 그대로 두고 아래만 뼈대 */
   loading?: boolean;
   startY?: number;
@@ -56,12 +54,10 @@ export function AppCompanyInfo(p: CompanyInfoProps & {
 }) {
   const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const placed = useRef(false);
-  const insets = useSafeAreaInsets();
   const { width: W, height: VH } = useWindowDimensions();
   const k = useMotionK();
   const [ready, setReady] = useState(false);
   const [y, setY] = useState(0);
-  const [sumH, setSumH] = useState(200);
   const [locked, setLocked] = useState(false);
   const [range, setRange] = useState<ChartRange>('1M');
   const [hover, setHover] = useState<number | null>(null);
@@ -97,7 +93,6 @@ export function AppCompanyInfo(p: CompanyInfoProps & {
   const yoyLabel = all[all.length - shown.length + gi - 4]?.label ?? '전년 동기';
   const Y = yoyAt(all, gkey, all.length - 8 + gi);
   const termCtx = { p: pr, price: p.stock.price, last, health: p.health };
-  const compact = y > sumH - 10;
   const asOf = mmddOf(p.quote_as_of);
 
   const tab = (
@@ -119,8 +114,8 @@ export function AppCompanyInfo(p: CompanyInfoProps & {
   );
 
   return (
-    <View style={[st.root, { paddingTop: insets.top }]}>
-      <Header name={p.stock.name} price={p.noPrice ? null : p.stock.price} pct={p.stock.change_pct} compact={compact} line={y > 8} onBack={p.onBack} onMore={p.onMore} />
+    <View style={st.root}>
+      {p.header}
       <ScrollView
         style={st.flex}
         contentContainerStyle={st.content}
@@ -137,9 +132,7 @@ export function AppCompanyInfo(p: CompanyInfoProps & {
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
       >
-        <View onLayout={(e) => setSumH(e.nativeEvent.layout.height)}>
-          {p.topCard}
-        </View>
+        {p.topCard}
         {tab}
         {!ready || p.loading ? (
           <View>
@@ -350,49 +343,6 @@ export function AppCompanyInfo(p: CompanyInfoProps & {
 }
 
 /** 머리 (원본 .ph2: 56 · 이름 18px ↔ 이름 15px + 가격 12px 600 · .28s 위아래로 바뀜) */
-function Header({ name, price, pct, compact, line, onBack, onMore }: { name: string; price: number | null; pct: number; compact: boolean; line: boolean; onBack: () => void; onMore?: () => void }) {
-  const k = useMotionK();
-  const [v] = useState(() => new Animated.Value(0));
-  useEffect(() => {
-    const a = Animated.timing(v, { toValue: compact ? 1 : 0, duration: 280 * k, easing: curve.ease, useNativeDriver: NATIVE });
-    a.start();
-    return () => a.stop();
-  }, [compact, v, k]);
-  const up = pct >= 0;
-  return (
-    <View style={[st.ph2, line && st.ph2Line]}>
-      <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="뒤로" style={st.ib}>
-        <BackChevron />
-      </Pressable>
-      <View style={st.tt}>
-        <Animated.View style={[st.ttIn, { opacity: v.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }), transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [0, -40] }) }] }]}>
-          <Text style={st.ttB} numberOfLines={1}>
-            {name}
-          </Text>
-        </Animated.View>
-        <Animated.View style={[st.ttIn, st.mini, { opacity: v, transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }] }]}>
-          <Text style={st.miniB} numberOfLines={1}>
-            {name}
-          </Text>
-          {price === null ? null : (
-            <Text style={[st.miniS, { color: up ? appColor.up : appColor.down }]}>
-              {won(price)}원 {up ? '+' : ''}
-              {pct.toFixed(2)}%
-            </Text>
-          )}
-        </Animated.View>
-      </View>
-      <Pressable onPress={onMore} accessibilityRole="button" accessibilityLabel="종목 메뉴" style={st.ib}>
-        <Svg width={20} height={20} viewBox="0 0 24 24" fill="#16171A">
-          <Circle cx={12} cy={5.5} r={2} />
-          <Circle cx={12} cy={12} r={2} />
-          <Circle cx={12} cy={18.5} r={2} />
-        </Svg>
-      </Pressable>
-    </View>
-  );
-}
-
 /** 화면에 들어오면 한 번 보여 줌 (원본 .rv: 아래 14 → 제자리 .45s · 처음 셋은 70ms 차례) */
 function Section({ i, scrollY, vh, children }: { i: number; scrollY: number; vh: number; children: (seen: boolean) => React.ReactNode }) {
   const k = useMotionK();
@@ -512,15 +462,6 @@ const st = StyleSheet.create({
   root: { flex: 1, backgroundColor: appColor.bg },
   flex: { flex: 1 },
   content: { paddingBottom: 28 },
-  ph2: { height: 56, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, backgroundColor: appColor.bg, zIndex: 2 },
-  ph2Line: { borderBottomWidth: 1, borderBottomColor: appColor.line, marginBottom: -1 },
-  ib: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  tt: { flex: 1, height: 40, overflow: 'hidden' },
-  ttIn: { position: 'absolute', left: 0, top: 0, height: 40, justifyContent: 'center' },
-  ttB: { ...ft(18), fontWeight: '700', color: appColor.ink },
-  mini: { alignItems: 'flex-start' },
-  miniB: { ...ft(15, 1.2), fontWeight: '700', color: appColor.ink },
-  miniS: { ...ft(12), fontWeight: '600' },
   seg2: { marginTop: 16, marginHorizontal: 16, marginBottom: 14 },
   cd: { backgroundColor: '#FFFFFF', borderRadius: 22, marginHorizontal: 16, marginBottom: 14, paddingTop: 18, paddingHorizontal: 16, paddingBottom: 16 },
   h3row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
