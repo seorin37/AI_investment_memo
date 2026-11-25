@@ -17,6 +17,7 @@ import { StockLogo } from '@/ui/shared/StockLogo';
 import { appColor, curve, ft } from '@/ui/theme';
 import type { AppUpdatesProps, KindFilter, UpdateItem, UpdateStock } from '../Updates.types';
 import { versionsOf } from '../Updates.mock';
+import { TabFrame, TabScroll } from '@/ui/layout/app/TabFrame';
 import { APP_TAG, KINDS, ago, byStock, dayGroup, kstMd, sourceLine, unreadOf } from '../updatesFormat';
 import { useNudge } from '@/store/nudge';
 
@@ -93,9 +94,9 @@ export function AppUpdates(p: AppUpdatesProps) {
   const nN = cur ? unreadOf(byStock(p.items, cur.stock_code)) : total;
 
   return (
-    <View style={st.root}>
+    <TabFrame style={st.root}>
       {p.header({ line: scrolled, onReadAll: code ? undefined : readAll, readAllOff: !total })}
-      <ScrollView style={st.flex} contentContainerStyle={st.pw} stickyHeaderIndices={[1]} scrollEventThrottle={16} onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > 0)} showsVerticalScrollIndicator={false}>
+      <TabScroll style={st.flex} contentContainerStyle={st.pw} stickyHeaderIndices={[1]} onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > 0)} showsVerticalScrollIndicator={false}>
         <View style={st.lt}>
           <View style={st.unr}>
             <View style={st.unrDot} />
@@ -137,7 +138,7 @@ export function AppUpdates(p: AppUpdatesProps) {
         )}
         <Text style={st.disc}>투자 권유가 아닌 참고 정보예요 · AI는 틀릴 수 있어 원문을 꼭 확인해 주세요</Text>
         <View style={{ height: nudge && nN ? 60 : 0 }} />
-      </ScrollView>
+      </TabScroll>
 
       {nudge && nN && !search ? (
         <View style={[st.nudge, { bottom: snack ? 76 : 16 }]} pointerEvents="box-none">
@@ -146,7 +147,7 @@ export function AppUpdates(p: AppUpdatesProps) {
       ) : null}
       <AppSnackbar visible={!!snack} message={snack?.msg ?? ''} onUndo={snack?.undo} style={st.snack} />
       {search ? <SearchOver stocks={p.stocks} items={p.items} q={q} setQ={setQ} top={insets.top} onClose={() => setSearch(false)} onPick={(c) => (setSearch(false), pick(c))} /> : null}
-    </View>
+    </TabFrame>
   );
 }
 

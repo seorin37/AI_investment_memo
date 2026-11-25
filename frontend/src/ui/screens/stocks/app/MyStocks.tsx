@@ -1,8 +1,8 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Animated, BackHandler, PanResponder, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Animated, BackHandler, PanResponder, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Rect } from 'react-native-svg';
-import { TAB_BAR_H } from '@/ui/layout/app/TopBar';
+import { TAB_BAR_H, TabFrame, TabScroll } from '@/ui/layout/app/TabFrame';
 import { Text } from '@/components/ui/AppText';
 import { Reveal } from '@/ui/motion/Reveal';
 import { Skeleton } from '@/ui/motion/Skeleton';
@@ -161,7 +161,7 @@ export function AppMyStocks(p: AppMyStocksProps) {
   const types = sel ? [...sel].map((c) => L.find((s) => s.stock_code === c)?.status) : [];
 
   return (
-    <View style={st.root}>
+    <TabFrame style={st.root}>
       {p.header({ onSearch: () => setAdd(true) })}
       {/* 선택 머리 (원본 .selh: 위 바 자리로 내려옴) */}
       {sel ? (
@@ -177,7 +177,7 @@ export function AppMyStocks(p: AppMyStocksProps) {
           </Pressable>
         </Reveal>
       ) : null}
-      <ScrollView style={st.flex} contentContainerStyle={{ paddingBottom: 30 + (sel ? 80 + insets.bottom : 0) }} stickyHeaderIndices={L.length ? [0] : undefined} scrollEnabled={!drag} showsVerticalScrollIndicator={false}>
+      <TabScroll style={st.flex} contentContainerStyle={{ paddingBottom: 30 + (sel ? 80 + insets.bottom : 0) }} stickyHeaderIndices={L.length ? [0] : undefined} scrollEnabled={!drag} showsVerticalScrollIndicator={false}>
         {L.length ? (
           <View>
             {/* 끈적이 머리는 자기 style 을 바깥 틀로 옮겨서, 줄 배치는 안쪽 View 에 */}
@@ -278,7 +278,7 @@ export function AppMyStocks(p: AppMyStocksProps) {
             <Text style={st.hint2}>종목을 꾹 누르면 여러 개를 옮기거나 빼고, ⋮⋮를 끌어 순서를 바꿀 수 있어요</Text>
           </>
         )}
-      </ScrollView>
+      </TabScroll>
 
       {/* 선택 동작 막대 (원본 .abar: 탭바 자리 80) */}
       {sel ? (
@@ -329,7 +329,7 @@ export function AppMyStocks(p: AppMyStocksProps) {
           show({ msg: `${n}${josa(n)} ${KO[h]} 종목에 추가했어요`, action: { label: '메모 쓰기', onPress: () => (setSnack(null), p.onWriteMemo(c)) } });
         }}
       />
-    </View>
+    </TabFrame>
   );
 }
 

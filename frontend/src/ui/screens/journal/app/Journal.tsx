@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, BackHandler, Keyboard, Pressable, ScrollView, StyleSheet, View, type TextInputInstance } from 'react-native';
+import { Animated, BackHandler, Keyboard, Pressable, StyleSheet, View, type TextInputInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { TAB_BAR_GAP, TAB_BAR_H } from '@/ui/layout/app/TopBar';
+import { TAB_BAR_GAP, TAB_BAR_H, TabFrame, TabScroll } from '@/ui/layout/app/TabFrame';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { Reveal } from '@/ui/motion/Reveal';
 import { Skeleton } from '@/ui/motion/Skeleton';
@@ -223,7 +223,7 @@ export function AppJournal(p: AppJournalProps) {
   const sbW = sv.interpolate({ inputRange: [0, 1], outputRange: [42, 0] });
 
   return (
-    <View style={st.root}>
+    <TabFrame style={st.root}>
       {/* 머리: 검색 중엔 위로 접힘 · 고르는 동안은 'N개 선택' */}
       {sel ? (
         <View style={{ paddingTop: insets.top, backgroundColor: appColor.bg }}>
@@ -244,9 +244,9 @@ export function AppJournal(p: AppJournalProps) {
           </Animated.View>
         </Animated.View>
       )}
-      <ScrollView style={st.flex} contentContainerStyle={st.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} onScrollBeginDrag={() => openRow && setOpenRow(null)}>
+      <TabScroll style={st.flex} contentContainerStyle={st.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} onScrollBeginDrag={() => openRow && setOpenRow(null)}>
         {/* 검색 줄 */}
-        <View style={[st.srow, srch && { paddingTop: 2 }]}>
+        <Animated.View style={[st.srow, { marginTop: sv.interpolate({ inputRange: [0, 1], outputRange: [0, 2 - TAB_BAR_GAP] }) }]}>
           <Pressable onPress={() => input.current?.focus()} style={st.sbx}>
             <JSearch color={appColor.ink3} />
             <TextInput ref={input} value={q} onChangeText={setQ} onFocus={openSearch} placeholder="검색" placeholderTextColor="#8E939C" style={st.sin} accessibilityLabel="기록 검색" />
@@ -266,7 +266,7 @@ export function AppJournal(p: AppJournalProps) {
               </Text>
             </Pressable>
           </Animated.View>
-        </View>
+        </Animated.View>
 
         {srch ? (
           /* 검색 결과 */
@@ -351,7 +351,7 @@ export function AppJournal(p: AppJournalProps) {
             ))}
           </>
         )}
-      </ScrollView>
+      </TabScroll>
 
       <AppSnackbar visible={!!snack} message={snack?.msg ?? ''} onUndo={snack?.undo ? undo : undefined} style={[st.snack, { bottom: selecting ? 96 + insets.bottom : 16 }]} />
       <Pill toast={toastV} bottom={selecting ? 100 + insets.bottom : 20} />
@@ -421,7 +421,7 @@ export function AppJournal(p: AppJournalProps) {
           ))}
         </View>
       </Sheet>
-    </View>
+    </TabFrame>
   );
 }
 
@@ -624,7 +624,7 @@ const st = StyleSheet.create({
   flex: { flex: 1 },
   content: { paddingBottom: 70 },
   headWrap: { overflow: 'hidden', backgroundColor: appColor.bg },
-  selh: { height: TAB_BAR_H, marginBottom: TAB_BAR_GAP, flexDirection: 'row', alignItems: 'center', paddingLeft: 8, paddingRight: 14, backgroundColor: appColor.bg },
+  selh: { height: TAB_BAR_H, flexDirection: 'row', alignItems: 'center', paddingLeft: 8, paddingRight: 14, backgroundColor: appColor.bg },
   ib: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   selhT: { ...ft(18), fontWeight: '700', color: appColor.ink, marginLeft: 4 },
   all: { marginLeft: 'auto', padding: 8 },

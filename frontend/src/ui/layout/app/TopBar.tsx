@@ -7,12 +7,11 @@ import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { Avatar } from '@/ui/shared/Avatar';
 import { AppIconButton } from '@/ui/shared/IconButton';
 import { appColor, ft } from '@/ui/theme';
+import { TAB_BAR_H, useTabScrollY } from './TabFrame';
 import type { TopBarPreset, TopBarProps } from './TopBar.types';
 
 type Spec = {
   h: number;
-  /** 바 아래 본문까지 간격 */
-  gap?: number;
   padL: number;
   padR: number;
   bg: string;
@@ -28,13 +27,12 @@ type Spec = {
   logo?: boolean;
 };
 
-/** 탭 화면 상단 바 높이 · 첫 본문까지 간격 (탭 위에 덮는 편집·선택 머리도 같은 값을 씀) */
-export const TAB_BAR_H = 64;
-export const TAB_BAR_GAP = 12;
 /* 부제목: 제목 줄(높이 24, 세로 가운데 32 → 아래 끝 44) 아래 6 = 50 ~ 64. 바 높이 안이라 부제목이 있어도 없어도 본문 시작이 같음 */
 const SUB_TOP = 50;
-/* 탭 5개 공용 (높이 64 · 좌우 20 · 부제목은 제목 아래 6 · 첫 본문 간격 12) */
-const TAB: Spec = { h: TAB_BAR_H, gap: TAB_BAR_GAP, padL: 20, padR: 20, bg: appColor.bg, btn: 40, btnGap: 2, avatarGap: 6, title: { ...ft(21), fontWeight: '800', color: appColor.ink } };
+/* 부제목이 올라가며 잘리는 위치 (제목 바로 아래) */
+const SUB_CLIP = 46;
+/* 탭 5개 공용 (높이 64 · 좌우 20 · 부제목은 제목 아래 6 · 첫 본문 간격 12 는 TabScroll) */
+const TAB: Spec = { h: TAB_BAR_H, padL: 20, padR: 20, bg: appColor.bg, btn: 40, btnGap: 2, avatarGap: 6, title: { ...ft(21), fontWeight: '800', color: appColor.ink } };
 /* 나머지는 원본 실측 (412 폭, 상태 바 36 아래) */
 const SPEC: Record<TopBarPreset, Spec> = {
   home: { ...TAB, logo: true },
@@ -57,8 +55,10 @@ const SPEC: Record<TopBarPreset, Spec> = {
 export function TopBar({ preset, title, subtitle, onBack, actions = [], avatar, showLine = false }: TopBarProps) {
   const s = SPEC[preset];
   const insets = useSafeAreaInsets();
+  const y = useTabScrollY();
+  const rise = s.h - SUB_CLIP;
   return (
-    <View style={{ paddingTop: insets.top, paddingBottom: s.gap ?? 0, backgroundColor: s.bg }}>
+    <View style={{ paddingTop: insets.top, backgroundColor: s.bg }}>
       <View style={[st.row, { height: s.h, paddingLeft: s.padL, paddingRight: s.padR, backgroundColor: s.bg }]}>
         {s.back ? <AppIconButton label="뒤로" size={s.back} icon={s.backIcon} iconSize={22} color={appColor.ink} onPress={onBack} /> : null}
         {s.logo ? (
@@ -84,9 +84,13 @@ export function TopBar({ preset, title, subtitle, onBack, actions = [], avatar, 
         ) : null}
       </View>
       {subtitle ? (
-        <Text style={[st.sub, { top: insets.top + SUB_TOP, left: s.padL, right: s.padR }]} numberOfLines={1}>
-          {subtitle}
-        </Text>
+        <View pointerEvents="none" style={[st.subClip, { top: insets.top + SUB_CLIP, left: s.padL, right: s.padR, height: rise }]}>
+          <Animated.View style={y ? { transform: [{ translateY: y.interpolate({ inputRange: [0, rise], outputRange: [0, -rise], extrapolate: 'clamp' }) }] } : null}>
+            <Text style={st.sub} numberOfLines={1}>
+              {subtitle}
+            </Text>
+          </Animated.View>
+        </View>
       ) : null}
       <BarLine on={showLine} />
     </View>
@@ -110,6 +114,7 @@ const st = StyleSheet.create({
   flex: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' },
   shrink: { flexShrink: 1 },
   /* 원본 내 종목 .sub · 스튜디오 .subr: 12.5 · ink3 */
-  sub: { position: 'absolute', fontSize: 12.5, lineHeight: 14, color: appColor.ink3 },
+  subClip: { position: 'absolute', overflow: 'hidden' },
+  sub: { marginTop: SUB_TOP - SUB_CLIP, fontSize: 12.5, lineHeight: 14, color: appColor.ink3 },
   line: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 1, backgroundColor: appColor.line },
 });

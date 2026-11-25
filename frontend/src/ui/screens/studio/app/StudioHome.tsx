@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
+import { TabFrame, TabScroll } from '@/ui/layout/app/TabFrame';
 import { Text } from '@/components/ui/AppText';
 import { PressScale } from '@/ui/motion/PressScale';
 import { Reveal } from '@/ui/motion/Reveal';
@@ -67,9 +68,9 @@ export function AppStudioHome({ header, jobs, onJob, playingId, onQuickPlay, bot
   const top = p.made.find((m) => m.kind === 'audio');
   const rest = p.made.filter((m) => m !== top);
   return (
-    <View style={st.root}>
+    <TabFrame style={st.root}>
       {header}
-      <ScrollView contentContainerStyle={{ paddingBottom: 24 + bottomPad }} showsVerticalScrollIndicator={false}>
+      <TabScroll contentContainerStyle={{ paddingBottom: 24 + bottomPad }} showsVerticalScrollIndicator={false}>
         <View style={st.subr}>
           <Text style={[st.subrT, { flex: 1 }]}>내 종목 {p.stock_count} · AI 연결 메모 {p.ai_memo_count}</Text>
           <PressScale scaleTo={0.93} onPress={() => setSheet(true)} accessibilityRole="button" accessibilityLabel={`AI 사용량 ${p.usage_pct}%`} style={[st.cred, full && st.credZero]}>
@@ -144,7 +145,7 @@ export function AppStudioHome({ header, jobs, onJob, playingId, onQuickPlay, bot
         ) : null}
         {!p.made.length && !jobs.length ? <View style={st.made}><Text style={st.empty}>{'아직 만든 항목이 없어요\n위에서 오디오·보고서·실험을 만들어 보세요'}</Text></View> : null}
         <Text style={st.sdisc}>스튜디오는 투자 권유나 주가 예측을 하지 않아요.</Text>
-      </ScrollView>
+      </TabScroll>
       <Sheet open={sheet} onClose={() => setSheet(false)} label="AI 사용량">
         <View style={{ paddingHorizontal: 18 }}>
           <Text style={st.shH}>{full ? '이번 달 AI 사용량을 다 썼어요' : 'AI 사용량'}</Text>
@@ -156,7 +157,7 @@ export function AppStudioHome({ header, jobs, onJob, playingId, onQuickPlay, bot
           </View>
         </View>
       </Sheet>
-    </View>
+    </TabFrame>
   );
 }
 
