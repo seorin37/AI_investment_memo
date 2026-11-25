@@ -80,10 +80,10 @@ class FakeCreditDb:
 
 def test_first_use_sets_anchor_and_mid_access_does_not_restart():
     db = FakeCreditDb()
-    assert ledger.ensure_monthly(db, 7, kst(2026, 11, 20, 15)) == 30            # 첫 사용 = 시작점 11/20
+    assert ledger.ensure_monthly(db, 7, kst(2026, 11, 20, 15)) == 20            # 첫 사용 = 시작점 11/20
     assert ledger.ensure_monthly(db, 7, kst(2026, 11, 28)) == 0                 # 중간 접속: 새로 주지 않음
     assert ledger.ensure_monthly(db, 7, kst(2026, 12, 19, 23, 59)) == 0         # 경계 직전 (KST)
-    assert ledger.ensure_monthly(db, 7, kst(2026, 12, 20, 0, 0)) == 30          # 경계 (KST 0시) → 다음 주기
+    assert ledger.ensure_monthly(db, 7, kst(2026, 12, 20, 0, 0)) == 20          # 경계 (KST 0시) → 다음 주기
     assert db.starts() == [date(2026, 11, 20), date(2026, 12, 20)]
     assert db.grants[0]["expires_at"] == datetime(2026, 12, 20, tzinfo=KST)     # 다음 주기 시작에 만료
 
@@ -112,7 +112,7 @@ def test_month_end_anchor_grants():
 def test_paid_plan_uses_same_anchor_rule_for_now():
     # 결제일 저장 칸이 없어 유료도 첫 지급일이 시작점 (결제 연결 때 anchor_date 에서 결제일로)
     db = FakeCreditDb(plan="plus")
-    assert ledger.ensure_monthly(db, 7, kst(2026, 11, 5)) == 100                # plus 가안 100 (configs/credits.yaml)
+    assert ledger.ensure_monthly(db, 7, kst(2026, 11, 5)) == 80                 # plus 80 (configs/credits.yaml, 11-25 확정)
     assert ledger.user_period(db, 7, kst(2026, 11, 30))[0] == date(2026, 11, 5)
 
 

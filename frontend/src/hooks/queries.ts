@@ -416,6 +416,8 @@ export const useAiStats = () => useQuery({ queryKey: qk.aiStats, queryFn: api.ge
 export const useTodayQuiz = (enabled = true) =>
   useQuery({ queryKey: qk.todayQuiz, queryFn: api.getTodayQuiz, staleTime: 10 * 60_000, retry: false, enabled });
 export const useUsage = () => useQuery({ queryKey: qk.usage, queryFn: api.getUsage });
+/** 요금제·추가 크레딧 상품 (GET /plans, configs/credits.yaml 한 곳 · 2026-11-25) */
+export const usePlans = () => useQuery({ queryKey: ['plans'] as const, queryFn: api.getPlans, staleTime: 10 * 60_000 });
 /** 크레딧을 다 쓴 뒤 'AI 연결 모두 끄기' (2026-11-24). 끈 뒤 보드·메모·사용량을 모두 다시 받는다 */
 export function useAiOffAll() {
   const qc = useQueryClient();

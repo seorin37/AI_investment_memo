@@ -15,7 +15,8 @@ import { Chev, CloseX, Row, SBtn, Switch, ws, type Hover } from './parts';
 export interface WebSettingsExtra {
   noti: NotiSettings;
   onNoti: (n: NotiSettings) => void;
-  usage: { usage_pct: number; usage_renew: string; plan_name: string };
+  /** credits_*: 이번 기간 쓴·남은 크레딧, tracking_cap: 요금제 추적 항목 상한 (2026-11-25, 모르면 null) */
+  usage: { usage_pct: number; usage_renew: string; plan_name: string; credits_used?: number | null; credits_left?: number | null; tracking_cap?: number | null };
   tracked: TrackedStock[];
   onOpenMemo: (stock_code: string, title: string) => void;
   plans: PlanInfo[];
@@ -62,7 +63,7 @@ export function UsageTab({ usage, tracked, onOpenMemo, onPlan }: Pick<WebSetting
         <Text style={tb.big}>{pct}% 사용</Text>
         <Bar pct={pct} />
         <View style={tb.useM}>
-          <Text style={[ws.d14, { color: '#575B63' }]}>남은 사용량 {Math.max(0, 100 - pct)}%</Text>
+          <Text style={[ws.d14, { color: '#575B63' }]}>{usage.credits_left != null ? `남은 크레딧 ${usage.credits_left}개 · 이번 기간 ${usage.credits_used ?? 0}개 씀` : `남은 사용량 ${Math.max(0, 100 - pct)}%`}</Text>
           <Text style={ws.d14}>다음 갱신 {usage.usage_renew}</Text>
         </View>
       </View>
@@ -73,7 +74,7 @@ export function UsageTab({ usage, tracked, onOpenMemo, onPlan }: Pick<WebSetting
         </View>
       ) : null}
       <View style={{ width: 718, gap: 12 }}>
-        <View style={tb.trkH}><Text style={ws.d14}>종목별 추적 현황</Text><Text style={ws.d14}>추적 항목 {total}개</Text></View>
+        <View style={tb.trkH}><Text style={ws.d14}>종목별 추적 현황</Text><Text style={ws.d14}>추적 항목 {total}개{usage.tracking_cap ? ` / 최대 ${usage.tracking_cap}개` : ''}</Text></View>
         <View style={tb.trk}>
           {tracked.map((s, i) => {
             const on = open === s.stock_code;
@@ -138,25 +139,8 @@ function Bar({ pct }: { pct: number }) {
 /* 플랜 살펴보기 (앱 화면 그대로 · 보라 → 검정) */
 const Tick = () => <Svg width={16} height={16} viewBox="0 0 16 16" fill="none"><Path d="M3 8.4L6.4 11.6L13 4.8" stroke="#15171A" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" /></Svg>;
 export function PlanView({ plans, compare, notes, pick, setPick }: Pick<WebSettingsExtra, 'plans' | 'compare' | 'notes'> & { pick: string; setPick: (k: string) => void }) {
-  const k = useMotionK();
-  const [per, setPer] = useState<'월간' | '연간'>('월간');
-  const [x] = useState(() => new Animated.Value(0));
-  useEffect(() => {
-    const a = Animated.timing(x, { toValue: per === '연간' ? 154 : 0, duration: 300 * k, easing: Easing.out(Easing.ease), useNativeDriver: false });
-    a.start();
-    return () => a.stop();
-  }, [per, k, x]);
-  const unit = per === '월간' ? '/ 월' : '/ 년';
   return (
     <View style={tb.pv}>
-      <View style={tb.seg}>
-        <Animated.View style={[tb.segSl, { transform: [{ translateX: x }] }]} />
-        {(['월간', '연간'] as const).map((p) => (
-          <Pressable key={p} onPress={() => setPer(p)} accessibilityRole="tab" accessibilityState={{ selected: per === p }} style={tb.segB}>
-            <Text style={[tb.segT, per === p && tb.segTOn]}>{p}</Text>
-          </Pressable>
-        ))}
-      </View>
       {plans.map((p) => {
         const on = pick === p.key;
         return (
@@ -165,7 +149,8 @@ export function PlanView({ plans, compare, notes, pick, setPick }: Pick<WebSetti
               <Text style={tb.pcN}>{p.key}</Text>
               {p.tag ? <View style={[tb.chip, p.tag === '추천' && { backgroundColor: '#EFEFEF' }]}><Text style={[tb.chipT, p.tag === '추천' && { color: '#15171A' }]}>{p.tag}</Text></View> : null}
             </View>
-            <View style={tb.pcP}><Text style={tb.pcPr}>{p.price}</Text><Text style={ws.d14}>{unit}</Text></View>
+            <View style={tb.pcP}><Text style={tb.pcPr}>{p.price}</Text>{p.price === '0원' ? null : <Text style={ws.d14}>/ 월</Text>}</View>
+            {p.first ? <Text style={[ws.d14, { fontWeight: '700', color: '#15171A' }]}>{p.first}</Text> : null}
             <View style={{ gap: 8 }}>{p.features.map((f) => <View key={f} style={tb.feat}><Tick /><Text style={tb.featT}>{f}</Text></View>)}</View>
             <View style={tb.radio}>
               <Svg width={28} height={28} viewBox="0 0 28 28" fill="none">

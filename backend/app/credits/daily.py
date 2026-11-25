@@ -62,12 +62,13 @@ def charge_run(dsn: str, update_ids: list[int], allow_shared: bool = False) -> d
     engine = _engine(dsn, allow_shared)
     try:
         with engine.begin() as db:
-            rows = db.execute(text("""SELECT tu.id, tu.type::text, m.user_id FROM tracking_updates tu
+            rows = db.execute(text("""SELECT tu.id, tu.type::text, m.user_id, tu.details->>'answer_status' FROM tracking_updates tu
                 JOIN tracking_items ti ON ti.id = tu.tracking_item_id JOIN memos m ON m.id = ti.memo_id
                 WHERE tu.id = ANY(:ids) ORDER BY tu.id"""), {"ids": [int(i) for i in update_ids]}).all()
-            for uid_, utype, user_id in rows:
+            for uid_, utype, user_id, astatus in rows:
                 reason = REASON.get(utype, "card")
-                want = ledger.cost(reason)
+                unverified = utype == "answer" and astatus == "no_answer"   # 2026-11-25 '확인되지 않았어요' 답 (기본 0크레딧)
+                want = ledger.cost("answer_unverified" if unverified else reason)   # 장부 사유는 answer 그대로 (credit_ledger CHECK)
                 if want <= 0:
                     continue
                 if _already(db, user_id, reason, uid_):          # 다시 돌려도 같은 카드는 한 번만

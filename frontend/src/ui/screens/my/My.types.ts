@@ -64,6 +64,8 @@ export interface UsageProps {
   usage_pct: number;
   usage_renew: string;
   plan_name: string;
+  /** 남은 크레딧 (GET /me/usage balance, 2026-11-25). 모르면 null → % 로 */
+  credits_left?: number | null;
   tracked: TrackedStock[];
   onBack: () => void;
   onOpenMemo: (stock_code: string, title: string) => void;

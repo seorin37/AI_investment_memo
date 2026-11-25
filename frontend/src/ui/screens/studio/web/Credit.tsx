@@ -44,18 +44,31 @@ export function WebUsageSheet({ open, pct, refill, onClose, onBuyCredit, onChang
   );
 }
 
-/** 웹 'PLUS예요' 창 = 원본 studio.tsx CreditPopup (사용량을 다 쓴 뒤 만들기를 누르면) */
-export function WebCreditPopup({ open, onClose, onPlan, onCharge }: { open: boolean; onClose: () => void; onPlan: () => void; onCharge: () => void }) {
+/**
+ * 웹 '크레딧을 다 썼어요' 창 = 원본 studio.tsx CreditPopup (사용량을 다 쓴 뒤 만들기를 누르면).
+ * 2026-11-25 플랜별 문구: 무료 → PLUS 안내 · PLUS → 충전 먼저, PRO 안내는 링크 · PRO → 충전. 숫자는 GET /plans
+ */
+export function WebCreditPopup({ open, plan = 'free', nextName, nextCredits, packLabel, onClose, onPlan, onCharge }: { open: boolean; plan?: string; nextName?: string; nextCredits?: number; packLabel?: string; onClose: () => void; onPlan: () => void; onCharge: () => void }) {
+  const free = plan !== 'plus' && plan !== 'pro';
+  const title = free ? '이번 달 무료 크레딧을 다 썼어요' : '이번 달 크레딧을 다 썼어요';
+  const up = nextName && nextCredits ? `${nextName}는 매달 ${nextCredits} 크레딧이에요. ` : '';
+  const pack = packLabel ? `추가 크레딧은 ${packLabel}이에요. ` : '';
+  const body = `${free ? up : plan === 'plus' ? pack + up : pack}이미 만든 항목과 오늘의 퀴즈는 계속 쓸 수 있어요.`;
   return (
-    <Sheet open={open} onClose={onClose} width={400} scrim={SCRIM} label="이 기능부터는 PLUS예요">
+    <Sheet open={open} onClose={onClose} width={400} scrim={SCRIM} label={title}>
       <View style={[st.pop, { width: 400, gap: 14 }]}>
         <View style={[st.ic, { width: 52, height: 52, borderRadius: 16 }]}><Bolt s={26} c="#FFFFFF" /></View>
-        <Text style={st.popH}>이 기능부터는 PLUS예요</Text>
-        <Text keepAll style={st.popP}>이번 달 무료 크레딧을 다 썼어요. PLUS에서는 매달 더 많이 만들 수 있어요. 이미 만든 항목과 오늘의 퀴즈는 계속 쓸 수 있어요.</Text>
-        <View style={st.btns}><GBtn h={48} flex onPress={onClose}>닫기</GBtn><GBtn h={48} flex dark onPress={onPlan}>PLUS 살펴보기</GBtn></View>
-        <Pressable onPress={onCharge} accessibilityRole="button" style={{ alignSelf: 'stretch' }}>
-          {({ hovered }: Hover) => <Text style={[st.link, hovered && { color: '#15171A' }]}>이번만 크레딧 충전하기</Text>}
-        </Pressable>
+        <Text style={st.popH}>{title}</Text>
+        <Text keepAll style={st.popP}>{body}</Text>
+        <View style={st.btns}>
+          <GBtn h={48} flex onPress={onClose}>닫기</GBtn>
+          {free ? <GBtn h={48} flex dark onPress={onPlan}>{`${nextName ?? 'PLUS'} 살펴보기`}</GBtn> : <GBtn h={48} flex dark onPress={onCharge}>크레딧 충전하기</GBtn>}
+        </View>
+        {free || plan === 'plus' ? (
+          <Pressable onPress={free ? onCharge : onPlan} accessibilityRole="button" style={{ alignSelf: 'stretch' }}>
+            {({ hovered }: Hover) => <Text style={[st.link, hovered && { color: '#15171A' }]}>{free ? '이번만 크레딧 충전하기' : `${nextName ?? 'PRO'} 살펴보기`}</Text>}
+          </Pressable>
+        ) : null}
       </View>
     </Sheet>
   );

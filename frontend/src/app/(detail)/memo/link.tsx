@@ -9,6 +9,7 @@ import { useMemoScreen } from '@/ui/screens/memo/useMemoScreen';
 import { api } from '@/api';
 import { useQueryClient } from '@tanstack/react-query';
 import { connectResult } from '@/ui/screens/board/useBoardData';
+import { ApiError } from '@/api/http';
 
 /**
  * 앱 AI 연결 창 = UI v2 (아래에서 올라옴). mock 단계: 분석 중 1.2초 (새 메모면 1.7초) → 항목 있음 / 항목 없음.
@@ -47,7 +48,11 @@ export default function AiLinkScreen() {
         setRealItems(r.items);
         setState(r.state);
       },
-      () => setState('error'),
+      (e) => {
+        /* 크레딧 0(402) · 추적 항목 상한(409): 서버 문구 안내 (2026-11-25) */
+        if (e instanceof ApiError && (e.status === 402 || e.status === 409)) useUI.getState().showToast(e.message);
+        setState('error');
+      },
     );
   }, [real, state, id, asked, qc]);
   useEffect(() => {

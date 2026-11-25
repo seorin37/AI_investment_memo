@@ -95,6 +95,7 @@ export const realApi: Api = {
   getAiStats: () => http.get('/ai/stats'),
   getAiTracking: () => http.get('/ai/tracking'),
   getUsage: () => http.get('/me/usage'),
+  getPlans: () => http.get('/plans'),
   aiOffAll: () => http.post('/me/ai-off'),
   aiOffNoticeSeen: () => http.post('/me/ai-off/notice-seen'),
   getTodayQuiz: () => http.get('/quiz/today'),

@@ -16,6 +16,7 @@ export default function MyUsageScreen() {
       usage_pct={usage.usage_pct}
       usage_renew={usage.usage_renew}
       plan_name={usage.plan_name}
+      credits_left={usage.credits_left}
       tracked={tracked}
       onBack={() => router.back()}
       onOpenMemo={(code) => router.push({ pathname: '/stocks/[code]', params: { code } })}

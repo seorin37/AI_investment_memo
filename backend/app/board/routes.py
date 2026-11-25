@@ -25,6 +25,7 @@ from .service import (
     BoardService,
     InvalidBoardPatchError,
     NoCreditError,
+    PlanLimitError,
     StaleConfirmationError,
     StockBoardNotFoundError,
 )
@@ -61,6 +62,8 @@ def _handle_error(exc: Exception) -> None:
         raise HTTPException(422, detail=str(exc)) from exc
     if isinstance(exc, NoCreditError):
         raise HTTPException(402, detail=str(exc)) from exc
+    if isinstance(exc, PlanLimitError):
+        raise HTTPException(409, detail=str(exc)) from exc
     raise exc
 
 
@@ -194,7 +197,7 @@ def set_ai_link(
 ):
     try:
         return service.set_ai_link(_user_id(current), memo_id, payload.enabled)
-    except (BoardItemNotFoundError, InvalidBoardPatchError, NoCreditError) as exc:
+    except (BoardItemNotFoundError, InvalidBoardPatchError, NoCreditError, PlanLimitError) as exc:
         _handle_error(exc)
 
 

@@ -38,6 +38,10 @@ class NoCreditError(Exception):
     """크레딧이 0이라 AI 연결(메모 분석·매일 확인)을 켤 수 없음. 화면은 402로 받는다."""
 
 
+class PlanLimitError(Exception):
+    """요금제의 AI 추적 항목 상한(configs/credits.yaml tracking_items)이 차서 AI 연결을 새로 켤 수 없음. 화면은 409로 받는다 (2026-11-25)."""
+
+
 class StaleConfirmationError(ValueError):
     """확인 질문 선택지가 지금 메모 버전의 것이 아님 (메모가 바뀜). 화면은 메모를 다시 불러 새 질문을 보여 준다."""
 
@@ -47,9 +51,11 @@ class BoardService:
 
     def __init__(self, repository: BoardRepository, tracking: TrackingRepository | None = None,
                  llm_factory: Callable[[], Callable[[str], str] | None] = default_llm,
-                 credit_check: Callable[[int], bool] | None = None) -> None:
+                 credit_check: Callable[[int], bool] | None = None,
+                 limit_check: Callable[[int], bool] | None = None) -> None:
         self.repository = repository
         self._credit_check = credit_check
+        self._limit_check = limit_check
         self.tracking = tracking or TrackingRepository(repository.db)
         self._llm_factory, self._llm = llm_factory, None
 
@@ -69,7 +75,9 @@ class BoardService:
 
     def create_memo(self, user_id: int, symbol: str, payload: MemoCreate) -> dict[str, Any]:
         self._require_stock(user_id, symbol)
-        ai_on = bool(payload.ai_linked) and self._has_credit(user_id)   # 크레딧 0이면 일반 메모로 저장
+        credit_ok = self._has_credit(user_id) if payload.ai_linked else True
+        room_ok = self._under_cap(user_id) if payload.ai_linked and credit_ok else True
+        ai_on = bool(payload.ai_linked) and credit_ok and room_ok   # 크레딧 0 · 추적 항목 상한이면 일반 메모로 저장
         row = self.repository.create(
             user_id=user_id,
             symbol=symbol,
@@ -83,7 +91,8 @@ class BoardService:
         self.repository.replace_tags(user_id, int(row["id"]), payload.tags)
         self._place(user_id, symbol, int(row["id"]), front=payload.pinned)
         self._commit()                                          # 메모 저장을 먼저 확정한다 (분석 실패와 무관하게)
-        analysis = self._analyze(row) if ai_on else self._skipped("no_credit" if payload.ai_linked else "ai_off")
+        analysis = self._analyze(row) if ai_on else self._skipped(
+            "ai_off" if not payload.ai_linked else "no_credit" if not credit_ok else "plan_limit")
         return {**self.get(user_id, int(row["id"])), "analysis": analysis}
 
     def create_checklist(
@@ -227,6 +236,8 @@ class BoardService:
             raise InvalidBoardPatchError("일반 메모만 AI 추적 대상으로 설정할 수 있습니다.")
         if enabled and not self._has_credit(user_id):
             raise NoCreditError("AI 사용량을 다 써서 AI 연결을 켤 수 없어요. 일반 메모로는 계속 쓸 수 있어요.")
+        if enabled and not row.get("ai_linked") and not self._under_cap(user_id):
+            raise PlanLimitError("지금 요금제에서 켤 수 있는 AI 추적 항목이 가득 찼어요. 다른 메모의 AI 연결을 끄거나 요금제를 올려 주세요.")
         if not self.repository.set_ai_link(user_id, memo_id, enabled):
             raise BoardItemNotFoundError(memo_id)
         if not enabled:                                         # AI 끄기: 항목을 멈춘다 (지우지 않음)
@@ -276,6 +287,18 @@ class BoardService:
                 return ledger.balance(db, user_id) > 0
         except Exception:                                       # noqa: BLE001 — 크레딧 확인 실패로 메모 저장을 막지 않는다
             log.warning("credit check failed user=%s", user_id, exc_info=True)
+            return True
+
+    def _under_cap(self, user_id: int) -> bool:
+        """AI 추적 항목이 요금제 상한보다 적은지 (새로 켤 때만 본다). 확인할 수 없으면 막지 않는다 (테스트 가짜 저장소 등)."""
+        if self._limit_check is not None:
+            return self._limit_check(user_id)
+        from app.credits import plans
+        db = self.repository.db
+        try:
+            return plans.active_items(db, user_id) < plans.tracking_cap(db, user_id)
+        except Exception:                                       # noqa: BLE001
+            log.warning("tracking cap check failed user=%s", user_id, exc_info=True)
             return True
 
     def _commit(self) -> None:

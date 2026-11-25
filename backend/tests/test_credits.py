@@ -51,11 +51,11 @@ def db():
 
 def test_monthly_grant_once_and_usage(db):
     c, uid = db
-    assert ledger.ensure_monthly(c, uid, NOV) == 30                 # free 기본량 (configs/credits.yaml)
+    assert ledger.ensure_monthly(c, uid, NOV) == 20                 # free 기본량 (configs/credits.yaml)
     assert ledger.ensure_monthly(c, uid, NOV) == 0                  # 같은 주기 두 번 X
     assert ledger.ensure_monthly(c, uid, MID) == 0                  # 중간 접속도 다시 시작 X
     u = ledger.usage(c, uid, NOV)
-    assert (u.balance, u.used, u.usage_percent, u.paused) == (30, 0, 0, False)
+    assert (u.balance, u.used, u.usage_percent, u.paused) == (20, 0, 0, False)
     assert u.to_dict()["renew_label"] == "12.19 갱신"                # 시작점 11/20 기준 (달력 월 아님)
 
 
@@ -64,8 +64,8 @@ def test_spend_monthly_first_then_purchase_and_never_negative(db):
     ledger.grant_purchase(c, uid, 10, "pay-1", NOV)
     assert ledger.spend(c, uid, 25, "card", "tracking_update", 1, NOV) == 25
     rows = dict(c.execute(text("SELECT source, remaining FROM credit_grants WHERE user_id = :u"), {"u": uid}).all())
-    assert rows == {"monthly": 5, "purchase": 10}                   # 기본량 먼저, 산 크레딧은 나중
-    assert ledger.spend(c, uid, 100, "answer", "tracking_update", 2, NOV) == 15   # 잔액까지만
+    assert rows == {"monthly": 0, "purchase": 5}                    # 기본량(20) 먼저, 산 크레딧은 나중
+    assert ledger.spend(c, uid, 100, "answer", "tracking_update", 2, NOV) == 5    # 잔액까지만
     assert ledger.balance(c, uid, NOV) == 0
     assert ledger.usage(c, uid, NOV).paused is True
     assert ledger.spend(c, uid, 1, "card", "tracking_update", 1, NOV) == 0        # 같은 카드는 한 번만
@@ -76,10 +76,10 @@ def test_month_change_expires_monthly_keeps_purchase(db):
     ledger.ensure_monthly(c, uid, NOV)
     ledger.grant_purchase(c, uid, 10, "pay-2", NOV)
     ledger.spend(c, uid, 4, "card", "tracking_update", 3, NOV)
-    assert ledger.usage(c, uid, MID).balance == 36                   # 같은 주기 중간: 그대로
-    u = ledger.usage(c, uid, DEC)                                    # 다음 주기: 앞 기본량 26 만료, 새 기본량 30, 산 크레딧 10 이월
-    assert u.balance == 40 and u.used == 0
-    assert c.execute(text("SELECT -sum(delta) FROM credit_ledger WHERE user_id = :u AND reason = 'expire'"), {"u": uid}).scalar() == 26
+    assert ledger.usage(c, uid, MID).balance == 26                   # 같은 주기 중간: 그대로
+    u = ledger.usage(c, uid, DEC)                                    # 다음 주기: 앞 기본량 16 만료, 새 기본량 20, 산 크레딧 10 이월
+    assert u.balance == 30 and u.used == 0
+    assert c.execute(text("SELECT -sum(delta) FROM credit_ledger WHERE user_id = :u AND reason = 'expire'"), {"u": uid}).scalar() == 16
     assert ledger.grant_purchase(c, uid, 10, "pay-2", DEC) is None   # 같은 결제번호 두 번 X
 
 
@@ -148,7 +148,7 @@ def test_usage_api():
         app.dependency_overrides[get_db] = session
         app.dependency_overrides[get_current_user] = lambda: {"id": str(uid)}
         body = TestClient(app).get("/api/v1/me/usage").json()
-        assert body["balance"] == 30 and body["usage_percent"] == 0 and body["paused"] is False and "갱신" in body["renew_label"]
+        assert body["balance"] == 20 and body["usage_percent"] == 0 and body["paused"] is False and "갱신" in body["renew_label"]
         assert body["ai_memo_count"] == 0
         assert TestClient(app).post("/api/v1/me/ai-off").json() == {"turned_off": 0}
     finally:
@@ -206,7 +206,7 @@ def test_renewal_turns_off_ai_when_period_ended_at_zero(db):
         pytest.skip("0026 전 DB")
     assert ledger.refresh(c, uid, NOV) == 0                           # 첫 지급: 끄지 않음
     mid = _seed_memo(c, uid)
-    ledger.spend(c, uid, 30, "card", "tracking_update", 1, NOV)        # 다 씀
+    ledger.spend(c, uid, 20, "card", "tracking_update", 1, NOV)        # 다 씀
     assert ledger.refresh(c, uid, DEC) == 1                           # 갱신일: 자동으로 끔
     assert ledger.refresh(c, uid, DEC) == 0                           # 같은 기간 두 번째: 그대로
     linked, auto = c.execute(text("SELECT ai_linked, ai_auto_off_at FROM memos WHERE id = :m"), {"m": mid}).one()
@@ -220,6 +220,20 @@ def test_renewal_keeps_ai_when_credits_left(db):
     c, uid = db
     ledger.refresh(c, uid, NOV)
     mid = _seed_memo(c, uid)
-    ledger.spend(c, uid, 10, "card", "tracking_update", 1, NOV)        # 20 남은 채 끝남 → 만료돼도 다 쓴 게 아님
+    ledger.spend(c, uid, 10, "card", "tracking_update", 1, NOV)        # 10 남은 채 끝남 → 만료돼도 다 쓴 게 아님
     assert ledger.refresh(c, uid, DEC) == 0
     assert c.execute(text("SELECT ai_linked FROM memos WHERE id = :m"), {"m": mid}).scalar() is True
+
+
+def test_plan_catalog_matches_config():
+    """2026-11-25 확정안 ⑧: 요금제 숫자는 configs/credits.yaml 한 곳."""
+    from app.credits.plans import catalog
+    c = catalog()
+    by = {p["code"]: p for p in c["plans"]}
+    assert [p["code"] for p in c["plans"]] == ["free", "plus", "pro"]
+    assert (by["plus"]["price"], by["plus"]["first_month_price"], by["plus"]["monthly_credits"], by["plus"]["tracking_items"]) == (14900, 7450, 80, 30)
+    assert (by["pro"]["price"], by["pro"]["monthly_credits"], by["pro"]["tracking_items"]) == (29900, 160, 100)
+    assert (by["free"]["price"], by["free"]["first_month_price"], by["free"]["monthly_credits"], by["free"]["tracking_items"]) == (0, None, 20, 5)
+    assert c["credit_packs"] == [{"credits": 50, "price": 9300}]
+    assert c["costs"]["report"] == 3 and c["costs"]["lab"] == 1 and c["costs"]["answer_unverified"] == 0
+    assert ledger.cost("answer_unverified") == 0

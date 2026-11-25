@@ -40,7 +40,8 @@ export const mockTracked: TrackedStock[] = [
 ];
 
 /** 플랜 (원본 PL · PLANS) — 가격·한도는 자리표시 */
-export interface PlanInfo { key: string; price: string; tag: '' | '현재 플랜' | '추천'; features: string[] }
+/** first: 첫 달 가격 문구 ('첫 달 7,450원') · 2026-11-25 GET /plans 로 채움 (planView.ts) */
+export interface PlanInfo { key: string; price: string; tag: '' | '현재 플랜' | '추천'; features: string[]; first?: string }
 export const mockPlans: PlanInfo[] = [
   { key: '무료', price: '0원', tag: '현재 플랜', features: ['메모·투자 기록 무제한', 'AI 업데이트 · 기본 사용량', '스튜디오 크레딧 · 매달 기본 제공'] },
   { key: 'PLUS', price: '[가격]', tag: '추천', features: ['무료 플랜의 모든 기능', 'AI 업데이트 · 더 많은 사용량', '스튜디오 크레딧 · 매달 더 많이'] },

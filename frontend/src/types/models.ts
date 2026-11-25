@@ -614,6 +614,25 @@ export interface CreditUsage {
   auto_off_count?: number;
 }
 
+/** 요금제 카탈로그 (GET /plans, configs/credits.yaml · 2026-11-25). 가격은 부가세 포함, 웹·앱 같음 */
+export interface PlanCatalogPlan {
+  code: 'free' | 'plus' | 'pro';
+  name: string;
+  price: number;
+  first_month_price: number | null;
+  monthly_credits: number;
+  tracking_items: number;
+  summary: string;
+  recommended: boolean;
+}
+export interface PlanCatalog {
+  plans: PlanCatalogPlan[];
+  credit_packs: { credits: number; price: number }[];
+  costs: Record<string, number>;
+  current_plan: string;
+  tracking_used: number;
+}
+
 /** 오늘의 퀴즈 (GET /quiz/today, backend/app/quiz, 문제 표 quiz_questions 0023) */
 export interface TodayQuiz {
   slug: string;
