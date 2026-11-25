@@ -11,7 +11,8 @@ services:
     volumes:
       - ../../.env:/app/.env:ro
       - ../../frontend/dist:/app/frontend/dist:ro
-      - ../../data:/app/data:ro
+      # AI 오디오 파일(data/studio_audio)을 저장해야 하므로 쓰기 가능
+      - ../../data:/app/data
     expose:
       - "8000"
 
