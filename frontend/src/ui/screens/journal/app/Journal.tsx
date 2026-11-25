@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, BackHandler, Keyboard, Pressable, StyleSheet, View, type TextInputInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TAB_BAR_GAP, TAB_BAR_H, TabFrame, TabScroll } from '@/ui/layout/app/TabFrame';
+import { useMiniSpace } from '@/ui/screens/studio/app/MiniBar';
+import { useBottomBarTop } from '@/ui/shared/app/BottomBar';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { Reveal } from '@/ui/motion/Reveal';
 import { Skeleton } from '@/ui/motion/Skeleton';
@@ -219,6 +221,7 @@ export function AppJournal(p: AppJournalProps) {
     );
   };
 
+  const miniSpace = useMiniSpace();
   const results = searchJournal(L, q);
   const sbW = sv.interpolate({ inputRange: [0, 1], outputRange: [42, 0] });
 
@@ -353,7 +356,7 @@ export function AppJournal(p: AppJournalProps) {
         )}
       </TabScroll>
 
-      <AppSnackbar visible={!!snack} message={snack?.msg ?? ''} onUndo={snack?.undo ? undo : undefined} style={[st.snack, { bottom: selecting ? 96 + insets.bottom : 16 }]} />
+      <AppSnackbar visible={!!snack} message={snack?.msg ?? ''} onUndo={snack?.undo ? undo : undefined} style={[st.snack, { bottom: (selecting ? 96 + insets.bottom : 16) + miniSpace }]} />
       <Pill toast={toastV} bottom={selecting ? 100 + insets.bottom : 20} />
       <SelBar
         visible={selecting}
@@ -567,6 +570,7 @@ function SelBar({ visible, onAction }: { visible: boolean; onAction: (a: 'pin' |
   const insets = useSafeAreaInsets();
   const padB = Math.max(14, insets.bottom);
   const H = 66 + padB;
+  useBottomBarTop(visible ? H : 0);
   const [v] = useState(() => new Animated.Value(0));
   useEffect(() => {
     const a = Animated.timing(v, { toValue: visible ? 1 : 0, duration: 320 * k, easing: curve.ease, useNativeDriver: NATIVE });

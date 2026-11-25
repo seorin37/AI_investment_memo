@@ -4,10 +4,8 @@ import { Redirect, Tabs, usePathname, useRouter } from 'expo-router';
 import { useCoach } from '@/store/coach';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/store/auth';
-import { chapterAt, fmt, useStudioPlayer } from '@/store/studioPlayer';
-import { blockPlay } from '@/ui/screens/studio/appAudio';
-import { epOf } from '@/ui/screens/studio/audioEp';
-import { AppMiniPlayer } from '@/ui/screens/studio/app/MiniPlayer';
+import { MINI_GAP, MINI_H, MiniBar, useMiniOn } from '@/ui/screens/studio/app/MiniBar';
+import { useBottomBar } from '@/ui/shared/app/BottomBar';
 import { size } from '@/ui/theme';
 import { useGenJobs } from '@/store/genJobs';
 import { useGenRestore } from '@/ui/screens/studio/genRuns';
@@ -38,6 +36,7 @@ export default function MainTabsLayout() {
   const sessionKey = useAuth((s) => s.sessionKey);
   /* 메모 고르기 중 탭바 숨김 (옛 보드가 store/ui 로 알려 줌) */
   const hidden = useUI((s) => s.tabBarHidden);
+  const miniBottom = useMiniBottom(hidden);
   if (status !== 'signedIn') return <Redirect href="/intro" />;
   return (
     <View style={{ flex: 1 }}>
@@ -66,7 +65,7 @@ export default function MainTabsLayout() {
         <Tabs.Screen name="help" options={{ href: null }} />
         <Tabs.Screen name="report" options={{ href: null }} />
       </Tabs>
-      <Mini hidden={hidden} />
+      <MiniBar bottom={miniBottom} />
       <TabToast hidden={hidden} />
       <CoachDriver />
     </View>
@@ -80,7 +79,8 @@ export default function MainTabsLayout() {
 function TabToast({ hidden }: { hidden: boolean }) {
   const toast = useUI((s) => s.toast);
   const insets = useSafeAreaInsets();
-  const bottom = (hidden ? 0 : 1 + 65 + Math.max(size.tabBarPadBottom, insets.bottom)) + 16;
+  const mini = useMiniBottom(hidden);
+  const bottom = useMiniOn() ? mini + MINI_H + MINI_GAP : (hidden ? 0 : 1 + 65 + Math.max(size.tabBarPadBottom, insets.bottom)) + 16;
   const action = toast?.action && {
     label: toast.action.label,
     onPress: () => {
@@ -126,25 +126,10 @@ function CoachDriver() {
   return null;
 }
 
-/* ⑧-8b 미니 플레이어: 탭 바 위 10 (원본 .mini bottom 88). 탭을 바꿔도 남고, 위로 쌓이는 화면이 덮으면 가려짐 */
-function Mini({ hidden }: { hidden: boolean }) {
-  const router = useRouter();
+/* 미니 플레이어: 탭 바 위 10 (원본 .mini bottom 88). 고르기처럼 탭 바를 가리는 때는 그 막대 위 8 (막대가 없으면 바닥 10) */
+function useMiniBottom(hidden: boolean) {
   const insets = useSafeAreaInsets();
-  const p = useStudioPlayer();
-  const item = p.made.find((m) => m.id === p.cur);
-  const ep = epOf(item);
-  const ch = ep.chapters[chapterAt(p.t, ep)][1].split(' ·')[0];
-  return (
-    <AppMiniPlayer
-      visible={p.mini && !!item && !hidden}
-      bottom={1 + 65 + Math.max(size.tabBarPadBottom, insets.bottom) + 10}
-      title={item?.title ?? ''}
-      sub={`${ch} · ${fmt(p.t)} / ${fmt(ep.dur)}`}
-      progress={p.t / ep.dur}
-      playing={p.playing}
-      onOpen={() => router.push('/studio-player')}
-      onToggle={() => !blockPlay() && p.toggle()}
-      onClose={p.closeMini}
-    />
-  );
+  const bar = useBottomBar((s) => s.bar);
+  if (!hidden) return 1 + 65 + Math.max(size.tabBarPadBottom, insets.bottom) + 10;
+  return bar ? bar.top + MINI_GAP : insets.bottom + 10;
 }

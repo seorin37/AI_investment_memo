@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, BackHandler } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
+import { MiniSpace } from '@/ui/screens/studio/app/MiniBar';
 import { Text } from '@/components/ui/AppText';
 import type { InboxItem } from '../My.mock';
 import type { InboxProps } from '../My.types';
@@ -74,6 +75,7 @@ export function AppInbox({ items, unread, noti, onBack, onOpen, onReadAll, onSet
             <Chev />
           </Pressable>
         </Rv>
+        <MiniSpace />
       </ScrollView>
     </View>
   );

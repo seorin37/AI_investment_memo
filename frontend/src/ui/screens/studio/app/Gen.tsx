@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Animated, Easing, StyleSheet, View } from 'react-native';
+import { Animated, Easing, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
+import { MiniSpace } from '@/ui/screens/studio/app/MiniBar';
 import { Text } from '@/components/ui/AppText';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { PressScale } from '@/ui/motion/PressScale';
@@ -45,7 +46,7 @@ export function AppGen({ job, onBack, onAway, onRetry }: { job: AppGenJob; onBac
   return (
     <View style={[st.root, { paddingTop: insets.top }]}>
       <Head title={T.head} onBack={onBack} />
-      <View style={st.gw}>
+      <ScrollView contentContainerStyle={st.gw} showsVerticalScrollIndicator={false}>
         <View style={[st.gic, { backgroundColor: T.bg }, fail && { backgroundColor: '#FFE4E4' }]}>
           {!fail ? <Ripple color={T.bg} /> : null}
           {fail ? <Svg width={34} height={34} viewBox="0 0 24 24" fill="none" stroke="#E5484D" strokeWidth={2.4} strokeLinecap="round"><Path d="M12 7v6M12 16.5h.01" /></Svg> : job.kind === 'report' ? <Doc /> : job.kind === 'lab' ? <Flask /> : <Eq />}
@@ -71,7 +72,8 @@ export function AppGen({ job, onBack, onAway, onRetry }: { job: AppGenJob; onBac
           <PressScale onPress={fail ? onRetry : onAway} accessibilityRole="button" style={st.cta}><Text style={st.ctaT}>{fail ? '다시 시도' : '다른 화면 보기'}</Text></PressScale>
         </View>
         <Text style={st.cap}>{late ? '' : fail ? (job.error ?? (job.kind === 'lab' ? '잠시 뒤 다시 해 보세요' : '잠시 뒤 다시 해 보거나 종목을 줄여 보세요')) : '다 되면 알려 드리고, 스튜디오 탭에 점을 표시해요'}</Text>
-      </View>
+        <MiniSpace />
+      </ScrollView>
     </View>
   );
 }
@@ -138,7 +140,7 @@ function Ripple({ color }: { color: string }) {
 
 const st = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#F3F4F6' },
-  gw: { flex: 1, alignItems: 'center', paddingTop: 56, paddingHorizontal: 22 },
+  gw: { flexGrow: 1, alignItems: 'center', paddingTop: 56, paddingHorizontal: 22 },
   gic: { width: 90, height: 90, borderRadius: 45, backgroundColor: '#DCE7FF', alignItems: 'center', justifyContent: 'center' },
   ring: { position: 'absolute', top: -8, left: -8, right: -8, bottom: -8, borderRadius: 53, borderWidth: 2, borderColor: '#DCE7FF' },
   h: { fontSize: 19, lineHeight: 26, fontWeight: '700', color: C.ink, marginTop: 18, marginBottom: 4 },

@@ -3,6 +3,7 @@ import { BackHandler, Pressable, ScrollView, StyleSheet, View } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { BottomBar } from '@/ui/shared/app/BottomBar';
+import { MiniSpace } from '@/ui/screens/studio/app/MiniBar';
 import { Text } from '@/components/ui/AppText';
 import { WITHDRAW_REASONS, type WithdrawProps } from '../My.types';
 import { ConfirmSheet, Head, Lb, MC, Rv } from './parts';
@@ -56,6 +57,7 @@ export function AppWithdraw(p: WithdrawProps) {
             <Text keepAll style={st.agrT}>안내를 모두 확인했고, 탈퇴에 동의해요</Text>
           </Pressable>
         </Rv>
+        <MiniSpace />
       </ScrollView>
       {/* .bot: 위로 갈수록 투명해지는 바탕 · 안쪽 30 16 12 */}
       <BottomBar clear={30} style={[st.bot, { paddingBottom: 12 + insets.bottom }]}>

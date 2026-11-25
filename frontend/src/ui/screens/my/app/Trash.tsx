@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import { useMiniSpace } from '@/ui/screens/studio/app/MiniBar';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { AppSnackbar } from '@/ui/shared/Snackbar';
 import type { TrashItem } from '../My.mock';
@@ -15,6 +16,7 @@ import { ConfirmSheet, Foot, Grp, MC, OkIcon, Page, Rv } from './parts';
 type Filter = '전체' | TrashItem['kind'];
 
 export function AppTrash({ items, onBack, onRestore, onUndo, onPurge }: TrashProps) {
+  const miniSpace = useMiniSpace();
   const [q, setQ] = useState('');
   const [f, setF] = useState<Filter>('전체');
   const [ask, setAsk] = useState<TrashItem | 'all' | null>(null);
@@ -81,7 +83,7 @@ export function AppTrash({ items, onBack, onRestore, onUndo, onPurge }: TrashPro
           </Pressable>
         </Rv>
       </Page>
-      <AppSnackbar visible={!!snack} message="원래 자리로 복원했어요" onUndo={() => { if (snack) onUndo(snack); setSnack(null); }} style={st.snack} />
+      <AppSnackbar visible={!!snack} message="원래 자리로 복원했어요" onUndo={() => { if (snack) onUndo(snack); setSnack(null); }} style={[st.snack, { bottom: 28 + miniSpace }]} />
       <ConfirmSheet
         open={!!ask}
         red

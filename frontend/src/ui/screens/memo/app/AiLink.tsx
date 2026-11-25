@@ -3,6 +3,7 @@ import { Animated, BackHandler, Easing, Pressable, ScrollView, StyleSheet, View 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomBar } from '@/ui/shared/app/BottomBar';
 import { InlineSpark } from '@/ui/icons/InlineGlyphs';
+import { MiniSpace } from '@/ui/screens/studio/app/MiniBar';
 import { Text } from '@/components/ui/AppText';
 import { AppPlug } from '@/ui/icons/BoardGlyphs';
 import { CloseX, DoneCheck, RevIcon, SearchGlass } from '@/ui/icons/MemoGlyphs';
@@ -158,6 +159,7 @@ export function AppAiLink({ stockName, memo, state, items, fromNew, onConfirm, o
       <Steps step={step} />
       <ScrollView style={st.flex} contentContainerStyle={[st.ob, { paddingBottom: 120 + insets.bottom }]} showsVerticalScrollIndicator={false}>
         {body}
+        <MiniSpace />
       </ScrollView>
       {bar ? <BottomBar style={[st.obar, { paddingBottom: 18 + insets.bottom }]}>{bar}</BottomBar> : null}
     </View>

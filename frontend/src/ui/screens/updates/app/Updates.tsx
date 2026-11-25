@@ -3,6 +3,7 @@ import { Animated, BackHandler, PanResponder, Pressable, ScrollView, StyleSheet,
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { InlineSpark } from '@/ui/icons/InlineGlyphs';
+import { MiniSpace, useMiniSpace } from '@/ui/screens/studio/app/MiniBar';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { ChevDown16 } from '@/ui/icons/MemoGlyphs';
 import { Collapse } from '@/ui/motion/Collapse';
@@ -50,6 +51,7 @@ export function AppUpdates(p: AppUpdatesProps) {
   };
   const [fading, setFading] = useState<string[]>([]);
   const cur = code ? p.stocks.find((s) => s.stock_code === code) : undefined;
+  const miniSpace = useMiniSpace();
   const total = unreadOf(p.items);
 
   useEffect(() => {
@@ -142,11 +144,11 @@ export function AppUpdates(p: AppUpdatesProps) {
       </TabScroll>
 
       {nudge && nN && !search ? (
-        <View style={[st.nudge, { bottom: snack ? 76 : 16 }]} pointerEvents="box-none">
+        <View style={[st.nudge, { bottom: (snack ? 76 : 16) + miniSpace }]} pointerEvents="box-none">
           <NudgePill text={`오늘 소식 ${nN}건, 라디오로 들을까요?`} onGo={p.onNudge} onClose={() => setNudge(false)} />
         </View>
       ) : null}
-      <AppSnackbar visible={!!snack} message={snack?.msg ?? ''} onUndo={snack?.undo} style={st.snack} />
+      <AppSnackbar visible={!!snack} message={snack?.msg ?? ''} onUndo={snack?.undo} style={[st.snack, { bottom: 16 + miniSpace }]} />
       {search ? <SearchOver stocks={p.stocks} items={p.items} q={q} setQ={setQ} top={insets.top} onClose={() => setSearch(false)} onPick={(c) => (setSearch(false), pick(c))} /> : null}
     </TabFrame>
   );
@@ -639,6 +641,7 @@ function SearchOver({ stocks, items, q, setQ, top, onClose, onPick }: { stocks: 
           <Text style={st.none}>{`내 종목에 "${t}"이 없어요\n종목은 내 종목 탭에서 추가해요`}</Text>
         )}
         <Text style={st.tipx}>고르면 그 종목 칩으로 바로 바뀌어요</Text>
+        <MiniSpace />
       </ScrollView>
     </View>
   );

@@ -4,6 +4,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { TAB_BAR_H, TabFrame, TabScroll } from '@/ui/layout/app/TabFrame';
 import { InlineGrip } from '@/ui/icons/InlineGlyphs';
+import { useMiniSpace } from '@/ui/screens/studio/app/MiniBar';
+import { useBottomBarTop } from '@/ui/shared/app/BottomBar';
 import { Text } from '@/components/ui/AppText';
 import { Reveal } from '@/ui/motion/Reveal';
 import { Skeleton } from '@/ui/motion/Skeleton';
@@ -159,6 +161,8 @@ export function AppMyStocks(p: AppMyStocksProps) {
   const askList = ask ? L.filter((s) => ask.includes(s.stock_code)) : [];
   const memoN = askList.reduce((a, s) => a + s.memo_count, 0);
   const aiN = askList.reduce((a, s) => a + s.ai_count, 0);
+  useBottomBarTop(sel ? 80 + insets.bottom : 0);
+  const miniSpace = useMiniSpace();
   const types = sel ? [...sel].map((c) => L.find((s) => s.stock_code === c)?.status) : [];
 
   return (
@@ -298,7 +302,7 @@ export function AppMyStocks(p: AppMyStocksProps) {
           </Pressable>
         </View>
       ) : null}
-      <AppSnackbar visible={!!snack} message={snack?.msg ?? ''} onUndo={snack?.undo} action={snack?.action} style={[st.snack, { bottom: sel ? 96 + insets.bottom : 16 }]} />
+      <AppSnackbar visible={!!snack} message={snack?.msg ?? ''} onUndo={snack?.undo} action={snack?.action} style={[st.snack, { bottom: (sel ? 96 + insets.bottom : 16) + miniSpace }]} />
       <ConfirmDialog
         variant="app"
         danger

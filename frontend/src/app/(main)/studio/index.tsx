@@ -82,7 +82,6 @@ export default function StudioTab() {
           else p.play(m.id);
           p.setMini(true);
         }}
-        bottomPad={p.mini ? 72 : 0}
         onJob={(id) => {
           retry(id);
           router.push({ pathname: '/studio-gen', params: { id } });

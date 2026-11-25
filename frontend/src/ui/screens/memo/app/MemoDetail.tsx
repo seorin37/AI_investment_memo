@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { BackHandler, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View, type ScrollViewInstance } from 'react-native';
 import { useCoach } from '@/store/coach';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MiniSpace, useMiniSpace } from '@/ui/screens/studio/app/MiniBar';
 import { Text } from '@/components/ui/AppText';
 import { Badge } from '@/components/ui/primitives';
 import { joinMemo, splitMemo } from '@/lib/memoText';
@@ -32,6 +33,7 @@ type Snack = { id: number; msg: string };
  */
 export function AppMemoDetail(p: MemoDetailProps) {
   const paper = usePaper();
+  const miniSpace = useMiniSpace();
   const insets = useSafeAreaInsets();
   const m = p.memo;
   /* 2026-11-24 크레딧을 다 쓰면(끄기 대기) 이 메모의 매일 확인은 가격 조건까지 멈춤. 스위치는 꺼진 모양, 누르면 '모두 끄기' 선택 */
@@ -230,9 +232,10 @@ export function AppMemoDetail(p: MemoDetailProps) {
               )}
             </FadeIn>
           )}
+          <MiniSpace />
         </ScrollView>
       </KeyboardAvoidingView>
-      <AppSnackbar visible={!!snack} message={snack?.msg ?? ''} style={[st.snack, { bottom: 16 + insets.bottom }]} />
+      <AppSnackbar visible={!!snack} message={snack?.msg ?? ''} style={[st.snack, { bottom: 16 + insets.bottom + miniSpace }]} />
       <MemoMoreSheet open={more} title={m.title} color={m.color} pinned={m.pinned} aiLinked={m.ai_linked} onColor={p.onChangeColor} onAction={onMore} onClose={() => setMore(false)} />
       <AiOffSheet
         open={off}

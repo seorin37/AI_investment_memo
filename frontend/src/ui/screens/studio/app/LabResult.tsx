@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { BottomBar } from '@/ui/shared/app/BottomBar';
+import { MiniSpace } from '@/ui/screens/studio/app/MiniBar';
 import { Text } from '@/components/ui/AppText';
 import { PressScale } from '@/ui/motion/PressScale';
 import { Head } from '../../my/app/parts';
@@ -98,6 +99,7 @@ export function AppLabResult({ stock, vars, groups, disclaimer, memo, onBack, on
           <Text keepAll style={st.yP}>{memo ? `“${memo.title}” — 이번 실험은 시장 환경 경로예요. 메모에서 지켜보는 항목과 나눠서 보면 좋아요.` : `${stock.name}에 남긴 메모가 없어요. 실험에서 본 경로를 메모로 남겨 두면 관련 소식을 모아 드려요.`}</Text>
         </View>
         <Text keepAll style={st.disc}>{disclaimer}</Text>
+        <MiniSpace />
       </ScrollView>
       <BottomBar style={[st.bar, { paddingBottom: 26 + insets.bottom }]} pointerEvents="box-none">
         <PressScale onPress={onAgain} accessibilityRole="button" style={st.barB}><Text style={st.barT}>조건 바꿔 다시 실험</Text></PressScale>

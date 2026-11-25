@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { Animated, BackHandler, PanResponder, Pressable, StyleSheet, View, type ScrollViewInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TAB_BAR_H, TabFrame, TabScroll } from '@/ui/layout/app/TabFrame';
+import { useMiniSpace } from '@/ui/screens/studio/app/MiniBar';
 import { Text } from '@/components/ui/AppText';
 import { GripDots, PlusGlyph, SlidersGlyph, WIDGET_META, WidgetGlyph } from '@/ui/icons/HomeGlyphs';
 import { Reveal } from '@/ui/motion/Reveal';
@@ -204,7 +205,8 @@ export function AppHome(p: AppHomeProps) {
     return <CheckWidget cl={cl} editing={editing} onToggle={(iid) => checkCode && p.onToggleCheck(checkCode, iid)} onAdd={(t) => checkCode && p.onAddCheck(checkCode, t)} />;
   };
 
-  const snackBottom = editing ? 24 + insets.bottom : 16;
+  const miniSpace = useMiniSpace();
+  const snackBottom = (editing ? 24 + insets.bottom : 16) + miniSpace;
   return (
     <TabFrame style={st.root}>
       {p.header({ line, onSearch: () => setSearch(true) })}
@@ -288,7 +290,7 @@ export function AppHome(p: AppHomeProps) {
       </TabScroll>
 
       {nudge && !editing && ready && !p.firstStart ? (
-        <View style={[st.nudge, { bottom: snack ? 76 : 16 }]} pointerEvents="box-none">
+        <View style={[st.nudge, { bottom: (snack ? 76 : 16) + miniSpace }]} pointerEvents="box-none">
           <NudgePill text="이번 주 내 종목, 한 장으로 볼까요?" onGo={() => p.onNudge('report')} onClose={() => setNudge(false)} />
         </View>
       ) : null}

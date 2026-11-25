@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Animated, PanResponder, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, ClipPath, Defs, Line, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import { useMiniSpace } from '@/ui/screens/studio/app/MiniBar';
 import { Text } from '@/components/ui/AppText';
 import { useMotionK } from '@/ui/motion/useMotion';
 import { useProgress } from '@/ui/motion/useProgress';
@@ -34,6 +35,7 @@ export function AppMarketDetail({ index: q, header, onNudge }: MarketDetailProps
   const col = last < first ? appColor.down : appColor.up;
   const [idx, setIdx] = useState<number | null>(null);
   /* 넛지 닫은 상태는 한 곳(store/nudge)에 — 다시 들어와도 안 뜸 · 사용법 안내 중엔 숨김 */
+  const miniSpace = useMiniSpace();
   const nudgeS = useNudge('lab');
   const nudge = nudgeS.show;
   const setNudge = (v: boolean) => {
@@ -158,7 +160,7 @@ export function AppMarketDetail({ index: q, header, onNudge }: MarketDetailProps
       />
       <Text style={st.mfoot}>{q.key === 'usd' ? '선을 손가락으로 훑으면 그날의 값이 보여요. 한국은행(ECOS) 관측값이에요' : '선을 손가락으로 훑으면 그날의 값이 보여요. 전일 확정 종가 기준이에요'}</Text>
       {q.key === 'usd' && onNudge && nudge ? (
-        <View style={[st.nudge, { bottom: 28 + insets.bottom }]} pointerEvents="box-none">
+        <View style={[st.nudge, { bottom: 28 + insets.bottom + miniSpace }]} pointerEvents="box-none">
           <NudgePill text="환율이 바뀌면 내 종목은? 실험해 보기" onGo={onNudge} onClose={() => setNudge(false)} />
         </View>
       ) : null}

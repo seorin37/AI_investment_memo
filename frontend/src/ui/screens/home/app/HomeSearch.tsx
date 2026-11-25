@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, BackHandler, Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type TextInputInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MiniSpace } from '@/ui/screens/studio/app/MiniBar';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { SearchGlyph } from '@/ui/icons/HomeGlyphs';
 import { useMotionK } from '@/ui/motion/useMotion';
@@ -112,6 +113,7 @@ export function HomeSearch({ open, onClose, recent, popular, all, onPick }: { op
               <Text style={st.emptyT}>{'코스피 종목만 찾을 수 있어요.\n종목명이나 6자리 종목코드로 다시 찾아 보세요.'}</Text>
             </View>
           )}
+          <MiniSpace />
         </ScrollView>
       </Animated.View>
     </View>

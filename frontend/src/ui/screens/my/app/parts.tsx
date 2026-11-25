@@ -3,6 +3,7 @@ import { Animated, BackHandler, Easing, Keyboard, Pressable, ScrollView, StyleSh
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { BottomBar } from '@/ui/shared/app/BottomBar';
+import { MiniSpace } from '@/ui/screens/studio/app/MiniBar';
 import { Text } from '@/components/ui/AppText';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { Sheet } from '@/ui/shared/Sheet';
@@ -114,6 +115,7 @@ export function Page({ title, onBack, lead, children, bottom, onHardwareBack }: 
       <ScrollView contentContainerStyle={{ paddingBottom: (bottom ? 150 : 28) + insets.bottom }} showsVerticalScrollIndicator={false}>
         {lead ? <Lead>{lead}</Lead> : null}
         <View style={pt.w}>{children}</View>
+        <MiniSpace />
       </ScrollView>
       {bottom ? (
         <BottomBar clear={30} style={[pt.bot, { paddingBottom: 12 + padB }]}>

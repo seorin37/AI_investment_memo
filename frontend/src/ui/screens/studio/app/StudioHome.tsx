@@ -48,7 +48,7 @@ const Chev = ({ c = '#B7BBC3' }: { c?: string }) => <Svg width={18} height={18} 
 const Bolt = ({ c, s = 11 }: { c: string; s?: number }) => <Svg width={s} height={s * 13 / 11} viewBox="0 0 11 13"><Path d="M6.5 0 0 7.5h4.5L3.5 13 11 4.8H6.3z" fill={c} /></Svg>;
 const WAVE = [8, 14, 10, 18, 12, 20, 9, 16, 22, 13, 17, 10, 19, 12, 8, 15, 11, 18, 9, 14, 12, 7];
 
-export function AppStudioHome({ header, jobs, onJob, playingId, onQuickPlay, bottomPad = 0, spent = false, ...p }: StudioHomeProps & {
+export function AppStudioHome({ header, jobs, onJob, playingId, onQuickPlay, spent = false, ...p }: StudioHomeProps & {
   header: React.ReactNode;
   /** 만드는 중 · 실패 줄 (원본 madeRow prog / fail) */
   jobs: AppGenJob[];
@@ -70,7 +70,7 @@ export function AppStudioHome({ header, jobs, onJob, playingId, onQuickPlay, bot
   return (
     <TabFrame style={st.root}>
       {header}
-      <TabScroll contentContainerStyle={{ paddingBottom: 24 + bottomPad }} showsVerticalScrollIndicator={false}>
+      <TabScroll contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
         <View style={st.subr}>
           <Text style={[st.subrT, { flex: 1 }]}>내 종목 {p.stock_count} · AI 연결 메모 {p.ai_memo_count}</Text>
           <PressScale scaleTo={0.93} onPress={() => setSheet(true)} accessibilityRole="button" accessibilityLabel={`AI 사용량 ${p.usage_pct}%`} style={[st.cred, full && st.credZero]}>
