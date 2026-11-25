@@ -73,6 +73,12 @@ function choose(item: MadeItem, autoplay: boolean) {
   else s.select(item.id);
 }
 
+/** 완성 알림 [보기] · 알림함: 그 결과를 바로 엶 */
+export function openMade(item: MadeItem) {
+  choose(item, false);
+  router.push(PATH[item.kind]);
+}
+
 /** 한 단계가 화면에 보이는 가장 짧은 시간 */
 const STEP_MS = 300;
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -124,10 +130,7 @@ export const useGenJobs = create<GenJobsState>((set, get) => {
           } else {
             useUI.getState().showToast(DONE_T[job.kind], {
               label: '보기',
-              onPress: () => {
-                choose(item, false);
-                router.push(PATH[item.kind]);
-              },
+              onPress: () => openMade(item),
             });
           }
           set((s) => ({ jobs: s.jobs.filter((j) => j.id !== job.id), dot: s.dot || (!here && !s.studioOpen) }));
