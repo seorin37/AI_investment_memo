@@ -115,7 +115,7 @@ export function AppStudioHome({ header, jobs, onJob, playingId, onQuickPlay, bot
               return job.status === 'fail' ? (
                 <Pressable key={job.id} onPress={() => onJob?.(job.id)} accessibilityRole="button" style={[st.mi, i > 0 && st.miLine]}>
                   <View style={[st.failIc]}><Svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="#E5484D" strokeWidth={2} strokeLinecap="round"><Path d="M12 8v5M12 16.5h.01" /><Circle cx={12} cy={12} r={9} /></Svg></View>
-                  <View style={{ flex: 1 }}><Text style={st.miB}>{title} · {job.late ? GEN_LATE.title : '만들지 못했어요'}</Text><Text style={st.miS}>{job.late ? GEN_LATE.body : '사용량은 그대로 돌려드려요'}</Text></View>
+                  <View style={{ flex: 1 }}><Text style={st.miB}>{title} · {job.late ? GEN_LATE.title : '만들지 못했어요'}</Text><Text style={st.miS}>{job.late ? GEN_LATE.body : job.sub}</Text></View>
                   <Text style={[st.miR, { color: C.a2, fontWeight: '700' }]}>다시 시도</Text>
                 </Pressable>
               ) : (
