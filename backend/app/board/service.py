@@ -135,33 +135,41 @@ class BoardService:
     # 새 카드는 맨 앞, 단 테이프(고정) 붙인 카드들 뒤. 테이프를 붙이면 맨 앞, 떼면 고정 카드들 바로 뒤.
     # 끌어서 옮긴 순서는 reorder(보드 전체 순서)나 PATCH position(카드 하나)으로 저장한다.
     def reorder(self, user_id: int, symbol: str, ids: list[int]) -> list[dict[str, Any]]:
-        """보드 전체 순서 저장. 빠진 카드는 지금 순서대로 맨 뒤에 붙인다. 이 보드에 없는 id(다른 사람·종목·삭제)는 거절."""
+        """고정 카드 순서는 유지하고 일반 카드 순서를 저장한다. 빠진 일반 카드는 지금 순서대로 뒤에 붙인다."""
         self._require_stock(user_id, symbol)
         if len(set(ids)) != len(ids):
             raise InvalidBoardPatchError("같은 카드가 순서에 두 번 들어 있습니다.")
-        current = [entry["id"] for entry in self.repository.board_order(user_id, symbol, lock=True)]
-        unknown = [memo_id for memo_id in ids if memo_id not in set(current)]
+        current = self.repository.board_order(user_id, symbol, lock=True)
+        current_ids = {entry["id"] for entry in current}
+        unknown = [memo_id for memo_id in ids if memo_id not in current_ids]
         if unknown:
             raise InvalidBoardPatchError(f"이 보드에 없는 카드입니다: {', '.join(map(str, unknown))}")
+        pinned = [entry["id"] for entry in current if entry["pinned"]]
+        pinned_ids = set(pinned)
         given = set(ids)
-        self.repository.write_order(user_id, symbol, ids + [memo_id for memo_id in current if memo_id not in given])
+        movable = [memo_id for memo_id in ids if memo_id not in pinned_ids]
+        omitted = [entry["id"] for entry in current if not entry["pinned"] and entry["id"] not in given]
+        self.repository.write_order(user_id, symbol, pinned + movable + omitted)
         return self.list_board(user_id, symbol)
 
     def _move(self, user_id: int, symbol: str, memo_id: int, position: int) -> None:
-        """카드 하나를 position 자리로 (범위를 넘으면 맨 뒤)."""
-        rest = [e["id"] for e in self.repository.board_order(user_id, symbol, lock=True) if e["id"] != memo_id]
-        rest.insert(min(position, len(rest)), memo_id)
-        self.repository.write_order(user_id, symbol, rest)
+        """일반 카드 하나를 고정 구역 뒤의 position 자리로 옮긴다."""
+        current = self.repository.board_order(user_id, symbol, lock=True)
+        movable = [entry["id"] for entry in current if not entry["pinned"]]
+        if memo_id not in movable:
+            return
+        pinned = [entry["id"] for entry in current if entry["pinned"]]
+        movable.remove(memo_id)
+        index = max(0, min(position - len(pinned), len(movable)))
+        movable.insert(index, memo_id)
+        self.repository.write_order(user_id, symbol, pinned + movable)
 
     def _place(self, user_id: int, symbol: str, memo_id: int, *, front: bool = False) -> None:
         """front=True: 맨 앞. False: 맨 앞에 모여 있는 고정 카드들 바로 뒤."""
         rest = [e for e in self.repository.board_order(user_id, symbol, lock=True) if e["id"] != memo_id]
-        index = 0
-        if not front:
-            while index < len(rest) and rest[index]["pinned"]:
-                index += 1
-        ids = [e["id"] for e in rest]
-        ids.insert(index, memo_id)
+        pinned = [entry["id"] for entry in rest if entry["pinned"]]
+        movable = [entry["id"] for entry in rest if not entry["pinned"]]
+        ids = [memo_id, *pinned, *movable] if front else [*pinned, memo_id, *movable]
         self.repository.write_order(user_id, symbol, ids)
 
     def update(self, user_id: int, memo_id: int, values: dict[str, Any]) -> dict[str, Any]:
@@ -169,10 +177,9 @@ class BoardService:
         values = dict(values)
         position = values.pop("position", None)
         symbol = str(row["symbol"]).strip()
-        if position is not None:
+        if position is not None and not values:
             self._move(user_id, symbol, memo_id, int(position))
-            if not values:
-                return self.get(user_id, memo_id)
+            return self.get(user_id, memo_id)
         kind = str(row["kind"])
         allowed = {
             "note": {"title", "body", "tags", "color", "pinned"},
@@ -192,8 +199,10 @@ class BoardService:
         ) != memo_full_text(row.get("title"), row.get("content"))
         if base and not self.repository.update_base(user_id, memo_id, base):
             raise BoardItemNotFoundError(memo_id)
-        if position is None and "pinned" in base and bool(base["pinned"]) != bool(row.get("is_pinned")):
+        if "pinned" in base and bool(base["pinned"]) != bool(row.get("is_pinned")):
             self._place(user_id, symbol, memo_id, front=bool(base["pinned"]))   # 테이프 붙이면 맨 앞, 떼면 고정 카드들 뒤
+        elif position is not None:
+            self._move(user_id, symbol, memo_id, int(position))
         children_changed = False
         if "tags" in values:
             self.repository.replace_tags(user_id, memo_id, values["tags"])

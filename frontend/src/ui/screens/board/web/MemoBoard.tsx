@@ -19,6 +19,7 @@ import { PriceNoteHead } from '../PriceNoteHead';
 import { WebViewToggle, type BoardView } from '@/ui/shared/ViewToggle';
 import { fpx, webColor } from '@/ui/theme';
 import type { BoardFilter, MemoBoardProps } from '../MemoBoard.types';
+import { arrange, pinnedIds } from '../boardCards';
 import { useBoardDragWeb, useContextMenuWeb, useEscapeWeb } from './boardDom.web';
 import { useCoachRef } from '@/ui/shared/Coach';
 
@@ -48,22 +49,18 @@ export function WebMemoBoard(p: MemoBoardProps) {
 
   const byId = (id: string) => p.memos.find((m) => m.id === id);
   const checklist = p.checklist;
-  const checklistKeys = checklist ? [checklist.id] : [];
-  const memoKeys = p.memos.map((m) => m.id);
-  const allKeys = [...checklistKeys, ...memoKeys];
-  /* 순서: 받은 순서 중 지금 있는 것 + 순서에 없는 새 것은 맨 앞 (원본 arrange) */
-  const order = (() => {
-    const has = new Set(allKeys);
-    const base = p.order ?? [...checklistKeys, ...[...p.memos].sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.created_at.localeCompare(a.created_at)).map((m) => m.id)];
-    const placed = base.filter((x) => has.has(x));
-    const inLay = new Set(placed);
-    return [...allKeys.filter((x) => !inLay.has(x)), ...placed];
-  })();
+  const cards = { memos: p.memos, checklists: checklist ? [checklist] : [] };
+  const baseOrder = p.order ?? [
+    ...cards.checklists.map((c) => c.id),
+    ...[...p.memos].sort((a, b) => b.created_at.localeCompare(a.created_at)).map((m) => m.id),
+  ];
+  const order = arrange({ ...cards, order: baseOrder });
+  const pinCount = pinnedIds(cards).size;
 
   const shownMemo = (m: Memo) => filter === 'all' || (filter === 'ai' ? m.ai_linked : m.unread_updates > 0);
   const empty = p.memos.length === 0 && !p.checklist;
   const canDrag = filter === 'all' && !sel && view === 'grid';
-  const { drag, justDropped } = useBoardDragWeb(grid, !empty && view === 'grid', order, canDrag, k, p.onReorder);
+  const { drag, justDropped } = useBoardDragWeb(grid, !empty && view === 'grid', order, pinCount, canDrag, k, p.onReorder);
   useContextMenuWeb(grid, !empty && view === 'grid', (key, at) => {
     if (key !== checklist?.id && !sel) setMenu({ id: key, at });
   });
@@ -89,7 +86,10 @@ export function WebMemoBoard(p: MemoBoardProps) {
     return others;
   })();
 
-  const shown = p.memos.filter(shownMemo);
+  const shown = order.flatMap((id) => {
+    const memo = byId(id);
+    return memo && shownMemo(memo) ? [memo] : [];
+  });
   const toggleSel = (id: string) =>
     setSel((s) => {
       const cur = s ?? [];
@@ -163,9 +163,7 @@ export function WebMemoBoard(p: MemoBoardProps) {
                 <EmptyBoard name={p.stock.name} onExample={(t) => p.onNewMemo(t)} onFirst={() => p.onNewMemo()} onChecklist={p.onNewChecklist} />
               ) : view === 'list' ? (
                 <FadeIn style={st.list}>
-                  {[...shown]
-                    .sort((a, b) => Number(b.pinned) - Number(a.pinned))
-                    .map((m, i) => (
+                  {shown.map((m, i) => (
                       <WebMemoRow key={m.id} memo={m} first={i === 0} selecting={!!sel} selected={!!sel?.includes(m.id)} onOpen={() => open(m)} onPick={() => toggleSel(m.id)} onMenu={(at) => setMenu({ id: m.id, at })} />
                     ))}
                   {shown.length === 0 ? <Text style={st.none}>조건에 맞는 메모가 없어요</Text> : null}
