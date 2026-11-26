@@ -106,9 +106,9 @@ export function useHomeData() {
     onChangeWidgets: (w: HomeWidget[]) => saveLayout.mutate(layoutFrom(w)),
     onToggleCheck: (code: string, id: string) => {
       if (Platform.OS === 'web') {
-        const c = checklists[code];
-        const it = c?.items.find((i) => i.id === id);
-        if (c && it) setItem.mutate({ checklistId: c.id, itemId: id, done: !it.done, stockCode: code });
+        /* 웹도 앱과 같게: 종목에 체크리스트가 여러 개면 목록 id(첫 체크리스트)가 아니라 그 항목이 든 체크리스트로 (2026-11-26 수정 78) */
+        const row = checks.data?.find((r) => r.id === id);
+        if (row) setItem.mutate({ checklistId: row.checklist_id, itemId: id, done: !row.done, stockCode: code });
         return;
       }
       /* 앱: 종목에 체크리스트가 여러 개일 수 있어 그 항목이 든 체크리스트로 */
