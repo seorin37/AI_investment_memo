@@ -5,6 +5,7 @@
 
 - /api/* 는 건드리지 않는다 (없는 API는 JSON 404).
 - 빌드에 있는 파일은 그 파일을, 그 밖의 경로(/auth/callback 등 SPA 경로)는 index.html 을 준다.
+- /app/* 는 앱 화면 미리보기 빌드(dist/app, export-web-same-origin.mjs)가 있으면 그 index.html 을 준다.
 - WEB_DIST_DIR (기본: <repo>/frontend/dist) 에 index.html 이 없으면 아무것도 등록하지 않는다.
 """
 
@@ -21,7 +22,8 @@ log = logging.getLogger(__name__)
 
 DEFAULT_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 # Expo 웹 빌드의 해시가 붙은 번들 폴더. 이름이 바뀌면 다시 받으므로 오래 캐시해도 된다.
-IMMUTABLE_PREFIXES = ("_expo/static/",)
+IMMUTABLE_PREFIXES = ("_expo/static/", "app/_expo/static/")
+APP_PREVIEW_PREFIX = "app"
 RESERVED_PREFIXES = ("api/", "docs", "redoc", "openapi.json", "health")
 
 
@@ -53,7 +55,12 @@ def mount_web(app: FastAPI, dist: Path | None = None) -> bool:
                 )
                 return FileResponse(candidate, headers=headers)
         # SPA 경로: 새 배포가 바로 보이도록 index.html 은 캐시하지 않는다.
-        return FileResponse(index, headers={"Cache-Control": "no-cache"})
+        page = index
+        if full_path == APP_PREVIEW_PREFIX or full_path.startswith(APP_PREVIEW_PREFIX + "/"):
+            app_index = root / APP_PREVIEW_PREFIX / "index.html"
+            if app_index.is_file():
+                page = app_index
+        return FileResponse(page, headers={"Cache-Control": "no-cache"})
 
     log.info("serving web build from %s", root)
     return True

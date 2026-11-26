@@ -69,6 +69,24 @@ class WebSpaTest(unittest.TestCase):
         res = self.client.get("/..%2Fsecret.txt")
         self.assertNotEqual(res.text, "outside")
 
+    def test_app_preview_routes_use_app_index(self):
+        (self.dist / "app" / "_expo" / "static" / "js" / "web").mkdir(parents=True)
+        (self.dist / "app" / "index.html").write_text("<html>APP</html>", encoding="utf-8")
+        (self.dist / "app" / "_expo" / "static" / "js" / "web" / "entry-app.js").write_text("app bundle", encoding="utf-8")
+        for path in ("/app", "/app/", "/app/stocks/005930", "/app/login"):
+            with self.subTest(path=path):
+                res = self.client.get(path)
+                self.assertEqual(res.text, "<html>APP</html>")
+                self.assertEqual(res.headers["cache-control"], "no-cache")
+        res = self.client.get("/app/_expo/static/js/web/entry-app.js")
+        self.assertEqual(res.text, "app bundle")
+        self.assertIn("immutable", res.headers["cache-control"])
+        # 이름만 비슷한 웹 경로는 그대로 웹 index
+        self.assertEqual(self.client.get("/apple").text, "<html>INDEX</html>")
+
+    def test_app_paths_fall_back_to_web_index_without_preview_build(self):
+        self.assertEqual(self.client.get("/app/stocks").text, "<html>INDEX</html>")
+
     def test_not_mounted_without_build(self):
         app = FastAPI()
         self.assertFalse(mount_web(app, Path(self._tmp.name) / "missing"))
