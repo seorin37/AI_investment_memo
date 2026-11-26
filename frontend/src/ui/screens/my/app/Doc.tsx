@@ -30,6 +30,6 @@ export function AppDoc({ title, html, oss, onBack }: { title: string; html?: str
 const st = StyleSheet.create({
   doc: { paddingVertical: 4 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, minHeight: 52, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#F1F2F4' },
-  n: { flexShrink: 1, fontSize: 15, lineHeight: 22, color: MC.ink },
-  l: { fontSize: 13, lineHeight: 19, color: MC.ink3 },
+  n: { flexShrink: 1, fontSize: 15.5, lineHeight: 22.7, color: MC.ink },
+  l: { fontSize: 14, lineHeight: 20.5, color: '#6B7079' },
 });

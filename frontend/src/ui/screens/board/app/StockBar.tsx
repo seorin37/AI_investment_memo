@@ -53,7 +53,7 @@ const st = StyleSheet.create({
   tt: { flex: 1, height: 40, marginLeft: 2, overflow: 'hidden' },
   ttIn: { position: 'absolute', left: 0, right: 0, top: 0, height: 40, justifyContent: 'center', alignItems: 'flex-start' },
   ttB: { ...nf(20), fontWeight: '700', color: appColor.ink },
-  miniB: { ...ft(15, 1.2), fontWeight: '700', color: appColor.ink },
-  miniS: { ...ft(12), fontWeight: '600', fontVariant: ['tabular-nums'] },
+  miniB: { ...ft(15.5, 1.2), fontWeight: '700', color: appColor.ink },
+  miniS: { ...ft(13), fontWeight: '600', fontVariant: ['tabular-nums'] },
   line: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 1, backgroundColor: appColor.line },
 });

@@ -55,12 +55,12 @@ export function MemoMoreSheet({ open, title, color, pinned, aiLinked, onColor, o
 const st = StyleSheet.create({
   head: { paddingHorizontal: 22, marginTop: -4 },
   sht: { ...ft(16.5), fontWeight: '800', color: appColor.ink },
-  shs: { ...ft(12.5), color: appColor.ink3, marginTop: 2 },
+  shs: { ...ft(13.5), color: '#6B7079', marginTop: 2 },
   colors: { flexDirection: 'row', gap: 8, paddingTop: 12, paddingHorizontal: 18, paddingBottom: 6 },
   /* 고리 42 = 동그라미 34 + 흰 2 + 색 2 */
   ring: { width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: 'transparent', alignItems: 'center', justifyContent: 'center' },
   dot: { width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: 'rgba(0,0,0,0.07)' },
   sdiv: { height: 1, backgroundColor: appColor.line, marginVertical: 4, marginHorizontal: 22 },
   srow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 22, paddingVertical: 14 },
-  srowT: { ...ft(15.5), color: appColor.ink },
+  srowT: { ...ft(16), color: appColor.ink },
 });

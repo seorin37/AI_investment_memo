@@ -99,7 +99,7 @@ const st = StyleSheet.create({
   progressOn: { width: 18, backgroundColor: appColor.accent },
   /* .tt 25 / 1.4 · 800 · margin 10 18 6 · .ts 14 / 1.6 ink3 · margin-bottom 24 */
   title: { fontSize: 25, lineHeight: 35, marginTop: 10, marginHorizontal: 2, color: '#16171A', fontWeight: '800' },
-  sub: { fontSize: 14, lineHeight: 22.4, marginTop: 6, marginHorizontal: 2, color: '#9A9EA7' },
+  sub: { fontSize: 15, lineHeight: 24, marginTop: 6, marginHorizontal: 2, color: '#6B7079' },
   /* .all 58 · r16 · #F4F0FF · gap 12 · 16.5 800 */
   all: { minHeight: 58, marginTop: 24, borderRadius: 16, backgroundColor: '#F4F0FF', paddingHorizontal: 16, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', gap: 12 },
   allOn: {},
@@ -110,18 +110,18 @@ const st = StyleSheet.create({
   items: { marginTop: 8 },
   item: { minHeight: 54, flexDirection: 'row', alignItems: 'center', paddingLeft: 10, paddingRight: 4 },
   itemMain: { minWidth: 0, flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  itemText: { fontSize: 14.5, lineHeight: 22, paddingVertical: 8, minWidth: 0, flex: 1, color: '#2E2E38' },
+  itemText: { fontSize: 15.5, lineHeight: 23.5, paddingVertical: 8, minWidth: 0, flex: 1, color: '#2E2E38' },
   /* .tr .v ink3 13 · padding 8 0 8 10 (터치는 hitSlop으로 44) */
   viewLink: { paddingVertical: 8, paddingLeft: 10, flexDirection: 'row', alignItems: 'center', gap: 2 },
-  viewText: { fontSize: 13, lineHeight: 19, color: '#9A9EA7' },
+  viewText: { fontSize: 14, lineHeight: 20.5, color: '#6B7079' },
   /* .pvl bottom 100 · 13.5 600 #6A42AB · padding 12 8 · .bottom bottom 30 */
   bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingTop: 8, gap: 2 },
   privacy: { alignSelf: 'center', minHeight: 44, paddingVertical: 12, paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center', gap: 2 },
-  privacyText: { fontSize: 13.5, lineHeight: 20, color: appColor.deepPurple, fontWeight: '600' },
+  privacyText: { fontSize: 14.5, lineHeight: 21.5, color: appColor.deepPurple, fontWeight: '600' },
   cta: { minHeight: 56, borderRadius: 16, backgroundColor: '#D5D8DD', paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
   /* 저장 실패 한 줄 = 앱 로그인 errorToast · errorText 와 같은 모양 (버튼과 8 띄움) */
   errorToast: { alignSelf: 'center', marginTop: 14, marginBottom: 8, borderRadius: 12, backgroundColor: '#303139', paddingHorizontal: 16, paddingVertical: 10 },
-  errorText: { ...ft(13), color: '#FFFFFF', fontWeight: '600' },
+  errorText: { ...ft(14), color: '#FFFFFF', fontWeight: '600' },
   ctaOn: { backgroundColor: appColor.accent },
   ctaText: { fontSize: 16.5, lineHeight: 24, color: '#FFFFFF', fontWeight: '800' },
   docHeader: { height: 58, paddingHorizontal: 22, flexDirection: 'row', alignItems: 'center', gap: 2 },

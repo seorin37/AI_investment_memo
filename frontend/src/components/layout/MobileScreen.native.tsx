@@ -82,6 +82,6 @@ function ToastBox({ toast, bottom }: { toast: NonNullable<ReturnType<typeof useU
 const st = StyleSheet.create({
   wrap: { position: 'absolute', left: 16, right: 16, alignItems: 'center', zIndex: 1000 },
   toast: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#1F2228', paddingHorizontal: 18, paddingVertical: 12, borderRadius: 12, elevation: 8 },
-  action: { color: '#CDBBFF', fontSize: 14, fontWeight: '800' },
-  text: { flexShrink: 1, color: '#FFFFFF', fontSize: 14 },
+  action: { color: '#CDBBFF', fontSize: 15, fontWeight: '800' },
+  text: { flexShrink: 1, color: '#FFFFFF', fontSize: 15 },
 });

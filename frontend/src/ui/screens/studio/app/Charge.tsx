@@ -42,16 +42,16 @@ export function AppCharge({ packs, default_credits, onBack, onPay }: ChargeProps
 }
 
 const st = StyleSheet.create({
-  secr: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: '#16171A', paddingTop: 4, paddingHorizontal: 2, paddingBottom: 8 },
+  secr: { fontSize: 15.5, lineHeight: 21.7, fontWeight: '800', color: '#16171A', paddingTop: 4, paddingHorizontal: 2, paddingBottom: 8 },
   pk: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10, backgroundColor: '#FFFFFF', borderRadius: 16, height: 58, paddingHorizontal: 16, borderWidth: 2, borderColor: 'transparent' },
   pkOn: { borderColor: '#16171A' },
   rd: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#C9CDD4', alignItems: 'center', justifyContent: 'center' },
   rdI: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#16171A' },
-  pkT: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: '#16171A' },
+  pkT: { fontSize: 15.5, lineHeight: 21.7, fontWeight: '800', color: '#16171A' },
   tag: { backgroundColor: '#16171A', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
-  tagT: { fontSize: 11, lineHeight: 15, fontWeight: '700', color: '#FFFFFF' },
-  pr: { marginLeft: 'auto', fontSize: 15, lineHeight: 21, fontWeight: '600', color: '#575B63' },
+  tagT: { fontSize: 11.5, lineHeight: 15.7, fontWeight: '700', color: '#FFFFFF' },
+  pr: { marginLeft: 'auto', fontSize: 15.5, lineHeight: 21.7, fontWeight: '600', color: '#575B63' },
   cta: { height: 54, borderRadius: 15, backgroundColor: '#16171A', alignItems: 'center', justifyContent: 'center' },
   ctaT: { fontSize: 16, lineHeight: 22, fontWeight: '800', color: '#FFFFFF' },
-  cap: { textAlign: 'center', fontSize: 11.5, lineHeight: 16, color: '#9A9EA7', marginTop: 6 },
+  cap: { textAlign: 'center', fontSize: 11.5, lineHeight: 16, color: '#6B7079', marginTop: 6 },
 });

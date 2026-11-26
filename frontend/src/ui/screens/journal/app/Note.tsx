@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, BackHandler, Keyboard, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent, type TextInputInstance, type TextStyle } from 'react-native';
+import { Animated, BackHandler, Keyboard, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent, type ScrollViewInstance, type TextInputInstance, type TextStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MiniSpace, useMiniSpace } from '@/ui/screens/studio/app/MiniBar';
 import { BottomBar } from '@/ui/shared/app/BottomBar';
@@ -42,7 +42,14 @@ export interface AppNoteProps {
   onPin: () => void;
   /** 휴지통으로 (목록에서 되돌리기 스낵바) */
   onTrash: () => void;
+  /** 쓰는 동안 자동 저장 (웹과 같게: 멈추고 0.6초 뒤) */
+  onAutoSave?: (blocks: JBlock[]) => void;
 }
+
+/** 자동 저장 대기 (웹 store/journal SAVE_MS 와 같음) */
+const AUTO_MS = 600;
+/** 커서 줄 아래로 남길 여백 */
+const CARET_GAP = 24;
 
 /**
  * 앱 투자 기록 보기·쓰기 (원본 journal.html 14.1 · 14.2 · 14.3)
@@ -151,6 +158,22 @@ export function AppNote(p: AppNoteProps) {
   /* 글 바꾸기 · 줄 바꿈 (제목·머리말·부제목 다음 줄은 본문 · 목록·체크리스트는 이어짐 · 빈 목록 줄에서 줄 바꿈은 목록 끝) */
   const onText = (i: number, t: string) => {
     const it = items[i];
+    /* 제목 줄 (웹과 같게): 줄바꿈은 지우고(붙여넣은 여러 줄도 한 줄로) 본문 끝으로 — 커서 뒤 글자를 나누지 않음 */
+    if (i === 0 && t.includes('\n')) {
+      const ti = t.replace(/\n/g, '');
+      const head = items.map((x, j) => (j === 0 ? { ...x, text: ti } : x));
+      if (items.length > 1) {
+        change(head, true);
+        setCur(items.length - 1);
+        focusAt(items[items.length - 1].k);
+        return;
+      }
+      const nb: Item = { s: 'body', text: '', k: key() };
+      change([...head, nb], true);
+      setCur(1);
+      focusAt(nb.k);
+      return;
+    }
     /* 새로 들어온 줄바꿈만 줄 나누기로 (원래 글 안에 있던 줄바꿈은 그대로 둠) */
     const nlCount = (s: string) => s.split('\n').length - 1;
     if (nlCount(t) <= nlCount(it.text)) return change(items.map((x, j) => (j === i ? { ...x, text: t } : x)), false, it.k);
@@ -175,6 +198,8 @@ export function AppNote(p: AppNoteProps) {
   const onKey = (i: number, keyName: string) => {
     if (keyName !== 'Backspace' || items[i].text || i === 0) return;
     const it = items[i];
+    /* 본문 첫 줄에서는 제목으로 올라가지 않음 (웹 본문 칸과 같게) */
+    if (i === 1 && !it.l && it.check === undefined) return;
     if (it.l || it.check !== undefined) {
       const { l: _l, check: _c, ...plain } = it;
       void _l;
@@ -211,6 +236,34 @@ export function AppNote(p: AppNoteProps) {
     Keyboard.dismiss();
     setFmt(true);
   };
+
+  /* 자동 저장: 글이 바뀌고 0.6초 멈추면 (처음 연 모습 그대로면 저장하지 않음) */
+  const first = useRef(items);
+  const { onAutoSave } = p;
+  useEffect(() => {
+    if (!onAutoSave || items === first.current) return;
+    const t = setTimeout(() => onAutoSave(strip(items)), AUTO_MS);
+    return () => clearTimeout(t);
+  }, [items, onAutoSave]);
+
+  /* 커서 줄이 키보드·아래 막대에 가리지 않게: 줄 자리(본문 안 y·높이)와 보이는 칸 높이로 필요한 만큼만 내림 */
+  const scroll = useRef<ScrollViewInstance>(null);
+  const lay = useRef<Record<string, { y: number; h: number }>>({});
+  const view = useRef({ y: 0, h: 0 });
+  const keepVisible = (k2?: string) => {
+    const L = lay.current[k2 ?? items[cur]?.k ?? ''];
+    const v = view.current;
+    if (!L || !v.h) return;
+    const bottom = L.y + L.h + CARET_GAP;
+    if (bottom > v.y + v.h) scroll.current?.scrollTo({ y: bottom - v.h, animated: true });
+    else if (L.y < v.y) scroll.current?.scrollTo({ y: Math.max(0, L.y - CARET_GAP), animated: true });
+  };
+  useEffect(() => {
+    if (!editing) return;
+    const t = setTimeout(() => keepVisible(), 80);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, cur, kb, editing]);
 
   const empty = items.length === 1 && !items[0].text;
   const nums = items.map((b, i) => items.slice(0, i + 1).filter((x) => x.l === 'num').length);
@@ -250,7 +303,21 @@ export function AppNote(p: AppNoteProps) {
         </View>
       </View>
 
-      <ScrollView style={st.flex} contentContainerStyle={st.scr} keyboardShouldPersistTaps="handled" onScroll={(e) => setShadow(e.nativeEvent.contentOffset.y > 8)} scrollEventThrottle={32}>
+      <ScrollView
+        ref={scroll}
+        style={st.flex}
+        contentContainerStyle={st.scr}
+        keyboardShouldPersistTaps="handled"
+        onLayout={(e) => {
+          view.current.h = e.nativeEvent.layout.height;
+          if (editing) keepVisible();
+        }}
+        onScroll={(e) => {
+          view.current.y = e.nativeEvent.contentOffset.y;
+          setShadow(e.nativeEvent.contentOffset.y > 8);
+        }}
+        scrollEventThrottle={32}
+      >
         <Text style={st.ndt}>{p.entry?.full ?? p.full}</Text>
         {items.map((b, i) => {
           const ts = textStyle(b);
@@ -285,7 +352,14 @@ export function AppNote(p: AppNoteProps) {
             field
           );
           return (
-            <Pressable key={b.k} disabled={editing} onPress={() => startEdit(i)} style={[st.b, b.s === 'title' && st.bTitle, b.s === 'head' && st.bHead, b.check !== undefined && st.bCk, (b.l === 'dot' || b.l === 'dash' || b.l === 'num') && st.bList, b.l === 'quote' && st.bQuote]}>
+            <Pressable
+              key={b.k}
+              disabled={editing}
+              onPress={() => startEdit(i)}
+              onLayout={(e) => {
+                lay.current[b.k] = { y: e.nativeEvent.layout.y, h: e.nativeEvent.layout.height };
+              }}
+              style={[st.b, b.s === 'title' && st.bTitle, b.s === 'head' && st.bHead, b.check !== undefined && st.bCk, (b.l === 'dot' || b.l === 'dash' || b.l === 'num') && st.bList, b.l === 'quote' && st.bQuote]}>
               {b.check !== undefined ? (
                 <View style={st.ckl}>
                   <Pressable onPress={() => toggleCheck(i)} accessibilityRole="checkbox" accessibilityState={{ checked: !!b.check }} accessibilityLabel={b.text || '할 일'} hitSlop={8} style={[st.cbx, b.check && st.cbxOn]}>
@@ -313,7 +387,7 @@ export function AppNote(p: AppNoteProps) {
           <View style={st.acc}>
             <Pressable onPress={openFmt} accessibilityRole="button" accessibilityLabel="서식" accessibilityState={{ selected: fmt }} style={[st.accB, fmt && st.accOn]}>
               <Text style={[st.accT, fmt && { color: A2 }]}>
-                가<Text style={[st.accT, { fontSize: 12 }, fmt && { color: A2 }]}>가</Text>
+                가<Text style={[st.accT, { fontSize: 13 }, fmt && { color: A2 }]}>가</Text>
               </Text>
             </Pressable>
             <Pressable onPress={insertCk} accessibilityRole="button" accessibilityLabel="체크리스트" style={st.accB}>
@@ -403,8 +477,8 @@ function SRow({ label, onPress, red }: { label: string; onPress: () => void; red
 const STY: [JBlockStyle, string, TextStyle][] = [
   ['title', '제목', { fontSize: 19, fontWeight: '800' }],
   ['head', '머리말', { fontSize: 16, fontWeight: '800' }],
-  ['sub', '부제목', { fontSize: 14.5, fontWeight: '700' }],
-  ['body', '본문', { fontSize: 14, fontWeight: '500' }],
+  ['sub', '부제목', { fontSize: 15.5, fontWeight: '700' }],
+  ['body', '본문', { fontSize: 15, fontWeight: '500' }],
 ];
 
 /** 서식 패널 (원본 .fmt: #F3F4F6 · 274 · 안쪽 14 16 · 글 모양 알약이 미끄러짐 · B I U S · 목록 4종 · 안내 11.5) */
@@ -451,14 +525,14 @@ function FmtPanel({ b, pad, onClose, onStyle, onMark, onList }: { b: JBlock; pad
       <View style={st.seg}>
         {marks.map(([m, l, ts], i) => (
           <Pressable key={m} onPress={() => onMark(m)} accessibilityRole="button" accessibilityLabel={{ b: '굵게', i: '기울임', u: '밑줄', x: '취소선' }[m]} accessibilityState={{ selected: !!b[m] }} style={[st.segB, i > 0 && st.segL, b[m] && st.segOn]}>
-            <Text style={[{ fontSize: 15, color: b[m] ? A2 : appColor.ink }, ts]}>{l}</Text>
+            <Text style={[{ fontSize: 15.5, color: b[m] ? A2 : appColor.ink }, ts]}>{l}</Text>
           </Pressable>
         ))}
       </View>
       <View style={st.seg}>
         {lists.map(([l, t], i) => (
           <Pressable key={l} onPress={() => onList(l)} accessibilityRole="button" accessibilityState={{ selected: b.l === l }} style={[st.segB, i > 0 && st.segL, b.l === l && st.segOn]}>
-            <Text style={{ fontSize: 13, color: b.l === l ? A2 : appColor.ink }}>{t}</Text>
+            <Text style={{ fontSize: 14, color: b.l === l ? A2 : appColor.ink }}>{t}</Text>
           </Pressable>
         ))}
       </View>
@@ -480,7 +554,7 @@ const st = StyleSheet.create({
   done: { height: 36, paddingHorizontal: 6, justifyContent: 'center' },
   doneT: { ...nf(16.5), fontWeight: '800', color: A2 },
   scr: { paddingHorizontal: 20, paddingBottom: 40 },
-  ndt: { ...ft(12.5), color: appColor.ink3, textAlign: 'center', marginTop: 4, marginBottom: 12 },
+  ndt: { ...ft(13.5), color: '#6B7079', textAlign: 'center', marginTop: 4, marginBottom: 12 },
   b: { marginBottom: 6 },
   bTitle: { marginBottom: 10 },
   bHead: { marginTop: 12 },
@@ -512,7 +586,7 @@ const st = StyleSheet.create({
   segB: { flex: 1, height: 42, alignItems: 'center', justifyContent: 'center' },
   segL: { borderLeftWidth: 1, borderLeftColor: '#EDEEF1' },
   segOn: { backgroundColor: appColor.accentSoft },
-  cap: { ...ft(11.5), color: appColor.ink3, marginTop: 4 },
+  cap: { ...ft(11.5), color: '#6B7079', marginTop: 4 },
   sr: { flexDirection: 'row', alignItems: 'center', height: 52, paddingHorizontal: 20 },
-  srT: { ...ft(15.5), color: appColor.ink },
+  srT: { ...ft(16), color: appColor.ink },
 });

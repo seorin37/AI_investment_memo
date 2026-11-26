@@ -9,9 +9,15 @@ import { AppTape } from '@/ui/shared/MemoPaper';
 import { mmdd, oneLine } from '@/ui/shared/memoFormat';
 import { useDark, usePaper } from '@/ui/shared/Dark';
 import { appColor, curve, ft } from '@/ui/theme';
+import { useFontScale } from '@/ui/shared/app/fontScale';
 
 /** 접힌 모서리 크기 */
 const CUT = 24;
+/* 줄 높이 (st.dt · st.tt · st.bd 와 같은 값) · 제목 위아래 여백 */
+const DT_LH = ft(11.5).lineHeight as number;
+const TT_LH = ft(15.5, 1.36).lineHeight as number;
+const BD_LH = ft(13.5, 1.5).lineHeight as number;
+const TT_GAP = 12;
 /** 카드 라운드 */
 const R = 16;
 
@@ -26,6 +32,10 @@ export function AppMemoCard({ memo: m, width, height, selecting, selected, aiSpe
   const dark = useDark();
   const k = useMotionK();
   const p = paper[m.color];
+  /* 기기 글자를 키우면(상한 1.3) 카드 높이는 그대로 두고 본문 줄 수를 줄여 줄 중간에서 잘리지 않게. 1.0배는 지금처럼 3줄 */
+  const fs = useFontScale();
+  const [titleLines, setTitleLines] = useState(2);
+  const bodyLines = fs <= 1 ? 3 : Math.max(0, Math.min(3, Math.floor((height - st.g.paddingTop - Math.max(st.dtr.minHeight, DT_LH * fs) - TT_GAP - titleLines * TT_LH * fs) / (BD_LH * fs))));
   const [s] = useState(() => new Animated.Value(1));
   const scaleTo = (v: number, delay = 0) => Animated.timing(s, { toValue: v, duration: 450 * k, delay: delay * k, easing: curve.land, useNativeDriver: NATIVE }).start();
   return (
@@ -67,10 +77,10 @@ export function AppMemoCard({ memo: m, width, height, selecting, selected, aiSpe
                 </View>
               ) : null}
             </View>
-            <Text style={st.tt} numberOfLines={2}>
+            <Text style={st.tt} numberOfLines={2} onTextLayout={(e) => setTitleLines(Math.max(1, Math.min(2, e.nativeEvent.lines.length)))}>
               {m.title}
             </Text>
-            <Text style={st.bd} numberOfLines={3}>
+            <Text style={st.bd} numberOfLines={bodyLines}>
               {oneLine(m.body)}
             </Text>
           </View>
@@ -93,10 +103,10 @@ const st = StyleSheet.create({
   dt: { ...ft(11.5), fontWeight: '500', color: '#4A4A55', flexShrink: 1 },
   plug: { marginLeft: 'auto', width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(255,255,255,0.8)', alignItems: 'center', justifyContent: 'center' },
   plugSpent: { backgroundColor: '#E9EAEE' },
-  tt: { ...ft(15, 1.36), fontWeight: '800', color: appColor.ink, marginVertical: 6 },
-  bd: { ...ft(12.5, 1.5), color: '#2E2E38' },
+  tt: { ...ft(15.5, 1.36), fontWeight: '800', color: appColor.ink, marginVertical: 6 },
+  bd: { ...ft(13.5, 1.5), color: '#2E2E38' },
   nbAt: { position: 'absolute', top: -7, right: -7 },
   gchk: { position: 'absolute', top: -10, left: -8 },
   badge: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#FFFFFF', backgroundColor: appColor.red, alignItems: 'center', justifyContent: 'center' },
-  badgeT: { ...ft(12, 1), fontWeight: '700', color: '#FFFFFF' },
+  badgeT: { ...ft(13, 1), fontWeight: '700', color: '#FFFFFF' },
 });

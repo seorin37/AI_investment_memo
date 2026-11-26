@@ -75,5 +75,5 @@ const st = StyleSheet.create({
   bt: { flex: 1, minHeight: 52, borderRadius: 14, backgroundColor: appColor.ink, alignItems: 'center', justifyContent: 'center', paddingVertical: 14 },
   btGray: { flexGrow: 0, flexBasis: 108, backgroundColor: '#ECEDF1' },
   press: { transform: [{ scale: 0.97 }] },
-  btT: { ...ft(15.5), fontWeight: '700', color: '#FFFFFF' },
+  btT: { ...ft(16), fontWeight: '700', color: '#FFFFFF' },
 });

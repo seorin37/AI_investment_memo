@@ -68,12 +68,12 @@ const dom = StyleSheet.create({
   input: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, minHeight: 120, color: 'transparent', caretColor: '#15171A', outlineStyle: 'none' } as object,
 });
 const app = StyleSheet.create({
-  box: { ...ft(15.5, 1.8), color: '#2E2E38', padding: 0, margin: 0, minHeight: 120 },
+  box: { ...ft(16, 1.8), color: '#2E2E38', padding: 0, margin: 0, minHeight: 120 },
   title: { ...ft(21, 1.4), fontWeight: '800', color: appColor.ink },
-  body: { ...ft(15.5, 1.8), color: '#2E2E38' },
+  body: { ...ft(16, 1.8), color: '#2E2E38' },
 });
 const web = StyleSheet.create({
-  box: { fontSize: 15.5, lineHeight: 24.8, color: '#333D4B', padding: 0, margin: 0 },
+  box: { fontSize: 16, lineHeight: 25.6, color: '#333D4B', padding: 0, margin: 0 },
   title: { fontSize: 21, lineHeight: 25, fontWeight: '700', color: webColor.ink },
-  body: { fontSize: 15.5, lineHeight: 24.8, color: '#333D4B' },
+  body: { fontSize: 16, lineHeight: 25.6, color: '#333D4B' },
 });
