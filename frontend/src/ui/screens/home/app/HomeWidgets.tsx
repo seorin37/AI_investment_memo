@@ -9,6 +9,7 @@ import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { useProgress } from '@/ui/motion/useProgress';
 import { usePaper } from '@/ui/shared/Dark';
 import { StockLogo } from '@/ui/shared/StockLogo';
+import { nf as nfont } from '@/ui/shared/app/nf';
 import { appColor, curve, ft } from '@/ui/theme';
 import type { HomeNewsItem, HomeUpdateRow, HomeWidget, MarketIndex } from '../Home.types';
 import { ago, basisText, hm, mmdd, nf, spark, WEB_RANGES, mkData, type WebRange } from '../homeFormat';
@@ -482,7 +483,7 @@ const st = StyleSheet.create({
   urM: { ...ft(12), color: appColor.ink3 },
   urMT: { flex: 1, minWidth: 0, color: appColor.ink2 },
   urMid: { flex: 1, minWidth: 0 },
-  urB: { ...ft(15), fontWeight: '700', color: appColor.ink },
+  urB: { ...nfont(15), fontWeight: '700', color: appColor.ink },
   urS: { ...ft(12.5), color: appColor.ink3 },
   urChev: { marginLeft: 'auto', ...ft(15), color: appColor.ink3 },
   nb: { marginLeft: 'auto', width: 24, height: 24, borderRadius: 12, backgroundColor: appColor.red, alignItems: 'center', justifyContent: 'center' },
@@ -500,7 +501,7 @@ const st = StyleSheet.create({
   nrMid: { flex: 1, minWidth: 0 },
   nrB: { fontSize: 14.5, lineHeight: 18.42, fontWeight: '600', color: appColor.ink },
   nrS: { ...ft(12), color: appColor.ink3, marginTop: 4 },
-  nrAr: { marginLeft: 'auto', ...ft(14.5), color: appColor.ink2 },
+  nrAr: { marginLeft: 'auto', ...nfont(14.5), color: appColor.ink2 },
   /* 체크리스트 */
   pbar: { height: 6, borderRadius: 3, backgroundColor: '#EEF0F3', overflow: 'hidden', marginTop: -4, marginBottom: 10 },
   pbarI: { height: '100%', borderRadius: 3, backgroundColor: appColor.accent },

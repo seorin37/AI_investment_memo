@@ -12,6 +12,7 @@ import { Sheet } from '@/ui/shared/Sheet';
 import { AppSnackbar } from '@/ui/shared/Snackbar';
 import { SwipeRow } from '@/ui/shared/SwipeRow';
 import { Toggle } from '@/ui/shared/Toggle';
+import { nf } from '@/ui/shared/app/nf';
 import { appColor, curve, ft } from '@/ui/theme';
 import { shareText } from '@/lib/copyText';
 import { mockJournalLoadMs, mockJournalRecentCount } from '../Journal.mock';
@@ -640,7 +641,7 @@ const st = StyleSheet.create({
   scn: { ...ft(15), fontWeight: '700', color: A2 },
   rh: { ...ft(13), fontWeight: '700', color: appColor.ink3, paddingTop: 12, paddingHorizontal: 18, paddingBottom: 8 },
   gh: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingTop: 16, paddingHorizontal: 18, paddingBottom: 8 },
-  ghT: { ...ft(19), fontWeight: '800', color: appColor.ink },
+  ghT: { ...nf(19), fontWeight: '800', color: appColor.ink },
   card: { backgroundColor: appColor.surface, borderRadius: 14, marginHorizontal: 16, overflow: 'hidden' },
   fg: { paddingVertical: 12, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center' },
   sep: { position: 'absolute', top: 0, right: 0, height: 1, backgroundColor: SEP, zIndex: 3 },

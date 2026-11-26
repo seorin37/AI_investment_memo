@@ -16,6 +16,7 @@ import { ON_DOM } from '@/ui/shared/onDom';
 import { NudgePill } from '@/ui/shared/NudgePill';
 import { AppSnackbar } from '@/ui/shared/Snackbar';
 import { StockLogo } from '@/ui/shared/StockLogo';
+import { nf } from '@/ui/shared/app/nf';
 import { appColor, curve, ft } from '@/ui/theme';
 import type { AppUpdatesProps, KindFilter, UpdateItem, UpdateStock } from '../Updates.types';
 import { versionsOf } from '../Updates.mock';
@@ -324,7 +325,7 @@ function StockView({ p, s, kind, setKind, openId, onOpen }: { p: AppUpdatesProps
       <StockLogo logo={s.logo} bg={s.logo_bg} ink={s.logo_ink} size={40} variant="app" />
       <View style={st.flexMin}>
         <View style={st.nmRow}>
-          <Text style={[st.nm, { ...ft(19) }]} numberOfLines={1}>
+          <Text style={[st.nm, { ...nf(19) }]} numberOfLines={1}>
             {s.name}
           </Text>
           <OwnChip s={s} />

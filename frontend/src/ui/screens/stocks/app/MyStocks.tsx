@@ -13,6 +13,7 @@ import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { ConfirmDialog } from '@/ui/shared/ConfirmDialog';
 import { AppSnackbar } from '@/ui/shared/Snackbar';
 import { StockLogo } from '@/ui/shared/StockLogo';
+import { nf } from '@/ui/shared/app/nf';
 import { appColor, curve, ft } from '@/ui/theme';
 import type { AppMyStocksProps, Hold, MyStock } from '../MyStocks.types';
 import { AddStockSheet } from './AddStockSheet';
@@ -480,7 +481,7 @@ const st = StyleSheet.create({
   cpl: { position: 'absolute', top: 0, bottom: 0, borderRadius: 17, backgroundColor: appColor.accent },
   chip: { minHeight: 34, paddingHorizontal: 13, borderRadius: 17, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E3E5EA', flexDirection: 'row', alignItems: 'center', gap: 3 },
   chipOn: { backgroundColor: 'transparent', borderColor: 'transparent' },
-  chipT: { ...ft(13.5), color: appColor.ink },
+  chipT: { ...nf(13.5), color: appColor.ink },
   chipTOn: { color: '#FFFFFF', fontWeight: '700' },
   chipN: { fontVariant: ['tabular-nums'] },
   addc: { marginLeft: 'auto', minHeight: 34, paddingHorizontal: 12, borderRadius: 17, backgroundColor: '#FFFFFF', flexDirection: 'row', alignItems: 'center', gap: 4 },
@@ -499,12 +500,12 @@ const st = StyleSheet.create({
   sckOn: { backgroundColor: appColor.accent, borderColor: appColor.accent },
   nm: { flex: 1, minWidth: 0 },
   nmRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  nmB: { flexShrink: 1, ...ft(15), fontWeight: '700', color: appColor.ink },
+  nmB: { flexShrink: 1, ...nf(15), fontWeight: '700', color: appColor.ink },
   bdg: { minWidth: 19, height: 19, paddingHorizontal: 5, borderRadius: 10, backgroundColor: appColor.red, alignItems: 'center', justifyContent: 'center' },
   bdgT: { fontSize: 11, lineHeight: 13, fontWeight: '700', color: '#FFFFFF' },
   nmS: { ...ft(12), color: appColor.ink3, marginTop: 2 },
   pr: { alignItems: 'flex-end' },
-  prB: { ...ft(15), fontWeight: '700', color: appColor.ink },
+  prB: { ...nf(15), fontWeight: '700', color: appColor.ink },
   prS: { ...ft(12.5), fontWeight: '600' },
   hdl: { width: 28, height: 40, marginVertical: -2, marginLeft: -4, alignItems: 'center', justifyContent: 'center' },
   none: { ...ft(12.5), color: appColor.ink3, paddingTop: 4, paddingHorizontal: 4, paddingBottom: 12 },

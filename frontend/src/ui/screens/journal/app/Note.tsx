@@ -8,6 +8,7 @@ import { copyText, shareText } from '@/lib/copyText';
 import { useMotionK } from '@/ui/motion/useMotion';
 import { ON_DOM } from '@/ui/shared/onDom';
 import { Sheet } from '@/ui/shared/Sheet';
+import { nf } from '@/ui/shared/app/nf';
 import { appColor, curve, ft } from '@/ui/theme';
 import type { JBlock, JBlockStyle, JList, JournalEntry } from '../Journal.types';
 import { Pill, type Toast } from './Journal';
@@ -472,12 +473,12 @@ const st = StyleSheet.create({
   nh: { height: 56, flexDirection: 'row', alignItems: 'center', paddingLeft: 4, paddingRight: 10, backgroundColor: '#FFFFFF', zIndex: 6 },
   nhSh: { borderBottomWidth: 1, borderBottomColor: '#EEF0F3' },
   bk: { flexDirection: 'row', alignItems: 'center', gap: 2, height: 44, paddingHorizontal: 8 },
-  bkT: { ...ft(16.5), fontWeight: '500', color: A2 },
+  bkT: { ...nf(16.5), fontWeight: '500', color: A2 },
   rt: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 8, height: 40 },
   rb: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F1F0F6', alignItems: 'center', justifyContent: 'center' },
   undo: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   done: { height: 36, paddingHorizontal: 6, justifyContent: 'center' },
-  doneT: { ...ft(16.5), fontWeight: '800', color: A2 },
+  doneT: { ...nf(16.5), fontWeight: '800', color: A2 },
   scr: { paddingHorizontal: 20, paddingBottom: 40 },
   ndt: { ...ft(12.5), color: appColor.ink3, textAlign: 'center', marginTop: 4, marginBottom: 12 },
   b: { marginBottom: 6 },

@@ -20,6 +20,7 @@ import { AppSnackbar } from '@/ui/shared/Snackbar';
 import { SpentBox } from '@/ui/shared/SpentBox';
 import { SwipeRow } from '@/ui/shared/SwipeRow';
 import { AppViewToggle, type BoardView } from '@/ui/shared/ViewToggle';
+import { nf } from '@/ui/shared/app/nf';
 import { appColor, ft } from '@/ui/theme';
 import { arrange } from '../boardCards';
 import { SortCards } from './SortCards';
@@ -369,7 +370,7 @@ const st = StyleSheet.create({
   flex: { flex: 1 },
   content: { paddingBottom: 0 },
   seg: { marginTop: 16, marginHorizontal: 16 },
-  mh: { ...ft(19), fontWeight: '800', color: appColor.ink, marginTop: 20, marginHorizontal: 16, marginBottom: 10 },
+  mh: { ...nf(19), fontWeight: '800', color: appColor.ink, marginTop: 20, marginHorizontal: 16, marginBottom: 10 },
   spb: { marginTop: 2, marginHorizontal: 16, marginBottom: 12 },
   frow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingBottom: 14 },
   vt: { marginLeft: 'auto' },
