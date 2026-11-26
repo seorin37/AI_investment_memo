@@ -5,7 +5,7 @@ import { useMockNotice } from '@/components/layout/MobileScreen';
 import { TopBar } from '@/ui/layout/app/TopBar';
 import { useMyProfile } from '@/ui/screens/my/useMyProfile';
 import { AppUpdates } from '@/ui/screens/updates/app/Updates';
-import { useUpdatesData } from '@/ui/screens/updates/useUpdatesData';
+import { useAppUpdatesData } from '@/ui/screens/updates/app/useAppUpdates';
 
 /**
  * 앱 업데이트 탭 = UI v2 (ui/screens/updates/app · ⑥). 종목별 업데이트도 같은 화면에서 칩만 바뀜 (원본 11.05 A안).
@@ -15,7 +15,7 @@ export default function UpdatesTab() {
   const router = useRouter();
   const { profile: { name: myName } } = useMyProfile();
   const notice = useMockNotice();
-  const { stocks, items, now, onMarkRead } = useUpdatesData();
+  const { stocks, items, now, onMarkRead } = useAppUpdatesData();
   return (
     <AppUpdates
       stocks={stocks}

@@ -126,7 +126,7 @@ export function AppAiTab({ memo, versions, feed, trackItems, lastChecked, openLa
         <View style={st.nudge}>
           <Pressable onPress={onNudge} accessibilityRole="button" style={st.nGo}>
             <NudgeSpark />
-            <Text style={st.nGoT} numberOfLines={1}>
+            <Text style={st.nGoT} numberOfLines={2}>
               이 메모에 붙은 소식, 한 번에 정리해 드릴까요?
             </Text>
             <NudgeArrow />
@@ -442,11 +442,11 @@ const st = StyleSheet.create({
   wstT: { ...ft(13, 1.4), color: '#6B7079', flexShrink: 1 },
   wnote: { ...ft(13, 1.5), color: '#6B7079', marginTop: 6, marginHorizontal: 4, marginBottom: 4 },
   /* 넛지 · 안내 */
-  nudge: { flexDirection: 'row', alignItems: 'center', height: 48, marginTop: 6, marginBottom: 10, borderRadius: 14, backgroundColor: appColor.nudge, overflow: 'hidden' },
-  nGo: { flex: 1, minWidth: 0, height: 48, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 14, paddingRight: 10 },
+  nudge: { flexDirection: 'row', alignItems: 'center', minHeight: 48, marginTop: 6, marginBottom: 10, borderRadius: 14, backgroundColor: appColor.nudge, overflow: 'hidden' },
+  nGo: { flex: 1, minWidth: 0, minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 14, paddingRight: 10, paddingVertical: 6 },
   nGoT: { flex: 1, minWidth: 0, ...ft(15.5), fontWeight: '700', color: '#FFFFFF' },
   nSep: { width: 1, height: 20, backgroundColor: 'rgba(255,255,255,0.2)' },
-  nX: { width: 44, height: 48, alignItems: 'center', justifyContent: 'center' },
+  nX: { width: 44, minHeight: 48, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
   fn: { ...ft(13), color: '#6B7079', marginTop: 6, marginHorizontal: 4, marginBottom: 14 },
   disc: { ...ft(13, 1.6), color: '#6B7079', textAlign: 'center', paddingTop: 14, paddingHorizontal: 20, paddingBottom: 26 },
   /* 뼈대 */

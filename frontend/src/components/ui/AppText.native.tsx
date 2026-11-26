@@ -5,6 +5,7 @@
  * (웹 겸용 기존 화면은 지금처럼 components/ui/Text.tsx 의 <T> 를 쓴다)
  *
  * 앱 전용 (AppText.tsx 와 같고 시스템 글자 크기 상한만 더함): 기기 설정으로 글자를 키워도 1.3배까지만.
+ * iOS 는 한글을 어절 단위로 줄바꿈 (lineBreakStrategyIOS hangul-word). 안드로이드는 RN 에 같은 옵션이 없어 keepAll(U+2060)만 씀.
  * RN 0.88 의 Text 는 함수 컴포넌트라 defaultProps 가 안 먹어서 여기서 기본값으로 넣음. AppText.tsx 가 바뀌면 같이 맞출 것.
  */
 import { Children, type ComponentProps, type ReactNode } from 'react';
@@ -51,17 +52,17 @@ const MAX_SCALE = 1.3;
 
 export function Text({ keepAll, children, ...props }: AppTextProps) {
   if (keepAll && Platform.OS === 'web') {
-    return <RNText maxFontSizeMultiplier={MAX_SCALE} {...props} style={[pretendard(props.style), { wordBreak: 'keep-all' } as TextStyle]}>{children}</RNText>;
+    return <RNText maxFontSizeMultiplier={MAX_SCALE} lineBreakStrategyIOS="hangul-word" {...props} style={[pretendard(props.style), { wordBreak: 'keep-all' } as TextStyle]}>{children}</RNText>;
   }
   return (
-    <RNText maxFontSizeMultiplier={MAX_SCALE} {...props} style={pretendard(props.style)}>
+    <RNText maxFontSizeMultiplier={MAX_SCALE} lineBreakStrategyIOS="hangul-word" {...props} style={pretendard(props.style)}>
       {keepAll ? keepAllChildren(children) : children}
     </RNText>
   );
 }
 
 export function TextInput(props: ComponentProps<typeof RNTextInput>) {
-  return <RNTextInput maxFontSizeMultiplier={MAX_SCALE} {...props} style={pretendard(props.style)} />;
+  return <RNTextInput maxFontSizeMultiplier={MAX_SCALE} lineBreakStrategyIOS="hangul-word" {...props} style={pretendard(props.style)} />;
 }
 
 /** Animated.Text 대신 (TopBar 제목 · 스낵바 · 큰 제목) */

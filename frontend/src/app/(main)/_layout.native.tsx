@@ -13,7 +13,7 @@ import { useUI } from '@/store/ui';
 import { useStudioItemsSync } from '@/ui/screens/studio/studioItems';
 import { BottomTabBar } from '@/ui/layout/app/BottomTabBar';
 import { AppSnackbar } from '@/ui/shared/Snackbar';
-import { mockTabBadges } from '@/ui/layout/app/BottomTabBar.mock';
+import { useUpdatesUnread } from '@/ui/screens/updates/app/useAppUpdates';
 import type { AppTab } from '@/ui/layout/app/BottomTabBar.types';
 import { useAiOffPrompt } from '@/ui/shared/useAiOffChoice';
 
@@ -30,6 +30,8 @@ export default function MainTabsLayout() {
   useStudioItemsSync();
   useGenRestore();
   const studioDot = useGenJobs((s) => s.dot);
+  /* 업데이트 탭 배지: 업데이트 화면 '읽지 않은 소식 N건'과 같은 수 (수정 76) */
+  const updatesUnread = useUpdatesUnread();
   /* 크레딧을 다 썼고 AI 연결 메모가 남아 있으면 '충전 · 업그레이드 · 모두 끄기' 한 번 묻기 (2026-11-24) */
   useAiOffPrompt();
   /* 로그인한 채 다른 사용자로 바뀌면(A → B) 커짐 → 탭을 다시 마운트해 열린 화면을 새 사용자 값으로 (store/auth sessionKey) */
@@ -48,7 +50,7 @@ export default function MainTabsLayout() {
           <BottomTabBar
             current={TAB_OF[state.routes[state.index]?.name ?? 'index'] ?? 'home'}
             hidden={hidden}
-            badges={mockTabBadges}
+            badges={{ updates: updatesUnread }}
             dots={{ studio: studioDot }}
             onPress={(tab) => {
               const route = state.routes.find((r) => r.name === ROUTE_OF[tab]);

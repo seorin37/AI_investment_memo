@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/AppText';
 import { AppIcon, type AppIconName } from '@/ui/icons/Icon';
 import { useMotionK } from '@/ui/motion/useMotion';
-import { CountBadge } from '@/ui/shared/CountBadge';
+import { TabBadge } from '@/ui/shared/app/TabBadge';
 import { appColor, curve, ft, size } from '@/ui/theme';
 import type { AppTab, BottomTabBarProps } from './BottomTabBar.types';
 
@@ -45,7 +45,7 @@ export function BottomTabBar({ current, onPress, badges, dots, hidden = false }:
             <Pressable key={t.key} style={st.tab} onPress={() => onPress(t.key)} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={dots?.[t.key] ? `${t.label} · 새로 완성된 항목` : t.label}>
               <View collapsable={false} style={[st.ic, on && st.icOn]}>
                 <AppIcon name={t.icon} color={ink} />
-                <CountBadge count={badges?.[t.key] ?? 0} style={st.badge} />
+                <TabBadge count={badges?.[t.key] ?? 0} style={st.badge} />
                 {dots?.[t.key] ? <View style={st.dot} /> : null}
               </View>
               <Text style={[st.label, { color: ink, fontWeight: on ? '700' : '400' }]} numberOfLines={1}>
