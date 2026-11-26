@@ -176,7 +176,7 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, pre, stockName, on
     setNewOpen(true);
   };
   /** 체크리스트 저장 (종목당 하나: 있으면 고치고 없으면 만들기). mock 모드는 화면 안에서만.
-   *  보드 순서는 체크리스트를 'cl' 칸으로 따로 두고, 순서에 없으면 맨 앞이라 순서는 건드리지 않음 */
+   *  보드 순서는 체크리스트 ID를 쓰고, 순서에 없는 새 체크리스트는 맨 앞에 표시한다. */
   const saveChecklist = (d: ChecklistDraft) => {
     setNewOpen(false);
     const had = checklist;
