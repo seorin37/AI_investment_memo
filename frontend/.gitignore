@@ -8,3 +8,4 @@ android/
 *.log
 .env
 .DS_Store
+src/app-preview/
