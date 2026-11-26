@@ -6,6 +6,7 @@ import { Logo } from '@/ui/icons/Icon';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { Avatar } from '@/ui/shared/Avatar';
 import { AppIconButton } from '@/ui/shared/IconButton';
+import { nf } from '@/ui/shared/app/nf';
 import { appColor, ft } from '@/ui/theme';
 import { TAB_BAR_H, useTabScrollY } from './TabFrame';
 import type { TopBarPreset, TopBarProps } from './TopBar.types';
@@ -32,7 +33,7 @@ const SUB_TOP = 50;
 /* 부제목이 올라가며 잘리는 위치 (제목 바로 아래) */
 const SUB_CLIP = 46;
 /* 탭 5개 공용 (높이 64 · 좌우 20 · 부제목은 제목 아래 6 · 첫 본문 간격 12 는 TabScroll) */
-const TAB: Spec = { h: TAB_BAR_H, padL: 20, padR: 20, bg: appColor.bg, btn: 40, btnGap: 2, avatarGap: 6, title: { ...ft(21), fontWeight: '800', color: appColor.ink } };
+const TAB: Spec = { h: TAB_BAR_H, padL: 20, padR: 20, bg: appColor.bg, btn: 40, btnGap: 2, avatarGap: 6, title: { ...nf(21), fontWeight: '800', color: appColor.ink } };
 /* 나머지는 원본 실측 (412 폭, 상태 바 36 아래) */
 const SPEC: Record<TopBarPreset, Spec> = {
   home: { ...TAB, logo: true },

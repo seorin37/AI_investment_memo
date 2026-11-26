@@ -12,6 +12,7 @@ import { PillSeg } from '@/ui/shared/PillSeg';
 import { Toggle } from '@/ui/shared/Toggle';
 import { FullSheet } from '@/ui/shared/app/FullSheet';
 import { usePaper } from '@/ui/shared/Dark';
+import { nf } from '@/ui/shared/app/nf';
 import { appColor, ft } from '@/ui/theme';
 import type { NewMemoProps } from '../MemoDetail.types';
 import { ChecklistTab, type ChecklistDraft } from './ChecklistTab';
@@ -118,7 +119,7 @@ const st = StyleSheet.create({
   hnLine: { position: 'absolute', left: 0, right: 0, top: 0 },
   hnT: { ...ft(12.5, 1.6), color: 'rgba(22,22,28,0.4)' },
   box: { backgroundColor: '#FFFFFF', borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 },
-  boxB: { ...ft(15), fontWeight: '700', color: appColor.ink },
+  boxB: { ...nf(15), fontWeight: '700', color: appColor.ink },
   boxS: { ...ft(12, 1.4), color: appColor.ink3, marginTop: 2 },
   dots: { flexDirection: 'row', gap: 8 },
   dot: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },

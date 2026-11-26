@@ -7,8 +7,10 @@ import type { ChartRange } from '@/types/models';
 import { Skeleton } from '@/ui/motion/Skeleton';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { NudgePill } from '@/ui/shared/NudgePill';
+import { StockTabs } from '@/ui/screens/board/app/StockTabs';
 import { PillSeg } from '@/ui/shared/PillSeg';
 import { Sheet } from '@/ui/shared/Sheet';
+import { nf } from '@/ui/shared/app/nf';
 import { appColor, curve, ft } from '@/ui/theme';
 import type { CompanyInfoProps } from '../CompanyInfo.types';
 import { FINANCIAL_HEALTH_NOTE, HEALTH_KEYS, TERM_TIP, TERMS, appQuoteRows, healthScore, healthVal, mdOf, mmddOf, won, yoyAt, type FinKey, type TermKey } from '../companyFormat';
@@ -98,21 +100,9 @@ export function AppCompanyInfo(p: CompanyInfoProps & {
   const asOf = mmddOf(p.quote_as_of);
 
   const tab = (
-    <PillSeg
-      options={[
-        { key: 'board', label: '메모 보드' },
-        { key: 'company', label: '기업정보' },
-      ]}
-      value="company"
-      onChange={(t) => t === 'board' && p.onChangeTab('board')}
-      bg="#E3E5EA"
-      pad={4}
-      radius={14}
-      pillRadius={11}
-      height={40}
-      fontSize={14.5}
-      style={st.seg2}
-    />
+    <View style={st.seg2}>
+      <StockTabs value="company" onChange={p.onChangeTab} />
+    </View>
   );
 
   return (
@@ -490,7 +480,7 @@ const st = StyleSheet.create({
   kvLT: { ...ft(13), color: appColor.ink2 },
   kvV: { ...ft(13.5), fontWeight: '700', color: appColor.ink, fontVariant: ['tabular-nums'] },
   q: { width: 18, height: 18, borderRadius: 9, backgroundColor: appColor.accentSoft, alignItems: 'center', justifyContent: 'center' },
-  qT: { ...ft(12, 1), fontWeight: '800', color: appColor.deepPurple },
+  qT: { ...nf(12), fontWeight: '800', color: appColor.deepPurple },
   ov: { ...ft(14, 1.7), color: appColor.ink, marginTop: 10 },
   finfo: { backgroundColor: '#EAF1FF', color: appColor.down, ...ft(12.5, 1.55), borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginHorizontal: 16, marginBottom: 12, overflow: 'hidden' },
   big: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },

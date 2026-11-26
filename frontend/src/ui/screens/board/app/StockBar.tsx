@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/AppText';
 import { NATIVE, useMotionK } from '@/ui/motion/useMotion';
 import { AppIconButton } from '@/ui/shared/IconButton';
+import { nf } from '@/ui/shared/app/nf';
 import { appColor, curve, ft } from '@/ui/theme';
 
 /**
@@ -51,7 +52,7 @@ const st = StyleSheet.create({
   bar: { flexDirection: 'row', alignItems: 'center', paddingLeft: 6, paddingRight: 8, backgroundColor: appColor.bg, zIndex: 2 },
   tt: { flex: 1, height: 40, marginLeft: 2, overflow: 'hidden' },
   ttIn: { position: 'absolute', left: 0, right: 0, top: 0, height: 40, justifyContent: 'center', alignItems: 'flex-start' },
-  ttB: { ...ft(20), fontWeight: '700', color: appColor.ink },
+  ttB: { ...nf(20), fontWeight: '700', color: appColor.ink },
   miniB: { ...ft(15, 1.2), fontWeight: '700', color: appColor.ink },
   miniS: { ...ft(12), fontWeight: '600', fontVariant: ['tabular-nums'] },
   line: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 1, backgroundColor: appColor.line },

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import { nf } from '@/ui/shared/app/nf';
 import { Text } from '@/components/ui/AppText';
 import { PressScale } from '@/ui/motion/PressScale';
 import { SlidingPill } from '@/ui/motion/SlidingPill';
@@ -99,30 +100,30 @@ export function AppAudioSheet({ open, stocks, periods, lastClose, onClose, onMak
 
 const st = StyleSheet.create({
   warn: { borderRadius: 14, backgroundColor: '#FFF6E5', borderWidth: 1, borderColor: '#F6E2B8', paddingVertical: 12, paddingHorizontal: 14, marginTop: 12 },
-  warnB: { fontSize: 14, lineHeight: 19, fontWeight: '800', color: '#5C3800' },
+  warnB: { ...nf(14), fontWeight: '800', color: '#5C3800' },
   warnS: { fontSize: 12.5, lineHeight: 19, color: '#7A4B00', marginTop: 3 },
-  warnL: { fontSize: 12.5, lineHeight: 18, fontWeight: '800', color: '#8A5A00', marginTop: 8 },
-  h: { fontSize: 19, lineHeight: 26, fontWeight: '700', color: C.ink, marginBottom: 4 },
-  d: { fontSize: 12.5, lineHeight: 18, color: C.ink3, marginBottom: 12 },
+  warnL: { ...nf(12.5), fontWeight: '800', color: '#8A5A00', marginTop: 8 },
+  h: { ...nf(19), fontWeight: '700', color: C.ink, marginBottom: 4 },
+  d: { ...nf(12.5), color: C.ink3, marginBottom: 12 },
   qc: { flexDirection: 'row', gap: 6, marginBottom: 6 },
   q: { height: 32, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1, borderColor: '#DADDE2', justifyContent: 'center' },
   qOn: { backgroundColor: C.ink, borderColor: C.ink },
-  qT: { fontSize: 12.5, lineHeight: 17, fontWeight: '600', color: C.ink },
+  qT: { ...nf(12.5), fontWeight: '600', color: C.ink },
   sr: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: '#F0F1F4' },
   cb: { width: 24, height: 24, borderRadius: 7, borderWidth: 2, borderColor: '#C9CDD4', alignItems: 'center', justifyContent: 'center' },
-  srT: { fontSize: 15, lineHeight: 21, fontWeight: '600', color: C.ink },
-  nn: { marginLeft: 'auto', fontSize: 12.5, lineHeight: 18, fontWeight: '500', color: C.ink2 },
+  srT: { ...nf(15), fontWeight: '600', color: C.ink },
+  nn: { marginLeft: 'auto', ...nf(12.5), fontWeight: '500', color: C.ink2 },
   op: { borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: '#EEE9FB' },
-  opT: { fontSize: 11, lineHeight: 15, fontWeight: '700', color: '#5B3BD1' },
-  note: { fontSize: 11.5, lineHeight: 16, color: C.ink3, marginTop: 8, marginBottom: 10 },
+  opT: { ...nf(11), fontWeight: '700', color: '#5B3BD1' },
+  note: { ...nf(11.5), color: C.ink3, marginTop: 8, marginBottom: 10 },
   swr: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: 4, paddingBottom: 12 },
-  swB: { fontSize: 15, lineHeight: 21, fontWeight: '700', color: C.ink },
-  swS: { fontSize: 12, lineHeight: 17, color: C.ink3 },
-  lbl: { fontSize: 13, lineHeight: 18, fontWeight: '700', color: C.ink2, marginTop: 2, marginBottom: 8 },
+  swB: { ...nf(15), fontWeight: '700', color: C.ink },
+  swS: { ...nf(12), color: C.ink3 },
+  lbl: { ...nf(13), fontWeight: '700', color: C.ink2, marginTop: 2, marginBottom: 8 },
   seg: { flexDirection: 'row', backgroundColor: '#F2F2F5', borderRadius: 13, padding: 4 },
   pill: { position: 'absolute', top: 4, bottom: 4, borderRadius: 10, backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
   segB: { flex: 1, height: 38, alignItems: 'center', justifyContent: 'center' },
-  segT: { fontSize: 14, lineHeight: 19, fontWeight: '600', color: C.ink3 },
+  segT: { ...nf(14), fontWeight: '600', color: C.ink3 },
   cta: { height: 54, borderRadius: 15, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center', marginTop: 20 },
-  ctaT: { fontSize: 16, lineHeight: 22, fontWeight: '800', color: '#FFFFFF' },
+  ctaT: { ...nf(16), fontWeight: '800', color: '#FFFFFF' },
 });

@@ -13,13 +13,14 @@ import { AppChips } from '@/ui/shared/Chips';
 import { FabFan } from '@/ui/shared/FabFan';
 import { AppMemoCard } from './MemoCard';
 import { AppMemoRow } from '@/ui/shared/MemoRow';
-import { PillSeg } from '@/ui/shared/PillSeg';
+import { StockTabs } from './StockTabs';
 import { AppSelectBar, AppSelectHeader, type AppSelAction } from '@/ui/shared/SelectBar';
 import { Sheet } from '@/ui/shared/Sheet';
 import { AppSnackbar } from '@/ui/shared/Snackbar';
 import { SpentBox } from '@/ui/shared/SpentBox';
 import { SwipeRow } from '@/ui/shared/SwipeRow';
 import { AppViewToggle, type BoardView } from '@/ui/shared/ViewToggle';
+import { nf } from '@/ui/shared/app/nf';
 import { appColor, ft } from '@/ui/theme';
 import { arrange } from '../boardCards';
 import { SortCards } from './SortCards';
@@ -192,7 +193,7 @@ export function AppMemoBoard(p: AppMemoBoardProps & { header: React.ReactNode; t
         {p.topCard}
         <View style={st.seg}>
           {/* 기업정보 탭과 같은 탭 버튼 */}
-          <PillSeg value="board" onChange={(k) => k === 'company' && p.onChangeTab('company')} options={[{ key: 'board', label: '메모 보드' }, { key: 'company', label: '기업정보' }]} bg="#E3E5EA" pad={4} radius={14} pillRadius={11} height={40} fontSize={14.5} />
+          <StockTabs value="board" onChange={p.onChangeTab} />
         </View>
         <Text style={st.mh}>내 메모 {memoCount}</Text>
         {p.aiSpent ? (
@@ -369,7 +370,7 @@ const st = StyleSheet.create({
   flex: { flex: 1 },
   content: { paddingBottom: 0 },
   seg: { marginTop: 16, marginHorizontal: 16 },
-  mh: { ...ft(19), fontWeight: '800', color: appColor.ink, marginTop: 20, marginHorizontal: 16, marginBottom: 10 },
+  mh: { ...nf(19), fontWeight: '800', color: appColor.ink, marginTop: 20, marginHorizontal: 16, marginBottom: 10 },
   spb: { marginTop: 2, marginHorizontal: 16, marginBottom: 12 },
   frow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingBottom: 14 },
   vt: { marginLeft: 'auto' },

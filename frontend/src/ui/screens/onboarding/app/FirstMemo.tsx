@@ -16,7 +16,7 @@ import { FirstStockSheet } from './FirstHome';
  * 앱 첫 메모 = 원본 app/start.html #nm (흰 전체 화면)
  * 머리 56 (좌우 16 · 간격 8): [취소] 15.5 · 가운데 종목 칩(.stkb 34 · 로고 24 · '종목 · 새 메모' 14.5 700 · ▾) · [완료] 15.5 800 #7356D6
  * 노란 종이(최소 250 · 라운드 22 · 접힘 28) + 예시 글 · '빈 메모 · 예시 글은 저장되지 않아요' · [예시로 채워 보기]
- * AI 연결 칸 ('켜고 완료하면 추적할 항목을 함께 확인해요') · 처음 쓰기 시작하면 0.6초 뒤 안내 말풍선(.tip)
+ * AI 연결 칸 ('켜 두면 하루 한 번 공시·뉴스를 대신 확인해 여기에 붙여 드려요.') · 처음 쓰기 시작하면 0.6초 뒤 안내 말풍선(.tip)
  */
 const C = { a2: '#7356D6', aa: '#6A42AB', ink: '#16171A', ink3: '#8A8F98' };
 const Y = { bg: '#FCEAAA', accent: '#EFBF2A' };
@@ -127,7 +127,7 @@ export function AppFirstMemo({ stocks, stock_code, onCancel, onEmpty, onSave }: 
             <View style={st.aisw}>
               <View style={st.flex}>
                 <Text style={st.aiswB}>AI 연결</Text>
-                <Text keepAll style={st.aiswS}>켜고 완료하면 추적할 항목을 함께 확인해요</Text>
+                <Text keepAll style={st.aiswS}>켜 두면 하루 한 번 공시·뉴스를 대신 확인해 여기에 붙여 드려요.</Text>
               </View>
               <Toggle variant="app" on={ai} onChange={(v) => { setAi(v); setTip('done'); }} label="AI 연결" />
             </View>

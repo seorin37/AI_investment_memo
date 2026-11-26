@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { TabFrame, TabScroll } from '@/ui/layout/app/TabFrame';
+import { nf } from '@/ui/shared/app/nf';
 import { Text } from '@/components/ui/AppText';
 import { PressScale } from '@/ui/motion/PressScale';
 import { Reveal } from '@/ui/motion/Reveal';
@@ -191,7 +192,7 @@ function RadioCard({ m, playing, onPress, onPlay, onRemove }: { m: MadeItem; pla
       <View style={st.mf}>
         <Text style={[st.mfT, { flex: 1 }]}>{m.foot}</Text>
         <Text style={st.mfT}>{m.left}</Text>
-        <Pressable onPress={onRemove} accessibilityRole="button" accessibilityLabel={`${m.title} 휴지통으로`} hitSlop={12} style={{ marginLeft: 10 }}><Trash /></Pressable>
+        <Pressable onPress={onRemove} accessibilityRole="button" accessibilityLabel={`${m.title} 휴지통으로`} hitSlop={12} style={{ marginLeft: 10, marginVertical: -1 }}><Trash /></Pressable>
       </View>
     </View>
   );
@@ -204,24 +205,24 @@ const PauseGlyph = ({ s = 16 }: { s?: number }) => <Svg width={s} height={s} vie
 const st = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
   subr: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingBottom: 10 },
-  subrT: { fontSize: 12.5, lineHeight: 18, color: C.ink3 },
+  subrT: { ...nf(12.5), color: C.ink3 },
   cred: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 28, paddingHorizontal: 10, borderRadius: 14, backgroundColor: '#F0ECFF' },
   credZero: { backgroundColor: '#FFF1D6', borderWidth: 1, borderColor: '#F1D9A8' },
-  credT: { fontSize: 12.5, lineHeight: 17, fontWeight: '800', color: '#5B3BD1', fontVariant: ['tabular-nums'] },
+  credT: { ...nf(12.5), fontWeight: '800', color: '#5B3BD1', fontVariant: ['tabular-nums'] },
   fc: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#FFFFFF', borderRadius: 20, marginHorizontal: 16, marginBottom: 10, padding: 16 },
-  fcH: { fontSize: 16, lineHeight: 22, fontWeight: '800', color: C.ink, marginBottom: 3 },
-  fcP: { fontSize: 13, lineHeight: 18, color: C.ink2 },
+  fcH: { ...nf(16), fontWeight: '800', color: C.ink, marginBottom: 3 },
+  fcP: { ...nf(13), color: C.ink2 },
   secr: { flexDirection: 'row', alignItems: 'baseline', gap: 8, paddingTop: 12, paddingHorizontal: 18, paddingBottom: 8 },
-  secrT: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: C.ink },
-  secrS: { fontSize: 12, lineHeight: 17, color: C.ink3 },
+  secrT: { ...nf(15), fontWeight: '800', color: C.ink },
+  secrS: { ...nf(12), fontWeight: '500', color: C.ink3 },
   made: { backgroundColor: '#FFFFFF', borderRadius: 20, marginHorizontal: 16, paddingVertical: 4, paddingHorizontal: 16 },
   mi: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
   mrow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   miMain: { flex: 1, minWidth: 0 },
   miLine: { borderTopWidth: 1, borderTopColor: '#F0F1F4' },
-  miB: { fontSize: 14.5, lineHeight: 20, fontWeight: '700', color: C.ink },
-  miS: { fontSize: 12, lineHeight: 17, color: C.ink3 },
-  miR: { fontSize: 12, lineHeight: 17, color: C.ink3 },
+  miB: { ...nf(14.5), fontWeight: '700', color: C.ink },
+  miS: { ...nf(12), color: C.ink3 },
+  miR: { ...nf(12), color: C.ink3 },
   del: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   failIc: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#FFE4E4', alignItems: 'center', justifyContent: 'center' },
   qp: { width: 32, height: 32, borderRadius: 16, marginRight: 14, backgroundColor: '#3D73F0', alignItems: 'center', justifyContent: 'center' },
@@ -229,24 +230,24 @@ const st = StyleSheet.create({
   empty: { fontSize: 13, lineHeight: 20, color: C.ink3, textAlign: 'center', paddingVertical: 20 },
   mfeat: { backgroundColor: '#FFFFFF', borderRadius: 20, marginHorizontal: 16, marginBottom: 10, padding: 16 },
   mh: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  mhT: { fontSize: 12.5, lineHeight: 17, fontWeight: '700', color: '#3D73F0' },
-  mfB: { fontSize: 17, lineHeight: 24, fontWeight: '700', color: C.ink, marginTop: 8 },
-  mfS: { fontSize: 13, lineHeight: 18, color: C.ink2, marginTop: 2 },
+  mhT: { ...nf(12.5), fontWeight: '700', color: '#3D73F0' },
+  mfB: { ...nf(17), fontWeight: '700', color: C.ink, marginTop: 8 },
+  mfS: { ...nf(13), color: C.ink2, marginTop: 2 },
   pl: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14 },
   pb: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#3D73F0', alignItems: 'center', justifyContent: 'center' },
   wv: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 3, height: 28 },
   wvI: { width: 3, borderRadius: 2 },
-  du: { fontSize: 13, lineHeight: 18, fontWeight: '700', color: C.ink2 },
+  du: { ...nf(13), fontWeight: '700', color: C.ink2 },
   spent: { marginHorizontal: 16, marginBottom: 10 },
   mf: { flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#F0F1F4', marginTop: 14, paddingTop: 10 },
-  mfT: { fontSize: 12, lineHeight: 17, color: C.ink3 },
-  sdisc: { fontSize: 12, lineHeight: 17, color: C.ink3, textAlign: 'center', marginTop: 14, marginHorizontal: 16, marginBottom: 24 },
-  shH: { fontSize: 19, lineHeight: 26, fontWeight: '700', color: C.ink, marginBottom: 4 },
-  shD: { fontSize: 12.5, lineHeight: 18, color: C.ink3, marginBottom: 2 },
+  mfT: { ...nf(12), color: C.ink3 },
+  sdisc: { ...nf(12), color: C.ink3, textAlign: 'center', marginTop: 14, marginHorizontal: 16, marginBottom: 24 },
+  shH: { ...nf(19), fontWeight: '700', color: C.ink, marginBottom: 4 },
+  shD: { ...nf(12.5), color: C.ink3, marginBottom: 2 },
   ubar: { height: 8, borderRadius: 4, backgroundColor: '#ECEDF1', overflow: 'hidden', marginTop: 10, marginBottom: 16 },
   ubarI: { height: '100%', borderRadius: 4 },
   ch: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 16, backgroundColor: '#F6F6F8' },
   ci: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  chB: { fontSize: 15.5, lineHeight: 21, fontWeight: '700', color: C.ink },
-  chS: { fontSize: 12.5, lineHeight: 18, color: C.ink3, marginTop: 1 },
+  chB: { ...nf(15.5), fontWeight: '700', color: C.ink },
+  chS: { ...nf(12.5), color: C.ink3, marginTop: 1 },
 });

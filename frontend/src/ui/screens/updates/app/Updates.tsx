@@ -16,6 +16,7 @@ import { ON_DOM } from '@/ui/shared/onDom';
 import { NudgePill } from '@/ui/shared/NudgePill';
 import { AppSnackbar } from '@/ui/shared/Snackbar';
 import { StockLogo } from '@/ui/shared/StockLogo';
+import { nf } from '@/ui/shared/app/nf';
 import { appColor, curve, ft } from '@/ui/theme';
 import type { AppUpdatesProps, KindFilter, UpdateItem, UpdateStock } from '../Updates.types';
 import { versionsOf } from '../Updates.mock';
@@ -324,7 +325,7 @@ function StockView({ p, s, kind, setKind, openId, onOpen }: { p: AppUpdatesProps
       <StockLogo logo={s.logo} bg={s.logo_bg} ink={s.logo_ink} size={40} variant="app" />
       <View style={st.flexMin}>
         <View style={st.nmRow}>
-          <Text style={[st.nm, { ...ft(19) }]} numberOfLines={1}>
+          <Text style={[st.nm, { ...nf(19) }]} numberOfLines={1}>
             {s.name}
           </Text>
           <OwnChip s={s} />
@@ -709,22 +710,22 @@ const st = StyleSheet.create({
   /* 펼친 내용 */
   nbWrap: { backgroundColor: '#FFFFFF', paddingTop: 2, paddingHorizontal: 16, paddingBottom: 16 },
   aiBox: { backgroundColor: '#F7F5FF', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 13 },
-  aiH: { ...ft(11.5), fontWeight: '800', color: appColor.deepPurple, marginBottom: 3 },
+  aiH: { ...ft(11.5, 1.7), fontWeight: '800', color: appColor.deepPurple, marginBottom: 3 },
   aiT: { fontSize: 13.5, lineHeight: 23, color: appColor.ink },
   citeChip: { fontSize: 11, fontWeight: '800', color: '#5B3BD1', backgroundColor: '#E3DBFF', borderRadius: 6, paddingHorizontal: 4 },
   qBox: { marginTop: 8, backgroundColor: '#F6F7F9', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12 },
-  qH: { ...ft(11), fontWeight: '700', color: appColor.ink3, marginBottom: 2 },
+  qH: { ...ft(11, 1.7), fontWeight: '700', color: appColor.ink3, marginBottom: 2 },
   qT: { fontSize: 12.5, lineHeight: 21, color: appColor.ink2 },
   qMark: { backgroundColor: 'rgba(255,211,0,0.5)' },
   nbLead: { fontSize: 13.5, lineHeight: 21.6, color: appColor.ink },
   artBox: { marginTop: 10, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: appColor.line, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12 },
   artS: { ...ft(11.5), color: '#8A8F98', marginBottom: 3 },
-  artT: { ...ft(14), fontWeight: '700', color: appColor.ink },
+  artT: { ...ft(14, 1.45), fontWeight: '700', color: appColor.ink },
   artNote: { ...ft(11.5), color: '#8A8F98', marginTop: 6 },
   mmBox: { marginTop: 8, backgroundColor: '#FFF8E6', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12 },
   mmTop: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 },
-  mmH: { ...ft(11), fontWeight: '700', color: '#A0802A' },
-  mmT: { ...ft(12.5), color: '#5B4A1A' },
+  mmH: { ...ft(11, 1.65), fontWeight: '700', color: '#A0802A' },
+  mmT: { ...ft(12.5, 1.65), color: '#5B4A1A' },
   evl: { alignSelf: 'flex-end', marginTop: 6 },
   evlT: { ...ft(12.5), fontWeight: '700', color: '#7A5A10' },
   nbBtns: { flexDirection: 'row', gap: 8, marginTop: 10 },

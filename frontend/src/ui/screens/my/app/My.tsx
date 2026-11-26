@@ -3,6 +3,7 @@ import { BackHandler, Pressable, ScrollView, StyleSheet, View } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, G, Path } from 'react-native-svg';
 import { MiniSpace } from '@/ui/screens/studio/app/MiniBar';
+import { nf } from '@/ui/shared/app/nf';
 import { Text } from '@/components/ui/AppText';
 import { Avatar } from '@/ui/shared/Avatar';
 import { SkySwitch } from '@/ui/shared/SkySwitch';
@@ -29,7 +30,7 @@ export function AppMy(p: AppMyProps) {
   return (
     <View style={[st.root, { paddingTop: insets.top }]}>
       <Head title="MY" onBack={p.onBack} />
-      <ScrollView style={st.sc} contentContainerStyle={st.w} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={st.w} showsVerticalScrollIndicator={false}>
         <Rv i={0}>
           <Pressable onPress={p.onProfile} style={({ pressed }) => [st.prof, pressed && { backgroundColor: '#F7F7F9' }]} accessibilityRole="button" accessibilityLabel={`${p.profile.name} 내 프로필`}>
             <Avatar name={p.profile.name} photoUrl={p.profile.photoUrl} size={50} variant="app" boxStyle={st.avb} textStyle={st.avbT} />
@@ -111,27 +112,25 @@ function MoonIcon() {
 const st = StyleSheet.create({
   root: { flex: 1, backgroundColor: MC.bg },
   flex: { flex: 1, minWidth: 0 },
-  /* 머리 58 중 4 만큼 올려 프로필 카드를 원본 위치로 */
-  sc: { marginTop: -4 },
   w: { paddingHorizontal: 16, paddingBottom: 28 },
   sec: { paddingTop: 16, paddingLeft: 4, paddingBottom: 7 },
   secT: { fontSize: 12.5, lineHeight: 15, color: MC.ink3 },
   prof: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, backgroundColor: '#FFFFFF', borderRadius: 18 },
   avb: { width: 50, height: 50, borderRadius: 25, backgroundColor: MC.aSoft, alignItems: 'center', justifyContent: 'center' },
-  avbT: { fontSize: 20, lineHeight: 26, fontWeight: '800', color: MC.a2 },
-  profB: { fontSize: 18, lineHeight: 26, fontWeight: '700', color: MC.ink },
-  profS: { fontSize: 12.5, lineHeight: 18, color: MC.ink3, flexShrink: 1 },
+  avbT: { ...nf(20), fontWeight: '800', color: MC.a2 },
+  profB: { ...nf(18), fontWeight: '700', color: MC.ink },
+  profS: { ...nf(12.5), color: MC.ink3, flexShrink: 1 },
   /* 높이 84 = 14 + 18 + 막대 26 + 14 + 12 */
   use: { marginTop: 10, paddingTop: 14, paddingHorizontal: 16, paddingBottom: 12, backgroundColor: '#FFFFFF', borderRadius: 18 },
   useT: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  useTT: { fontSize: 14, lineHeight: 18, fontWeight: '700', color: MC.ink },
+  useTT: { ...nf(14), fontWeight: '700', color: MC.ink },
   more: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center' },
-  moreT: { fontSize: 13, lineHeight: 18, fontWeight: '700', color: MC.a2 },
+  moreT: { ...nf(13), fontWeight: '700', color: MC.a2 },
   useM: { flexDirection: 'row', justifyContent: 'space-between' },
   useMT: { fontSize: 12, lineHeight: 14, color: MC.ink2 },
   dk: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 52, paddingHorizontal: 16 },
   dki: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center' },
-  dkT: { fontSize: 15, lineHeight: 22, color: MC.ink },
+  dkT: { ...nf(15), color: MC.ink },
   dkSw: { marginLeft: 'auto' },
-  ver: { textAlign: 'center', fontSize: 12, lineHeight: 17, color: MC.ink3, marginTop: 18 },
+  ver: { textAlign: 'center', ...nf(12), color: MC.ink3, marginTop: 18 },
 });
