@@ -179,12 +179,17 @@ def test_postgres_board_order_new_front_after_pinned_and_reorder(isolated_db):
 
     saved = client.put(f"/api/v1/stocks/{SYMBOLS[0]}/board-order", json={"ids": [a, p]})
     assert saved.status_code == 200
-    assert [item["title"] for item in saved.json()] == ["A", "P", "체크", "D", "C", "B"]   # 빠진 카드는 지금 순서대로 뒤에
+    assert [item["title"] for item in saved.json()] == ["P", "A", "체크", "D", "C", "B"]
     assert client.patch(f"/api/v1/board-items/{a}", json={"position": 99}).json()["position"] == 5
     assert titles() == ["P", "체크", "D", "C", "B", "A"]
 
     client.patch(f"/api/v1/board-items/{b}", json={"pinned": True})
     assert titles() == ["B", "P", "체크", "D", "C", "A"]        # 테이프 붙이면 맨 앞
+    saved = client.put(f"/api/v1/stocks/{SYMBOLS[0]}/board-order", json={"ids": [c, p, b]})
+    assert [item["title"] for item in saved.json()] == ["B", "P", "C", "체크", "D", "A"]
+    assert client.patch(f"/api/v1/board-items/{b}", json={"position": 99}).json()["position"] == 0
+    assert client.patch(f"/api/v1/board-items/{c}", json={"position": 0}).json()["position"] == 2
+    client.patch(f"/api/v1/board-items/{c}", json={"position": 4})
     client.patch(f"/api/v1/board-items/{b}", json={"pinned": False})
     assert titles() == ["P", "B", "체크", "D", "C", "A"]        # 떼면 고정 카드들 바로 뒤
 

@@ -10,6 +10,7 @@ import { mockCompanyByCode } from '@/ui/screens/company/CompanyInfo.mock';
 import { WebCompanyInfo } from '@/ui/screens/company/web/CompanyInfo';
 import { useCompanyInfo } from '@/ui/screens/company/useCompanyInfo';
 import { mockBoardChecklist, mockBoardMemos, mockBoardOrder, mockBoardStock, mockEmptyStock } from '@/ui/screens/board/MemoBoard.mock';
+import { setPinned } from '@/ui/screens/board/boardCards';
 import { useBoardData } from '@/ui/screens/board/useBoardData';
 import { useBoardStock } from '@/ui/screens/board/useBoardStock';
 import { WebMemoBoard } from '@/ui/screens/board/web/MemoBoard';
@@ -207,6 +208,12 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, pre, stockName, on
     removed.current = [...removed.current, ...memos.filter((m) => ids.includes(m.id))];
     setMemos((all) => all.filter((m) => !ids.includes(m.id)));
   };
+  const pinCards = (ids: string[], pinned: boolean) => {
+    bd.ops.pin(ids, pinned);
+    setOrder((current) => setPinned({ memos, checklists: checklist ? [checklist] : [], order: current }, ids, pinned).order);
+    setMemos((all) => all.map((memo) => (ids.includes(memo.id) ? { ...memo, pinned } : memo)));
+    setChecklist((card) => (card && ids.includes(card.id) ? { ...card, pinned } : card));
+  };
   return (
     <>
     <WebMemoBoard
@@ -238,13 +245,9 @@ function BoardTab({ code, memoParam, ev, firstFlow, newParam, pre, stockName, on
         if (checklist && it) bd.ops.checkItem(checklist.id, iid, !it.done);
         setChecklist((c) => (c ? { ...c, items: c.items.map((i) => (i.id === iid ? { ...i, done: !i.done } : i)) } : c));
       }}
-      onPin={(ids, pinned) => {
-        bd.ops.pin(ids, pinned);
-        setMemos((all) => all.map((m) => (ids.includes(m.id) ? { ...m, pinned } : m)));
-      }}
+      onPin={pinCards}
       onTogglePin={(pinned) => {
-        if (checklist) bd.ops.pin([checklist.id], pinned);
-        setChecklist((c) => (c ? { ...c, pinned } : c));
+        if (checklist) pinCards([checklist.id], pinned);
       }}
       onToggleAi={(id) => {
         const m = memos.find((x) => x.id === id);

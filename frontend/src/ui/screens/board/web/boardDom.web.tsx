@@ -6,6 +6,7 @@
  * RN-web 의 View ref 는 DOM 요소라서 여기서 HTMLElement 로 다룸. 카드 칸에는 dataSet={{ bkey }} (→ data-bkey) 를 붙임.
  */
 import { useEffect, useRef, useState } from 'react';
+import { moveCard } from '../boardCards';
 
 const HOLD = 350;
 const SLOP = 6;
@@ -37,17 +38,18 @@ export interface DragView {
 /**
  * @param box 격자 View 의 ref (웹에서는 DOM 요소)
  * @param order 지금 순서
+ * @param pinCount 앞쪽 고정 카드 수
  * @param enabled 끌 수 있는지 (전체 보기 · 고르기 아님 · 격자)
  * @param scale 고정 틀 배율 (화면 px → 틀 px)
  * @param onDrop 바뀐 순서
  */
-export function useBoardDragWeb(box: { current: unknown }, ready: boolean, order: string[], enabled: boolean, scale: number, onDrop: (o: string[]) => void) {
+export function useBoardDragWeb(box: { current: unknown }, ready: boolean, order: string[], pinCount: number, enabled: boolean, scale: number, onDrop: (o: string[]) => void) {
   const [drag, setDrag] = useState<DragView | null>(null);
   const st = useRef<St | null>(null);
   const dropped = useRef(0);
-  const live = useRef({ order, scale, onDrop, enabled });
+  const live = useRef({ order, pinCount, scale, onDrop, enabled });
   useEffect(() => {
-    live.current = { order, scale, onDrop, enabled };
+    live.current = { order, pinCount, scale, onDrop, enabled };
   });
 
   useEffect(() => {
@@ -65,7 +67,7 @@ export function useBoardDragWeb(box: { current: unknown }, ready: boolean, order
       const col = Math.max(0, Math.min(COLS - 1, Math.floor((cx + GAP_X / 2) / (CELL_W + GAP_X))));
       const row = Math.max(0, Math.floor((cy + GAP_Y / 2) / (200 + GAP_Y)));
       const n = live.current.order.filter((k) => k !== s.key).length;
-      const to = Math.max(0, Math.min(n, row * COLS + col));
+      const to = Math.max(live.current.pinCount, Math.min(n, row * COLS + col));
       setDrag({ key: s.key, to, left, top, h: 200 });
     };
     const auto = () => {
@@ -114,9 +116,9 @@ export function useBoardDragWeb(box: { current: unknown }, ready: boolean, order
       dropped.current = Date.now();
       setDrag((d) => {
         if (commit && d) {
-          const o = live.current.order.filter((k) => k !== d.key);
-          o.splice(Math.min(d.to, o.length), 0, d.key);
-          if (JSON.stringify(o) !== JSON.stringify(live.current.order)) live.current.onDrop(o);
+          const { order, pinCount, onDrop } = live.current;
+          const next = moveCard(order, pinCount, d.key, d.to);
+          if (next) onDrop(next);
         }
         return null;
       });
@@ -154,8 +156,9 @@ export function useBoardDragWeb(box: { current: unknown }, ready: boolean, order
       const t = e.target as HTMLElement;
       if (t.closest('[data-nodrag]')) return;
       const slot = t.closest<HTMLElement>('[data-bkey]');
-      if (!slot || !el.contains(slot)) return;
-      st.current = { key: slot.dataset.bkey!, pid: e.pointerId, touch: e.pointerType !== 'mouse', sx: e.clientX, sy: e.clientY, px: e.clientX, py: e.clientY, gx: 0, gy: 0, active: false, timer: 0, raf: 0, scroller: null };
+      const key = slot?.dataset.bkey;
+      if (!slot || !key || !el.contains(slot) || live.current.order.indexOf(key) < live.current.pinCount) return;
+      st.current = { key, pid: e.pointerId, touch: e.pointerType !== 'mouse', sx: e.clientX, sy: e.clientY, px: e.clientX, py: e.clientY, gx: 0, gy: 0, active: false, timer: 0, raf: 0, scroller: null };
       st.current.timer = window.setTimeout(activate, HOLD);
       window.addEventListener('pointermove', move, { passive: false });
       window.addEventListener('pointerup', up);
