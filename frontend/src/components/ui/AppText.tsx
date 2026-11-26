@@ -43,9 +43,12 @@ function keepAllChildren(children: ReactNode): ReactNode {
 
 type AppTextProps = ComponentProps<typeof RNText> & { keepAll?: boolean };
 
+/* 웹: 한글을 어절 단위로 줄바꿈 (keep-all) · 긴 영문·URL 은 칸 안에서 끊음 (anywhere) — 2026-11-26 수정 77 */
+const WEB_WRAP = { wordBreak: 'keep-all', overflowWrap: 'anywhere' } as TextStyle;
+
 export function Text({ keepAll, children, ...props }: AppTextProps) {
-  if (keepAll && Platform.OS === 'web') {
-    return <RNText {...props} style={[pretendard(props.style), { wordBreak: 'keep-all' } as TextStyle]}>{children}</RNText>;
+  if (Platform.OS === 'web') {
+    return <RNText {...props} style={[pretendard(props.style), WEB_WRAP]}>{children}</RNText>;
   }
   return (
     <RNText {...props} style={pretendard(props.style)}>
