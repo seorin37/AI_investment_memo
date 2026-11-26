@@ -8,7 +8,7 @@ import type { MyMenuKey } from '@/ui/screens/my/My.types';
 import { AppMy } from '@/ui/screens/my/app/My';
 import { useTheme } from '@/store/theme';
 import { BottomTabBar } from '@/ui/layout/app/BottomTabBar';
-import { mockTabBadges } from '@/ui/layout/app/BottomTabBar.mock';
+import { useUpdatesUnread } from '@/ui/screens/updates/app/useAppUpdates';
 import type { AppTab } from '@/ui/layout/app/BottomTabBar.types';
 
 const TAB_HREF: Record<AppTab, Href> = { home: '/', updates: '/updates', stocks: '/stocks', journal: '/journal', studio: '/studio' };
@@ -19,6 +19,8 @@ const ROUTE: Record<MyMenuKey, Href> = { noti: '/my-noti', usage: '/my-usage', d
 /** 앱 MY = UI v2 (원본 app/my.html). 웹은 사이드바 프로필·설정 창을 쓰므로 홈으로 돌려보낸다. */
 export default function MyScreen() {
   const router = useRouter();
+  /* 아래 탭 '업데이트' 배지 = 읽지 않은 소식 수 (수정 76) */
+  const updatesUnread = useUpdatesUnread();
   const { profile } = useMyProfile();
   /* AI 사용량: 실제 모드면 GET /me/usage, mock 모드면 My.mock */
   const usage = useUsageView();
@@ -41,7 +43,7 @@ export default function MyScreen() {
         onToggleDark={toggleDark}
       />
       {/* 선택된 탭 없음. 누르면 MY 를 닫고 아래 깔린 탭 화면으로 */}
-      <BottomTabBar current={null} badges={mockTabBadges} onPress={(tab) => router.dismissTo(TAB_HREF[tab])} />
+      <BottomTabBar current={null} badges={{ updates: updatesUnread }} onPress={(tab) => router.dismissTo(TAB_HREF[tab])} />
     </View>
   );
 }

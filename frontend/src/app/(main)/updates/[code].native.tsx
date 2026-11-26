@@ -5,7 +5,7 @@ import { useMockNotice } from '@/components/layout/MobileScreen';
 import { TopBar } from '@/ui/layout/app/TopBar';
 import { useMyProfile } from '@/ui/screens/my/useMyProfile';
 import { AppUpdates } from '@/ui/screens/updates/app/Updates';
-import { useUpdatesData } from '@/ui/screens/updates/useUpdatesData';
+import { useAppUpdatesData } from '@/ui/screens/updates/app/useAppUpdates';
 
 /** 앱 종목별 업데이트 (홈 업데이트 위젯에서 들어옴) = 업데이트 탭과 같은 화면, 그 종목 칩이 골라진 채로. 뒤로 = 홈 */
 export default function StockUpdatesScreen() {
@@ -13,7 +13,7 @@ export default function StockUpdatesScreen() {
   const router = useRouter();
   const { profile: { name: myName } } = useMyProfile();
   const notice = useMockNotice();
-  const { stocks, items, now, onMarkRead } = useUpdatesData();
+  const { stocks, items, now, onMarkRead } = useAppUpdatesData();
   return (
     <AppUpdates
       stocks={stocks}
