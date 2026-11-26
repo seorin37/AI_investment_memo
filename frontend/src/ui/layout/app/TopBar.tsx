@@ -8,7 +8,7 @@ import { Avatar } from '@/ui/shared/Avatar';
 import { AppIconButton } from '@/ui/shared/IconButton';
 import { nf } from '@/ui/shared/app/nf';
 import { appColor, ft } from '@/ui/theme';
-import { TAB_BAR_H, useTabScrollY } from './TabFrame';
+import { TAB_BAR_H, useTabScrolled, useTabScrollY } from './TabFrame';
 import type { TopBarPreset, TopBarProps } from './TopBar.types';
 
 type Spec = {
@@ -57,6 +57,8 @@ export function TopBar({ preset, title, subtitle, onBack, actions = [], avatar, 
   const s = SPEC[preset];
   const insets = useSafeAreaInsets();
   const y = useTabScrollY();
+  /* 탭 화면: 스크롤을 시작하면 아래 선 */
+  const scrolled = useTabScrolled();
   const rise = s.h - SUB_CLIP;
   return (
     <View style={{ paddingTop: insets.top, backgroundColor: s.bg }}>
@@ -93,7 +95,7 @@ export function TopBar({ preset, title, subtitle, onBack, actions = [], avatar, 
           </Animated.View>
         </View>
       ) : null}
-      <BarLine on={showLine} />
+      <BarLine on={showLine || scrolled} />
     </View>
   );
 }
