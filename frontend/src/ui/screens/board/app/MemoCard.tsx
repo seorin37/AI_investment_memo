@@ -93,10 +93,10 @@ const st = StyleSheet.create({
   dt: { ...ft(11.5), fontWeight: '500', color: '#4A4A55', flexShrink: 1 },
   plug: { marginLeft: 'auto', width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(255,255,255,0.8)', alignItems: 'center', justifyContent: 'center' },
   plugSpent: { backgroundColor: '#E9EAEE' },
-  tt: { ...ft(15, 1.36), fontWeight: '800', color: appColor.ink, marginVertical: 6 },
-  bd: { ...ft(12.5, 1.5), color: '#2E2E38' },
+  tt: { ...ft(15.5, 1.36), fontWeight: '800', color: appColor.ink, marginVertical: 6 },
+  bd: { ...ft(13.5, 1.5), color: '#2E2E38' },
   nbAt: { position: 'absolute', top: -7, right: -7 },
   gchk: { position: 'absolute', top: -10, left: -8 },
   badge: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#FFFFFF', backgroundColor: appColor.red, alignItems: 'center', justifyContent: 'center' },
-  badgeT: { ...ft(12, 1), fontWeight: '700', color: '#FFFFFF' },
+  badgeT: { ...ft(13, 1), fontWeight: '700', color: '#FFFFFF' },
 });

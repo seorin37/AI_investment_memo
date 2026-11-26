@@ -103,10 +103,10 @@ export function SwipeRow({ enabled, open, onOpenChange, onPin, pinLabel, onAi, a
 const st = StyleSheet.create({
   wrap: { overflow: 'hidden' },
   actl: { ...StyleSheet.absoluteFill, bottom: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 24, backgroundColor: '#F29A1F' },
-  actlT: { ...ft(13), fontWeight: '700', color: '#FFFFFF' },
+  actlT: { ...ft(14), fontWeight: '700', color: '#FFFFFF' },
   acts: { position: 'absolute', top: 0, right: 0, bottom: 1, flexDirection: 'row' },
   act: { width: 72, alignItems: 'center', justifyContent: 'center', gap: 4 },
-  actT: { ...ft(12), fontWeight: '700', color: '#FFFFFF' },
+  actT: { ...ft(13), fontWeight: '700', color: '#FFFFFF' },
   /* 투자 기록 (원본 .jr .al: 주황 #F2A33A · 세로 · 왼쪽 22 · 사이 3 / .ar: 88 · 사이 3) */
   actlJ: { flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 3, paddingLeft: 22, bottom: 0, backgroundColor: appColor.org },
   actJ: { width: 88, gap: 3 },

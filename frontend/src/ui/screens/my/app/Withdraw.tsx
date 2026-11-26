@@ -72,7 +72,7 @@ export function AppWithdraw(p: WithdrawProps) {
           <Rect x="0" y="0" width="100%" height="100%" fill="url(#wdBot)" />
         </Svg>
         <Pressable disabled={!ok} onPress={() => setAsk(true)} style={({ pressed }) => [st.cta, !ok && st.ctaDis, ok && { backgroundColor: MC.red }, pressed && { opacity: 0.9 }]} accessibilityRole="button">
-          <Text style={[st.ctaT, !ok && { color: MC.ink3 }]}>탈퇴하기</Text>
+          <Text style={[st.ctaT, !ok && { color: '#6B7079' }]}>탈퇴하기</Text>
         </Pressable>
       </BottomBar>
       <ConfirmSheet
@@ -92,16 +92,16 @@ const st = StyleSheet.create({
   root: { flex: 1, backgroundColor: MC.bg },
   w: { paddingHorizontal: 16 },
   danger: { backgroundColor: '#FFEEEE', borderWidth: 1, borderColor: '#F7C7C7', borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16 },
-  dangerB: { fontSize: 15, lineHeight: 22, fontWeight: '700', color: '#9A1C1C', marginBottom: 2 },
-  dangerT: { fontSize: 12.5, lineHeight: 20, color: '#9A1C1C' },
+  dangerB: { fontSize: 15.5, lineHeight: 22.7, fontWeight: '700', color: '#9A1C1C', marginBottom: 2 },
+  dangerT: { fontSize: 13.5, lineHeight: 21.6, color: '#9A1C1C' },
   tg2: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: { borderWidth: 1, borderColor: '#DADDE2', backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 8, paddingHorizontal: 13, minHeight: 36, justifyContent: 'center' },
   chipOn: { backgroundColor: MC.aSoft, borderColor: '#C9BCF4' },
-  chipT: { fontSize: 13, lineHeight: 19, fontWeight: '600', color: MC.ink },
+  chipT: { fontSize: 14, lineHeight: 20.5, fontWeight: '600', color: MC.ink },
   agr: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 16, marginHorizontal: 4, minHeight: 44 },
   cb: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.6, borderColor: '#C9CCD2', backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
   cbOn: { backgroundColor: MC.ink, borderColor: MC.ink },
-  agrT: { flex: 1, fontSize: 14, lineHeight: 20, color: MC.ink },
+  agrT: { flex: 1, fontSize: 15, lineHeight: 21.4, color: MC.ink },
   bot: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: 30, paddingHorizontal: 16 },
   cta: { borderRadius: 16, paddingVertical: 16, minHeight: 56, alignItems: 'center', justifyContent: 'center', backgroundColor: MC.ink },
   ctaDis: { backgroundColor: '#E3E5E9' },

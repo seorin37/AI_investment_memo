@@ -311,7 +311,7 @@ export function AppHome(p: AppHomeProps) {
                   <Text style={st.wrS}>{WIDGET_META[id].sub}</Text>
                 </View>
                 <Pressable disabled={have} onPress={() => add(id)} accessibilityRole="button" style={({ pressed }) => [st.ad, have && st.adOff, pressed && { transform: [{ scale: 0.92 }] }]}>
-                  <Text style={[st.adT, have && { color: appColor.ink3 }]}>{have ? '추가됨' : '추가'}</Text>
+                  <Text style={[st.adT, have && { color: '#6B7079' }]}>{have ? '추가됨' : '추가'}</Text>
                 </Pressable>
               </View>
             );
@@ -489,14 +489,14 @@ const st = StyleSheet.create({
   eh: { position: 'absolute', left: 0, right: 0, height: TAB_BAR_H, zIndex: 7, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, backgroundColor: appColor.bg },
   ehT: { flex: 1, ...ft(20), fontWeight: '700', color: appColor.ink },
   addp: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 34, paddingLeft: 11, paddingRight: 13, borderRadius: 17, backgroundColor: appColor.accentSoft2, marginRight: 6 },
-  addpT: { ...ft(14), fontWeight: '800', color: appColor.deepPurple },
+  addpT: { ...ft(15), fontWeight: '800', color: appColor.deepPurple },
   done: { padding: 8 },
   doneT: { ...ft(16), fontWeight: '800', color: appColor.deepPurple },
-  einfo: { ...ft(13, 1.7), color: appColor.ink2 },
+  einfo: { ...ft(14, 1.7), color: appColor.ink2 },
   ereset: { fontWeight: '700', color: appColor.deepPurple },
   wbar: { overflow: 'hidden', flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 14, paddingRight: 10, borderBottomColor: '#EEF0F3' },
   hdl: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, height: 40 },
-  hdlT: { ...ft(12.5), color: appColor.ink3 },
+  hdlT: { ...ft(13.5), color: '#6B7079' },
   rmb: { marginLeft: 'auto', width: 26, height: 26, borderRadius: 13, backgroundColor: appColor.redSoft, alignItems: 'center', justifyContent: 'center' },
   rmbT: { fontSize: 18, lineHeight: 20, fontWeight: '700', color: appColor.red },
   ring: { position: 'absolute', top: -1.5, left: -1.5, right: -1.5, bottom: -1.5, borderRadius: 23.5, borderWidth: 1.5, borderColor: appColor.accent },
@@ -506,19 +506,19 @@ const st = StyleSheet.create({
   addwPl: { width: 44, height: 44, borderRadius: 22, backgroundColor: appColor.accentSoft, alignItems: 'center', justifyContent: 'center' },
   addwPlT: { fontSize: 24, lineHeight: 28, color: appColor.deepPurple },
   addwB: { ...ft(16), fontWeight: '700', color: appColor.ink },
-  addwT: { ...ft(13), color: appColor.ink2 },
+  addwT: { ...ft(14), color: appColor.ink2 },
   hr: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingBottom: 10 },
   pill: { minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, borderRadius: 16, backgroundColor: appColor.surface },
   pillEdit: { marginLeft: 'auto' },
-  pillT: { ...ft(13), fontWeight: '600', color: appColor.ink },
-  pillB: { ...ft(13), fontWeight: '800', color: appColor.ink, fontVariant: ['tabular-nums'] },
+  pillT: { ...ft(14), fontWeight: '600', color: appColor.ink },
+  pillB: { ...ft(14), fontWeight: '800', color: appColor.ink, fontVariant: ['tabular-nums'] },
   nudge: { position: 'absolute', left: 16, right: 16, alignItems: 'center' },
   snack: { position: 'absolute', left: 14, right: 14 },
   wr: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 22, minHeight: 68 },
   wrBx: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  wrB: { ...ft(15.5), fontWeight: '700', color: appColor.ink },
-  wrS: { ...ft(12.5), color: appColor.ink3 },
+  wrB: { ...ft(16), fontWeight: '700', color: appColor.ink },
+  wrS: { ...ft(13.5), color: '#6B7079' },
   ad: { marginLeft: 'auto', minHeight: 36, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12, backgroundColor: appColor.accent, alignItems: 'center', justifyContent: 'center' },
   adOff: { backgroundColor: '#EEF0F3' },
-  adT: { ...ft(14), fontWeight: '700', color: '#FFFFFF' },
+  adT: { ...ft(15), fontWeight: '700', color: '#FFFFFF' },
 });

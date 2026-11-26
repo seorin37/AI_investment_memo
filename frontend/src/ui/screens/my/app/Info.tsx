@@ -46,12 +46,12 @@ export function AppInfo({ version, sources, onBack, onDoc, onFeedback }: InfoPro
 }
 
 const st = StyleSheet.create({
-  v: { fontSize: 13, lineHeight: 19, color: MC.ink3 },
+  v: { fontSize: 14, lineHeight: 20.5, color: '#6B7079' },
   src: { paddingVertical: 6, paddingHorizontal: 16 },
   r: { flexDirection: 'row', gap: 10, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: '#F1F2F4' },
-  rK: { width: 34, fontSize: 13, lineHeight: 16, color: MC.ink3 },
-  rV: { flex: 1, fontSize: 14, lineHeight: 16, color: MC.ink },
+  rK: { width: 34, fontSize: 14, lineHeight: 16, color: '#6B7079' },
+  rV: { flex: 1, fontSize: 15, lineHeight: 18, color: MC.ink },
   disc: { backgroundColor: '#ECEDF1', borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16, marginTop: 10 },
-  discT: { fontSize: 12.5, lineHeight: 20.6, color: MC.ink2 },
-  sig: { textAlign: 'center', fontSize: 11.5, lineHeight: 16, color: MC.ink3, marginTop: 12 },
+  discT: { fontSize: 13.5, lineHeight: 22.2, color: MC.ink2 },
+  sig: { textAlign: 'center', fontSize: 11.5, lineHeight: 16, color: '#6B7079', marginTop: 12 },
 });

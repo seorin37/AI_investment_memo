@@ -43,6 +43,6 @@ const st = StyleSheet.create({
   box: { flexDirection: 'row', backgroundColor: '#E3E5EA', borderRadius: 14, padding: PAD },
   pill: { position: 'absolute', top: PAD, bottom: PAD, left: PAD, borderRadius: 11, backgroundColor: '#FFFFFF', shadowColor: '#000000', shadowOpacity: 0.08, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
   btn: { flex: 1, height: 40, alignItems: 'center', justifyContent: 'center' },
-  t: { ...nf(14.5), color: appColor.ink2 },
+  t: { ...nf(15.5), color: appColor.ink2 },
   tOn: { color: appColor.ink, fontWeight: '600' },
 });

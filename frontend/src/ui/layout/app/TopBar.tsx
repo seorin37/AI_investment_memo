@@ -118,6 +118,6 @@ const st = StyleSheet.create({
   shrink: { flexShrink: 1 },
   /* 원본 내 종목 .sub · 스튜디오 .subr: 12.5 · ink3 */
   subClip: { position: 'absolute', overflow: 'hidden' },
-  sub: { marginTop: SUB_TOP - SUB_CLIP, fontSize: 12.5, lineHeight: 14, color: appColor.ink3 },
+  sub: { marginTop: SUB_TOP - SUB_CLIP, fontSize: 13, lineHeight: 14, color: '#6B7079' },
   line: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 1, backgroundColor: appColor.line },
 });

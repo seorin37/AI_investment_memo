@@ -22,7 +22,7 @@ export function AppPlans(p: PlansProps) {
       bottom={
         <>
           <Pressable disabled={free} onPress={() => p.onStart(pick)} style={({ pressed }) => [st.cta, free && st.ctaDis, pressed && { opacity: 0.9 }]} accessibilityRole="button">
-            <Text style={[st.ctaT, free && { color: MC.ink3 }]}>{free ? '지금 쓰는 플랜이에요' : startLabel(p.plans.find((x) => x.key === pick), pick)}</Text>
+            <Text style={[st.ctaT, free && { color: '#6B7079' }]}>{free ? '지금 쓰는 플랜이에요' : startLabel(p.plans.find((x) => x.key === pick), pick)}</Text>
           </Pressable>
           <Text style={st.cap}>결제는 스토어 결제 창에서 진행돼요</Text>
         </>
@@ -79,25 +79,25 @@ const st = StyleSheet.create({
   pcH: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   nm: { fontSize: 18, lineHeight: 25, fontWeight: '800', letterSpacing: 0.36, color: MC.ink },
   bd2: { borderRadius: 6, paddingVertical: 2, paddingHorizontal: 7 },
-  bd2T: { fontSize: 11, lineHeight: 15, fontWeight: '800' },
+  bd2T: { fontSize: 11.5, lineHeight: 15.7, fontWeight: '800' },
   rd: { marginLeft: 'auto', width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#C9CCD2' },
   rdOn: { borderWidth: 7, borderColor: MC.ink },
   pr: { fontSize: 22, lineHeight: 30, fontWeight: '800', color: MC.ink, marginTop: 10, marginBottom: 2 },
-  prS: { fontSize: 13, fontWeight: '500', color: MC.ink3 },
+  prS: { fontSize: 14, fontWeight: '500', color: '#6B7079' },
   sale: { alignSelf: 'flex-start', marginTop: 10, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: '#FDECEC' },
-  saleT: { fontSize: 12, lineHeight: 17, fontWeight: '800', color: '#D33A3A' },
-  strike: { fontSize: 14, fontWeight: '500', color: MC.ink3, textDecorationLine: 'line-through' },
+  saleT: { fontSize: 13, lineHeight: 18.4, fontWeight: '800', color: '#D33A3A' },
+  strike: { fontSize: 15, fontWeight: '500', color: '#6B7079', textDecorationLine: 'line-through' },
   ul: { marginTop: 10, gap: 7 },
   li: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
-  liT: { flex: 1, fontSize: 13.5, lineHeight: 19.6, color: '#33343A' },
+  liT: { flex: 1, fontSize: 14.5, lineHeight: 21.1, color: '#33343A' },
   cmp: { paddingVertical: 4, paddingHorizontal: 14 },
   cr: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F2F4' },
   c0: { flex: 1.3 },
   c: { flex: 1, alignItems: 'center', textAlign: 'center' },
-  crT: { fontSize: 12.5, lineHeight: 18, color: MC.ink },
+  crT: { fontSize: 13.5, lineHeight: 19.4, color: MC.ink },
   hd: { fontWeight: '800' },
   cta: { borderRadius: 16, paddingVertical: 16, minHeight: 56, alignItems: 'center', justifyContent: 'center', backgroundColor: MC.ink },
   ctaDis: { backgroundColor: '#E3E5E9' },
   ctaT: { fontSize: 16, lineHeight: 23, fontWeight: '800', color: '#FFFFFF' },
-  cap: { textAlign: 'center', fontSize: 11, lineHeight: 15.4, color: MC.ink3, marginTop: 6 },
+  cap: { textAlign: 'center', fontSize: 11.5, lineHeight: 16.1, color: '#6B7079', marginTop: 6 },
 });

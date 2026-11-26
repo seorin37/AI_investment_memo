@@ -171,12 +171,12 @@ export function AppMarketDetail({ index: q, header, onNudge }: MarketDetailProps
 const st = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#FFFFFF' },
   mdv: { paddingVertical: 6, paddingHorizontal: 20 },
-  sub: { ...ft(14), color: appColor.ink2 },
+  sub: { ...ft(15), color: appColor.ink2 },
   big: { fontSize: 34, lineHeight: 40, fontWeight: '800', letterSpacing: -0.5, color: appColor.ink, marginVertical: 2 },
-  chg: { ...ft(14), fontWeight: '600' },
-  when: { ...ft(12.5), color: appColor.ink3, marginTop: 2, minHeight: 18 },
+  chg: { ...ft(15), fontWeight: '600' },
+  when: { ...ft(13.5), color: '#6B7079', marginTop: 2, minHeight: 18 },
   chart: { marginTop: 14, height: CH },
   per: { marginTop: 14, marginHorizontal: 20 },
-  mfoot: { ...ft(12, 1.7), color: appColor.ink3, paddingVertical: 14, paddingHorizontal: 20 },
+  mfoot: { ...ft(13, 1.7), color: '#6B7079', paddingVertical: 14, paddingHorizontal: 20 },
   nudge: { position: 'absolute', left: 16, right: 16, alignItems: 'center' },
 });

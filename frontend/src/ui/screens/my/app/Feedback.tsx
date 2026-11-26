@@ -28,7 +28,7 @@ export function AppFeedback({ kinds, star_labels, onBack, onSend }: FeedbackProp
         bottom={
           <>
             <Pressable disabled={!ok} onPress={() => onSend({ mode, star, text, where, kinds: picked, detail })} style={({ pressed }) => [st.cta, !ok && st.ctaDis, pressed && { opacity: 0.9 }]} accessibilityRole="button">
-              <Text style={[st.ctaT, !ok && { color: MC.ink3 }]}>보내기</Text>
+              <Text style={[st.ctaT, !ok && { color: '#6B7079' }]}>보내기</Text>
             </Pressable>
             <Text style={[st.cap, ok && { opacity: 0 }]}>별점과 내용을 입력하면 버튼이 켜져요</Text>
           </>
@@ -117,22 +117,22 @@ const st = StyleSheet.create({
   seg: { flexDirection: 'row', backgroundColor: '#ECEDF1', borderRadius: 13, padding: 3, marginBottom: 12 },
   sl: { position: 'absolute', top: 3, bottom: 3, left: 3, borderRadius: 11, backgroundColor: '#FFFFFF', shadowColor: '#000000', shadowOpacity: 0.08, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
   segB: { flex: 1, paddingVertical: 10, alignItems: 'center' },
-  segT: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: MC.ink2 },
+  segT: { fontSize: 15, lineHeight: 21.4, fontWeight: '600', color: MC.ink2 },
   segTOn: { fontWeight: '800', color: MC.ink },
   rate: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 16, alignItems: 'center' },
-  rateT: { fontSize: 14.5, lineHeight: 21, fontWeight: '700', color: MC.ink },
+  rateT: { fontSize: 15.5, lineHeight: 22.4, fontWeight: '700', color: MC.ink },
   stars: { flexDirection: 'row', gap: 10, marginTop: 10, marginBottom: 4 },
   star: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  rateS: { fontSize: 12, lineHeight: 17, fontWeight: '500', color: MC.ink3 },
-  inp: { borderWidth: 1, borderColor: '#E2E4E8', borderRadius: 14, paddingVertical: 13, paddingHorizontal: 14, fontSize: 15, lineHeight: 21, color: MC.ink, backgroundColor: '#FFFFFF' },
+  rateS: { fontSize: 13, lineHeight: 18.4, fontWeight: '500', color: '#6B7079' },
+  inp: { borderWidth: 1, borderColor: '#E2E4E8', borderRadius: 14, paddingVertical: 13, paddingHorizontal: 14, fontSize: 15.5, lineHeight: 21.7, color: MC.ink, backgroundColor: '#FFFFFF' },
   area: { height: 130, lineHeight: 23.25 },
-  cnt: { textAlign: 'right', fontSize: 11.5, lineHeight: 16, color: MC.ink3, marginTop: 5 },
+  cnt: { textAlign: 'right', fontSize: 11.5, lineHeight: 16, color: '#6B7079', marginTop: 5 },
   tg2: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: { borderWidth: 1, borderColor: '#DADDE2', backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 8, paddingHorizontal: 13, minHeight: 36, justifyContent: 'center' },
   chipOn: { backgroundColor: MC.aSoft, borderColor: '#C9BCF4' },
-  chipT: { fontSize: 13, lineHeight: 19, fontWeight: '600', color: MC.ink },
+  chipT: { fontSize: 14, lineHeight: 20.5, fontWeight: '600', color: MC.ink },
   cta: { borderRadius: 16, paddingVertical: 16, minHeight: 56, alignItems: 'center', justifyContent: 'center', backgroundColor: MC.ink },
   ctaDis: { backgroundColor: '#E3E5E9' },
   ctaT: { fontSize: 16, lineHeight: 23, fontWeight: '800', color: '#FFFFFF' },
-  cap: { textAlign: 'center', fontSize: 11, lineHeight: 15.4, color: MC.ink3, marginTop: 6 },
+  cap: { textAlign: 'center', fontSize: 11.5, lineHeight: 16.1, color: '#6B7079', marginTop: 6 },
 });

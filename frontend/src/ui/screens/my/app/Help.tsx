@@ -33,5 +33,5 @@ const st = StyleSheet.create({
   hre: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 18, paddingHorizontal: 16, backgroundColor: '#FFFFFF', borderRadius: 18 },
   hic: { width: 44, height: 44, borderRadius: 14, backgroundColor: MC.a, alignItems: 'center', justifyContent: 'center' },
   hreB: { fontSize: 16, lineHeight: 23, fontWeight: '700', color: MC.ink },
-  hreS: { fontSize: 13, lineHeight: 19, color: MC.ink2, marginTop: 2 },
+  hreS: { fontSize: 14, lineHeight: 20.5, color: MC.ink2, marginTop: 2 },
 });

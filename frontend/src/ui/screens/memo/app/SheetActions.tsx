@@ -25,7 +25,7 @@ export function SheetActions({ note, ok, onCancel, onOk }: { note: string; ok: s
 
 const st = StyleSheet.create({
   wrap: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, borderTopWidth: 1, borderTopColor: '#E6E8EC' },
-  note: { ...ft(12.5), color: appColor.ink3, textAlign: 'center', marginBottom: 10 },
+  note: { ...ft(13.5), color: '#6B7079', textAlign: 'center', marginBottom: 10 },
   row: { flexDirection: 'row', gap: 8 },
   btn: { height: 54, borderRadius: 15, paddingHorizontal: 24, alignItems: 'center', justifyContent: 'center' },
   gray: { backgroundColor: '#E6E8EC' },

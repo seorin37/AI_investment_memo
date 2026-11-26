@@ -43,7 +43,7 @@ export function AppUsage(p: UsageProps) {
           <UsageBar pct={pct} delay={250} />
           <View style={st.m}>
             <Text style={[st.mT, { color: st2 === 'er' ? MC.red : MC.ink2 }]}>{p.credits_left != null ? `남은 크레딧 ${p.credits_left}개` : `남은 사용량 ${Math.max(0, 100 - pct)}%`}</Text>
-            <Text style={[st.mT, { color: MC.ink3 }]}>다음 갱신 {p.usage_renew}</Text>
+            <Text style={[st.mT, { color: '#6B7079' }]}>다음 갱신 {p.usage_renew}</Text>
           </View>
         </Grp>
       </Rv>
@@ -112,27 +112,27 @@ const st = StyleSheet.create({
   banWn: { backgroundColor: '#FFF6E0', borderColor: '#F5DFA6' },
   banEr: { backgroundColor: '#FFEEEE', borderColor: '#F7C7C7' },
   banDot: { width: 7, height: 7, borderRadius: 4, marginTop: 6 },
-  banB: { fontSize: 13.5, lineHeight: 21, fontWeight: '700' },
-  banT: { fontSize: 12.5, lineHeight: 19.4 },
+  banB: { fontSize: 14.5, lineHeight: 22.6, fontWeight: '700' },
+  banT: { fontSize: 13.5, lineHeight: 21 },
   plan: { padding: 16 },
   planH: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  planHT: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: MC.ink },
+  planHT: { fontSize: 15, lineHeight: 21.4, fontWeight: '700', color: MC.ink },
   big: { marginTop: 10, marginBottom: 2 },
   bigT: { fontSize: 30, lineHeight: 38, fontWeight: '800', color: MC.ink, fontVariant: ['tabular-nums'] },
   m: { flexDirection: 'row', justifyContent: 'space-between' },
-  mT: { fontSize: 12, lineHeight: 17 },
+  mT: { fontSize: 13, lineHeight: 18.4 },
   lbRow: { flexDirection: 'row' },
   sk2: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 14, paddingHorizontal: 16 },
   sk2Line: { borderBottomWidth: 1, borderBottomColor: '#F1F2F4' },
   lg0: { width: 26, height: 26, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
-  lg0T: { fontSize: 12, lineHeight: 16, fontWeight: '800', color: '#FFFFFF' },
-  sk2T: { fontSize: 15, lineHeight: 22, fontWeight: '700', color: MC.ink },
+  lg0T: { fontSize: 13, lineHeight: 17.3, fontWeight: '800', color: '#FFFFFF' },
+  sk2T: { fontSize: 15.5, lineHeight: 22.7, fontWeight: '700', color: MC.ink },
   sk2V: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 4 },
-  sk2VT: { fontSize: 12.5, lineHeight: 18, fontWeight: '500', color: MC.ink3 },
+  sk2VT: { fontSize: 13.5, lineHeight: 19.4, fontWeight: '500', color: '#6B7079' },
   /* 메모 간격 80 = 12 + 18 + 8 + 22 + 12 + 사이 8 (원본 CSS 는 위아래 여백 8 이 겹침) */
   ti: { marginBottom: 8, marginHorizontal: 12, backgroundColor: '#F6F7F9', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14 },
   tiB: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  tiT: { flex: 1, fontSize: 14, lineHeight: 18, fontWeight: '700', color: MC.ink },
+  tiT: { flex: 1, fontSize: 15, lineHeight: 19.3, fontWeight: '700', color: MC.ink },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 8 },
   chip: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E6E8EC', borderRadius: 7, paddingVertical: 3, paddingHorizontal: 7 },
   chipT: { fontSize: 11.5, lineHeight: 14, color: MC.ink2 },

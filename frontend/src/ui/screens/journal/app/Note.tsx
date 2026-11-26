@@ -387,7 +387,7 @@ export function AppNote(p: AppNoteProps) {
           <View style={st.acc}>
             <Pressable onPress={openFmt} accessibilityRole="button" accessibilityLabel="서식" accessibilityState={{ selected: fmt }} style={[st.accB, fmt && st.accOn]}>
               <Text style={[st.accT, fmt && { color: A2 }]}>
-                가<Text style={[st.accT, { fontSize: 12 }, fmt && { color: A2 }]}>가</Text>
+                가<Text style={[st.accT, { fontSize: 13 }, fmt && { color: A2 }]}>가</Text>
               </Text>
             </Pressable>
             <Pressable onPress={insertCk} accessibilityRole="button" accessibilityLabel="체크리스트" style={st.accB}>
@@ -477,8 +477,8 @@ function SRow({ label, onPress, red }: { label: string; onPress: () => void; red
 const STY: [JBlockStyle, string, TextStyle][] = [
   ['title', '제목', { fontSize: 19, fontWeight: '800' }],
   ['head', '머리말', { fontSize: 16, fontWeight: '800' }],
-  ['sub', '부제목', { fontSize: 14.5, fontWeight: '700' }],
-  ['body', '본문', { fontSize: 14, fontWeight: '500' }],
+  ['sub', '부제목', { fontSize: 15.5, fontWeight: '700' }],
+  ['body', '본문', { fontSize: 15, fontWeight: '500' }],
 ];
 
 /** 서식 패널 (원본 .fmt: #F3F4F6 · 274 · 안쪽 14 16 · 글 모양 알약이 미끄러짐 · B I U S · 목록 4종 · 안내 11.5) */
@@ -525,14 +525,14 @@ function FmtPanel({ b, pad, onClose, onStyle, onMark, onList }: { b: JBlock; pad
       <View style={st.seg}>
         {marks.map(([m, l, ts], i) => (
           <Pressable key={m} onPress={() => onMark(m)} accessibilityRole="button" accessibilityLabel={{ b: '굵게', i: '기울임', u: '밑줄', x: '취소선' }[m]} accessibilityState={{ selected: !!b[m] }} style={[st.segB, i > 0 && st.segL, b[m] && st.segOn]}>
-            <Text style={[{ fontSize: 15, color: b[m] ? A2 : appColor.ink }, ts]}>{l}</Text>
+            <Text style={[{ fontSize: 15.5, color: b[m] ? A2 : appColor.ink }, ts]}>{l}</Text>
           </Pressable>
         ))}
       </View>
       <View style={st.seg}>
         {lists.map(([l, t], i) => (
           <Pressable key={l} onPress={() => onList(l)} accessibilityRole="button" accessibilityState={{ selected: b.l === l }} style={[st.segB, i > 0 && st.segL, b.l === l && st.segOn]}>
-            <Text style={{ fontSize: 13, color: b.l === l ? A2 : appColor.ink }}>{t}</Text>
+            <Text style={{ fontSize: 14, color: b.l === l ? A2 : appColor.ink }}>{t}</Text>
           </Pressable>
         ))}
       </View>
@@ -554,7 +554,7 @@ const st = StyleSheet.create({
   done: { height: 36, paddingHorizontal: 6, justifyContent: 'center' },
   doneT: { ...nf(16.5), fontWeight: '800', color: A2 },
   scr: { paddingHorizontal: 20, paddingBottom: 40 },
-  ndt: { ...ft(12.5), color: appColor.ink3, textAlign: 'center', marginTop: 4, marginBottom: 12 },
+  ndt: { ...ft(13.5), color: '#6B7079', textAlign: 'center', marginTop: 4, marginBottom: 12 },
   b: { marginBottom: 6 },
   bTitle: { marginBottom: 10 },
   bHead: { marginTop: 12 },
@@ -586,7 +586,7 @@ const st = StyleSheet.create({
   segB: { flex: 1, height: 42, alignItems: 'center', justifyContent: 'center' },
   segL: { borderLeftWidth: 1, borderLeftColor: '#EDEEF1' },
   segOn: { backgroundColor: appColor.accentSoft },
-  cap: { ...ft(11.5), color: appColor.ink3, marginTop: 4 },
+  cap: { ...ft(11.5), color: '#6B7079', marginTop: 4 },
   sr: { flexDirection: 'row', alignItems: 'center', height: 52, paddingHorizontal: 20 },
-  srT: { ...ft(15.5), color: appColor.ink },
+  srT: { ...ft(16), color: appColor.ink },
 });

@@ -52,10 +52,10 @@ const st = StyleSheet.create({
   scrim: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16 },
   box: { width: 320, maxWidth: '100%', borderRadius: 22, backgroundColor: appColor.surface, paddingTop: 22, paddingHorizontal: 20, paddingBottom: 16 },
   t: { ...ft(17), fontWeight: '700', color: appColor.ink, marginBottom: 6 },
-  b: { ...ft(14, 1.6), color: appColor.ink2, marginBottom: 18 },
+  b: { ...ft(15, 1.6), color: appColor.ink2, marginBottom: 18 },
   btns: { flexDirection: 'row', gap: 8 },
   btn: { flex: 1, minHeight: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingVertical: 12 },
-  btnT: { ...ft(15), fontWeight: '700', color: appColor.ink },
+  btnT: { ...ft(15.5), fontWeight: '700', color: appColor.ink },
   link: { alignSelf: 'center', marginTop: 12, paddingVertical: 4 },
-  linkT: { ...ft(14), fontWeight: '700', color: '#8E8A97', textDecorationLine: 'underline' },
+  linkT: { ...ft(15), fontWeight: '700', color: '#6B7079', textDecorationLine: 'underline' },
 });

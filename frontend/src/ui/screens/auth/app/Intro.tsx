@@ -47,12 +47,12 @@ const st = StyleSheet.create({
   dots: { height: 6, flexDirection: 'row', alignItems: 'center', gap: 6 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#D5D8DD' },
   dotOn: { width: 18, backgroundColor: appColor.accent },
-  skip: { fontSize: 15, lineHeight: 22, color: '#667085', paddingHorizontal: 4 },
+  skip: { fontSize: 15.5, lineHeight: 22.7, color: '#667085', paddingHorizontal: 4 },
   art: { height: 340, marginTop: 8, overflow: 'hidden', borderRadius: 20, backgroundColor: '#F4F5F7' },
   /* .u042-pane h2 26/36 800 -0.6 #16171A · p 15/23 #8B919C */
   copy: { marginTop: 28 },
   title: { fontSize: 26, lineHeight: 36, letterSpacing: -0.6, color: '#16171A', fontWeight: '800' },
-  description: { fontSize: 15, lineHeight: 23, marginTop: 8, color: '#8B919C' },
+  description: { fontSize: 15.5, lineHeight: 23.8, marginTop: 8, color: '#6B7079' },
   /* .u042-b 56 · r16 · 16.5px 800 */
   actions: { marginTop: 'auto', paddingTop: 12, flexDirection: 'row', gap: 8 },
   prev: { width: 96, minHeight: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F2F2F5', paddingVertical: 14 },
