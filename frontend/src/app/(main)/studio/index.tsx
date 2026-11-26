@@ -17,6 +17,9 @@ import { env } from '@/config/env';
 import { AppAudioSheet } from '@/ui/screens/studio/app/AudioSheet';
 import { AppReportSheet } from '@/ui/screens/studio/app/ReportSheet';
 import { AppStudioHome } from '@/ui/screens/studio/app/StudioHome';
+import { AppCreditDialog } from '@/ui/screens/studio/app/CreditDialog';
+import { usePlanView } from '@/ui/screens/my/usePlanView';
+import type { StudioKind } from '@/ui/screens/studio/Studio.types';
 
 /**
  * 앱 스튜디오 탭 = UI v2 (원본 app/studio.html · ⑧).
@@ -54,10 +57,25 @@ export default function StudioTab() {
   const [rsheet, setRSheet] = useState(false);
   /* AI 오디오: 실제 모드면 GET /studio/audio/options (시트를 열었을 때만) · POST /studio/audio (genRuns, 2026-11-24) */
   const audioPick = useAudioPick(sheet);
+  /* 사용량을 다 쓴 뒤 오디오 · 보고서 · 실험 만들기를 누르면 '크레딧을 다 썼어요' 창 먼저 (웹 studioFeat 와 같음) */
+  const usageSpent = usage.paused || usage.usage_pct >= 100;
+  const [credit, setCredit] = useState(false);
+  const { plan: myPlan } = useMyProfile();
+  const planView = usePlanView();
+  const nextPlan = planView.catalog.plans.find((x) => x.code === (myPlan === 'plus' ? 'pro' : 'plus'));
+  const feature = (k: StudioKind) => {
+    if (k !== 'quiz' && usageSpent) return setCredit(true);
+    if (k === 'audio') return setSheet(true);
+    if (k === 'report') return setRSheet(true);
+    router.push(k === 'quiz' ? '/studio-quiz' : '/studio-lab');
+  };
   const [mk, setMk] = useState(make);
   if (make !== mk) {
     setMk(make);
-    if (make === 'audio') setSheet(true);
+    if (make === 'audio') {
+      if (usageSpent) setCredit(true);
+      else setSheet(true);
+    }
   }
   if (Platform.OS === 'web') return <Redirect href="/" />;
   return (
@@ -90,7 +108,7 @@ export default function StudioTab() {
         spent={usage.paused}
         usage_refill={usage.usage_refill}
         {...counts}
-        onFeature={(k) => (k === 'audio' ? setSheet(true) : k === 'report' ? setRSheet(true) : router.push(k === 'quiz' ? '/studio-quiz' : '/studio-lab'))}
+        onFeature={feature}
         onOpenMade={(m) => {
           if (m.kind === 'lab') {
             p.openLab(m.id);
@@ -118,6 +136,16 @@ export default function StudioTab() {
           const id = startAudio({ sub: `${codes.length}종목 · ${period} · ${market ? '증시 요약 포함' : '증시 요약 없음'}`, codes, period, market, fail: __DEV__ && fail === '1' });
           setTimeout(() => router.push({ pathname: '/studio-gen', params: { id } }), 220);
         }}
+      />
+      <AppCreditDialog
+        open={credit}
+        plan={myPlan ?? 'free'}
+        nextName={nextPlan?.name}
+        nextCredits={nextPlan?.monthly_credits}
+        packLabel={planView.packs[0] ? `${planView.packs[0].credits}개 ${planView.packs[0].price}` : undefined}
+        onClose={() => setCredit(false)}
+        onPlan={() => { setCredit(false); router.push('/my-plans'); }}
+        onCharge={() => { setCredit(false); router.push('/studio-charge'); }}
       />
       <AppReportSheet
         open={rsheet}

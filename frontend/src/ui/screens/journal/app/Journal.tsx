@@ -18,7 +18,7 @@ import { shareText } from '@/lib/copyText';
 import { mockJournalLoadMs, mockJournalRecentCount } from '../Journal.mock';
 import type { JournalFlash } from '@/store/journal';
 import type { JournalEntry, JournalProps } from '../Journal.types';
-import { appTitle, groupJournal, preview, searchJournal, splitHit } from '../journalParts';
+import { groupJournal, preview, searchJournal, splitHit } from '../journalParts';
 import { JBarIcon, JCheck, JChevron, JClose, JCompose, JEmptyDoc, JMic, JNoHit, JPlus, JSearch } from './journalGlyphs';
 
 const A2 = appColor.tabPurple;
@@ -463,7 +463,7 @@ function JRow({ j, q, first, selV, selecting, selected, hl, onPress, onLongPress
         </Animated.View>
         <Animated.View style={[st.tx, { transform: [{ translateX: selV.interpolate({ inputRange: [0, 1], outputRange: [0, 36] }) }] }]}>
           <Text style={st.rT} numberOfLines={1}>
-            {hit(appTitle(j), st.rT)}
+            {hit(j.title || '제목 없음', st.rT)}
           </Text>
           <View style={st.rSub}>
             <Text style={st.rS} numberOfLines={1}>

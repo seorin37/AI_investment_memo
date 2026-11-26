@@ -90,7 +90,7 @@ export function AppStudioHome({ header, jobs, onJob, playingId, onQuickPlay, spe
         <View ref={featRef} collapsable={false}>
         {p.features.map((f, i) => (
           <Reveal key={f.key} i={i}>
-            <PressScale scaleTo={0.975} onPress={() => (full && f.key !== 'quiz' ? setSheet(true) : p.onFeature(f.key))} accessibilityRole="button" accessibilityLabel={f.title} style={st.fc}>
+            <PressScale scaleTo={0.975} onPress={() => p.onFeature(f.key)} accessibilityRole="button" accessibilityLabel={f.title} style={st.fc}>
               <FeatIcon k={f.key} />
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={st.fcH}>{f.title}</Text>
