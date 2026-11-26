@@ -87,7 +87,7 @@ export function TopBar({ preset, title, subtitle, onBack, actions = [], avatar, 
         ) : null}
       </View>
       {subtitle ? (
-        <View pointerEvents="none" style={[st.subClip, { top: insets.top + SUB_CLIP, left: s.padL, right: s.padR, height: rise }]}>
+        <View pointerEvents="none" style={[st.subClip, { top: insets.top + SUB_CLIP, left: s.padL, right: s.padR, minHeight: rise }]}>
           <Animated.View style={y ? { transform: [{ translateY: y.interpolate({ inputRange: [0, rise], outputRange: [0, -rise], extrapolate: 'clamp' }) }] } : null}>
             <Text style={st.sub} numberOfLines={1}>
               {subtitle}

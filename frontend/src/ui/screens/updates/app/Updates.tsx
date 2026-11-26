@@ -273,7 +273,7 @@ function Overview({ p, kind, setKind, ready, fading, onOpenStock, onOpenRow }: {
                   <View style={[st.tg, { backgroundColor: APP_TAG[u.kind].bg }]}>
                     <Text style={[st.tgT, { color: APP_TAG[u.kind].ink }]}>{u.kind}</Text>
                   </View>
-                  <Text style={st.tt} numberOfLines={1}>
+                  <Text style={st.tt} numberOfLines={2}>
                     {u.headline}
                   </Text>
                   <Text style={st.ag}>{ago(u.arrived ?? u.at, p.now)}</Text>
@@ -662,7 +662,7 @@ const st = StyleSheet.create({
   find: { height: 42, marginHorizontal: 16, marginBottom: 12, borderRadius: 14, backgroundColor: '#FFFFFF', flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14 },
   findT: { ...ft(15), color: '#6B7079' },
   cin: { paddingHorizontal: 16, gap: 6 },
-  cpill: { position: 'absolute', top: 0, height: 36, borderRadius: 18, backgroundColor: '#16171A' },
+  cpill: { position: 'absolute', top: 0, bottom: 0, borderRadius: 18, backgroundColor: '#16171A' },
   chip: { minHeight: 36, paddingHorizontal: 14, borderRadius: 18, flexDirection: 'row', alignItems: 'center', gap: 6 },
   chipOff: { borderWidth: 1, borderColor: '#DADDE2' },
   chipT: { ...ft(15), fontWeight: '600', color: appColor.ink2 },

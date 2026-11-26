@@ -257,7 +257,7 @@ export function UpdatesWidget({ rows, ready, editing, onAll, onRow }: { rows: Ho
             <View style={st.urBox}>
               <View style={st.urLine}>
                 <View style={st.urKind}><Text style={st.urKindT}>{u.latest.kind}</Text></View>
-                <Text style={st.urT} numberOfLines={1}>{u.latest.title}</Text>
+                <Text style={st.urT} numberOfLines={2}>{u.latest.title}</Text>
               </View>
               {u.latest.memo_title ? (
                 <View style={st.urLine}>

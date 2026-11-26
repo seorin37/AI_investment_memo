@@ -113,7 +113,7 @@ export function AppReport({ title, rep, stocks, market, allDefault, onBack, onOp
                   <Text style={st.glS} numberOfLines={2}>{[bits.length ? bits.join(' · ') : '새 소식 없음', memo || (bits.length ? '' : '연결된 메모 없음')].filter(Boolean).join(' · ')}</Text>
                 </View>
                 <Spark c={r.closes} color={up(r.pct)} />
-                <Text style={[st.glP, { color: up(r.pct) }]}>{sign(r.pct)}</Text>
+                <Text style={[st.glP, { color: up(r.pct) }]} numberOfLines={1}>{sign(r.pct)}</Text>
               </View>
             );
           })}
@@ -308,7 +308,7 @@ const st = StyleSheet.create({
   gl: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: '#F0F1F4' },
   glN: { ...nf(15), fontWeight: '700', color: C.ink },
   glS: { fontSize: 13, lineHeight: 19.5, color: '#6B7079' },
-  glP: { width: 52, textAlign: 'right', ...nf(15), fontWeight: '700' },
+  glP: { minWidth: 52, flexShrink: 0, textAlign: 'right', ...nf(15), fontWeight: '700' },
   topO: { ...nf(11.5), color: '#6B7079' },
   r3h: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 22, marginHorizontal: 2 },
   r3hE: { ...nf(13), fontWeight: '800', color: C.a2 },
