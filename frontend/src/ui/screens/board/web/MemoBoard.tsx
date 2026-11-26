@@ -22,7 +22,6 @@ import type { BoardFilter, MemoBoardProps } from '../MemoBoard.types';
 import { useBoardDragWeb, useContextMenuWeb, useEscapeWeb } from './boardDom.web';
 import { useCoachRef } from '@/ui/shared/Coach';
 
-const CL = 'cl';
 const HOLE = '__hole';
 type Snack = { id: number; msg: string; undo?: string[]; check?: boolean };
 type HoverState = { pressed: boolean; hovered?: boolean };
@@ -48,12 +47,14 @@ export function WebMemoBoard(p: MemoBoardProps) {
   const grid = useRef<React.ComponentRef<typeof View>>(null);
 
   const byId = (id: string) => p.memos.find((m) => m.id === id);
+  const checklist = p.checklist;
+  const checklistKeys = checklist ? [checklist.id] : [];
   const memoKeys = p.memos.map((m) => m.id);
-  const allKeys = [...(p.checklist ? [CL] : []), ...memoKeys];
+  const allKeys = [...checklistKeys, ...memoKeys];
   /* 순서: 받은 순서 중 지금 있는 것 + 순서에 없는 새 것은 맨 앞 (원본 arrange) */
   const order = (() => {
     const has = new Set(allKeys);
-    const base = p.order ?? [...(p.checklist ? [CL] : []), ...[...p.memos].sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.created_at.localeCompare(a.created_at)).map((m) => m.id)];
+    const base = p.order ?? [...checklistKeys, ...[...p.memos].sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.created_at.localeCompare(a.created_at)).map((m) => m.id)];
     const placed = base.filter((x) => has.has(x));
     const inLay = new Set(placed);
     return [...allKeys.filter((x) => !inLay.has(x)), ...placed];
@@ -64,7 +65,7 @@ export function WebMemoBoard(p: MemoBoardProps) {
   const canDrag = filter === 'all' && !sel && view === 'grid';
   const { drag, justDropped } = useBoardDragWeb(grid, !empty && view === 'grid', order, canDrag, k, p.onReorder);
   useContextMenuWeb(grid, !empty && view === 'grid', (key, at) => {
-    if (key !== CL && !sel) setMenu({ id: key, at });
+    if (key !== checklist?.id && !sel) setMenu({ id: key, at });
   });
   /* Esc: 메뉴 → 고르기 순으로 닫기 (원본 CtxMenu · SelectBar) */
   useEscapeWeb(!!sel || !!menu, () => {
@@ -81,7 +82,7 @@ export function WebMemoBoard(p: MemoBoardProps) {
 
   /* 끄는 동안: 집은 카드는 빼고 놓일 자리에 빈칸 */
   const viewKeys = (() => {
-    const ks = order.filter((x) => (x === CL ? filter === 'all' : shownMemo(byId(x)!)));
+    const ks = order.filter((x) => (x === checklist?.id ? filter === 'all' : shownMemo(byId(x)!)));
     if (!drag) return ks;
     const others = ks.filter((x) => x !== drag.key);
     others.splice(Math.min(drag.to, others.length), 0, HOLE);
@@ -118,7 +119,7 @@ export function WebMemoBoard(p: MemoBoardProps) {
     '-',
     { label: '휴지통으로 이동', icon: 'trash', danger: true, run: () => trash([m.id]) },
   ];
-  const lifted = drag ? (drag.key === CL ? null : byId(drag.key)) : null;
+  const lifted = drag ? byId(drag.key) : null;
 
   return (
     <View style={st.root}>
@@ -174,10 +175,10 @@ export function WebMemoBoard(p: MemoBoardProps) {
                   <View ref={grid} style={st.grid}>
                     {viewKeys.map((key) => {
                       if (key === HOLE) return <View key={HOLE} style={st.hole} />;
-                      if (key === CL)
+                      if (checklist && key === checklist.id)
                         return (
-                          <View key={CL} {...data({ bkey: CL })} style={st.slot}>
-                            <WebChecklistCard checklist={p.checklist!} onOpen={() => !justDropped() && p.onOpenChecklist()} onToggleItem={p.onToggleChecklistItem} />
+                          <View key={key} {...data({ bkey: key })} style={st.slot}>
+                            <WebChecklistCard checklist={checklist} onOpen={() => !justDropped() && p.onOpenChecklist()} onToggleItem={p.onToggleChecklistItem} />
                           </View>
                         );
                       const m = byId(key)!;
